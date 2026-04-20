@@ -30,7 +30,6 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     private const string BoundsRootName = "Bounds";
     private const string ObstaclesRootName = "Obstacles";
-    private static Sprite fallbackSquareSprite;
 
     private System.Random rng;
 
@@ -193,14 +192,18 @@ public class ProceduralArenaGenerator : MonoBehaviour
     private void CreateWall(string name, Vector2 position, Vector2 size, Transform parent)
     {
         GameObject wall = CreateBlock(name, position, size, new Color(0.15f, 0.16f, 0.2f), parent);
-        wall.AddComponent<BoxCollider2D>();
+        BoxCollider2D collider = wall.AddComponent<BoxCollider2D>();
+        collider.size = size;
+        collider.offset = Vector2.zero;
     }
 
     private void CreateObstacle(string name, Vector2 position, Vector2 size, Transform parent)
     {
         float tint = Range(0.20f, 0.32f);
         GameObject obstacle = CreateBlock(name, position, size, new Color(tint, tint + 0.03f, tint + 0.08f), parent);
-        obstacle.AddComponent<BoxCollider2D>();
+        BoxCollider2D collider = obstacle.AddComponent<BoxCollider2D>();
+        collider.size = size;
+        collider.offset = Vector2.zero;
     }
 
     private static GameObject CreateBlock(string name, Vector2 position, Vector2 size, Color color, Transform parent)
@@ -208,47 +211,16 @@ public class ProceduralArenaGenerator : MonoBehaviour
         GameObject go = new GameObject(name);
         go.transform.SetParent(parent, false);
         go.transform.position = new Vector3(position.x, position.y, 0f);
-        go.transform.localScale = new Vector3(size.x, size.y, 1f);
+        go.transform.localScale = Vector3.one;
 
         SpriteRenderer renderer = go.AddComponent<SpriteRenderer>();
-        renderer.sprite = GetSquareSprite();
+        renderer.sprite = SquareSpriteProvider.Get();
+        renderer.drawMode = SpriteDrawMode.Sliced;
+        renderer.size = size;
         renderer.color = color;
         renderer.sortingOrder = 0;
 
         return go;
-    }
-
-    private static Sprite GetSquareSprite()
-    {
-        Sprite sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/UISprite.psd");
-
-        if (sprite == null)
-        {
-            sprite = Resources.GetBuiltinResource<Sprite>("UI/Skin/Background.psd");
-        }
-
-        if (sprite != null)
-        {
-            return sprite;
-        }
-
-        if (fallbackSquareSprite != null)
-        {
-            return fallbackSquareSprite;
-        }
-
-        Texture2D texture = new Texture2D(1, 1, TextureFormat.RGBA32, false);
-        texture.SetPixel(0, 0, Color.white);
-        texture.Apply();
-
-        fallbackSquareSprite = Sprite.Create(
-            texture,
-            new Rect(0f, 0f, 1f, 1f),
-            new Vector2(0.5f, 0.5f),
-            1f);
-
-        fallbackSquareSprite.name = "RuntimeSquareSprite";
-        return fallbackSquareSprite;
     }
 
     private Rect CenterRect(Vector2 center, Vector2 size)

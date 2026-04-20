@@ -7,7 +7,6 @@ using UnityEngine.SceneManagement;
 public static class LevelSceneGenerator
 {
     private const string RootName = "__GeneratedArena";
-    private static Sprite fallbackSquareSprite;
 
     [MenuItem("Glitch/Generate/Setup Current Level Scene")]
     public static void SetupCurrentLevelScene()
@@ -127,44 +126,11 @@ public static class LevelSceneGenerator
         go.transform.localScale = new Vector3(scale, scale, 1f);
 
         SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
-        sr.sprite = GetSquareSprite();
+        sr.sprite = SquareSpriteProvider.Get();
         sr.color = color;
         sr.sortingOrder = 10;
 
         return go;
-    }
-
-    private static Sprite GetSquareSprite()
-    {
-        Sprite sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
-
-        if (sprite == null)
-        {
-            sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Background.psd");
-        }
-
-        if (sprite != null)
-        {
-            return sprite;
-        }
-
-        if (fallbackSquareSprite != null)
-        {
-            return fallbackSquareSprite;
-        }
-
-        Texture2D texture = new Texture2D(1, 1, TextureFormat.RGBA32, false);
-        texture.SetPixel(0, 0, Color.white);
-        texture.Apply();
-
-        fallbackSquareSprite = Sprite.Create(
-            texture,
-            new Rect(0f, 0f, 1f, 1f),
-            new Vector2(0.5f, 0.5f),
-            1f);
-
-        fallbackSquareSprite.name = "EditorRuntimeSquareSprite";
-        return fallbackSquareSprite;
     }
 }
 #endif
