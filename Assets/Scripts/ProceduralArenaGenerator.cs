@@ -33,6 +33,9 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     private System.Random rng;
 
+    public float ArenaWidth => arenaWidth;
+    public float ArenaHeight => arenaHeight;
+
     private void Awake()
     {
         if (!generateOnAwake)
