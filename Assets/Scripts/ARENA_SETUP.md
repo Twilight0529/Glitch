@@ -6,25 +6,33 @@
 2. In Unity menu, run `Glitch > Generate > Setup Current Level Scene`.
 3. Press Play.
 
-This generator creates automatically:
-- `GameManager` with survival timer/game over/difficulty ramp
+This setup creates automatically:
+- `GameManager`
 - `Player` (WASD, 4-direction movement)
 - `Anomaly` (3 behavior patterns, switching every 5s)
-- Arena walls (closed containment)
-- Static blocking obstacles
-- Enemy references wired to `PlayerController` + `GameManager`
+- `ProceduralArenaGenerator` (closed walls + procedural static obstacles)
 
-## Manual fallback (if needed)
+## Procedural behavior
 
-1. Create an empty `GameManager` object and attach `GameManager.cs`.
-2. Create `Player` with: `SpriteRenderer`, `Rigidbody2D` (Dynamic), `CircleCollider2D`, `PlayerController.cs`.
-3. Create `Anomaly` with: `SpriteRenderer`, `Rigidbody2D` (Dynamic), `CircleCollider2D`, `EnemyController.cs`.
-4. In `EnemyController`, drag references for `Player` and `GameManager`.
-5. Create 4 walls with `BoxCollider2D` to close the map.
-6. Create static obstacles with `BoxCollider2D` or `PolygonCollider2D`.
+- Every run generates a new obstacle layout.
+- The arena remains closed (containment preserved).
+- Obstacles avoid immediate spawn overlap around player/anomaly.
+
+## Useful tuning
+
+On `__GeneratedArena` object (`ProceduralArenaGenerator`):
+- `minObstacles` / `maxObstacles`
+- `obstacleSizeMin` / `obstacleSizeMax`
+- `spawnSafeRadius`
+- `randomizeSeedEachRun`
+- `fixedSeed` (disable randomize to reproduce one map)
+
+## Optional manual regeneration
+
+- In Inspector on `ProceduralArenaGenerator`, use context menu `Generate Arena Now`.
 
 ## Design Alignment
 
-- Constant pressure: enemy velocity is always driven toward a target.
-- Instability: behavior pattern rotates every 5 seconds.
-- Containment: closed colliders and static obstacles prevent escape routes.
+- Constant pressure: anomaly never stops chasing.
+- Instability: anomaly behavior changes every 5 seconds and terrain changes each run.
+- Containment: walls always close the arena, no escape route.
