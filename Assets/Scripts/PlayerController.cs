@@ -1,4 +1,7 @@
 ﻿using UnityEngine;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 [RequireComponent(typeof(Rigidbody2D))]
 public class PlayerController : MonoBehaviour
@@ -20,8 +23,9 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
-        float horizontal = Input.GetAxisRaw("Horizontal");
-        float vertical = Input.GetAxisRaw("Vertical");
+        Vector2 rawInput = ReadMoveInput();
+        float horizontal = rawInput.x;
+        float vertical = rawInput.y;
 
         // 4-directions priority: keeps movement cardinal and readable under pressure.
         if (Mathf.Abs(horizontal) > 0f)
@@ -31,6 +35,26 @@ public class PlayerController : MonoBehaviour
 
         moveInput = new Vector2(horizontal, vertical).normalized;
         rb.linearVelocity = moveInput * moveSpeed;
+    }
+
+    private static Vector2 ReadMoveInput()
+    {
+#if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null)
+        {
+            float horizontal = 0f;
+            float vertical = 0f;
+
+            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed) horizontal -= 1f;
+            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed) horizontal += 1f;
+            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed) vertical -= 1f;
+            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed) vertical += 1f;
+
+            return new Vector2(horizontal, vertical);
+        }
+#endif
+        return new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
     }
 
     public Vector2 GetPosition()
