@@ -122,6 +122,8 @@ public static class LevelSceneGenerator
         so.FindProperty("secondaryLaneWidth").floatValue = 2.6f;
         so.FindProperty("minObstacles").intValue = 10;
         so.FindProperty("maxObstacles").intValue = 16;
+        so.FindProperty("minDynamicObstacles").intValue = 1;
+        so.FindProperty("maxDynamicObstacles").intValue = 3;
         so.FindProperty("randomizeThemeEachRun").boolValue = true;
         so.FindProperty("generateOnAwake").boolValue = true;
         so.FindProperty("randomizeSeedEachRun").boolValue = true;

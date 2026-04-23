@@ -46,6 +46,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float waypointReachDistance = 0.25f;
     [SerializeField] private float targetRepathThreshold = 0.45f;
     [SerializeField] private int pathLookahead = 6;
+    [SerializeField] private float gridRefreshInterval = 0.8f;
 
     [Header("Obstacle Preference")]
     [SerializeField] private float obstaclePenaltyDistance = 2.4f;
@@ -81,6 +82,7 @@ public class EnemyController : MonoBehaviour
     private int[,] obstacleDistanceSteps;
 
     private float repathTimer;
+    private float gridRefreshTimer;
     private Vector2 lastPathGoal;
     private readonly List<Vector2> pathWorld = new List<Vector2>();
     private int pathIndex;
@@ -173,6 +175,13 @@ public class EnemyController : MonoBehaviour
 
         HandleBehaviorSwitch();
         UpdatePatternInternals();
+
+        gridRefreshTimer += Time.deltaTime;
+        if (gridRefreshTimer >= gridRefreshInterval)
+        {
+            gridRefreshTimer = 0f;
+            BuildNavigationGrid();
+        }
 
         Vector2 strategicTarget = ClampToArena(GetStrategicTarget());
 

@@ -21,9 +21,25 @@ public class GameManager : MonoBehaviour
     }
 
     private float reloadTimer;
+    private ProceduralArenaGenerator arenaGenerator;
+    private string levelType = "Unknown";
+
+    private void Start()
+    {
+        RefreshLevelType();
+    }
 
     private void Update()
     {
+        if (arenaGenerator == null)
+        {
+            RefreshLevelType();
+        }
+        else if (levelType != arenaGenerator.ActiveThemeLabel)
+        {
+            levelType = arenaGenerator.ActiveThemeLabel;
+        }
+
         if (IsGameOver)
         {
             HandleOptionalReload();
@@ -66,10 +82,20 @@ public class GameManager : MonoBehaviour
         GUI.Label(new Rect(margin, margin, 350f, 25f), $"Survival Time: {SurvivalTime:F1}s");
         GUI.Label(new Rect(margin, margin + 22f, 350f, 25f), $"Threat Level: x{DifficultyMultiplier:F2}");
         GUI.Label(new Rect(margin, margin + 44f, 350f, 25f), $"Pattern Shift: {CurrentBehaviorChangeInterval:F1}s");
+        GUI.Label(new Rect(margin, margin + 66f, 350f, 25f), $"Level Type: {levelType}");
 
         if (IsGameOver)
         {
-            GUI.Label(new Rect(margin, margin + 74f, 500f, 25f), "GAME OVER - The anomaly reached you.");
+            GUI.Label(new Rect(margin, margin + 96f, 500f, 25f), "GAME OVER - The anomaly reached you.");
+        }
+    }
+
+    private void RefreshLevelType()
+    {
+        arenaGenerator = FindFirstObjectByType<ProceduralArenaGenerator>();
+        if (arenaGenerator != null)
+        {
+            levelType = arenaGenerator.ActiveThemeLabel;
         }
     }
 }
