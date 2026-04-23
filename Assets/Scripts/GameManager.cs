@@ -92,7 +92,7 @@ public class GameManager : MonoBehaviour
 
     private void RefreshLevelType()
     {
-        arenaGenerator = FindFirstObjectByType<ProceduralArenaGenerator>();
+        arenaGenerator = FindAnyObjectByType<ProceduralArenaGenerator>();
         if (arenaGenerator != null)
         {
             levelType = arenaGenerator.ActiveThemeLabel;

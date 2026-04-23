@@ -56,6 +56,19 @@ public class ProceduralArenaGenerator : MonoBehaviour
     [SerializeField] private bool randomizeThemeEachRun = true;
     [SerializeField] private ArenaTheme fixedTheme = ArenaTheme.ContainmentLab;
 
+    [Header("Rupture Pattern")]
+    [SerializeField] private int minRuptureAnchors = 4;
+    [SerializeField] private int maxRuptureAnchors = 7;
+    [SerializeField] private int ruptureRingsPerAnchor = 3;
+    [SerializeField] private int ruptureSlotsPerRing = 12;
+    [SerializeField] private int rupturePlacementsPerAnchorBurst = 4;
+    [SerializeField] private float ruptureRingRadiusMin = 1.2f;
+    [SerializeField] private float ruptureRingRadiusMax = 4.8f;
+    [SerializeField] private float ruptureAnchorPadding = 1.8f;
+    [SerializeField] private float ruptureAnchorMinSeparation = 4.8f;
+    [SerializeField] private float ruptureMinCenterSpacing = 1.65f;
+    [SerializeField] private float ruptureCoreDiameter = 1.55f;
+
     [Header("Random")]
     [SerializeField] private bool randomizeSeedEachRun = true;
     [SerializeField] private int fixedSeed = 12345;
@@ -73,6 +86,15 @@ public class ProceduralArenaGenerator : MonoBehaviour
     private readonly List<Rect> blockedAreas = new List<Rect>();
     private readonly List<Rect> placedObstacleRects = new List<Rect>();
     private readonly List<Rect> reservedLanes = new List<Rect>();
+    private readonly List<Vector2> ruptureAnchors = new List<Vector2>();
+    private readonly List<List<Vector2>> ruptureAnchorSlots = new List<List<Vector2>>();
+    private readonly List<int> ruptureAnchorSlotCursor = new List<int>();
+    private int ruptureAnchorCursor;
+    private int ruptureActiveAnchorIndex = -1;
+    private int ruptureAnchorBurstCounter;
+    private float ruptureOuterRadius;
+    private float ruptureOuterExtentX = 1f;
+    private float ruptureOuterExtentY = 1f;
 
     public float ArenaWidth => arenaWidth;
     public float ArenaHeight => arenaHeight;
@@ -100,8 +122,21 @@ public class ProceduralArenaGenerator : MonoBehaviour
         blockedAreas.Clear();
         placedObstacleRects.Clear();
         reservedLanes.Clear();
+        ruptureAnchors.Clear();
+        ruptureAnchorSlots.Clear();
+        ruptureAnchorSlotCursor.Clear();
+        ruptureAnchorCursor = 0;
+        ruptureActiveAnchorIndex = -1;
+        ruptureAnchorBurstCounter = 0;
+        ruptureOuterRadius = 1f;
+        ruptureOuterExtentX = 1f;
+        ruptureOuterExtentY = 1f;
 
         BuildReservedLanes();
+        if (activeTheme == ArenaTheme.RuptureZone)
+        {
+            BuildRuptureAnchors();
+        }
 
         Transform boundsRoot = new GameObject(BoundsRootName).transform;
         boundsRoot.SetParent(transform, false);
@@ -237,9 +272,240 @@ public class ProceduralArenaGenerator : MonoBehaviour
                 break;
 
             case ArenaTheme.RuptureZone:
-                reservedLanes.Add(new Rect(-innerWidth * 0.5f, -secondaryLaneWidth * 0.5f, innerWidth, secondaryLaneWidth));
                 break;
         }
+    }
+
+    private void BuildRuptureAnchors()
+    {
+        // Rupture is a single bullseye: one center, concentric rings.
+        ruptureAnchors.Add(Vector2.zero);
+        BuildRuptureSlots();
+    }
+
+    private List<Vector2> BuildRuptureCoverageCandidates()
+    {
+        List<Vector2> candidates = new List<Vector2>();
+        float margin = edgeClearance + 0.6f;
+        float minX = -arenaWidth * 0.5f + margin;
+        float maxX = arenaWidth * 0.5f - margin;
+        float minY = -arenaHeight * 0.5f + margin;
+        float maxY = arenaHeight * 0.5f - margin;
+
+        for (int a = 0; a < ruptureAnchorSlots.Count; a++)
+        {
+            List<Vector2> slots = ruptureAnchorSlots[a];
+            for (int i = 0; i < slots.Count; i++)
+            {
+                Vector2 p = slots[i];
+                p.x = Mathf.Clamp(p.x, minX, maxX);
+                p.y = Mathf.Clamp(p.y, minY, maxY);
+                candidates.Add(p);
+
+                if (i % 2 == 0)
+                {
+                    Vector2 jittered = p + RandomInsideUnitCircle() * 0.35f;
+                    jittered.x = Mathf.Clamp(jittered.x, minX, maxX);
+                    jittered.y = Mathf.Clamp(jittered.y, minY, maxY);
+                    candidates.Add(jittered);
+                }
+            }
+        }
+
+        for (int i = candidates.Count - 1; i > 0; i--)
+        {
+            int j = Range(0, i + 1);
+            Vector2 tmp = candidates[i];
+            candidates[i] = candidates[j];
+            candidates[j] = tmp;
+        }
+
+        return candidates;
+    }
+
+    private void BuildRuptureSlots()
+    {
+        ruptureAnchorSlots.Clear();
+        ruptureAnchorSlotCursor.Clear();
+        ruptureAnchorCursor = 0;
+
+        float margin = edgeClearance + 0.6f;
+        float minX = -arenaWidth * 0.5f + margin;
+        float maxX = arenaWidth * 0.5f - margin;
+        float minY = -arenaHeight * 0.5f + margin;
+        float maxY = arenaHeight * 0.5f - margin;
+
+        for (int i = 0; i < ruptureAnchors.Count; i++)
+        {
+            Vector2 anchor = ruptureAnchors[i];
+            List<Vector2> slots = new List<Vector2>();
+            float extentX = Mathf.Min(anchor.x - minX, maxX - anchor.x) - 0.2f;
+            float extentY = Mathf.Min(anchor.y - minY, maxY - anchor.y) - 0.2f;
+            extentX = Mathf.Max(ruptureRingRadiusMin + 0.1f, extentX);
+            extentY = Mathf.Max(ruptureRingRadiusMin + 0.1f, extentY);
+
+            ruptureOuterExtentX = Mathf.Max(ruptureOuterExtentX, extentX);
+            ruptureOuterExtentY = Mathf.Max(ruptureOuterExtentY, extentY);
+            ruptureOuterRadius = Mathf.Max(ruptureOuterRadius, Mathf.Min(extentX, extentY));
+
+            float maxAxisExtent = Mathf.Max(extentX, extentY);
+            int ringCount = Mathf.Max(Mathf.Max(8, ruptureRingsPerAnchor), Mathf.CeilToInt(maxAxisExtent / 1.05f));
+            float basePhase = Range(0f, 360f);
+
+            for (int ring = 0; ring < ringCount; ring++)
+            {
+                float t = ringCount == 1 ? 1f : (ring + 1f) / ringCount;
+                float ringX = Mathf.Lerp(ruptureRingRadiusMin, extentX, t);
+                float ringY = Mathf.Lerp(ruptureRingRadiusMin, extentY, t);
+                int points = Mathf.Max(12, ruptureSlotsPerRing) + ring * 3;
+
+                for (int p = 0; p < points; p++)
+                {
+                    float angleDeg = basePhase + (360f / points) * p;
+                    Vector2 dir = new Vector2(Mathf.Cos(angleDeg * Mathf.Deg2Rad), Mathf.Sin(angleDeg * Mathf.Deg2Rad));
+                    Vector2 candidate = anchor + new Vector2(dir.x * ringX, dir.y * ringY);
+
+                    if (candidate.x < minX || candidate.x > maxX || candidate.y < minY || candidate.y > maxY)
+                    {
+                        continue;
+                    }
+
+                    slots.Add(candidate);
+                }
+            }
+
+            if (slots.Count > 0)
+            {
+                ruptureAnchorSlots.Add(slots);
+                ruptureAnchorSlotCursor.Add(0);
+            }
+        }
+    }
+
+    private Vector2 GetRuptureCircularPosition()
+    {
+        if (ruptureAnchorSlots.Count == 0)
+        {
+            return GetRandomRupturePosition();
+        }
+
+        int anchorCount = ruptureAnchorSlots.Count;
+        if (ruptureAnchorCursor >= anchorCount)
+        {
+            ruptureAnchorCursor = 0;
+        }
+
+        bool needsNewAnchor =
+            ruptureActiveAnchorIndex < 0 ||
+            ruptureActiveAnchorIndex >= anchorCount ||
+            ruptureAnchorBurstCounter <= 0 ||
+            ruptureAnchorSlots[ruptureActiveAnchorIndex].Count == 0;
+
+        if (needsNewAnchor)
+        {
+            int guard = 0;
+            ruptureActiveAnchorIndex = -1;
+            while (guard < anchorCount)
+            {
+                int anchorIndex = ruptureAnchorCursor;
+                ruptureAnchorCursor = (ruptureAnchorCursor + 1) % anchorCount;
+                guard++;
+
+                if (ruptureAnchorSlots[anchorIndex].Count == 0)
+                {
+                    continue;
+                }
+
+                ruptureActiveAnchorIndex = anchorIndex;
+                ruptureAnchorBurstCounter = Mathf.Max(1, rupturePlacementsPerAnchorBurst);
+                break;
+            }
+        }
+
+        if (ruptureActiveAnchorIndex >= 0)
+        {
+            List<Vector2> slots = ruptureAnchorSlots[ruptureActiveAnchorIndex];
+            if (slots.Count > 0)
+            {
+                int cursor = ruptureAnchorSlotCursor[ruptureActiveAnchorIndex];
+                if (cursor >= slots.Count)
+                {
+                    cursor = 0;
+                }
+
+                Vector2 candidate = slots[cursor];
+                ruptureAnchorSlotCursor[ruptureActiveAnchorIndex] = cursor + 1;
+                ruptureAnchorBurstCounter--;
+
+                float clampMargin = edgeClearance + 0.6f;
+                candidate.x = Mathf.Clamp(candidate.x, -arenaWidth * 0.5f + clampMargin, arenaWidth * 0.5f - clampMargin);
+                candidate.y = Mathf.Clamp(candidate.y, -arenaHeight * 0.5f + clampMargin, arenaHeight * 0.5f - clampMargin);
+                return candidate;
+            }
+
+            ruptureAnchorBurstCounter = 0;
+        }
+
+        // Fallback if something unexpected happens.
+        Vector2 fallback = GetRandomRupturePosition();
+
+        float margin = edgeClearance + 0.6f;
+        fallback.x = Mathf.Clamp(fallback.x, -arenaWidth * 0.5f + margin, arenaWidth * 0.5f - margin);
+        fallback.y = Mathf.Clamp(fallback.y, -arenaHeight * 0.5f + margin, arenaHeight * 0.5f - margin);
+        return fallback;
+    }
+
+    private float GetRuptureFlowAngle(Vector2 position)
+    {
+        if (ruptureAnchors.Count == 0)
+        {
+            return Range(0f, 360f);
+        }
+
+        Vector2 nearest = ruptureAnchors[0];
+        float nearestDist = Vector2.SqrMagnitude(position - nearest);
+
+        for (int i = 1; i < ruptureAnchors.Count; i++)
+        {
+            float d = Vector2.SqrMagnitude(position - ruptureAnchors[i]);
+            if (d < nearestDist)
+            {
+                nearestDist = d;
+                nearest = ruptureAnchors[i];
+            }
+        }
+
+        Vector2 radial = (position - nearest).normalized;
+        if (radial.sqrMagnitude < 0.0001f)
+        {
+            radial = Vector2.right;
+        }
+
+        Vector2 tangent = new Vector2(-radial.y, radial.x);
+        return Mathf.Atan2(tangent.y, tangent.x) * Mathf.Rad2Deg;
+    }
+
+    private float GetRuptureRingT(Vector2 position)
+    {
+        float ex = Mathf.Max(0.001f, ruptureOuterExtentX);
+        float ey = Mathf.Max(0.001f, ruptureOuterExtentY);
+        float nx = position.x / ex;
+        float ny = position.y / ey;
+        return Mathf.Clamp01(Mathf.Sqrt(nx * nx + ny * ny));
+    }
+
+    private static bool HasMinCenterSpacing(Vector2 candidate, List<Vector2> centers, float minSpacing)
+    {
+        float sqr = minSpacing * minSpacing;
+        for (int i = 0; i < centers.Count; i++)
+        {
+            if ((centers[i] - candidate).sqrMagnitude < sqr)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void CreateArenaBounds(Transform parent)
@@ -408,32 +674,110 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     private void GenerateRuptureZone(Transform parent)
     {
-        int target = Range(minObstacles, maxObstacles + 2);
+        int totalSlots = 0;
+        for (int i = 0; i < ruptureAnchorSlots.Count; i++)
+        {
+            totalSlots += ruptureAnchorSlots[i].Count;
+        }
+
+        int areaBoost = Mathf.RoundToInt((arenaWidth * arenaHeight) / 140f);
+        int anchorBoost = ruptureAnchors.Count * 2;
+        int desiredMin = minObstacles + 16 + areaBoost + anchorBoost;
+        int desiredMax = maxObstacles + 28 + areaBoost + anchorBoost;
+        int target = Range(desiredMin, desiredMax + 1);
+        int slotCap = Mathf.Max(desiredMin, Mathf.RoundToInt(totalSlots * 0.90f));
+        target = Mathf.Min(target, slotCap);
+
         int placed = 0;
         int serial = 0;
+        List<Vector2> placedCenters = new List<Vector2>();
+
+        // Mandatory center piece for Rupture: always keep a circle at (0,0).
+        if (CreateMandatoryRuptureCore(parent))
+        {
+            placed++;
+            serial++;
+            placedCenters.Add(Vector2.zero);
+        }
+
+        // Pass 1: cover ring slots (and near-ring jitter) to avoid large empty patches.
+        List<Vector2> candidates = BuildRuptureCoverageCandidates();
+        for (int i = 0; i < candidates.Count && placed < target; i++)
+        {
+            Vector2 center = candidates[i];
+            float angle = GetRuptureFlowAngle(center);
+            float ringT = GetRuptureRingT(center);
+            float roll = Range(0f, 1f);
+            bool success;
+
+            if (!HasMinCenterSpacing(center, placedCenters, ruptureMinCenterSpacing))
+            {
+                continue;
+            }
+
+            if (ringT < 0.30f)
+            {
+                // Core: compact blockers.
+                success = roll < 0.55f
+                    ? TryPlacePillarObstacle($"Obstacle_RuptureCorePillar_{serial}", center, Range(0.45f, 0.76f), parent)
+                    : TryPlaceDiamondObstacle($"Obstacle_RuptureCoreDiamond_{serial}", center, Range(0.85f, 1.25f), parent);
+            }
+            else if (ringT < 0.70f && roll < 0.45f)
+            {
+                Vector2 size = new Vector2(Range(1.15f, 2.0f), Range(0.55f, 0.88f));
+                float rotation = angle + Range(-11f, 11f);
+                success = TryPlaceRectangleObstacle($"Obstacle_Rupture_{serial}", center, size, rotation, parent);
+            }
+            else if (ringT < 0.85f && roll < 0.72f)
+            {
+                Vector2 size = new Vector2(Range(1.1f, 1.9f), Range(0.58f, 0.92f));
+                float rotation = angle + Range(-9f, 9f);
+                success = TryPlaceCapsuleObstacle($"Obstacle_RuptureCapsule_{serial}", center, size, false, rotation, parent);
+            }
+            else if (roll < 0.88f)
+            {
+                success = TryPlaceDiamondObstacle($"Obstacle_RuptureDiamond_{serial}", center, Range(0.9f, 1.45f), parent);
+            }
+            else
+            {
+                success = TryPlacePillarObstacle($"Obstacle_RupturePillar_{serial}", center, Range(0.42f, 0.72f), parent);
+            }
+
+            if (success)
+            {
+                placed++;
+                serial++;
+                placedCenters.Add(center);
+            }
+        }
+
         int attempts = 0;
-        int maxAttempts = target * placementAttemptsPerObstacle;
+        int maxAttempts = target * placementAttemptsPerObstacle * 2;
 
         while (placed < target && attempts < maxAttempts)
         {
             attempts++;
 
             float roll = Range(0f, 1f);
-            float angle = Range(0f, 360f);
-            float radius = Range(1.5f, Mathf.Min(arenaWidth, arenaHeight) * 0.43f);
-            Vector2 center = new Vector2(Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad)) * radius;
+            Vector2 center = GetRuptureCircularPosition();
+            float angle = GetRuptureFlowAngle(center);
 
             bool success;
+            if (!HasMinCenterSpacing(center, placedCenters, ruptureMinCenterSpacing))
+            {
+                continue;
+            }
+
             if (roll < 0.48f)
             {
-                Vector2 size = new Vector2(Range(2.2f, 4.4f), Range(0.75f, 1.25f));
-                float rotation = angle + Range(-28f, 28f);
+                Vector2 size = new Vector2(Range(1.4f, 2.4f), Range(0.62f, 0.95f));
+                float rotation = angle + Range(-10f, 10f);
                 success = TryPlaceRectangleObstacle($"Obstacle_Rupture_{serial}", center, size, rotation, parent);
             }
             else if (roll < 0.70f)
             {
-                Vector2 size = new Vector2(Range(1.6f, 3.1f), Range(0.9f, 1.3f));
-                float rotation = angle + Range(-20f, 20f);
+                Vector2 size = new Vector2(Range(1.25f, 2.1f), Range(0.66f, 1.0f));
+                float rotation = angle + Range(-8f, 8f);
                 success = TryPlaceCapsuleObstacle($"Obstacle_RuptureCapsule_{serial}", center, size, false, rotation, parent);
             }
             else if (roll < 0.84f)
@@ -446,15 +790,65 @@ public class ProceduralArenaGenerator : MonoBehaviour
             }
             else
             {
-                success = TryPlaceLObstacle($"Obstacle_RuptureL_{serial}", center, Range(2.0f, 3.4f), Range(1.9f, 3.0f), Range(0.65f, 0.95f), Range(0, 4), parent);
+                success = TryPlaceLObstacle($"Obstacle_RuptureL_{serial}", center, Range(1.6f, 2.7f), Range(1.5f, 2.6f), Range(0.55f, 0.82f), Range(0, 4), parent);
             }
 
             if (success)
             {
                 placed++;
                 serial++;
+                placedCenters.Add(center);
             }
         }
+
+        int fallbackAttempts = target * 3;
+        for (int i = 0; i < fallbackAttempts && placed < target; i++)
+        {
+            Vector2 center = GetRuptureCircularPosition();
+            bool success;
+
+            if (!HasMinCenterSpacing(center, placedCenters, ruptureMinCenterSpacing))
+            {
+                continue;
+            }
+
+            if (Range(0f, 1f) < 0.5f)
+            {
+                success = TryPlacePillarObstacle($"Obstacle_RuptureFillPillar_{serial}", center, Range(0.45f, 0.78f), parent);
+            }
+            else
+            {
+                success = TryPlaceDiamondObstacle($"Obstacle_RuptureFillDiamond_{serial}", center, Range(0.9f, 1.4f), parent);
+            }
+
+            if (success)
+            {
+                placed++;
+                serial++;
+                placedCenters.Add(center);
+            }
+        }
+
+    }
+
+    private bool CreateMandatoryRuptureCore(Transform parent)
+    {
+        float diameter = Mathf.Max(0.8f, ruptureCoreDiameter);
+        Vector2 center = Vector2.zero;
+        Vector2 size = new Vector2(diameter, diameter);
+        Color color = Color.Lerp(palette.obstacleBase, palette.obstacleAccent, 0.55f);
+
+        GameObject go = CreateBlock("Obstacle_RuptureCore_Center", center, size, color, parent);
+        SpriteRenderer renderer = go.GetComponent<SpriteRenderer>();
+        renderer.sprite = CircleSpriteProvider.Get();
+        renderer.drawMode = SpriteDrawMode.Sliced;
+        renderer.size = size;
+
+        CircleCollider2D collider = go.AddComponent<CircleCollider2D>();
+        collider.radius = diameter * 0.5f;
+
+        RegisterFootprint(CenterRect(center, size));
+        return true;
     }
 
     private void CreateThemedDynamicObstacles(Transform parent)
@@ -526,9 +920,8 @@ public class ProceduralArenaGenerator : MonoBehaviour
     private bool TryCreateRuptureDynamic(string name, Transform parent)
     {
         float roll = Range(0f, 1f);
-        float angle = Range(0f, 360f);
-        float radius = Range(2.0f, Mathf.Min(arenaWidth, arenaHeight) * 0.40f);
-        Vector2 center = new Vector2(Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad)) * radius;
+            Vector2 center = GetRuptureCircularPosition();
+            float angle = GetRuptureFlowAngle(center);
 
         if (roll < 0.4f)
         {
@@ -835,7 +1228,61 @@ public class ProceduralArenaGenerator : MonoBehaviour
     {
         CreateLaneStrips(parent);
         CreateWallMarkers(parent);
+        if (activeTheme == ArenaTheme.RuptureZone)
+        {
+            CreateRuptureRingGuides(parent);
+        }
         CreateObstacleEdgeLights(parent);
+    }
+
+    private void CreateRuptureRingGuides(Transform parent)
+    {
+        int segments = 48;
+        float margin = edgeClearance + 0.35f;
+        float minX = -arenaWidth * 0.5f + margin;
+        float maxX = arenaWidth * 0.5f - margin;
+        float minY = -arenaHeight * 0.5f + margin;
+        float maxY = arenaHeight * 0.5f - margin;
+
+        for (int a = 0; a < ruptureAnchors.Count; a++)
+        {
+            Vector2 anchor = ruptureAnchors[a];
+            float extentX = Mathf.Min(anchor.x - minX, maxX - anchor.x) - 0.1f;
+            float extentY = Mathf.Min(anchor.y - minY, maxY - anchor.y) - 0.1f;
+            extentX = Mathf.Max(ruptureRingRadiusMin + 0.1f, extentX);
+            extentY = Mathf.Max(ruptureRingRadiusMin + 0.1f, extentY);
+
+            float maxAxisExtent = Mathf.Max(extentX, extentY);
+            int ringCount = Mathf.Max(Mathf.Max(8, ruptureRingsPerAnchor), Mathf.CeilToInt(maxAxisExtent / 1.05f));
+
+            for (int ring = 0; ring < ringCount; ring++)
+            {
+                float t = ringCount == 1 ? 1f : (ring + 1f) / ringCount;
+                float rx = Mathf.Lerp(ruptureRingRadiusMin, extentX, t);
+                float ry = Mathf.Lerp(ruptureRingRadiusMin, extentY, t);
+                float segLen = Mathf.Max(0.16f, (2f * Mathf.PI * Mathf.Max(rx, ry)) / segments * 0.28f);
+
+                for (int s = 0; s < segments; s++)
+                {
+                    float ang = (360f / segments) * s;
+                    Vector2 dir = new Vector2(Mathf.Cos(ang * Mathf.Deg2Rad), Mathf.Sin(ang * Mathf.Deg2Rad));
+                    Vector2 pos = anchor + new Vector2(dir.x * rx, dir.y * ry);
+
+                    if (pos.x <= -arenaWidth * 0.5f + margin || pos.x >= arenaWidth * 0.5f - margin ||
+                        pos.y <= -arenaHeight * 0.5f + margin || pos.y >= arenaHeight * 0.5f - margin)
+                    {
+                        continue;
+                    }
+
+                    Vector2 size = new Vector2(segLen, 0.06f);
+                    GameObject segment = CreateBlock($"RuptureGuide_{a}_{ring}_{s}", pos, size, new Color(palette.detail.r, palette.detail.g, palette.detail.b, palette.detail.a * 0.6f), parent);
+                    Vector2 tangent = new Vector2(-Mathf.Sin(ang * Mathf.Deg2Rad) * rx, Mathf.Cos(ang * Mathf.Deg2Rad) * ry);
+                    float tangentAngle = Mathf.Atan2(tangent.y, tangent.x) * Mathf.Rad2Deg;
+                    segment.transform.rotation = Quaternion.Euler(0f, 0f, tangentAngle);
+                    segment.GetComponent<SpriteRenderer>().sortingOrder = -2;
+                }
+            }
+        }
     }
 
     private void CreateLaneStrips(Transform parent)
@@ -953,6 +1400,17 @@ public class ProceduralArenaGenerator : MonoBehaviour
         float angle = Range(0f, Mathf.PI * 2f);
         float radius = Mathf.Sqrt(Range(0f, 1f));
         return new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+    }
+
+    private Vector2 GetRandomRupturePosition()
+    {
+        float margin = Mathf.Max(edgeClearance + 0.6f, ruptureAnchorPadding);
+        float minX = -arenaWidth * 0.5f + margin;
+        float maxX = arenaWidth * 0.5f - margin;
+        float minY = -arenaHeight * 0.5f + margin;
+        float maxY = arenaHeight * 0.5f - margin;
+
+        return new Vector2(Range(minX, maxX), Range(minY, maxY));
     }
 
     private float Range(float min, float max)

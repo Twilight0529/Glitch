@@ -150,12 +150,12 @@ public class EnemyController : MonoBehaviour
     {
         if (player == null)
         {
-            player = FindFirstObjectByType<PlayerController>();
+            player = FindAnyObjectByType<PlayerController>();
         }
 
         if (gameManager == null)
         {
-            gameManager = FindFirstObjectByType<GameManager>();
+            gameManager = FindAnyObjectByType<GameManager>();
         }
 
         ResolveArenaBounds();
@@ -227,7 +227,7 @@ public class EnemyController : MonoBehaviour
         navSize = fallbackArenaSize;
         navOrigin = new Vector2(-navSize.x * 0.5f, -navSize.y * 0.5f);
 
-        ProceduralArenaGenerator generator = FindFirstObjectByType<ProceduralArenaGenerator>();
+        ProceduralArenaGenerator generator = FindAnyObjectByType<ProceduralArenaGenerator>();
         if (generator == null)
         {
             return;
