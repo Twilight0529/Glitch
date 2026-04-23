@@ -7,6 +7,7 @@ using UnityEngine.SceneManagement;
 public static class LevelSceneGenerator
 {
     private const string RootName = "__GeneratedArena";
+    private const string MainMenuRootName = "__GeneratedMainMenu";
     private const float TargetArenaWidth = 32f;
     private const float TargetArenaHeight = 18f;
     private const float CameraPadding = 1.4f;
@@ -38,6 +39,7 @@ public static class LevelSceneGenerator
         GameObject root = new GameObject(RootName);
 
         GameManager gameManager = CreateGameManager(root.transform);
+        CreateMenuController(root.transform, gameManager);
         PlayerController player = CreatePlayer(root.transform);
         EnemyController enemy = CreateEnemy(root.transform, player, gameManager);
         CreateArenaGenerator(root.transform, player.transform, enemy.transform);
@@ -46,6 +48,52 @@ public static class LevelSceneGenerator
         Selection.activeGameObject = root;
 
         Debug.Log("Level scene generated: GameManager, Player, Anomaly and procedural arena are ready.");
+    }
+
+    [MenuItem("Glitch/Generate/Setup Main Menu Scene")]
+    public static void SetupMainMenuScene()
+    {
+        if (Application.isPlaying)
+        {
+            Debug.LogWarning("Stop Play Mode before generating the scene.");
+            return;
+        }
+
+        Scene scene = SceneManager.GetActiveScene();
+        if (!scene.IsValid() || !scene.isLoaded)
+        {
+            Debug.LogError("No active loaded scene found.");
+            return;
+        }
+
+        GameObject gameplayRoot = GameObject.Find(RootName);
+        if (gameplayRoot != null)
+        {
+            Object.DestroyImmediate(gameplayRoot);
+        }
+
+        GameObject menuRoot = GameObject.Find(MainMenuRootName);
+        if (menuRoot != null)
+        {
+            Object.DestroyImmediate(menuRoot);
+        }
+
+        EnsureCamera(TargetArenaWidth, TargetArenaHeight);
+
+        menuRoot = new GameObject(MainMenuRootName);
+
+        GameObject controllerGo = new GameObject("MainMenuController");
+        controllerGo.transform.SetParent(menuRoot.transform, false);
+        MainMenuController controller = controllerGo.AddComponent<MainMenuController>();
+
+        SerializedObject so = new SerializedObject(controller);
+        so.FindProperty("gameplaySceneName").stringValue = "Game";
+        so.ApplyModifiedPropertiesWithoutUndo();
+
+        EditorSceneManager.MarkSceneDirty(scene);
+        Selection.activeGameObject = menuRoot;
+
+        Debug.Log("Main menu scene generated. Add this scene and your gameplay scene to Build Settings.");
     }
 
     private static void EnsureCamera(float arenaWidth, float arenaHeight)
@@ -73,6 +121,19 @@ public static class LevelSceneGenerator
         GameObject go = new GameObject("GameManager");
         go.transform.SetParent(parent, false);
         return go.AddComponent<GameManager>();
+    }
+
+    private static GameMenuController CreateMenuController(Transform parent, GameManager gameManager)
+    {
+        GameObject go = new GameObject("GameMenuController");
+        go.transform.SetParent(parent, false);
+        GameMenuController controller = go.AddComponent<GameMenuController>();
+
+        SerializedObject so = new SerializedObject(controller);
+        so.FindProperty("gameManager").objectReferenceValue = gameManager;
+        so.ApplyModifiedPropertiesWithoutUndo();
+
+        return controller;
     }
 
     private static PlayerController CreatePlayer(Transform parent)

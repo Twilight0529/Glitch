@@ -24,6 +24,11 @@ public class GameManager : MonoBehaviour
     private ProceduralArenaGenerator arenaGenerator;
     private string levelType = "Unknown";
 
+    private void Awake()
+    {
+        EnsureMenuController();
+    }
+
     private void Start()
     {
         RefreshLevelType();
@@ -77,6 +82,11 @@ public class GameManager : MonoBehaviour
 
     private void OnGUI()
     {
+        if (GameMenuController.ShouldHideGameplayHud)
+        {
+            return;
+        }
+
         const int margin = 12;
 
         GUI.Label(new Rect(margin, margin, 350f, 25f), $"Survival Time: {SurvivalTime:F1}s");
@@ -97,5 +107,16 @@ public class GameManager : MonoBehaviour
         {
             levelType = arenaGenerator.ActiveThemeLabel;
         }
+    }
+
+    private void EnsureMenuController()
+    {
+        if (FindAnyObjectByType<GameMenuController>() != null)
+        {
+            return;
+        }
+
+        GameObject go = new GameObject("GameMenuController");
+        go.AddComponent<GameMenuController>();
     }
 }
