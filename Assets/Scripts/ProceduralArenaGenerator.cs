@@ -5,13 +5,13 @@ using UnityEngine;
 public class ProceduralArenaGenerator : MonoBehaviour
 {
     [Header("Arena")]
-    [SerializeField] private float arenaWidth = 24f;
-    [SerializeField] private float arenaHeight = 14f;
+    [SerializeField] private float arenaWidth = 32f;
+    [SerializeField] private float arenaHeight = 18f;
     [SerializeField] private float wallThickness = 1f;
 
     [Header("Obstacles")]
-    [SerializeField] private int minObstacles = 7;
-    [SerializeField] private int maxObstacles = 12;
+    [SerializeField] private int minObstacles = 10;
+    [SerializeField] private int maxObstacles = 16;
     [SerializeField] private Vector2 obstacleSizeMin = new Vector2(1.2f, 1.2f);
     [SerializeField] private Vector2 obstacleSizeMax = new Vector2(3.1f, 2.4f);
     [SerializeField] private float edgeClearance = 0.6f;

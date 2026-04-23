@@ -39,7 +39,7 @@ public class EnemyController : MonoBehaviour
 
     [Header("Navigation Grid")]
     [SerializeField] private LayerMask obstacleMask = ~0;
-    [SerializeField] private Vector2 fallbackArenaSize = new Vector2(24f, 14f);
+    [SerializeField] private Vector2 fallbackArenaSize = new Vector2(32f, 18f);
     [SerializeField] private float nodeSize = 0.6f;
     [SerializeField] private float nodeProbePadding = 0.10f;
     [SerializeField] private float repathInterval = 0.16f;

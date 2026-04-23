@@ -7,6 +7,9 @@ using UnityEngine.SceneManagement;
 public static class LevelSceneGenerator
 {
     private const string RootName = "__GeneratedArena";
+    private const float TargetArenaWidth = 32f;
+    private const float TargetArenaHeight = 18f;
+    private const float CameraPadding = 1.4f;
 
     [MenuItem("Glitch/Generate/Setup Current Level Scene")]
     public static void SetupCurrentLevelScene()
@@ -30,7 +33,7 @@ public static class LevelSceneGenerator
             Object.DestroyImmediate(existingRoot);
         }
 
-        EnsureCamera();
+        EnsureCamera(TargetArenaWidth, TargetArenaHeight);
 
         GameObject root = new GameObject(RootName);
 
@@ -45,7 +48,7 @@ public static class LevelSceneGenerator
         Debug.Log("Level scene generated: GameManager, Player, Anomaly and procedural arena are ready.");
     }
 
-    private static void EnsureCamera()
+    private static void EnsureCamera(float arenaWidth, float arenaHeight)
     {
         Camera cam = Camera.main;
         if (cam == null)
@@ -56,7 +59,10 @@ public static class LevelSceneGenerator
         }
 
         cam.orthographic = true;
-        cam.orthographicSize = 8f;
+        float halfHeight = arenaHeight * 0.5f + CameraPadding;
+        float halfWidth = arenaWidth * 0.5f + CameraPadding;
+        float aspect = Mathf.Max(0.1f, cam.aspect);
+        cam.orthographicSize = Mathf.Max(halfHeight, halfWidth / aspect);
         cam.transform.position = new Vector3(0f, 0f, -10f);
         cam.clearFlags = CameraClearFlags.SolidColor;
         cam.backgroundColor = new Color(0.05f, 0.05f, 0.07f);
@@ -109,13 +115,17 @@ public static class LevelSceneGenerator
     private static void CreateArenaGenerator(Transform parent, Transform player, Transform anomaly)
     {
         ProceduralArenaGenerator generator = parent.gameObject.AddComponent<ProceduralArenaGenerator>();
-        generator.SetRuntimeReferences(player, anomaly);
-        generator.GenerateNow();
-
         SerializedObject so = new SerializedObject(generator);
+        so.FindProperty("arenaWidth").floatValue = TargetArenaWidth;
+        so.FindProperty("arenaHeight").floatValue = TargetArenaHeight;
+        so.FindProperty("minObstacles").intValue = 10;
+        so.FindProperty("maxObstacles").intValue = 16;
         so.FindProperty("generateOnAwake").boolValue = true;
         so.FindProperty("randomizeSeedEachRun").boolValue = true;
         so.ApplyModifiedPropertiesWithoutUndo();
+
+        generator.SetRuntimeReferences(player, anomaly);
+        generator.GenerateNow();
     }
 
     private static GameObject CreateActorVisual(string name, Vector2 position, Color color, float scale, Transform parent)
