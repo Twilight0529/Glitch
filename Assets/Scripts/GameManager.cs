@@ -14,6 +14,7 @@ public class GameManager : MonoBehaviour
     public bool IsGameOver { get; private set; }
     public float SurvivalTime { get; private set; }
     public float DifficultyMultiplier => 1f + (SurvivalTime * difficultyRampPerSecond);
+    public string CurrentLevelTypeLabel => levelType;
 
     public float CurrentBehaviorChangeInterval
     {
