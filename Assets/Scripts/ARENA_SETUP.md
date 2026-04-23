@@ -9,23 +9,30 @@
 This setup creates automatically:
 - `GameManager`
 - `Player` (WASD, 4-direction movement)
-- `Anomaly` (3 behavior patterns, switching every 5s)
-- `ProceduralArenaGenerator` (closed walls + procedural static obstacles)
+- `Anomaly` (adaptive pathfinding, switching behavior every 5s)
+- `ProceduralArenaGenerator` (closed walls + procedural obstacles + thematic details)
 
-## Procedural behavior
+## Rule-based procedural themes
 
-- Every run generates a new obstacle layout.
-- The arena remains closed (containment preserved).
-- Obstacles avoid immediate spawn overlap around player/anomaly.
+Each run can select one arena theme with explicit layout rules:
+- `ContainmentLab`: orthogonal blocks with protected crossing lanes.
+- `StorageBay`: clustered structures by quadrant with mixed shapes.
+- `RuptureZone`: diagonal fractures and irregular formations.
+
+Global rules always enforced:
+- Closed arena and no escape.
+- Reserved circulation lanes (avoid visual clutter chaos).
+- Spawn safety around player and anomaly.
+- Obstacle separation gap to keep readable movement paths.
 
 ## Useful tuning
 
 On `__GeneratedArena` object (`ProceduralArenaGenerator`):
+- `arenaWidth` / `arenaHeight`
+- `primaryLaneWidth` / `secondaryLaneWidth`
 - `minObstacles` / `maxObstacles`
-- `obstacleSizeMin` / `obstacleSizeMax`
-- `spawnSafeRadius`
-- `randomizeSeedEachRun`
-- `fixedSeed` (disable randomize to reproduce one map)
+- `randomizeThemeEachRun` / `fixedTheme`
+- `randomizeSeedEachRun` / `fixedSeed`
 
 ## Optional manual regeneration
 
@@ -34,5 +41,5 @@ On `__GeneratedArena` object (`ProceduralArenaGenerator`):
 ## Design Alignment
 
 - Constant pressure: anomaly never stops chasing.
-- Instability: anomaly behavior changes every 5 seconds and terrain changes each run.
-- Containment: walls always close the arena, no escape route.
+- Instability: anomaly behavior changes every 5 seconds and map style varies by theme.
+- Containment: walls always close the arena and core circulation remains intentionally structured.

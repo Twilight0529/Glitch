@@ -118,8 +118,11 @@ public static class LevelSceneGenerator
         SerializedObject so = new SerializedObject(generator);
         so.FindProperty("arenaWidth").floatValue = TargetArenaWidth;
         so.FindProperty("arenaHeight").floatValue = TargetArenaHeight;
+        so.FindProperty("primaryLaneWidth").floatValue = 3.4f;
+        so.FindProperty("secondaryLaneWidth").floatValue = 2.6f;
         so.FindProperty("minObstacles").intValue = 10;
         so.FindProperty("maxObstacles").intValue = 16;
+        so.FindProperty("randomizeThemeEachRun").boolValue = true;
         so.FindProperty("generateOnAwake").boolValue = true;
         so.FindProperty("randomizeSeedEachRun").boolValue = true;
         so.ApplyModifiedPropertiesWithoutUndo();
