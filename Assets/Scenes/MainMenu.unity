@@ -166,8 +166,12 @@ MonoBehaviour:
   gameTitle: GLITCH
   gameSubtitle: Containment Breach
   gameplaySceneName: Level1
+  titleFontOverride: {fileID: 0}
+  uiFontOverride: {fileID: 0}
   masterVolume: 0.8
   uiScale: 1
+  menuElementsFadeDelay: 0.38
+  menuElementsFadeDuration: 1.37
 --- !u!1 &519420028
 GameObject:
   m_ObjectHideFlags: 0
