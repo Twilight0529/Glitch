@@ -15,6 +15,10 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private float masterVolume = 0.8f;
     [SerializeField] private float uiScale = 1f;
 
+    [Header("Menu Reveal")]
+    [SerializeField] private float menuElementsFadeDelay = 0.5f;
+    [SerializeField] private float menuElementsFadeDuration = 0.65f;
+
     private bool showOptions;
     private Font titleFont;
     private Font uiFont;
@@ -27,23 +31,29 @@ public class MainMenuController : MonoBehaviour
     private int cachedScreenWidth;
     private int cachedScreenHeight;
     private float cachedUiScale = -1f;
+    private bool revealTimerStarted;
+    private float revealStartTimestamp;
+    private float menuElementsAlpha;
 
     private void Awake()
     {
         Time.timeScale = 1f;
         Cursor.visible = true;
         ResolveFonts();
+        ResetMenuReveal();
     }
 
     private void OnGUI()
     {
+        EnsureStyles();
+        DrawThematicBackground();
+
+        UpdateMenuReveal();
+
         if (SceneTransitionController.IsFading)
         {
             return;
         }
-
-        EnsureStyles();
-        DrawThematicBackground();
 
         if (showOptions)
         {
@@ -61,10 +71,17 @@ public class MainMenuController : MonoBehaviour
 
     private void DrawMainMenu()
     {
+        if (menuElementsAlpha <= 0.001f)
+        {
+            return;
+        }
+
         DrawScreenFade(0.38f);
         float bob = Mathf.Sin(Time.unscaledTime * 1.35f) * 6f;
         Rect panel = CenterRect(390f, 360f);
         panel.y += bob;
+        Color old = GUI.color;
+        GUI.color = new Color(1f, 1f, 1f, menuElementsAlpha);
         DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.88f), new Color(0.47f, 0.56f, 0.72f, 0.55f));
 
         Rect area = new Rect(panel.x + 18f, panel.y + 14f, panel.width - 36f, panel.height - 24f);
@@ -92,14 +109,22 @@ public class MainMenuController : MonoBehaviour
         }
 
         GUILayout.EndArea();
+        GUI.color = old;
     }
 
     private void DrawOptionsMenu()
     {
+        if (menuElementsAlpha <= 0.001f)
+        {
+            return;
+        }
+
         DrawScreenFade(0.46f);
         float bob = Mathf.Sin(Time.unscaledTime * 1.2f + 1.2f) * 5f;
         Rect panel = CenterRect(420f, 380f);
         panel.y += bob;
+        Color old = GUI.color;
+        GUI.color = new Color(1f, 1f, 1f, menuElementsAlpha);
         DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.90f), new Color(0.47f, 0.56f, 0.72f, 0.55f));
 
         Rect area = new Rect(panel.x + 18f, panel.y + 16f, panel.width - 36f, panel.height - 28f);
@@ -123,6 +148,7 @@ public class MainMenuController : MonoBehaviour
         }
 
         GUILayout.EndArea();
+        GUI.color = old;
     }
 
     private void StartGameplay()
@@ -293,10 +319,14 @@ public class MainMenuController : MonoBehaviour
 
     private bool DrawMenuButton(string label, float height)
     {
+        bool canInteract = menuElementsAlpha >= 0.99f && !SceneTransitionController.IsFading;
         Color old = GUI.color;
         float pulse = 0.86f + 0.14f * (0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 2f));
         GUI.color = new Color(pulse, pulse, pulse, 1f);
+        bool oldEnabled = GUI.enabled;
+        GUI.enabled = canInteract;
         bool clicked = GUILayout.Button(label, buttonStyle, GUILayout.Height(height));
+        GUI.enabled = oldEnabled;
         GUI.color = old;
         return clicked;
     }
@@ -413,5 +443,31 @@ public class MainMenuController : MonoBehaviour
         GUI.color = color;
         GUI.DrawTexture(rect, Texture2D.whiteTexture);
         GUI.color = old;
+    }
+
+    private void ResetMenuReveal()
+    {
+        revealTimerStarted = false;
+        revealStartTimestamp = 0f;
+        menuElementsAlpha = 0f;
+    }
+
+    private void UpdateMenuReveal()
+    {
+        if (SceneTransitionController.IsFading)
+        {
+            ResetMenuReveal();
+            return;
+        }
+
+        if (!revealTimerStarted)
+        {
+            revealTimerStarted = true;
+            revealStartTimestamp = Time.unscaledTime;
+        }
+
+        float elapsed = Time.unscaledTime - revealStartTimestamp;
+        float t = (elapsed - menuElementsFadeDelay) / Mathf.Max(0.01f, menuElementsFadeDuration);
+        menuElementsAlpha = Mathf.Clamp01(t);
     }
 }
