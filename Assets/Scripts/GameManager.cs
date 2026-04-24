@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
@@ -77,13 +76,13 @@ public class GameManager : MonoBehaviour
 
         if (reloadTimer >= reloadDelay)
         {
-            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+            SceneTransitionController.ReloadActiveScene();
         }
     }
 
     private void OnGUI()
     {
-        if (GameMenuController.ShouldHideGameplayHud)
+        if (GameMenuController.ShouldHideGameplayHud || SceneTransitionController.IsFading)
         {
             return;
         }

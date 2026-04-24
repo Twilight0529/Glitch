@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 public class MainMenuController : MonoBehaviour
 {
@@ -38,6 +37,11 @@ public class MainMenuController : MonoBehaviour
 
     private void OnGUI()
     {
+        if (SceneTransitionController.IsFading)
+        {
+            return;
+        }
+
         EnsureStyles();
         DrawThematicBackground();
 
@@ -125,7 +129,7 @@ public class MainMenuController : MonoBehaviour
     {
         if (!string.IsNullOrWhiteSpace(gameplaySceneName) && Application.CanStreamedLevelBeLoaded(gameplaySceneName))
         {
-            SceneManager.LoadScene(gameplaySceneName);
+            SceneTransitionController.LoadScene(gameplaySceneName);
             return;
         }
 

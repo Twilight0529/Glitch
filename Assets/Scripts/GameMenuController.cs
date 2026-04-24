@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
@@ -51,6 +50,11 @@ public class GameMenuController : MonoBehaviour
 
     private void Update()
     {
+        if (SceneTransitionController.IsFading)
+        {
+            return;
+        }
+
         if (gameManager == null)
         {
             gameManager = FindAnyObjectByType<GameManager>();
@@ -110,8 +114,7 @@ public class GameMenuController : MonoBehaviour
     private void RestartLevel()
     {
         Time.timeScale = 1f;
-        Scene active = SceneManager.GetActiveScene();
-        SceneManager.LoadScene(active.buildIndex);
+        SceneTransitionController.ReloadActiveScene();
     }
 
     private void ReturnToMainMenu()
@@ -119,16 +122,21 @@ public class GameMenuController : MonoBehaviour
         Time.timeScale = 1f;
         if (!string.IsNullOrWhiteSpace(mainMenuSceneName) && Application.CanStreamedLevelBeLoaded(mainMenuSceneName))
         {
-            SceneManager.LoadScene(mainMenuSceneName);
+            SceneTransitionController.LoadScene(mainMenuSceneName);
             return;
         }
 
         Debug.LogWarning($"Main menu scene '{mainMenuSceneName}' is not in Build Settings. Loading scene index 0.");
-        SceneManager.LoadScene(0);
+        SceneTransitionController.LoadScene(0);
     }
 
     private void OnGUI()
     {
+        if (SceneTransitionController.IsFading)
+        {
+            return;
+        }
+
         EnsureStyles();
 
         if (state == OverlayState.Paused)
