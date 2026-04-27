@@ -22,6 +22,9 @@ public class GameMenuController : MonoBehaviour
     [SerializeField] private string defeatTitle = "CONTAINMENT FAILURE";
     [SerializeField] private string defeatSubtitle = "La anomalia te alcanzo.";
     [SerializeField] private float defeatPulseSpeed = 1.8f;
+    [SerializeField] private float glitchJitterStrength = 6.5f;
+    [SerializeField] private float glitchSplitStrength = 2.2f;
+    [SerializeField] private float glitchBarOpacity = 0.14f;
 
     public static bool ShouldHideGameplayHud { get; private set; }
 
@@ -225,18 +228,28 @@ public class GameMenuController : MonoBehaviour
 
     private void DrawDefeatMenu()
     {
-        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * defeatPulseSpeed);
+        float t = Time.unscaledTime;
+        float pulse = 0.5f + 0.5f * Mathf.Sin(t * defeatPulseSpeed);
+        float glitch = Mathf.Clamp01(0.25f + pulse * 0.85f);
         DrawScreenFade(0.70f);
-        DrawDefeatBackdrop(pulse);
+        DrawDefeatBackdrop(pulse, glitch, t);
 
         Rect panel = CenterRect(470f, 360f);
+        float jitterX = (Mathf.PerlinNoise(t * 17f, 0.37f) - 0.5f) * 2f * glitchJitterStrength * glitch;
+        float jitterY = (Mathf.PerlinNoise(0.77f, t * 19f) - 0.5f) * 2f * (glitchJitterStrength * 0.6f) * glitch;
+        panel.x += jitterX;
+        panel.y += jitterY;
         DrawPanel(panel, new Color(0.07f, 0.03f, 0.06f, 0.92f), new Color(0.94f, 0.42f, 0.55f, 0.65f));
 
         Rect area = new Rect(panel.x + 20f, panel.y + 14f, panel.width - 40f, panel.height - 24f);
         GUILayout.BeginArea(area);
-        GUILayout.Label(defeatTitle, titleStyle);
+        Rect titleRect = new Rect(0f, 0f, area.width, 44f);
+        DrawGlitchLabel(titleRect, defeatTitle, titleStyle, glitch);
+        GUILayout.Space(44f);
         GUILayout.Space(2f);
-        GUILayout.Label(defeatSubtitle, subtitleStyle);
+        Rect subtitleRect = new Rect(0f, 46f, area.width, 24f);
+        DrawGlitchLabel(subtitleRect, defeatSubtitle, subtitleStyle, glitch * 0.7f);
+        GUILayout.Space(24f);
         GUILayout.Space(16f);
 
         string level = gameManager != null ? gameManager.CurrentLevelTypeLabel : "Unknown";
@@ -263,7 +276,7 @@ public class GameMenuController : MonoBehaviour
         GUILayout.EndArea();
     }
 
-    private static void DrawDefeatBackdrop(float pulse)
+    private void DrawDefeatBackdrop(float pulse, float glitch, float time)
     {
         Color ring = new Color(0.98f, 0.45f, 0.60f, 0.18f + pulse * 0.10f);
         Vector2 center = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
@@ -276,6 +289,32 @@ public class GameMenuController : MonoBehaviour
         {
             DrawSolidRect(new Rect(-40f, y, Screen.width + 80f, 8f), stripe);
         }
+
+        float barStep = Mathf.Max(24f, Screen.height / 15f);
+        for (float y = 0f; y < Screen.height + barStep; y += barStep)
+        {
+            float flow = Mathf.Repeat(y * 0.012f + time * 1.3f, 1f);
+            float width = Screen.width * Mathf.Lerp(0.2f, 0.82f, flow);
+            float offset = (Mathf.PerlinNoise(y * 0.03f, time * 5.2f) - 0.5f) * 60f * glitch;
+            float x = (Screen.width - width) * 0.5f + offset;
+            Color bar = new Color(1f, 0.34f, 0.48f, glitchBarOpacity * glitch);
+            DrawSolidRect(new Rect(x, y, width, 2f), bar);
+        }
+    }
+
+    private void DrawGlitchLabel(Rect rect, string text, GUIStyle style, float glitch)
+    {
+        float split = glitchSplitStrength * glitch;
+        Color old = GUI.color;
+
+        GUI.color = new Color(1f, 0.28f, 0.38f, 0.84f * glitch);
+        GUI.Label(new Rect(rect.x - split, rect.y, rect.width, rect.height), text, style);
+
+        GUI.color = new Color(0.24f, 0.98f, 1f, 0.78f * glitch);
+        GUI.Label(new Rect(rect.x + split, rect.y, rect.width, rect.height), text, style);
+
+        GUI.color = old;
+        GUI.Label(rect, text, style);
     }
 
     private static void DrawEllipseRing(Vector2 center, float radiusX, float radiusY, Color color)

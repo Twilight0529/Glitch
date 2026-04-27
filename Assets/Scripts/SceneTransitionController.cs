@@ -84,6 +84,15 @@ public class SceneTransitionController : MonoBehaviour
         SceneManager.sceneLoaded += OnSceneLoaded;
     }
 
+    private void Start()
+    {
+        // Safety net for the very first scene in case sceneLoaded timing is skipped.
+        if (transitionRoutine == null && entryFadeRoutine == null && overlayAlpha > 0.001f)
+        {
+            StartEntryFade(forceBlack: false);
+        }
+    }
+
     private void OnDisable()
     {
         SceneManager.sceneLoaded -= OnSceneLoaded;
