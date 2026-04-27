@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 
 public class ProceduralArenaGenerator : MonoBehaviour
@@ -69,6 +70,18 @@ public class ProceduralArenaGenerator : MonoBehaviour
     [SerializeField] private float ruptureMinCenterSpacing = 1.65f;
     [SerializeField] private float ruptureCoreDiameter = 1.55f;
 
+    [Header("Rupture Dynamic Orbit")]
+    [SerializeField] private int ruptureDynamicMin = 4;
+    [SerializeField] private int ruptureDynamicMax = 7;
+    [SerializeField] private float ruptureOrbitInnerPadding = 1.9f;
+    [SerializeField] private float ruptureOrbitRadiusGap = 1.35f;
+    [SerializeField] private Vector2 ruptureOrbitObstacleSizeMin = new Vector2(1.0f, 0.55f);
+    [SerializeField] private Vector2 ruptureOrbitObstacleSizeMax = new Vector2(2.2f, 0.95f);
+    [SerializeField] private Vector2 ruptureOrbitAngularSpeedRange = new Vector2(18f, 55f);
+    [SerializeField] private Vector2 ruptureOrbitRadialAmplitudeRange = new Vector2(0.12f, 0.55f);
+    [SerializeField] private Vector2 ruptureOrbitRadialSpeedRange = new Vector2(0.55f, 1.35f);
+    [SerializeField] private int ruptureOrbitPathSamples = 32;
+
     [Header("Random")]
     [SerializeField] private bool randomizeSeedEachRun = true;
     [SerializeField] private int fixedSeed = 12345;
@@ -89,6 +102,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
     private readonly List<Vector2> ruptureAnchors = new List<Vector2>();
     private readonly List<List<Vector2>> ruptureAnchorSlots = new List<List<Vector2>>();
     private readonly List<int> ruptureAnchorSlotCursor = new List<int>();
+    private readonly List<float> ruptureOrbitRadii = new List<float>();
     private int ruptureAnchorCursor;
     private int ruptureActiveAnchorIndex = -1;
     private int ruptureAnchorBurstCounter;
@@ -125,6 +139,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
         ruptureAnchors.Clear();
         ruptureAnchorSlots.Clear();
         ruptureAnchorSlotCursor.Clear();
+        ruptureOrbitRadii.Clear();
         ruptureAnchorCursor = 0;
         ruptureActiveAnchorIndex = -1;
         ruptureAnchorBurstCounter = 0;
@@ -154,6 +169,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
         CreateThemedObstacles(obstaclesRoot);
         CreateThemedDynamicObstacles(dynamicRoot);
         CreateThemedDetails(detailsRoot);
+        ConfigureRuptureMapEvent(obstaclesRoot, dynamicRoot);
     }
 
     public void SetRuntimeReferences(Transform player, Transform anomaly)
@@ -252,6 +268,86 @@ public class ProceduralArenaGenerator : MonoBehaviour
         }
 
         DestroyImmediate(target);
+    }
+
+    private static void DestroyComponentByPlayState(Component component)
+    {
+        if (component == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(component);
+            return;
+        }
+
+        DestroyImmediate(component);
+    }
+
+    private void ConfigureRuptureMapEvent(Transform obstaclesRoot, Transform dynamicRoot)
+    {
+        Type controllerType = FindTypeInLoadedAssemblies("RuptureSpinEventController");
+        if (controllerType == null)
+        {
+            return;
+        }
+
+        Component controller = GetComponent(controllerType);
+        if (activeTheme != ArenaTheme.RuptureZone)
+        {
+            if (controller != null)
+            {
+                DestroyComponentByPlayState(controller);
+            }
+
+            return;
+        }
+
+        if (controller == null)
+        {
+            controller = gameObject.AddComponent(controllerType);
+        }
+
+        MethodInfo configureMethod = controllerType.GetMethod("Configure", BindingFlags.Instance | BindingFlags.Public);
+        if (configureMethod != null)
+        {
+            configureMethod.Invoke(controller, new object[] { transform, obstaclesRoot, dynamicRoot });
+        }
+    }
+
+    private static Type FindTypeInLoadedAssemblies(string typeName)
+    {
+        Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+        for (int i = 0; i < assemblies.Length; i++)
+        {
+            Type[] types;
+            try
+            {
+                types = assemblies[i].GetTypes();
+            }
+            catch (ReflectionTypeLoadException ex)
+            {
+                types = ex.Types;
+            }
+
+            if (types == null)
+            {
+                continue;
+            }
+
+            for (int t = 0; t < types.Length; t++)
+            {
+                Type type = types[t];
+                if (type != null && type.Name == typeName)
+                {
+                    return type;
+                }
+            }
+        }
+
+        return null;
     }
 
     private void BuildReservedLanes()
@@ -854,6 +950,12 @@ public class ProceduralArenaGenerator : MonoBehaviour
     private void CreateThemedDynamicObstacles(Transform parent)
     {
         int target = Range(minDynamicObstacles, maxDynamicObstacles + 1);
+        if (activeTheme == ArenaTheme.RuptureZone)
+        {
+            int ruptureTarget = Range(Mathf.Max(1, ruptureDynamicMin), Mathf.Max(ruptureDynamicMin + 1, ruptureDynamicMax + 1));
+            target = Mathf.Max(target, ruptureTarget);
+        }
+
         int placed = 0;
         int attempts = 0;
         int maxAttempts = target * placementAttemptsPerObstacle;
@@ -919,11 +1021,16 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     private bool TryCreateRuptureDynamic(string name, Transform parent)
     {
-        float roll = Range(0f, 1f);
-            Vector2 center = GetRuptureCircularPosition();
-            float angle = GetRuptureFlowAngle(center);
+        if (TryPlaceDynamicRuptureOrbiter(name + "_Orbit", parent))
+        {
+            return true;
+        }
 
-        if (roll < 0.4f)
+        float roll = Range(0f, 1f);
+        Vector2 center = GetRuptureCircularPosition();
+        float angle = GetRuptureFlowAngle(center);
+
+        if (roll < 0.55f)
         {
             Vector2 size = new Vector2(Range(1.8f, 2.9f), Range(0.65f, 1.0f));
             Vector2 axis = new Vector2(Mathf.Cos((angle + 90f) * Mathf.Deg2Rad), Mathf.Sin((angle + 90f) * Mathf.Deg2Rad)).normalized;
@@ -931,6 +1038,113 @@ public class ProceduralArenaGenerator : MonoBehaviour
         }
 
         return TryPlaceDynamicPulse(name, center, Range(0.9f, 1.4f), parent);
+    }
+
+    private bool TryPlaceDynamicRuptureOrbiter(string name, Transform parent)
+    {
+        Vector2 orbitCenter = transform.position;
+        float edgeMargin = edgeClearance + 0.95f;
+        float maxOrbitRadius = Mathf.Min(arenaWidth, arenaHeight) * 0.5f - edgeMargin;
+        float minOrbitRadius = ruptureCoreDiameter * 0.5f + ruptureOrbitInnerPadding;
+
+        if (maxOrbitRadius <= minOrbitRadius + 0.25f)
+        {
+            return false;
+        }
+
+        float selectedRadius = -1f;
+        const int radiusAttempts = 20;
+        for (int i = 0; i < radiusAttempts; i++)
+        {
+            float t = Mathf.Pow(Range(0f, 1f), 0.72f);
+            float candidate = Mathf.Lerp(minOrbitRadius, maxOrbitRadius, t);
+
+            bool hasGap = true;
+            for (int j = 0; j < ruptureOrbitRadii.Count; j++)
+            {
+                if (Mathf.Abs(ruptureOrbitRadii[j] - candidate) < ruptureOrbitRadiusGap)
+                {
+                    hasGap = false;
+                    break;
+                }
+            }
+
+            if (hasGap)
+            {
+                selectedRadius = candidate;
+                break;
+            }
+        }
+
+        if (selectedRadius < 0f)
+        {
+            selectedRadius = Range(minOrbitRadius, maxOrbitRadius);
+        }
+
+        Vector2 size = new Vector2(
+            Range(ruptureOrbitObstacleSizeMin.x, ruptureOrbitObstacleSizeMax.x),
+            Range(ruptureOrbitObstacleSizeMin.y, ruptureOrbitObstacleSizeMax.y));
+        float halfExtent = Mathf.Max(size.x, size.y) * 0.5f;
+
+        float maxAmplitudeByBounds = Mathf.Max(0.04f, maxOrbitRadius - selectedRadius - halfExtent - 0.1f);
+        float maxAmplitudeByCore = Mathf.Max(0.04f, selectedRadius - minOrbitRadius);
+        float allowedAmplitude = Mathf.Min(maxAmplitudeByBounds, maxAmplitudeByCore, ruptureOrbitRadialAmplitudeRange.y);
+        float radialAmplitude = Mathf.Clamp(ruptureOrbitRadialAmplitudeRange.x, 0.04f, allowedAmplitude);
+        if (allowedAmplitude > radialAmplitude + 0.01f)
+        {
+            radialAmplitude = Range(radialAmplitude, allowedAmplitude);
+        }
+
+        float startAngleDeg = Range(0f, 360f);
+        Vector2 dir = new Vector2(Mathf.Cos(startAngleDeg * Mathf.Deg2Rad), Mathf.Sin(startAngleDeg * Mathf.Deg2Rad));
+        Vector2 spawnPosition = orbitCenter + dir * selectedRadius;
+        Rect spawnFootprint = CenterRect(spawnPosition, size);
+
+        if (!IsValidFootprint(spawnFootprint))
+        {
+            return false;
+        }
+
+        float minRadius = Mathf.Max(0.05f, selectedRadius - radialAmplitude);
+        float maxRadius = selectedRadius + radialAmplitude;
+        if (!IsOrbitPathClear(orbitCenter, minRadius, maxRadius, halfExtent))
+        {
+            return false;
+        }
+
+        GameObject go = CreateBlock(name, spawnPosition, size, palette.dynamic, parent);
+        BoxCollider2D collider = go.AddComponent<BoxCollider2D>();
+        collider.size = size;
+        ConfigureRuptureOrbitCollision(collider);
+
+        Rigidbody2D rb = go.AddComponent<Rigidbody2D>();
+        rb.bodyType = RigidbodyType2D.Kinematic;
+        rb.gravityScale = 0f;
+        rb.interpolation = RigidbodyInterpolation2D.Interpolate;
+        rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+        rb.freezeRotation = true;
+
+        float angularSpeed = Range(ruptureOrbitAngularSpeedRange.x, ruptureOrbitAngularSpeedRange.y);
+        if (Range(0f, 1f) < 0.5f)
+        {
+            angularSpeed = -angularSpeed;
+        }
+
+        float radialSpeed = Range(ruptureOrbitRadialSpeedRange.x, ruptureOrbitRadialSpeedRange.y);
+        float phase = Range(0f, Mathf.PI * 2f);
+        DynamicObstacleController controller = go.AddComponent<DynamicObstacleController>();
+        controller.ConfigureOrbitSpiral(
+            orbitCenter,
+            selectedRadius,
+            angularSpeed,
+            radialAmplitude,
+            radialSpeed,
+            phase,
+            true);
+
+        ruptureOrbitRadii.Add(selectedRadius);
+        RegisterDynamicFootprint(spawnFootprint);
+        return true;
     }
 
     private bool TryPlaceDynamicSlider(string name, Vector2 center, Vector2 size, Vector2 axis, Transform parent)
@@ -1189,6 +1403,61 @@ public class ProceduralArenaGenerator : MonoBehaviour
     private void RegisterDynamicFootprint(Rect rect)
     {
         blockedAreas.Add(InflateRect(rect, dynamicObstacleGap));
+    }
+
+    private bool IsOrbitPathClear(Vector2 orbitCenter, float minRadius, float maxRadius, float clearance)
+    {
+        int samples = Mathf.Max(12, ruptureOrbitPathSamples);
+        float inner = Mathf.Max(0.05f, minRadius);
+        float outer = Mathf.Max(inner, maxRadius);
+        float middle = (inner + outer) * 0.5f;
+        float[] ringRadii = { inner, middle, outer };
+        float minX = -arenaWidth * 0.5f + edgeClearance + clearance;
+        float maxX = arenaWidth * 0.5f - edgeClearance - clearance;
+        float minY = -arenaHeight * 0.5f + edgeClearance + clearance;
+        float maxY = arenaHeight * 0.5f - edgeClearance - clearance;
+
+        for (int ring = 0; ring < ringRadii.Length; ring++)
+        {
+            float radius = ringRadii[ring];
+            for (int i = 0; i < samples; i++)
+            {
+                float angle = (i / (float)samples) * Mathf.PI * 2f;
+                Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+                Vector2 point = orbitCenter + dir * radius;
+                if (point.x < minX || point.x > maxX || point.y < minY || point.y > maxY)
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private static void ConfigureRuptureOrbitCollision(Collider2D orbitCollider)
+    {
+        if (orbitCollider == null)
+        {
+            return;
+        }
+
+        Collider2D[] all = FindObjectsByType<Collider2D>();
+        for (int i = 0; i < all.Length; i++)
+        {
+            Collider2D other = all[i];
+            if (other == null || other == orbitCollider || other.isTrigger)
+            {
+                continue;
+            }
+
+            if (other.GetComponent<PlayerController>() != null || other.GetComponent<EnemyController>() != null)
+            {
+                continue;
+            }
+
+            Physics2D.IgnoreCollision(orbitCollider, other, true);
+        }
     }
 
     private bool IsInsideSafeRadius(Rect rect, Transform actor)
