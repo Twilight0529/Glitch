@@ -183,8 +183,15 @@ public static class LevelSceneGenerator
         so.FindProperty("secondaryLaneWidth").floatValue = 2.6f;
         so.FindProperty("minObstacles").intValue = 10;
         so.FindProperty("maxObstacles").intValue = 16;
-        so.FindProperty("minDynamicObstacles").intValue = 1;
-        so.FindProperty("maxDynamicObstacles").intValue = 3;
+        so.FindProperty("minDynamicObstacles").intValue = 0;
+        so.FindProperty("maxDynamicObstacles").intValue = 0;
+        SerializedProperty ruptureDynamicMin = so.FindProperty("ruptureDynamicMin");
+        SerializedProperty ruptureDynamicMax = so.FindProperty("ruptureDynamicMax");
+        if (ruptureDynamicMin != null && ruptureDynamicMax != null)
+        {
+            ruptureDynamicMin.intValue = 0;
+            ruptureDynamicMax.intValue = 0;
+        }
         so.FindProperty("randomizeThemeEachRun").boolValue = true;
         so.FindProperty("generateOnAwake").boolValue = true;
         so.FindProperty("randomizeSeedEachRun").boolValue = true;

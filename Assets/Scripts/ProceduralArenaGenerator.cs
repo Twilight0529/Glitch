@@ -40,8 +40,8 @@ public class ProceduralArenaGenerator : MonoBehaviour
     [SerializeField] private int placementAttemptsPerObstacle = 36;
 
     [Header("Dynamic Obstacles")]
-    [SerializeField] private int minDynamicObstacles = 1;
-    [SerializeField] private int maxDynamicObstacles = 3;
+    [SerializeField] private int minDynamicObstacles = 0;
+    [SerializeField] private int maxDynamicObstacles = 0;
     [SerializeField] private float dynamicObstacleGap = 0.5f;
     [SerializeField] private Vector2 sliderDistanceRange = new Vector2(0.9f, 1.8f);
     [SerializeField] private Vector2 sliderSpeedRange = new Vector2(0.7f, 1.35f);
@@ -71,8 +71,8 @@ public class ProceduralArenaGenerator : MonoBehaviour
     [SerializeField] private float ruptureCoreDiameter = 1.55f;
 
     [Header("Rupture Dynamic Orbit")]
-    [SerializeField] private int ruptureDynamicMin = 4;
-    [SerializeField] private int ruptureDynamicMax = 7;
+    [SerializeField] private int ruptureDynamicMin = 0;
+    [SerializeField] private int ruptureDynamicMax = 0;
     [SerializeField] private float ruptureOrbitInnerPadding = 1.9f;
     [SerializeField] private float ruptureOrbitRadiusGap = 1.35f;
     [SerializeField] private Vector2 ruptureOrbitObstacleSizeMin = new Vector2(1.0f, 0.55f);
@@ -117,6 +117,8 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     private void Awake()
     {
+        RemoveLegacyDynamicObstacles();
+
         if (!generateOnAwake)
         {
             return;
@@ -244,18 +246,40 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     private void ClearGeneratedGeometry()
     {
-        DestroyGeneratedChild(BoundsRootName);
-        DestroyGeneratedChild(ObstaclesRootName);
-        DestroyGeneratedChild(DynamicRootName);
-        DestroyGeneratedChild(DetailsRootName);
+        DestroyGeneratedChildren(BoundsRootName);
+        DestroyGeneratedChildren(ObstaclesRootName);
+        DestroyGeneratedChildren(DynamicRootName);
+        DestroyGeneratedChildren(DetailsRootName);
     }
 
-    private void DestroyGeneratedChild(string childName)
+    private void DestroyGeneratedChildren(string childName)
     {
-        Transform child = transform.Find(childName);
-        if (child != null)
+        for (int i = transform.childCount - 1; i >= 0; i--)
         {
+            Transform child = transform.GetChild(i);
+            if (child == null || child.name != childName)
+            {
+                continue;
+            }
+
             DestroyByPlayState(child.gameObject);
+        }
+    }
+
+    private void RemoveLegacyDynamicObstacles()
+    {
+        DestroyGeneratedChildren(DynamicRootName);
+
+        DynamicObstacleController[] legacyControllers = FindObjectsOfType<DynamicObstacleController>(true);
+        for (int i = 0; i < legacyControllers.Length; i++)
+        {
+            DynamicObstacleController controller = legacyControllers[i];
+            if (controller == null)
+            {
+                continue;
+            }
+
+            DestroyByPlayState(controller.gameObject);
         }
     }
 
@@ -949,40 +973,9 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     private void CreateThemedDynamicObstacles(Transform parent)
     {
-        int target = Range(minDynamicObstacles, maxDynamicObstacles + 1);
-        if (activeTheme == ArenaTheme.RuptureZone)
-        {
-            int ruptureTarget = Range(Mathf.Max(1, ruptureDynamicMin), Mathf.Max(ruptureDynamicMin + 1, ruptureDynamicMax + 1));
-            target = Mathf.Max(target, ruptureTarget);
-        }
-
-        int placed = 0;
-        int attempts = 0;
-        int maxAttempts = target * placementAttemptsPerObstacle;
-
-        while (placed < target && attempts < maxAttempts)
-        {
-            attempts++;
-            bool success;
-
-            switch (activeTheme)
-            {
-                case ArenaTheme.ContainmentLab:
-                    success = TryCreateLabDynamic($"Dynamic_Lab_{placed}", parent);
-                    break;
-                case ArenaTheme.StorageBay:
-                    success = TryCreateStorageDynamic($"Dynamic_Storage_{placed}", parent);
-                    break;
-                default:
-                    success = TryCreateRuptureDynamic($"Dynamic_Rupture_{placed}", parent);
-                    break;
-            }
-
-            if (success)
-            {
-                placed++;
-            }
-        }
+        // Dynamic obstacles are intentionally disabled.
+        // Map events now drive movement for Rupture without pink moving blockers.
+        return;
     }
 
     private bool TryCreateLabDynamic(string name, Transform parent)

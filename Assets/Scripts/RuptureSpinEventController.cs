@@ -6,15 +6,17 @@ public class RuptureSpinEventController : MonoBehaviour
     private struct ObstacleBinding
     {
         public Transform transform;
+        public Rigidbody2D rigidbody;
         public DynamicObstacleController dynamicController;
-        public float orbitMultiplier;
+        public float obstacleRadius;
         public float spinMultiplier;
     }
 
     private struct ObstacleSnapshot
     {
-        public Vector2 initialOffset;
-        public float initialRotationZ;
+        public ObstacleBinding binding;
+        public Vector2 startOffset;
+        public float startRotationZ;
         public bool dynamicWasEnabled;
     }
 
@@ -24,30 +26,43 @@ public class RuptureSpinEventController : MonoBehaviour
     [SerializeField] private float durationMin = 3f;
     [SerializeField] private float durationMax = 5f;
 
-    [Header("Spin Motion")]
-    [SerializeField] private float angularSpeedMin = 20f;
-    [SerializeField] private float angularSpeedMax = 38f;
-    [SerializeField] private Vector2 orbitMultiplierRange = new Vector2(0.9f, 1.15f);
-    [SerializeField] private Vector2 spinMultiplierRange = new Vector2(0.75f, 1.35f);
+    [Header("Spin Burst (2D)")]
+    [SerializeField] private float maxSweepAngle = 70f;
+    [SerializeField] private float minSweepAngle = 3f;
+    [SerializeField, Range(0.5f, 0.99f)] private float safeAngleFactor = 0.92f;
+    [SerializeField] private float angleSampleStep = 0.75f;
+    [SerializeField] private Vector2 spinMultiplierRange = new Vector2(0.8f, 1.25f);
+
+    [Header("Bounds")]
+    [SerializeField] private float boundsPadding = 0.08f;
 
     private Transform centerTransform;
     private readonly List<ObstacleBinding> obstacles = new List<ObstacleBinding>();
-    private readonly Dictionary<Transform, ObstacleSnapshot> snapshots = new Dictionary<Transform, ObstacleSnapshot>();
+    private readonly List<ObstacleSnapshot> snapshots = new List<ObstacleSnapshot>();
     private readonly HashSet<Transform> dedupe = new HashSet<Transform>();
+
+    private float interiorLeft;
+    private float interiorRight;
+    private float interiorBottom;
+    private float interiorTop;
 
     private float nextEventTimer;
     private float eventTimer;
-    private float activeDuration;
-    private float globalAngularSpeed;
+    private float eventDuration;
+    private float plannedAngleDeg;
     private bool initialized;
     private bool eventActive;
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
         centerTransform = center != null ? center : transform;
+        BuildInteriorBounds();
         RebuildObstacleList(staticObstaclesRoot, dynamicObstaclesRoot);
+
         initialized = true;
         eventActive = false;
+        eventTimer = 0f;
+        plannedAngleDeg = 0f;
         snapshots.Clear();
         ScheduleNextEvent();
     }
@@ -66,7 +81,7 @@ public class RuptureSpinEventController : MonoBehaviour
 
         if (eventActive)
         {
-            TickActiveEvent();
+            TickEvent();
             return;
         }
 
@@ -81,7 +96,6 @@ public class RuptureSpinEventController : MonoBehaviour
     {
         obstacles.Clear();
         dedupe.Clear();
-
         AddObstaclesFromRoot(staticObstaclesRoot);
         AddObstaclesFromRoot(dynamicObstaclesRoot);
     }
@@ -113,12 +127,12 @@ public class RuptureSpinEventController : MonoBehaviour
                 continue;
             }
 
-            DynamicObstacleController dynamicController = target.GetComponent<DynamicObstacleController>();
             ObstacleBinding binding = new ObstacleBinding
             {
                 transform = target,
-                dynamicController = dynamicController,
-                orbitMultiplier = Random.Range(orbitMultiplierRange.x, orbitMultiplierRange.y),
+                rigidbody = target.GetComponent<Rigidbody2D>(),
+                dynamicController = target.GetComponent<DynamicObstacleController>(),
+                obstacleRadius = Mathf.Max(col.bounds.extents.x, col.bounds.extents.y),
                 spinMultiplier = Random.Range(spinMultiplierRange.x, spinMultiplierRange.y)
             };
 
@@ -128,22 +142,15 @@ public class RuptureSpinEventController : MonoBehaviour
 
     private void BeginEvent()
     {
-        if (obstacles.Count == 0)
+        if (obstacles.Count == 0 || centerTransform == null)
         {
             ScheduleNextEvent();
             return;
         }
 
-        eventActive = true;
-        eventTimer = 0f;
-        activeDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
-        globalAngularSpeed = Random.Range(Mathf.Min(angularSpeedMin, angularSpeedMax), Mathf.Max(angularSpeedMin, angularSpeedMax));
-        if (Random.value < 0.5f)
-        {
-            globalAngularSpeed = -globalAngularSpeed;
-        }
-
+        BuildInteriorBounds();
         snapshots.Clear();
+
         Vector2 center = centerTransform.position;
         for (int i = 0; i < obstacles.Count; i++)
         {
@@ -160,47 +167,180 @@ public class RuptureSpinEventController : MonoBehaviour
                 binding.dynamicController.enabled = false;
             }
 
-            snapshots[binding.transform] = new ObstacleSnapshot
+            ObstacleSnapshot snapshot = new ObstacleSnapshot
             {
-                initialOffset = (Vector2)binding.transform.position - center,
-                initialRotationZ = binding.transform.eulerAngles.z,
+                binding = binding,
+                startOffset = (Vector2)binding.transform.position - center,
+                startRotationZ = binding.transform.eulerAngles.z,
                 dynamicWasEnabled = dynamicWasEnabled
             };
+
+            snapshots.Add(snapshot);
+        }
+
+        if (snapshots.Count == 0)
+        {
+            EndEvent(restoreControllers: true);
+            ScheduleNextEvent();
+            return;
+        }
+
+        float direction = Random.value < 0.5f ? -1f : 1f;
+        float safeAngle = ComputeSafeSweepAngle(direction);
+        float targetAbsAngle = Mathf.Min(maxSweepAngle, safeAngle * safeAngleFactor);
+
+        targetAbsAngle = Mathf.Max(minSweepAngle, targetAbsAngle);
+
+        plannedAngleDeg = targetAbsAngle * direction;
+        eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
+        eventTimer = 0f;
+        eventActive = true;
+    }
+
+    private void TickEvent()
+    {
+        eventTimer += Time.deltaTime;
+        float progress = Mathf.Clamp01(eventTimer / Mathf.Max(0.0001f, eventDuration));
+
+        // 2D pulse: rotate out and come back, so the layout does not drift between events.
+        float upDown = 1f - Mathf.Abs(progress * 2f - 1f); // 0 -> 1 -> 0
+        float eased = upDown * upDown * (3f - 2f * upDown);
+        float angleDeg = plannedAngleDeg * eased;
+
+        ApplyAngle(angleDeg);
+
+        if (progress >= 1f)
+        {
+            EndEvent(restoreControllers: true);
+            ScheduleNextEvent();
         }
     }
 
-    private void TickActiveEvent()
+    private void ApplyAngle(float angleDeg)
     {
-        eventTimer += Time.deltaTime;
-        Vector2 center = centerTransform.position;
-
-        for (int i = 0; i < obstacles.Count; i++)
+        if (centerTransform == null)
         {
-            ObstacleBinding binding = obstacles[i];
+            return;
+        }
+
+        Vector2 center = centerTransform.position;
+        float angleRad = angleDeg * Mathf.Deg2Rad;
+        float cos = Mathf.Cos(angleRad);
+        float sin = Mathf.Sin(angleRad);
+
+        for (int i = 0; i < snapshots.Count; i++)
+        {
+            ObstacleSnapshot snapshot = snapshots[i];
+            ObstacleBinding binding = snapshot.binding;
             if (binding.transform == null)
             {
                 continue;
             }
 
-            if (!snapshots.TryGetValue(binding.transform, out ObstacleSnapshot snapshot))
+            Vector2 start = snapshot.startOffset;
+            Vector2 rotated = new Vector2(
+                start.x * cos - start.y * sin,
+                start.x * sin + start.y * cos);
+
+            Vector2 targetPosition = center + rotated;
+            float margin = binding.obstacleRadius + boundsPadding;
+            targetPosition.x = Mathf.Clamp(targetPosition.x, interiorLeft + margin, interiorRight - margin);
+            targetPosition.y = Mathf.Clamp(targetPosition.y, interiorBottom + margin, interiorTop - margin);
+
+            if (binding.rigidbody != null && binding.rigidbody.bodyType == RigidbodyType2D.Kinematic)
+            {
+                binding.rigidbody.MovePosition(targetPosition);
+            }
+            else
+            {
+                binding.transform.position = new Vector3(targetPosition.x, targetPosition.y, binding.transform.position.z);
+            }
+
+            float targetRotZ = snapshot.startRotationZ + angleDeg * binding.spinMultiplier;
+            if (binding.rigidbody != null && binding.rigidbody.bodyType == RigidbodyType2D.Kinematic)
+            {
+                binding.rigidbody.MoveRotation(targetRotZ);
+            }
+            else
+            {
+                binding.transform.rotation = Quaternion.Euler(0f, 0f, targetRotZ);
+            }
+        }
+    }
+
+    private float ComputeSafeSweepAngle(float direction)
+    {
+        float dir = Mathf.Sign(direction);
+        float step = Mathf.Max(0.2f, angleSampleStep);
+        float safe = 0f;
+
+        for (float absAngle = step; absAngle <= maxSweepAngle; absAngle += step)
+        {
+            float signedAngle = absAngle * dir;
+            if (!IsAngleSafe(signedAngle))
+            {
+                break;
+            }
+
+            safe = absAngle;
+        }
+
+        float low = safe;
+        float high = Mathf.Min(maxSweepAngle, safe + step);
+        for (int i = 0; i < 8; i++)
+        {
+            float mid = (low + high) * 0.5f;
+            if (IsAngleSafe(mid * dir))
+            {
+                low = mid;
+            }
+            else
+            {
+                high = mid;
+            }
+        }
+
+        return low;
+    }
+
+    private bool IsAngleSafe(float angleDeg)
+    {
+        if (centerTransform == null)
+        {
+            return false;
+        }
+
+        Vector2 center = centerTransform.position;
+        float angleRad = angleDeg * Mathf.Deg2Rad;
+        float cos = Mathf.Cos(angleRad);
+        float sin = Mathf.Sin(angleRad);
+
+        for (int i = 0; i < snapshots.Count; i++)
+        {
+            ObstacleSnapshot snapshot = snapshots[i];
+            ObstacleBinding binding = snapshot.binding;
+            if (binding.transform == null)
             {
                 continue;
             }
 
-            float angle = globalAngularSpeed * eventTimer * binding.orbitMultiplier;
-            Vector2 offset = Rotate(snapshot.initialOffset, angle);
-            Vector2 targetPosition = center + offset;
-            binding.transform.position = new Vector3(targetPosition.x, targetPosition.y, binding.transform.position.z);
+            Vector2 start = snapshot.startOffset;
+            Vector2 rotated = new Vector2(
+                start.x * cos - start.y * sin,
+                start.x * sin + start.y * cos);
 
-            float targetRotZ = snapshot.initialRotationZ + angle * binding.spinMultiplier;
-            binding.transform.rotation = Quaternion.Euler(0f, 0f, targetRotZ);
+            Vector2 position = center + rotated;
+            float margin = binding.obstacleRadius + boundsPadding;
+            if (position.x < interiorLeft + margin ||
+                position.x > interiorRight - margin ||
+                position.y < interiorBottom + margin ||
+                position.y > interiorTop - margin)
+            {
+                return false;
+            }
         }
 
-        if (eventTimer >= activeDuration)
-        {
-            EndEvent(restoreControllers: true);
-            ScheduleNextEvent();
-        }
+        return true;
     }
 
     private void EndEvent(bool restoreControllers)
@@ -211,25 +351,127 @@ public class RuptureSpinEventController : MonoBehaviour
         }
 
         eventActive = false;
+        eventTimer = 0f;
+        plannedAngleDeg = 0f;
 
         if (restoreControllers)
         {
-            for (int i = 0; i < obstacles.Count; i++)
+            for (int i = 0; i < snapshots.Count; i++)
             {
-                ObstacleBinding binding = obstacles[i];
-                if (binding.transform == null || binding.dynamicController == null)
+                ObstacleSnapshot snapshot = snapshots[i];
+                ObstacleBinding binding = snapshot.binding;
+                if (binding.dynamicController == null)
                 {
                     continue;
                 }
 
-                if (snapshots.TryGetValue(binding.transform, out ObstacleSnapshot snapshot))
-                {
-                    binding.dynamicController.enabled = snapshot.dynamicWasEnabled;
-                }
+                binding.dynamicController.enabled = snapshot.dynamicWasEnabled;
             }
         }
 
         snapshots.Clear();
+    }
+
+    private void BuildInteriorBounds()
+    {
+        Vector2 center = centerTransform != null ? (Vector2)centerTransform.position : Vector2.zero;
+
+        float halfW = 16f;
+        float halfH = 9f;
+        ProceduralArenaGenerator generator = centerTransform != null ? centerTransform.GetComponent<ProceduralArenaGenerator>() : null;
+        if (generator != null)
+        {
+            halfW = generator.ArenaWidth * 0.5f;
+            halfH = generator.ArenaHeight * 0.5f;
+        }
+
+        interiorLeft = center.x - halfW + 0.5f;
+        interiorRight = center.x + halfW - 0.5f;
+        interiorBottom = center.y - halfH + 0.5f;
+        interiorTop = center.y + halfH - 0.5f;
+
+        TryReadInteriorFromWalls(center);
+    }
+
+    private void TryReadInteriorFromWalls(Vector2 center)
+    {
+        if (centerTransform == null)
+        {
+            return;
+        }
+
+        Transform boundsRoot = centerTransform.Find("Bounds");
+        if (boundsRoot == null)
+        {
+            return;
+        }
+
+        BoxCollider2D[] walls = boundsRoot.GetComponentsInChildren<BoxCollider2D>(true);
+        bool hasLeft = false;
+        bool hasRight = false;
+        bool hasBottom = false;
+        bool hasTop = false;
+        float left = float.NegativeInfinity;
+        float right = float.PositiveInfinity;
+        float bottom = float.NegativeInfinity;
+        float top = float.PositiveInfinity;
+
+        for (int i = 0; i < walls.Length; i++)
+        {
+            BoxCollider2D wall = walls[i];
+            if (wall == null)
+            {
+                continue;
+            }
+
+            Bounds b = wall.bounds;
+            if (b.size.x >= b.size.y)
+            {
+                if (b.center.y >= center.y)
+                {
+                    top = Mathf.Min(top, b.min.y);
+                    hasTop = true;
+                }
+                else
+                {
+                    bottom = Mathf.Max(bottom, b.max.y);
+                    hasBottom = true;
+                }
+            }
+            else
+            {
+                if (b.center.x >= center.x)
+                {
+                    right = Mathf.Min(right, b.min.x);
+                    hasRight = true;
+                }
+                else
+                {
+                    left = Mathf.Max(left, b.max.x);
+                    hasLeft = true;
+                }
+            }
+        }
+
+        if (hasLeft)
+        {
+            interiorLeft = left;
+        }
+
+        if (hasRight)
+        {
+            interiorRight = right;
+        }
+
+        if (hasBottom)
+        {
+            interiorBottom = bottom;
+        }
+
+        if (hasTop)
+        {
+            interiorTop = top;
+        }
     }
 
     private void ScheduleNextEvent()
@@ -237,13 +479,5 @@ public class RuptureSpinEventController : MonoBehaviour
         float min = Mathf.Min(intervalMin, intervalMax);
         float max = Mathf.Max(intervalMin, intervalMax);
         nextEventTimer = Random.Range(min, max);
-    }
-
-    private static Vector2 Rotate(Vector2 v, float degrees)
-    {
-        float r = degrees * Mathf.Deg2Rad;
-        float c = Mathf.Cos(r);
-        float s = Mathf.Sin(r);
-        return new Vector2(v.x * c - v.y * s, v.x * s + v.y * c);
     }
 }
