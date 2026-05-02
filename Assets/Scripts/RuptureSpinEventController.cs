@@ -24,18 +24,20 @@ public class RuptureSpinEventController : MonoBehaviour
     [Header("Event Timing")]
     [SerializeField] private float intervalMin = 8f;
     [SerializeField] private float intervalMax = 14f;
-    [SerializeField] private float durationMin = 5f;
-    [SerializeField] private float durationMax = 8f;
+    [SerializeField] private float durationMin = 7f;
+    [SerializeField] private float durationMax = 11f;
 
-    [Header("Spin Burst (2D)")]
+    [Header("Spin Motion (2D)")]
     [SerializeField] private float maxSweepAngle = 70f;
     [SerializeField] private float minSweepAngle = 3f;
     [SerializeField, Range(0.5f, 0.99f)] private float safeAngleFactor = 0.92f;
     [SerializeField] private float angleSampleStep = 0.75f;
     [SerializeField] private Vector2 spinMultiplierRange = new Vector2(0.8f, 1.25f);
-    [SerializeField] private int minOscillations = 3;
-    [SerializeField] private int maxOscillations = 6;
-    [SerializeField, Range(0f, 1f)] private float amplitudeDecay = 0.45f;
+    [SerializeField] private Vector2 angularSpeedRange = new Vector2(8f, 16f);
+    [SerializeField] private Vector2 directionChangeIntervalRange = new Vector2(0.9f, 4.5f);
+    [SerializeField] private float angularAcceleration = 22f;
+    [SerializeField] private float angularDeceleration = 30f;
+    [SerializeField, Range(0.5f, 0.95f)] private float boundaryTurnRatio = 0.82f;
 
     [Header("Bounds")]
     [SerializeField] private float boundsPadding = 0.08f;
@@ -57,8 +59,12 @@ public class RuptureSpinEventController : MonoBehaviour
     private float nextEventTimer;
     private float eventTimer;
     private float eventDuration;
-    private float amplitudeAngleDeg;
-    private int oscillationCount;
+    private float currentAngleDeg;
+    private float currentAngularSpeedDeg;
+    private float targetAngularSpeedDeg;
+    private float directionChangeTimer;
+    private float safePositiveAngleDeg;
+    private float safeNegativeAngleDeg;
     private bool initialized;
     private bool eventActive;
 
@@ -71,8 +77,12 @@ public class RuptureSpinEventController : MonoBehaviour
         initialized = true;
         eventActive = false;
         eventTimer = 0f;
-        amplitudeAngleDeg = 0f;
-        oscillationCount = 0;
+        currentAngleDeg = 0f;
+        currentAngularSpeedDeg = 0f;
+        targetAngularSpeedDeg = 0f;
+        directionChangeTimer = 0f;
+        safePositiveAngleDeg = 0f;
+        safeNegativeAngleDeg = 0f;
         snapshots.Clear();
         ScheduleNextEvent();
     }
@@ -218,17 +228,21 @@ public class RuptureSpinEventController : MonoBehaviour
             return;
         }
 
-        float direction = Random.value < 0.5f ? -1f : 1f;
-        float safeAnglePos = ComputeSafeSweepAngle(1f);
-        float safeAngleNeg = ComputeSafeSweepAngle(-1f);
-        float safeAngle = Mathf.Min(safeAnglePos, safeAngleNeg);
-        float targetAbsAngle = Mathf.Min(maxSweepAngle, safeAngle * safeAngleFactor);
+        safePositiveAngleDeg = Mathf.Min(maxSweepAngle, ComputeSafeSweepAngle(1f) * safeAngleFactor);
+        safeNegativeAngleDeg = Mathf.Min(maxSweepAngle, ComputeSafeSweepAngle(-1f) * safeAngleFactor);
+        if (safePositiveAngleDeg < minSweepAngle && safeNegativeAngleDeg < minSweepAngle)
+        {
+            EndEvent(restoreControllers: true);
+            ScheduleNextEvent();
+            return;
+        }
 
-        targetAbsAngle = Mathf.Max(minSweepAngle, targetAbsAngle);
-        amplitudeAngleDeg = targetAbsAngle * direction;
-        oscillationCount = Mathf.Max(1, Random.Range(minOscillations, maxOscillations + 1));
+        currentAngleDeg = 0f;
+        currentAngularSpeedDeg = 0f;
+        targetAngularSpeedDeg = 0f;
+        directionChangeTimer = 0f;
         eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
-        eventDuration = Mathf.Max(eventDuration, oscillationCount * 0.9f);
+        ChooseNextDirectionAndSpeed(forceDirectionChange: false);
         eventTimer = 0f;
         eventActive = true;
 
@@ -240,25 +254,88 @@ public class RuptureSpinEventController : MonoBehaviour
 
     private void TickEvent()
     {
-        eventTimer += Time.deltaTime;
+        float dt = Time.deltaTime;
+        eventTimer += dt;
         float progress = Mathf.Clamp01(eventTimer / Mathf.Max(0.0001f, eventDuration));
 
-        // Multi-oscillation 2D motion: swings to both sides with progressive damping.
-        float t = progress;
-        float phase = t * oscillationCount * Mathf.PI * 2f;
-        float damping = Mathf.Lerp(1f, Mathf.Clamp01(1f - amplitudeDecay), t);
-        float gateIn = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / 0.12f));
-        float gateOut = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((1f - t) / 0.18f));
-        float envelope = gateIn * gateOut * damping;
-        float angleDeg = amplitudeAngleDeg * Mathf.Sin(phase) * envelope;
+        directionChangeTimer -= dt;
+        if (directionChangeTimer <= 0f)
+        {
+            ChooseNextDirectionAndSpeed(forceDirectionChange: true);
+        }
 
-        ApplyAngle(angleDeg);
+        float gateIn = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress / 0.14f));
+        float gateOut = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((1f - progress) / 0.22f));
+        float envelope = gateIn * gateOut;
+        float targetSpeed = targetAngularSpeedDeg * envelope;
+        float response = Mathf.Abs(targetSpeed) > Mathf.Abs(currentAngularSpeedDeg) ? angularAcceleration : angularDeceleration;
+        currentAngularSpeedDeg = Mathf.MoveTowards(currentAngularSpeedDeg, targetSpeed, response * dt);
+
+        float candidateAngle = currentAngleDeg + currentAngularSpeedDeg * dt;
+        float maxPositive = Mathf.Max(minSweepAngle, safePositiveAngleDeg);
+        float maxNegative = Mathf.Max(minSweepAngle, safeNegativeAngleDeg);
+
+        if (candidateAngle > maxPositive)
+        {
+            candidateAngle = maxPositive;
+            currentAngularSpeedDeg = -Mathf.Abs(currentAngularSpeedDeg) * 0.35f;
+            ChooseNextDirectionAndSpeed(forceDirectionChange: true, forcedSign: -1f);
+        }
+        else if (candidateAngle < -maxNegative)
+        {
+            candidateAngle = -maxNegative;
+            currentAngularSpeedDeg = Mathf.Abs(currentAngularSpeedDeg) * 0.35f;
+            ChooseNextDirectionAndSpeed(forceDirectionChange: true, forcedSign: 1f);
+        }
+
+        currentAngleDeg = candidateAngle;
+        ApplyAngle(currentAngleDeg);
 
         if (progress >= 1f)
         {
             EndEvent(restoreControllers: true);
             ScheduleNextEvent();
         }
+    }
+
+    private void ChooseNextDirectionAndSpeed(bool forceDirectionChange, float forcedSign = 0f)
+    {
+        float sign;
+        if (forcedSign != 0f)
+        {
+            sign = Mathf.Sign(forcedSign);
+        }
+        else if (currentAngleDeg >= Mathf.Max(minSweepAngle, safePositiveAngleDeg) * boundaryTurnRatio)
+        {
+            sign = -1f;
+        }
+        else if (currentAngleDeg <= -Mathf.Max(minSweepAngle, safeNegativeAngleDeg) * boundaryTurnRatio)
+        {
+            sign = 1f;
+        }
+        else
+        {
+            float currentSign = Mathf.Sign(targetAngularSpeedDeg);
+            if (currentSign == 0f)
+            {
+                currentSign = Random.value < 0.5f ? -1f : 1f;
+            }
+
+            if (forceDirectionChange && Random.value < 0.75f)
+            {
+                sign = -currentSign;
+            }
+            else
+            {
+                sign = Random.value < 0.5f ? -1f : 1f;
+            }
+        }
+
+        float speed = Random.Range(Mathf.Min(angularSpeedRange.x, angularSpeedRange.y), Mathf.Max(angularSpeedRange.x, angularSpeedRange.y));
+        targetAngularSpeedDeg = sign * speed;
+        float minInterval = Mathf.Clamp(Mathf.Min(directionChangeIntervalRange.x, directionChangeIntervalRange.y), 0.1f, 5f);
+        float maxInterval = Mathf.Clamp(Mathf.Max(directionChangeIntervalRange.x, directionChangeIntervalRange.y), minInterval, 5f);
+        directionChangeTimer = Random.Range(minInterval, maxInterval);
     }
 
     private void ApplyAngle(float angleDeg)
@@ -397,8 +474,12 @@ public class RuptureSpinEventController : MonoBehaviour
 
         eventActive = false;
         eventTimer = 0f;
-        amplitudeAngleDeg = 0f;
-        oscillationCount = 0;
+        currentAngleDeg = 0f;
+        currentAngularSpeedDeg = 0f;
+        targetAngularSpeedDeg = 0f;
+        directionChangeTimer = 0f;
+        safePositiveAngleDeg = 0f;
+        safeNegativeAngleDeg = 0f;
 
         if (restoreControllers)
         {
