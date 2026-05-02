@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class RuptureSpinEventController : MonoBehaviour
 {
@@ -23,8 +24,8 @@ public class RuptureSpinEventController : MonoBehaviour
     [Header("Event Timing")]
     [SerializeField] private float intervalMin = 8f;
     [SerializeField] private float intervalMax = 14f;
-    [SerializeField] private float durationMin = 3f;
-    [SerializeField] private float durationMax = 5f;
+    [SerializeField] private float durationMin = 5f;
+    [SerializeField] private float durationMax = 8f;
 
     [Header("Spin Burst (2D)")]
     [SerializeField] private float maxSweepAngle = 70f;
@@ -32,9 +33,16 @@ public class RuptureSpinEventController : MonoBehaviour
     [SerializeField, Range(0.5f, 0.99f)] private float safeAngleFactor = 0.92f;
     [SerializeField] private float angleSampleStep = 0.75f;
     [SerializeField] private Vector2 spinMultiplierRange = new Vector2(0.8f, 1.25f);
+    [SerializeField] private int minOscillations = 3;
+    [SerializeField] private int maxOscillations = 6;
+    [SerializeField, Range(0f, 1f)] private float amplitudeDecay = 0.45f;
 
     [Header("Bounds")]
     [SerializeField] private float boundsPadding = 0.08f;
+
+    [Header("Debug")]
+    [SerializeField] private bool debugTriggerEnabled = true;
+    [SerializeField] private Key debugTriggerKey = Key.R;
 
     private Transform centerTransform;
     private readonly List<ObstacleBinding> obstacles = new List<ObstacleBinding>();
@@ -49,7 +57,8 @@ public class RuptureSpinEventController : MonoBehaviour
     private float nextEventTimer;
     private float eventTimer;
     private float eventDuration;
-    private float plannedAngleDeg;
+    private float amplitudeAngleDeg;
+    private int oscillationCount;
     private bool initialized;
     private bool eventActive;
 
@@ -62,7 +71,8 @@ public class RuptureSpinEventController : MonoBehaviour
         initialized = true;
         eventActive = false;
         eventTimer = 0f;
-        plannedAngleDeg = 0f;
+        amplitudeAngleDeg = 0f;
+        oscillationCount = 0;
         snapshots.Clear();
         ScheduleNextEvent();
     }
@@ -79,6 +89,12 @@ public class RuptureSpinEventController : MonoBehaviour
             return;
         }
 
+        if (!eventActive && WasDebugTriggerPressed())
+        {
+            BeginEvent(forceImmediate: true);
+            return;
+        }
+
         if (eventActive)
         {
             TickEvent();
@@ -88,8 +104,25 @@ public class RuptureSpinEventController : MonoBehaviour
         nextEventTimer -= Time.deltaTime;
         if (nextEventTimer <= 0f)
         {
-            BeginEvent();
+            BeginEvent(forceImmediate: false);
         }
+    }
+
+    private bool WasDebugTriggerPressed()
+    {
+        if (!debugTriggerEnabled)
+        {
+            return false;
+        }
+
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard == null)
+        {
+            return false;
+        }
+
+        var keyControl = keyboard[debugTriggerKey];
+        return keyControl != null && keyControl.wasPressedThisFrame;
     }
 
     private void RebuildObstacleList(Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
@@ -140,7 +173,7 @@ public class RuptureSpinEventController : MonoBehaviour
         }
     }
 
-    private void BeginEvent()
+    private void BeginEvent(bool forceImmediate)
     {
         if (obstacles.Count == 0 || centerTransform == null)
         {
@@ -186,15 +219,23 @@ public class RuptureSpinEventController : MonoBehaviour
         }
 
         float direction = Random.value < 0.5f ? -1f : 1f;
-        float safeAngle = ComputeSafeSweepAngle(direction);
+        float safeAnglePos = ComputeSafeSweepAngle(1f);
+        float safeAngleNeg = ComputeSafeSweepAngle(-1f);
+        float safeAngle = Mathf.Min(safeAnglePos, safeAngleNeg);
         float targetAbsAngle = Mathf.Min(maxSweepAngle, safeAngle * safeAngleFactor);
 
         targetAbsAngle = Mathf.Max(minSweepAngle, targetAbsAngle);
-
-        plannedAngleDeg = targetAbsAngle * direction;
+        amplitudeAngleDeg = targetAbsAngle * direction;
+        oscillationCount = Mathf.Max(1, Random.Range(minOscillations, maxOscillations + 1));
         eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
+        eventDuration = Mathf.Max(eventDuration, oscillationCount * 0.9f);
         eventTimer = 0f;
         eventActive = true;
+
+        if (forceImmediate)
+        {
+            nextEventTimer = Mathf.Max(intervalMin, 0.5f);
+        }
     }
 
     private void TickEvent()
@@ -202,10 +243,14 @@ public class RuptureSpinEventController : MonoBehaviour
         eventTimer += Time.deltaTime;
         float progress = Mathf.Clamp01(eventTimer / Mathf.Max(0.0001f, eventDuration));
 
-        // 2D pulse: rotate out and come back, so the layout does not drift between events.
-        float upDown = 1f - Mathf.Abs(progress * 2f - 1f); // 0 -> 1 -> 0
-        float eased = upDown * upDown * (3f - 2f * upDown);
-        float angleDeg = plannedAngleDeg * eased;
+        // Multi-oscillation 2D motion: swings to both sides with progressive damping.
+        float t = progress;
+        float phase = t * oscillationCount * Mathf.PI * 2f;
+        float damping = Mathf.Lerp(1f, Mathf.Clamp01(1f - amplitudeDecay), t);
+        float gateIn = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / 0.12f));
+        float gateOut = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((1f - t) / 0.18f));
+        float envelope = gateIn * gateOut * damping;
+        float angleDeg = amplitudeAngleDeg * Mathf.Sin(phase) * envelope;
 
         ApplyAngle(angleDeg);
 
@@ -352,7 +397,8 @@ public class RuptureSpinEventController : MonoBehaviour
 
         eventActive = false;
         eventTimer = 0f;
-        plannedAngleDeg = 0f;
+        amplitudeAngleDeg = 0f;
+        oscillationCount = 0;
 
         if (restoreControllers)
         {
