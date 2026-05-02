@@ -25,6 +25,9 @@ public class GameMenuController : MonoBehaviour
     [SerializeField] private float glitchJitterStrength = 6.5f;
     [SerializeField] private float glitchSplitStrength = 2.2f;
     [SerializeField] private float glitchBarOpacity = 0.14f;
+    [SerializeField, Range(0f, 1f)] private float hudGlitchWeight = 0.85f;
+    [SerializeField, Range(0f, 1f)] private float textGlitchWeight = 0.35f;
+    [SerializeField] private float panelJitterStrength = 1.1f;
 
     public static bool ShouldHideGameplayHud { get; private set; }
 
@@ -163,7 +166,9 @@ public class GameMenuController : MonoBehaviour
         {
             fontSize = 34,
             fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter
+            alignment = TextAnchor.MiddleCenter,
+            wordWrap = false,
+            clipping = TextClipping.Clip
         };
         titleStyle.normal.textColor = new Color(1f, 0.58f, 0.64f, 1f);
 
@@ -230,25 +235,29 @@ public class GameMenuController : MonoBehaviour
     {
         float t = Time.unscaledTime;
         float pulse = 0.5f + 0.5f * Mathf.Sin(t * defeatPulseSpeed);
-        float glitch = Mathf.Clamp01(0.25f + pulse * 0.85f);
+        float glitch = Mathf.Clamp01(0.20f + pulse * 0.50f);
+        float hudGlitch = glitch * Mathf.Clamp01(hudGlitchWeight);
+        float textGlitch = glitch * Mathf.Clamp01(textGlitchWeight);
         DrawScreenFade(0.70f);
-        DrawDefeatBackdrop(pulse, glitch, t);
+        DrawDefeatBackdrop(pulse, hudGlitch, t);
 
         Rect panel = CenterRect(470f, 360f);
-        float jitterX = (Mathf.PerlinNoise(t * 17f, 0.37f) - 0.5f) * 2f * glitchJitterStrength * glitch;
-        float jitterY = (Mathf.PerlinNoise(0.77f, t * 19f) - 0.5f) * 2f * (glitchJitterStrength * 0.6f) * glitch;
+        float cappedJitter = Mathf.Min(glitchJitterStrength, 2.0f) * panelJitterStrength;
+        float jitterX = (Mathf.PerlinNoise(t * 13.5f, 0.37f) - 0.5f) * 2f * cappedJitter * textGlitch;
+        float jitterY = (Mathf.PerlinNoise(0.77f, t * 9.2f) - 0.5f) * 2f * (cappedJitter * 0.28f) * textGlitch;
         panel.x += jitterX;
         panel.y += jitterY;
         DrawPanel(panel, new Color(0.07f, 0.03f, 0.06f, 0.92f), new Color(0.94f, 0.42f, 0.55f, 0.65f));
 
         Rect area = new Rect(panel.x + 20f, panel.y + 14f, panel.width - 40f, panel.height - 24f);
         GUILayout.BeginArea(area);
-        Rect titleRect = new Rect(0f, 0f, area.width, 44f);
-        DrawGlitchLabel(titleRect, defeatTitle, titleStyle, glitch);
-        GUILayout.Space(44f);
+        GUIStyle fittedTitleStyle = GetFittedSingleLineStyle(titleStyle, defeatTitle, area.width, 34, 24);
+        Rect titleRect = new Rect(0f, 0f, area.width, 48f);
+        DrawGlitchLabel(titleRect, defeatTitle, fittedTitleStyle, textGlitch * 0.30f);
+        GUILayout.Space(48f);
         GUILayout.Space(2f);
         Rect subtitleRect = new Rect(0f, 46f, area.width, 24f);
-        DrawGlitchLabel(subtitleRect, defeatSubtitle, subtitleStyle, glitch * 0.7f);
+        DrawGlitchLabel(subtitleRect, defeatSubtitle, subtitleStyle, textGlitch * 0.45f);
         GUILayout.Space(24f);
         GUILayout.Space(16f);
 
@@ -300,21 +309,86 @@ public class GameMenuController : MonoBehaviour
             Color bar = new Color(1f, 0.34f, 0.48f, glitchBarOpacity * glitch);
             DrawSolidRect(new Rect(x, y, width, 2f), bar);
         }
+
+        DrawHudGlitchOverlay(glitch, time);
     }
 
     private void DrawGlitchLabel(Rect rect, string text, GUIStyle style, float glitch)
     {
-        float split = glitchSplitStrength * glitch;
+        float cappedSplit = Mathf.Min(glitchSplitStrength, 1.15f);
+        float split = cappedSplit * glitch;
         Color old = GUI.color;
 
-        GUI.color = new Color(1f, 0.28f, 0.38f, 0.84f * glitch);
+        GUI.color = new Color(1f, 0.28f, 0.38f, 0.55f * glitch);
         GUI.Label(new Rect(rect.x - split, rect.y, rect.width, rect.height), text, style);
 
-        GUI.color = new Color(0.24f, 0.98f, 1f, 0.78f * glitch);
+        GUI.color = new Color(0.24f, 0.98f, 1f, 0.50f * glitch);
         GUI.Label(new Rect(rect.x + split, rect.y, rect.width, rect.height), text, style);
 
         GUI.color = old;
         GUI.Label(rect, text, style);
+    }
+
+    private static GUIStyle GetFittedSingleLineStyle(GUIStyle source, string text, float maxWidth, int maxFont, int minFont)
+    {
+        GUIStyle style = new GUIStyle(source)
+        {
+            wordWrap = false,
+            clipping = TextClipping.Clip
+        };
+
+        GUIContent content = new GUIContent(text);
+        float targetWidth = Mathf.Max(12f, maxWidth - 10f);
+        int top = Mathf.Max(maxFont, minFont);
+        int bottom = Mathf.Min(maxFont, minFont);
+
+        int chosen = bottom;
+        for (int size = top; size >= bottom; size--)
+        {
+            style.fontSize = size;
+            if (style.CalcSize(content).x <= targetWidth)
+            {
+                chosen = size;
+                break;
+            }
+        }
+
+        style.fontSize = chosen;
+        return style;
+    }
+
+    private static void DrawHudGlitchOverlay(float glitch, float time)
+    {
+        if (glitch <= 0.001f)
+        {
+            return;
+        }
+
+        // Soft moving interference blocks: affects the scene/HUD feel without breaking menu readability.
+        int blocks = Mathf.RoundToInt(Mathf.Lerp(6f, 16f, glitch));
+        for (int i = 0; i < blocks; i++)
+        {
+            float seed = i * 0.173f;
+            float px = Mathf.PerlinNoise(seed, time * 0.45f + seed * 1.7f) * Screen.width;
+            float py = Mathf.PerlinNoise(seed * 2.1f, time * 0.38f + 3.1f) * Screen.height;
+            float w = Mathf.Lerp(36f, 110f, Mathf.PerlinNoise(seed * 3.7f, time * 0.21f));
+            float h = Mathf.Lerp(12f, 42f, Mathf.PerlinNoise(seed * 4.3f, time * 0.18f));
+            Color c = i % 2 == 0
+                ? new Color(1f, 0.30f, 0.45f, 0.03f + 0.06f * glitch)
+                : new Color(0.35f, 0.90f, 1f, 0.02f + 0.04f * glitch);
+            DrawSolidRect(new Rect(px - w * 0.5f, py - h * 0.5f, w, h), c);
+        }
+
+        // Thin scanline glitches, mostly horizontal.
+        int lines = Mathf.RoundToInt(Mathf.Lerp(4f, 12f, glitch));
+        for (int i = 0; i < lines; i++)
+        {
+            float y = Mathf.PerlinNoise(i * 0.66f, time * 0.9f + i) * Screen.height;
+            float drift = (Mathf.PerlinNoise(i * 0.44f, time * 3.1f) - 0.5f) * 22f;
+            float width = Screen.width * Mathf.Lerp(0.25f, 0.8f, Mathf.PerlinNoise(i * 0.22f, time * 0.35f));
+            float x = (Screen.width - width) * 0.5f + drift;
+            DrawSolidRect(new Rect(x, y, width, 1.5f), new Color(1f, 0.36f, 0.50f, 0.05f + 0.07f * glitch));
+        }
     }
 
     private static void DrawEllipseRing(Vector2 center, float radiusX, float radiusY, Color color)
