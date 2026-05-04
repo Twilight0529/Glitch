@@ -13,7 +13,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private bool autoReloadSceneOnGameOver = false;
     [SerializeField] private float reloadDelay = 1.2f;
     [SerializeField] private float startupDelaySeconds = 1f;
-    [SerializeField] private float countdownSeconds = 3f;
+    [SerializeField] private int countdownSeconds = 3;
 
     [Header("Difficulty")]
     [SerializeField] private float behaviorChangeInterval = 5f;
@@ -33,7 +33,8 @@ public class GameManager : MonoBehaviour
     private float reloadTimer;
     private RunPhase runPhase;
     private float startupTimer;
-    private float countdownTimer;
+    private float countdownElapsed;
+    private int countdownStartValue;
     private ProceduralArenaGenerator arenaGenerator;
     private string levelType = "Unknown";
     private GUIStyle countdownStyle;
@@ -132,7 +133,8 @@ public class GameManager : MonoBehaviour
     {
         runPhase = RunPhase.StartupDelay;
         startupTimer = 0f;
-        countdownTimer = Mathf.Max(0.1f, countdownSeconds);
+        countdownStartValue = Mathf.Max(1, countdownSeconds);
+        countdownElapsed = 0f;
         SurvivalTime = 0f;
         reloadTimer = 0f;
         Time.timeScale = 0f;
@@ -140,6 +142,13 @@ public class GameManager : MonoBehaviour
 
     private void UpdateStartupSequence()
     {
+        // Do not consume startup/countdown time while scene fade is covering the screen.
+        // This guarantees the visible "3" lasts a full second on screen.
+        if (SceneTransitionController.IsFading)
+        {
+            return;
+        }
+
         float dt = Time.unscaledDeltaTime;
 
         if (runPhase == RunPhase.StartupDelay)
@@ -148,14 +157,15 @@ public class GameManager : MonoBehaviour
             if (startupTimer >= Mathf.Max(0f, startupDelaySeconds))
             {
                 runPhase = RunPhase.Countdown;
+                countdownElapsed = 0f;
             }
             return;
         }
 
         if (runPhase == RunPhase.Countdown)
         {
-            countdownTimer -= dt;
-            if (countdownTimer <= 0f)
+            countdownElapsed += dt;
+            if (countdownElapsed >= countdownStartValue)
             {
                 runPhase = RunPhase.Active;
                 Time.timeScale = 1f;
@@ -172,12 +182,13 @@ public class GameManager : MonoBehaviour
 
         if (runPhase == RunPhase.StartupDelay)
         {
-            main = "...";
+            main = string.Empty;
             sub = "Inicializando contencion";
         }
         else
         {
-            int remaining = Mathf.Max(1, Mathf.CeilToInt(countdownTimer));
+            int remaining = countdownStartValue - Mathf.FloorToInt(countdownElapsed);
+            remaining = Mathf.Clamp(remaining, 1, countdownStartValue);
             main = remaining.ToString();
             sub = "Preparate";
         }
