@@ -167,7 +167,7 @@ public class EnemyController : MonoBehaviour
 
     private void Update()
     {
-        if (gameManager == null || player == null || gameManager.IsGameOver)
+        if (gameManager == null || player == null || gameManager.IsGameOver || !gameManager.IsRunActive)
         {
             rb.linearVelocity = Vector2.zero;
             return;
@@ -805,6 +805,11 @@ public class EnemyController : MonoBehaviour
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
+        if (gameManager == null || !gameManager.IsRunActive)
+        {
+            return;
+        }
+
         if (collision.collider.GetComponent<PlayerController>() != null)
         {
             gameManager?.TriggerGameOver();
@@ -813,6 +818,11 @@ public class EnemyController : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
+        if (gameManager == null || !gameManager.IsRunActive)
+        {
+            return;
+        }
+
         if (other.GetComponent<PlayerController>() != null)
         {
             gameManager?.TriggerGameOver();
