@@ -19,6 +19,13 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float behaviorChangeInterval = 5f;
     [SerializeField] private float difficultyRampPerSecond = 0.03f;
 
+    [Header("Countdown Theme")]
+    [SerializeField] private float countdownPulseSpeed = 2.1f;
+    [SerializeField, Range(0f, 1f)] private float countdownBackdropOpacity = 0.33f;
+    [SerializeField, Range(0f, 1f)] private float countdownGlitchOpacity = 0.18f;
+    [SerializeField] private Color countdownPrimary = new Color(0.98f, 0.63f, 0.73f, 1f);
+    [SerializeField] private Color countdownAccent = new Color(0.33f, 0.93f, 1f, 1f);
+
     public bool IsGameOver { get; private set; }
     public bool IsRunActive => runPhase == RunPhase.Active && !IsGameOver;
     public float SurvivalTime { get; private set; }
@@ -177,6 +184,10 @@ public class GameManager : MonoBehaviour
     {
         EnsureCountdownStyles();
 
+        float t = Time.unscaledTime;
+        float pulse = 0.5f + 0.5f * Mathf.Sin(t * countdownPulseSpeed);
+        DrawCountdownBackdrop(t, pulse);
+
         string main;
         string sub;
 
@@ -198,7 +209,14 @@ public class GameManager : MonoBehaviour
         Rect mainRect = new Rect(centerX - 140f, centerY - 90f, 280f, 96f);
         Rect subRect = new Rect(centerX - 220f, centerY + 12f, 440f, 36f);
 
-        GUI.Label(mainRect, main, countdownStyle);
+        GUIStyle dynamicMain = new GUIStyle(countdownStyle);
+        dynamicMain.fontSize = Mathf.RoundToInt(Mathf.Lerp(66f, 78f, pulse));
+        dynamicMain.normal.textColor = Color.Lerp(
+            new Color(countdownPrimary.r, countdownPrimary.g, countdownPrimary.b, 0.92f),
+            new Color(countdownAccent.r, countdownAccent.g, countdownAccent.b, 0.98f),
+            pulse * 0.26f);
+
+        DrawSplitLabel(mainRect, main, dynamicMain, 0.85f + pulse * 0.55f);
         GUI.Label(subRect, sub, countdownSubStyle);
     }
 
@@ -224,6 +242,65 @@ public class GameManager : MonoBehaviour
             alignment = TextAnchor.MiddleCenter
         };
         countdownSubStyle.normal.textColor = new Color(0.86f, 0.78f, 0.90f, 0.92f);
+    }
+
+    private void DrawCountdownBackdrop(float time, float pulse)
+    {
+        float alpha = Mathf.Clamp01(countdownBackdropOpacity);
+        DrawSolidRect(new Rect(0f, 0f, Screen.width, Screen.height), new Color(0.04f, 0.03f, 0.06f, alpha));
+
+        Vector2 center = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+        Color ring = new Color(countdownPrimary.r, countdownPrimary.g, countdownPrimary.b, 0.16f + pulse * 0.08f);
+        DrawEllipseRing(center, Screen.width * 0.12f, Screen.height * 0.14f, ring);
+        DrawEllipseRing(center, Screen.width * 0.21f, Screen.height * 0.24f, ring);
+
+        float barStep = Mathf.Max(30f, Screen.height / 16f);
+        float glitchA = Mathf.Clamp01(countdownGlitchOpacity) * (0.55f + pulse * 0.45f);
+        for (float y = 0f; y <= Screen.height + barStep; y += barStep)
+        {
+            float width = Screen.width * Mathf.Lerp(0.28f, 0.76f, Mathf.PerlinNoise(y * 0.021f, time * 0.55f));
+            float xOffset = (Mathf.PerlinNoise(y * 0.017f, time * 1.8f) - 0.5f) * 44f;
+            float x = (Screen.width - width) * 0.5f + xOffset;
+            DrawSolidRect(new Rect(x, y, width, 2f), new Color(countdownPrimary.r, 0.32f, 0.45f, glitchA));
+        }
+    }
+
+    private static void DrawSplitLabel(Rect rect, string text, GUIStyle style, float split)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        Color old = GUI.color;
+        GUI.color = new Color(1f, 0.35f, 0.45f, 0.28f);
+        GUI.Label(new Rect(rect.x - split, rect.y, rect.width, rect.height), text, style);
+
+        GUI.color = new Color(0.28f, 0.95f, 1f, 0.24f);
+        GUI.Label(new Rect(rect.x + split, rect.y, rect.width, rect.height), text, style);
+
+        GUI.color = old;
+        GUI.Label(rect, text, style);
+    }
+
+    private static void DrawEllipseRing(Vector2 center, float radiusX, float radiusY, Color color)
+    {
+        const int segments = 96;
+        for (int i = 0; i < segments; i += 2)
+        {
+            float t = i / (float)segments * Mathf.PI * 2f;
+            float x = center.x + Mathf.Cos(t) * radiusX;
+            float y = center.y + Mathf.Sin(t) * radiusY;
+            DrawSolidRect(new Rect(x, y, 3f, 3f), color);
+        }
+    }
+
+    private static void DrawSolidRect(Rect rect, Color color)
+    {
+        Color old = GUI.color;
+        GUI.color = color;
+        GUI.DrawTexture(rect, Texture2D.whiteTexture);
+        GUI.color = old;
     }
 
     private void RefreshLevelType()
