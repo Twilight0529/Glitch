@@ -270,7 +270,9 @@ public class ProceduralArenaGenerator : MonoBehaviour
     {
         DestroyGeneratedChildren(DynamicRootName);
 
-        DynamicObstacleController[] legacyControllers = FindObjectsOfType<DynamicObstacleController>(true);
+        DynamicObstacleController[] legacyControllers = FindObjectsByType<DynamicObstacleController>(
+            FindObjectsInactive.Include,
+            FindObjectsSortMode.None);
         for (int i = 0; i < legacyControllers.Length; i++)
         {
             DynamicObstacleController controller = legacyControllers[i];

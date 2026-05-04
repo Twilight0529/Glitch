@@ -6,6 +6,7 @@ public class GameManager : MonoBehaviour
     {
         StartupDelay,
         Countdown,
+        GoFlash,
         Active
     }
 
@@ -14,6 +15,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float reloadDelay = 1.2f;
     [SerializeField] private float startupDelaySeconds = 1f;
     [SerializeField] private int countdownSeconds = 3;
+    [SerializeField] private float goFlashSeconds = 0.4f;
 
     [Header("Difficulty")]
     [SerializeField] private float behaviorChangeInterval = 5f;
@@ -41,6 +43,7 @@ public class GameManager : MonoBehaviour
     private RunPhase runPhase;
     private float startupTimer;
     private float countdownElapsed;
+    private float goFlashTimer;
     private int countdownStartValue;
     private ProceduralArenaGenerator arenaGenerator;
     private string levelType = "Unknown";
@@ -130,7 +133,7 @@ public class GameManager : MonoBehaviour
             GUI.Label(new Rect(margin, margin + 96f, 500f, 25f), "GAME OVER - The anomaly reached you.");
         }
 
-        if (runPhase == RunPhase.StartupDelay || runPhase == RunPhase.Countdown)
+        if (runPhase == RunPhase.StartupDelay || runPhase == RunPhase.Countdown || runPhase == RunPhase.GoFlash)
         {
             DrawCountdownOverlay();
         }
@@ -142,6 +145,7 @@ public class GameManager : MonoBehaviour
         startupTimer = 0f;
         countdownStartValue = Mathf.Max(1, countdownSeconds);
         countdownElapsed = 0f;
+        goFlashTimer = 0f;
         SurvivalTime = 0f;
         reloadTimer = 0f;
         Time.timeScale = 0f;
@@ -174,6 +178,17 @@ public class GameManager : MonoBehaviour
             countdownElapsed += dt;
             if (countdownElapsed >= countdownStartValue)
             {
+                runPhase = RunPhase.GoFlash;
+                goFlashTimer = 0f;
+            }
+            return;
+        }
+
+        if (runPhase == RunPhase.GoFlash)
+        {
+            goFlashTimer += dt;
+            if (goFlashTimer >= Mathf.Max(0.05f, goFlashSeconds))
+            {
                 runPhase = RunPhase.Active;
                 Time.timeScale = 1f;
             }
@@ -195,6 +210,11 @@ public class GameManager : MonoBehaviour
         {
             main = string.Empty;
             sub = "Inicializando contencion";
+        }
+        else if (runPhase == RunPhase.GoFlash)
+        {
+            main = "GO";
+            sub = "Corre";
         }
         else
         {
