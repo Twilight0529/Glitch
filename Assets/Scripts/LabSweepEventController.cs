@@ -20,6 +20,8 @@ public class LabSweepEventController : MonoBehaviour
         public bool dynamicWasEnabled;
         public float laneOffset;
         public float rotationOffset;
+        public SpriteRenderer[] renderers;
+        public Color[] baseColors;
     }
 
     [Header("Event Timing")]
@@ -36,6 +38,11 @@ public class LabSweepEventController : MonoBehaviour
     [SerializeField] private int maxCycles = 4;
     [SerializeField, Range(0.35f, 0.95f)] private float envelopeFactor = 0.75f;
     [SerializeField] private float boundsPadding = 0.08f;
+
+    [Header("Visual Telegraph")]
+    [SerializeField, Range(0f, 1f)] private float activeColorPulseStrength = 0.6f;
+    [SerializeField, Range(0f, 1f)] private float activeColorLightenAmount = 0.34f;
+    [SerializeField] private float activeColorPulseSpeed = 2.2f;
 
     [Header("Debug")]
     [SerializeField] private bool debugTriggerEnabled = true;
@@ -210,8 +217,15 @@ public class LabSweepEventController : MonoBehaviour
                 startRotationZ = binding.transform.eulerAngles.z,
                 dynamicWasEnabled = dynamicWasEnabled,
                 laneOffset = laneSign * offsetMag,
-                rotationOffset = laneSign * rotMag
+                rotationOffset = laneSign * rotMag,
+                renderers = binding.transform.GetComponentsInChildren<SpriteRenderer>(includeInactive: true),
+                baseColors = null
             });
+
+            int last = snapshots.Count - 1;
+            ObstacleSnapshot created = snapshots[last];
+            created.baseColors = CaptureBaseColors(created.renderers);
+            snapshots[last] = created;
         }
 
         if (snapshots.Count == 0)
@@ -253,6 +267,7 @@ public class LabSweepEventController : MonoBehaviour
             float rot = snapshot.startRotationZ + snapshot.rotationOffset * phaseValue;
             RotateTransform(binding, rot);
         }
+        ApplyActiveColorPulse(progress);
 
         if (progress >= 1f)
         {
@@ -267,6 +282,8 @@ public class LabSweepEventController : MonoBehaviour
         {
             return;
         }
+
+        RestoreAllColors();
 
         if (snapBackToStart)
         {
@@ -299,6 +316,69 @@ public class LabSweepEventController : MonoBehaviour
         snapshots.Clear();
         eventActive = false;
         eventTimer = 0f;
+    }
+
+    private void ApplyActiveColorPulse(float progress)
+    {
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Max(0.01f, activeColorPulseSpeed));
+        float envelope = Mathf.Sin(Mathf.Clamp01(progress) * Mathf.PI);
+        float blend = Mathf.Clamp01(activeColorPulseStrength) * pulse * envelope;
+        float lighten = Mathf.Clamp01(activeColorLightenAmount);
+
+        for (int i = 0; i < snapshots.Count; i++)
+        {
+            ObstacleSnapshot snapshot = snapshots[i];
+            ApplyColors(snapshot.renderers, snapshot.baseColors, blend, lighten);
+        }
+    }
+
+    private void RestoreAllColors()
+    {
+        for (int i = 0; i < snapshots.Count; i++)
+        {
+            ObstacleSnapshot snapshot = snapshots[i];
+            ApplyColors(snapshot.renderers, snapshot.baseColors, 0f, 0f);
+        }
+    }
+
+    private static Color[] CaptureBaseColors(SpriteRenderer[] renderers)
+    {
+        if (renderers == null || renderers.Length == 0)
+        {
+            return null;
+        }
+
+        Color[] colors = new Color[renderers.Length];
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            SpriteRenderer renderer = renderers[i];
+            colors[i] = renderer != null ? renderer.color : Color.white;
+        }
+
+        return colors;
+    }
+
+    private static void ApplyColors(SpriteRenderer[] renderers, Color[] baseColors, float blend, float lightenAmount)
+    {
+        if (renderers == null || baseColors == null)
+        {
+            return;
+        }
+
+        int count = Mathf.Min(renderers.Length, baseColors.Length);
+        for (int i = 0; i < count; i++)
+        {
+            SpriteRenderer renderer = renderers[i];
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            Color baseColor = baseColors[i];
+            Color lighter = Color.Lerp(baseColor, Color.white, Mathf.Clamp01(lightenAmount));
+            lighter.a = baseColor.a;
+            renderer.color = Color.Lerp(baseColor, lighter, Mathf.Clamp01(blend));
+        }
     }
 
     private Vector2 ClampToInterior(Vector2 position, float radius)

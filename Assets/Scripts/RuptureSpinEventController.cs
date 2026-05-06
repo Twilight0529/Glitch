@@ -19,6 +19,8 @@ public class RuptureSpinEventController : MonoBehaviour
         public Vector2 startOffset;
         public float startRotationZ;
         public bool dynamicWasEnabled;
+        public SpriteRenderer[] renderers;
+        public Color[] baseColors;
     }
 
     [Header("Event Timing")]
@@ -41,6 +43,11 @@ public class RuptureSpinEventController : MonoBehaviour
 
     [Header("Bounds")]
     [SerializeField] private float boundsPadding = 0.08f;
+
+    [Header("Visual Telegraph")]
+    [SerializeField, Range(0f, 1f)] private float activeColorPulseStrength = 0.65f;
+    [SerializeField, Range(0f, 1f)] private float activeColorLightenAmount = 0.38f;
+    [SerializeField] private float activeColorPulseSpeed = 2.4f;
 
     [Header("Debug")]
     [SerializeField] private bool debugTriggerEnabled = true;
@@ -215,8 +222,11 @@ public class RuptureSpinEventController : MonoBehaviour
                 binding = binding,
                 startOffset = (Vector2)binding.transform.position - center,
                 startRotationZ = binding.transform.eulerAngles.z,
-                dynamicWasEnabled = dynamicWasEnabled
+                dynamicWasEnabled = dynamicWasEnabled,
+                renderers = binding.transform.GetComponentsInChildren<SpriteRenderer>(includeInactive: true),
+                baseColors = null
             };
+            snapshot.baseColors = CaptureBaseColors(snapshot.renderers);
 
             snapshots.Add(snapshot);
         }
@@ -290,6 +300,7 @@ public class RuptureSpinEventController : MonoBehaviour
 
         currentAngleDeg = candidateAngle;
         ApplyAngle(currentAngleDeg);
+        ApplyActiveColorPulse(progress);
 
         if (progress >= 1f)
         {
@@ -480,6 +491,7 @@ public class RuptureSpinEventController : MonoBehaviour
         directionChangeTimer = 0f;
         safePositiveAngleDeg = 0f;
         safeNegativeAngleDeg = 0f;
+        RestoreAllColors();
 
         if (restoreControllers)
         {
@@ -497,6 +509,69 @@ public class RuptureSpinEventController : MonoBehaviour
         }
 
         snapshots.Clear();
+    }
+
+    private void ApplyActiveColorPulse(float progress)
+    {
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Max(0.01f, activeColorPulseSpeed));
+        float envelope = Mathf.Sin(Mathf.Clamp01(progress) * Mathf.PI);
+        float blend = Mathf.Clamp01(activeColorPulseStrength) * pulse * envelope;
+        float lighten = Mathf.Clamp01(activeColorLightenAmount);
+
+        for (int i = 0; i < snapshots.Count; i++)
+        {
+            ObstacleSnapshot snapshot = snapshots[i];
+            ApplyColors(snapshot.renderers, snapshot.baseColors, blend, lighten);
+        }
+    }
+
+    private void RestoreAllColors()
+    {
+        for (int i = 0; i < snapshots.Count; i++)
+        {
+            ObstacleSnapshot snapshot = snapshots[i];
+            ApplyColors(snapshot.renderers, snapshot.baseColors, 0f, 0f);
+        }
+    }
+
+    private static Color[] CaptureBaseColors(SpriteRenderer[] renderers)
+    {
+        if (renderers == null || renderers.Length == 0)
+        {
+            return null;
+        }
+
+        Color[] colors = new Color[renderers.Length];
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            SpriteRenderer renderer = renderers[i];
+            colors[i] = renderer != null ? renderer.color : Color.white;
+        }
+
+        return colors;
+    }
+
+    private static void ApplyColors(SpriteRenderer[] renderers, Color[] baseColors, float blend, float lightenAmount)
+    {
+        if (renderers == null || baseColors == null)
+        {
+            return;
+        }
+
+        int count = Mathf.Min(renderers.Length, baseColors.Length);
+        for (int i = 0; i < count; i++)
+        {
+            SpriteRenderer renderer = renderers[i];
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            Color baseColor = baseColors[i];
+            Color lighter = Color.Lerp(baseColor, Color.white, Mathf.Clamp01(lightenAmount));
+            lighter.a = baseColor.a;
+            renderer.color = Color.Lerp(baseColor, lighter, Mathf.Clamp01(blend));
+        }
     }
 
     private void BuildInteriorBounds()
