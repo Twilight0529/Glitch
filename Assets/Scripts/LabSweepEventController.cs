@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class LabSweepEventController : MonoBehaviour
 {
@@ -35,6 +36,10 @@ public class LabSweepEventController : MonoBehaviour
     [SerializeField] private int maxCycles = 4;
     [SerializeField, Range(0.35f, 0.95f)] private float envelopeFactor = 0.75f;
     [SerializeField] private float boundsPadding = 0.08f;
+
+    [Header("Debug")]
+    [SerializeField] private bool debugTriggerEnabled = true;
+    [SerializeField] private Key debugTriggerKey = Key.R;
 
     private Transform centerTransform;
     private readonly List<ObstacleBinding> obstacles = new List<ObstacleBinding>();
@@ -85,11 +90,34 @@ public class LabSweepEventController : MonoBehaviour
             return;
         }
 
+        if (WasDebugTriggerPressed())
+        {
+            BeginEvent();
+            return;
+        }
+
         nextEventTimer -= Time.deltaTime;
         if (nextEventTimer <= 0f)
         {
             BeginEvent();
         }
+    }
+
+    private bool WasDebugTriggerPressed()
+    {
+        if (!debugTriggerEnabled)
+        {
+            return false;
+        }
+
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard == null)
+        {
+            return false;
+        }
+
+        var keyControl = keyboard[debugTriggerKey];
+        return keyControl != null && keyControl.wasPressedThisFrame;
     }
 
     private void RebuildObstacleList(Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)

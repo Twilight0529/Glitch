@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class StorageSurgeEventController : MonoBehaviour
 {
@@ -33,6 +34,10 @@ public class StorageSurgeEventController : MonoBehaviour
     [SerializeField] private float waveStaggerSeconds = 0.7f;
     [SerializeField] private float recoilStrength = 0.28f;
     [SerializeField] private float boundsPadding = 0.08f;
+
+    [Header("Debug")]
+    [SerializeField] private bool debugTriggerEnabled = true;
+    [SerializeField] private Key debugTriggerKey = Key.R;
 
     private Transform centerTransform;
     private readonly List<ObstacleBinding> obstacles = new List<ObstacleBinding>();
@@ -84,11 +89,34 @@ public class StorageSurgeEventController : MonoBehaviour
             return;
         }
 
+        if (WasDebugTriggerPressed())
+        {
+            BeginEvent();
+            return;
+        }
+
         nextEventTimer -= Time.deltaTime;
         if (nextEventTimer <= 0f)
         {
             BeginEvent();
         }
+    }
+
+    private bool WasDebugTriggerPressed()
+    {
+        if (!debugTriggerEnabled)
+        {
+            return false;
+        }
+
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard == null)
+        {
+            return false;
+        }
+
+        var keyControl = keyboard[debugTriggerKey];
+        return keyControl != null && keyControl.wasPressedThisFrame;
     }
 
     private void RebuildObstacleList(Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
