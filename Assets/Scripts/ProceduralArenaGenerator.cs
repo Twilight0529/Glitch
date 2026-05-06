@@ -171,7 +171,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
         CreateThemedObstacles(obstaclesRoot);
         CreateThemedDynamicObstacles(dynamicRoot);
         CreateThemedDetails(detailsRoot);
-        ConfigureRuptureMapEvent(obstaclesRoot, dynamicRoot);
+        ConfigureThemeMapEvents(obstaclesRoot, dynamicRoot);
     }
 
     public void SetRuntimeReferences(Transform player, Transform anomaly)
@@ -312,16 +312,27 @@ public class ProceduralArenaGenerator : MonoBehaviour
         DestroyImmediate(component);
     }
 
-    private void ConfigureRuptureMapEvent(Transform obstaclesRoot, Transform dynamicRoot)
+    private void ConfigureThemeMapEvents(Transform obstaclesRoot, Transform dynamicRoot)
     {
-        Type controllerType = FindTypeInLoadedAssemblies("RuptureSpinEventController");
+        ConfigureThemeMapEventController("RuptureSpinEventController", activeTheme == ArenaTheme.RuptureZone, obstaclesRoot, dynamicRoot);
+        ConfigureThemeMapEventController("LabSweepEventController", activeTheme == ArenaTheme.ContainmentLab, obstaclesRoot, dynamicRoot);
+        ConfigureThemeMapEventController("StorageSurgeEventController", activeTheme == ArenaTheme.StorageBay, obstaclesRoot, dynamicRoot);
+    }
+
+    private void ConfigureThemeMapEventController(
+        string controllerTypeName,
+        bool shouldBeActive,
+        Transform obstaclesRoot,
+        Transform dynamicRoot)
+    {
+        Type controllerType = FindTypeInLoadedAssemblies(controllerTypeName);
         if (controllerType == null)
         {
             return;
         }
 
         Component controller = GetComponent(controllerType);
-        if (activeTheme != ArenaTheme.RuptureZone)
+        if (!shouldBeActive)
         {
             if (controller != null)
             {
