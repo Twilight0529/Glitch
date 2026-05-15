@@ -5,6 +5,19 @@ using UnityEngine;
 [RequireComponent(typeof(Collider2D))]
 public class EnemyController : MonoBehaviour
 {
+    public enum AnomalyState
+    {
+        DirectChase,
+        PredictiveIntercept,
+        CutoffFlank,
+        ErraticBurst,
+        Split,
+        ExpansionShoot,
+        SpeedSurge,
+        RicochetHunter,
+        Destroyer
+    }
+
     private enum BehaviorPattern
     {
         DirectChase,
@@ -37,6 +50,26 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float erraticOffsetRadius = 2.7f;
     [SerializeField] private float erraticBurstMultiplier = 1.2f;
 
+    [Header("Anomaly State Machine")]
+    [SerializeField] private bool enableAdvancedStates = true;
+    [SerializeField] private Vector2 stateDurationMultiplierRange = new Vector2(0.85f, 1.25f);
+    [SerializeField] private float speedStateMultiplier = 1.55f;
+    [SerializeField] private bool logStateChanges = false;
+
+    [Header("State Weights")]
+    [SerializeField, Min(0f)] private float directChaseWeight = 1f;
+    [SerializeField, Min(0f)] private float predictiveInterceptWeight = 1f;
+    [SerializeField, Min(0f)] private float cutoffFlankWeight = 1f;
+    [SerializeField, Min(0f)] private float erraticBurstWeight = 1f;
+    [SerializeField, Min(0f)] private float splitWeight = 0.7f;
+    [SerializeField, Min(0f)] private float expansionShootWeight = 0.8f;
+    [SerializeField, Min(0f)] private float speedSurgeWeight = 0.9f;
+    [SerializeField, Min(0f)] private float ricochetHunterWeight = 0.65f;
+    [SerializeField, Min(0f)] private float destroyerWeight = 0.75f;
+
+    public AnomalyState CurrentState => currentState;
+    public string CurrentStateLabel => currentState.ToString();
+
     [Header("Navigation Grid")]
     [SerializeField] private LayerMask obstacleMask = ~0;
     [SerializeField] private Vector2 fallbackArenaSize = new Vector2(32f, 18f);
@@ -65,8 +98,10 @@ public class EnemyController : MonoBehaviour
     private Rigidbody2D rb;
     private Collider2D ownCollider;
 
+    private AnomalyState currentState;
     private BehaviorPattern currentPattern;
-    private float behaviorChangeTimer;
+    private float stateTimer;
+    private float currentStateDuration;
     private float erraticRefreshTimer;
     private float flankRetargetTimer;
     private float flankSide = 1f;
@@ -112,6 +147,18 @@ public class EnemyController : MonoBehaviour
         new Vector2Int(0, -1),
         new Vector2Int(0, 1)
     };
+
+    private struct StateWeight
+    {
+        public AnomalyState state;
+        public float weight;
+
+        public StateWeight(AnomalyState state, float weight)
+        {
+            this.state = state;
+            this.weight = weight;
+        }
+    }
 
     private void Awake()
     {
@@ -162,7 +209,7 @@ public class EnemyController : MonoBehaviour
         BuildNavigationGrid();
 
         stuckCheckPosition = rb.position;
-        PickNextBehavior();
+        SelectNextState(forceDifferent: false);
     }
 
     private void Update()
@@ -173,7 +220,7 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
-        HandleBehaviorSwitch();
+        HandleStateSwitch();
         UpdatePatternInternals();
 
         gridRefreshTimer += Time.deltaTime;
@@ -216,6 +263,11 @@ public class EnemyController : MonoBehaviour
         if (currentPattern == BehaviorPattern.ErraticBurst)
         {
             speed *= erraticBurstMultiplier;
+        }
+
+        if (currentState == AnomalyState.SpeedSurge)
+        {
+            speed *= speedStateMultiplier;
         }
 
         Vector2 desiredVelocity = desiredDirection * speed;
@@ -319,22 +371,38 @@ public class EnemyController : MonoBehaviour
         return true;
     }
 
-    private void HandleBehaviorSwitch()
+    private void HandleStateSwitch()
     {
-        behaviorChangeTimer += Time.deltaTime;
-        float interval = gameManager.CurrentBehaviorChangeInterval;
-
-        if (behaviorChangeTimer >= interval)
+        stateTimer += Time.deltaTime;
+        if (stateTimer >= currentStateDuration)
         {
-            behaviorChangeTimer = 0f;
-            PickNextBehavior();
+            SelectNextState(forceDifferent: true);
         }
     }
 
-    private void PickNextBehavior()
+    private void SelectNextState(bool forceDifferent)
     {
-        currentPattern = (BehaviorPattern)Random.Range(0, 4);
+        AnomalyState nextState = PickWeightedState(forceDifferent);
+        currentState = nextState;
+        currentPattern = ResolvePatternForState(currentState);
+        stateTimer = 0f;
 
+        float baseInterval = gameManager != null ? gameManager.CurrentBehaviorChangeInterval : 5f;
+        float minMul = Mathf.Min(stateDurationMultiplierRange.x, stateDurationMultiplierRange.y);
+        float maxMul = Mathf.Max(stateDurationMultiplierRange.x, stateDurationMultiplierRange.y);
+        float durationMultiplier = Random.Range(minMul, maxMul);
+        currentStateDuration = Mathf.Max(0.6f, baseInterval * durationMultiplier);
+
+        if (logStateChanges)
+        {
+            Debug.Log($"[Anomaly] State -> {currentState} ({currentStateDuration:F2}s)");
+        }
+
+        OnStateEntered();
+    }
+
+    private void OnStateEntered()
+    {
         if (currentPattern == BehaviorPattern.ErraticBurst)
         {
             erraticRefreshTimer = 0f;
@@ -345,6 +413,83 @@ public class EnemyController : MonoBehaviour
         {
             flankRetargetTimer = 0f;
             flankSide = Random.value < 0.5f ? -1f : 1f;
+        }
+    }
+
+    private AnomalyState PickWeightedState(bool forceDifferent)
+    {
+        List<StateWeight> options = new List<StateWeight>
+        {
+            new StateWeight(AnomalyState.DirectChase, directChaseWeight),
+            new StateWeight(AnomalyState.PredictiveIntercept, predictiveInterceptWeight),
+            new StateWeight(AnomalyState.CutoffFlank, cutoffFlankWeight),
+            new StateWeight(AnomalyState.ErraticBurst, erraticBurstWeight)
+        };
+
+        if (enableAdvancedStates)
+        {
+            options.Add(new StateWeight(AnomalyState.Split, splitWeight));
+            options.Add(new StateWeight(AnomalyState.ExpansionShoot, expansionShootWeight));
+            options.Add(new StateWeight(AnomalyState.SpeedSurge, speedSurgeWeight));
+            options.Add(new StateWeight(AnomalyState.RicochetHunter, ricochetHunterWeight));
+            options.Add(new StateWeight(AnomalyState.Destroyer, destroyerWeight));
+        }
+
+        if (forceDifferent && options.Count > 1)
+        {
+            options.RemoveAll(o => o.state == currentState);
+        }
+
+        float totalWeight = 0f;
+        for (int i = 0; i < options.Count; i++)
+        {
+            totalWeight += Mathf.Max(0f, options[i].weight);
+        }
+
+        if (totalWeight <= 0.0001f)
+        {
+            return AnomalyState.DirectChase;
+        }
+
+        float roll = Random.Range(0f, totalWeight);
+        float cursor = 0f;
+        for (int i = 0; i < options.Count; i++)
+        {
+            float w = Mathf.Max(0f, options[i].weight);
+            cursor += w;
+            if (roll <= cursor)
+            {
+                return options[i].state;
+            }
+        }
+
+        return options[options.Count - 1].state;
+    }
+
+    private static BehaviorPattern ResolvePatternForState(AnomalyState state)
+    {
+        switch (state)
+        {
+            case AnomalyState.DirectChase:
+                return BehaviorPattern.DirectChase;
+            case AnomalyState.PredictiveIntercept:
+                return BehaviorPattern.PredictiveIntercept;
+            case AnomalyState.CutoffFlank:
+                return BehaviorPattern.CutoffFlank;
+            case AnomalyState.ErraticBurst:
+                return BehaviorPattern.ErraticBurst;
+            case AnomalyState.Split:
+                return BehaviorPattern.CutoffFlank;
+            case AnomalyState.ExpansionShoot:
+                return BehaviorPattern.PredictiveIntercept;
+            case AnomalyState.SpeedSurge:
+                return BehaviorPattern.DirectChase;
+            case AnomalyState.RicochetHunter:
+                return BehaviorPattern.ErraticBurst;
+            case AnomalyState.Destroyer:
+                return BehaviorPattern.DirectChase;
+            default:
+                return BehaviorPattern.DirectChase;
         }
     }
 
