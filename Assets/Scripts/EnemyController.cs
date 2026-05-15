@@ -77,7 +77,16 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float splitCloneSpawnOffset = 0.8f;
     [SerializeField] private float splitMergeLeadTime = 0.7f;
     [SerializeField] private float splitMergeSpeed = 7.5f;
+    [SerializeField] private float splitMergeOwnerSpeedMultiplier = 1.05f;
+    [SerializeField] private float splitMergeTimeout = 2.4f;
     [SerializeField] private Color splitCloneColor = new Color(1f, 0.30f, 0.42f, 0.92f);
+
+    [Header("Split Merge Telegraph")]
+    [SerializeField] private Color splitMergeTelegraphColor = new Color(1f, 0.73f, 0.82f, 0.92f);
+    [SerializeField] private float splitMergeTelegraphPulseSpeed = 7.8f;
+    [SerializeField] private float splitMergeTelegraphRingRadius = 0.34f;
+    [SerializeField] private int splitMergeTelegraphSegments = 8;
+    [SerializeField] private Vector2 splitMergeTelegraphSegmentSize = new Vector2(0.18f, 0.04f);
 
     [Header("State Weights")]
     [SerializeField, Min(0f)] private float directChaseWeight = 1f;
@@ -137,6 +146,12 @@ public class EnemyController : MonoBehaviour
     private bool splitStateActive;
     private bool splitMergeInProgress;
     private int splitSideSign = 1;
+    private float splitCloneRadius = 0.45f;
+    private float splitMergeTimer;
+    private GameObject splitMergeTelegraphRoot;
+    private SpriteRenderer splitMergeOwnerRing;
+    private SpriteRenderer splitMergeCloneRing;
+    private readonly List<SpriteRenderer> splitMergeBridgeSegments = new List<SpriteRenderer>();
 
     private Vector2 erraticTarget;
     private Vector2 lastMoveDirection = Vector2.right;
@@ -247,6 +262,7 @@ public class EnemyController : MonoBehaviour
     private void OnDisable()
     {
         DestroySplitCloneImmediate();
+        DestroySplitMergeTelegraphImmediate();
     }
 
     private void Update()
@@ -260,6 +276,14 @@ public class EnemyController : MonoBehaviour
         HandleStateSwitch();
         UpdatePatternInternals();
         UpdateStateAbilities();
+
+        if (splitMergeInProgress && splitClone != null)
+        {
+            TickOwnerSplitMergeMovement();
+            UpdateSplitMergeTelegraphVisual();
+            return;
+        }
+        HideSplitMergeTelegraphVisual();
 
         gridRefreshTimer += Time.deltaTime;
         if (gridRefreshTimer >= gridRefreshInterval)
@@ -621,6 +645,7 @@ public class EnemyController : MonoBehaviour
         if (splitClone == null)
         {
             splitMergeInProgress = false;
+            HideSplitMergeTelegraphVisual();
         }
     }
 
@@ -628,7 +653,9 @@ public class EnemyController : MonoBehaviour
     {
         splitStateActive = true;
         splitMergeInProgress = false;
+        splitMergeTimer = 0f;
         splitSideSign = Random.value < 0.5f ? -1 : 1;
+        HideSplitMergeTelegraphVisual();
 
         if (splitClone != null)
         {
@@ -649,6 +676,7 @@ public class EnemyController : MonoBehaviour
 
         CircleCollider2D col = cloneGo.AddComponent<CircleCollider2D>();
         col.radius = Mathf.Max(0.2f, agentRadius * 0.95f);
+        splitCloneRadius = col.radius;
 
         Rigidbody2D rbClone = cloneGo.AddComponent<Rigidbody2D>();
         rbClone.gravityScale = 0f;
@@ -658,6 +686,10 @@ public class EnemyController : MonoBehaviour
 
         EnsureNoFrictionMaterial();
         col.sharedMaterial = noFrictionMaterial;
+        if (ownCollider != null)
+        {
+            Physics2D.IgnoreCollision(ownCollider, col, true);
+        }
 
         splitClone = cloneGo.AddComponent<SplitAnomalyCloneController>();
         splitClone.ConfigureMovement(
@@ -673,9 +705,11 @@ public class EnemyController : MonoBehaviour
     private void BeginSplitMerge()
     {
         splitStateActive = false;
+        splitMergeTimer = 0f;
         if (splitClone == null)
         {
             splitMergeInProgress = false;
+            HideSplitMergeTelegraphVisual();
             return;
         }
 
@@ -704,6 +738,8 @@ public class EnemyController : MonoBehaviour
         }
 
         splitMergeInProgress = false;
+        splitMergeTimer = 0f;
+        HideSplitMergeTelegraphVisual();
     }
 
     public bool IsSplitStateActive()
@@ -763,6 +799,231 @@ public class EnemyController : MonoBehaviour
 
         splitClone = null;
         splitMergeInProgress = false;
+        splitMergeTimer = 0f;
+        HideSplitMergeTelegraphVisual();
+    }
+
+    private void TickOwnerSplitMergeMovement()
+    {
+        if (splitClone == null)
+        {
+            splitMergeInProgress = false;
+            rb.linearVelocity = Vector2.zero;
+            return;
+        }
+
+        Vector2 clonePos = splitClone.transform.position;
+        Vector2 toClone = clonePos - rb.position;
+        float distance = toClone.magnitude;
+        splitMergeTimer += Time.deltaTime;
+        float mergeThreshold = GetSplitMergeDistanceThreshold();
+        if (distance <= mergeThreshold || splitMergeTimer >= Mathf.Max(0.25f, splitMergeTimeout))
+        {
+            ForceCompleteSplitMerge();
+            return;
+        }
+
+        Vector2 desiredDirection = toClone / distance;
+        desiredDirection = ApplyObstacleRepulsion(desiredDirection);
+        if (desiredDirection.sqrMagnitude > 0.0001f)
+        {
+            lastMoveDirection = desiredDirection;
+        }
+
+        float speed = baseMoveSpeed * gameManager.DifficultyMultiplier * Mathf.Max(0.2f, splitMergeOwnerSpeedMultiplier);
+        Vector2 desiredVelocity = desiredDirection * speed;
+        rb.linearVelocity = Vector2.MoveTowards(rb.linearVelocity, desiredVelocity, velocityResponsiveness * 1.15f * Time.deltaTime);
+    }
+
+    private void ForceCompleteSplitMerge()
+    {
+        rb.linearVelocity = Vector2.zero;
+
+        if (splitClone != null)
+        {
+            if (Application.isPlaying)
+            {
+                Destroy(splitClone.gameObject);
+            }
+            else
+            {
+                DestroyImmediate(splitClone.gameObject);
+            }
+
+            splitClone = null;
+        }
+
+        splitMergeInProgress = false;
+        splitMergeTimer = 0f;
+        HideSplitMergeTelegraphVisual();
+    }
+
+    public float GetSplitMergeDistanceThreshold()
+    {
+        float cloneR = Mathf.Max(0.1f, splitCloneRadius);
+        float ownR = Mathf.Max(0.1f, agentRadius);
+        return ownR + cloneR + 0.06f;
+    }
+
+    private void UpdateSplitMergeTelegraphVisual()
+    {
+        if (splitClone == null)
+        {
+            HideSplitMergeTelegraphVisual();
+            return;
+        }
+
+        EnsureSplitMergeTelegraphVisuals();
+        if (splitMergeTelegraphRoot == null)
+        {
+            return;
+        }
+
+        if (!splitMergeTelegraphRoot.activeSelf)
+        {
+            splitMergeTelegraphRoot.SetActive(true);
+        }
+
+        Vector2 ownerPos = rb != null ? rb.position : (Vector2)transform.position;
+        Vector2 clonePos = splitClone.transform.position;
+        Vector2 delta = clonePos - ownerPos;
+        float distance = delta.magnitude;
+        Vector2 dir = distance > 0.001f ? delta / distance : Vector2.right;
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Max(0.1f, splitMergeTelegraphPulseSpeed));
+
+        Color c = splitMergeTelegraphColor;
+        c.a *= Mathf.Lerp(0.45f, 1f, pulse);
+
+        if (splitMergeOwnerRing != null)
+        {
+            splitMergeOwnerRing.color = c;
+            splitMergeOwnerRing.transform.localPosition = Vector3.zero;
+            float s = 1f + pulse * 0.12f;
+            splitMergeOwnerRing.transform.localScale = new Vector3(s, s, 1f);
+        }
+
+        if (splitMergeCloneRing != null)
+        {
+            splitMergeCloneRing.color = c;
+            splitMergeCloneRing.transform.localPosition = (Vector3)(clonePos - ownerPos);
+            float s = 1f + (1f - pulse) * 0.12f;
+            splitMergeCloneRing.transform.localScale = new Vector3(s, s, 1f);
+        }
+
+        int count = splitMergeBridgeSegments.Count;
+        for (int i = 0; i < count; i++)
+        {
+            SpriteRenderer seg = splitMergeBridgeSegments[i];
+            if (seg == null)
+            {
+                continue;
+            }
+
+            float t = (i + 1f) / (count + 1f);
+            Vector2 pos = ownerPos + delta * t;
+            seg.transform.localPosition = pos - ownerPos;
+            seg.transform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg);
+            seg.color = new Color(c.r, c.g, c.b, c.a * Mathf.Lerp(0.45f, 0.95f, Mathf.Sin((Time.time * 5.5f + i) * 0.5f) * 0.5f + 0.5f));
+            seg.size = splitMergeTelegraphSegmentSize;
+        }
+    }
+
+    private void HideSplitMergeTelegraphVisual()
+    {
+        if (splitMergeTelegraphRoot != null && splitMergeTelegraphRoot.activeSelf)
+        {
+            splitMergeTelegraphRoot.SetActive(false);
+        }
+    }
+
+    private void EnsureSplitMergeTelegraphVisuals()
+    {
+        int desiredSegments = Mathf.Max(3, splitMergeTelegraphSegments);
+        float ringDiameter = Mathf.Max(0.1f, splitMergeTelegraphRingRadius) * 2f;
+
+        if (splitMergeTelegraphRoot == null)
+        {
+            splitMergeTelegraphRoot = new GameObject("SplitMergeTelegraph");
+            splitMergeTelegraphRoot.transform.SetParent(transform, false);
+            splitMergeTelegraphRoot.transform.localPosition = Vector3.zero;
+            splitMergeTelegraphRoot.transform.localRotation = Quaternion.identity;
+            splitMergeTelegraphRoot.transform.localScale = Vector3.one;
+            splitMergeTelegraphRoot.SetActive(false);
+
+            GameObject ownerRing = new GameObject("OwnerRing");
+            ownerRing.transform.SetParent(splitMergeTelegraphRoot.transform, false);
+            splitMergeOwnerRing = ownerRing.AddComponent<SpriteRenderer>();
+            splitMergeOwnerRing.sprite = CircleSpriteProvider.Get();
+            splitMergeOwnerRing.drawMode = SpriteDrawMode.Sliced;
+            splitMergeOwnerRing.size = Vector2.one * ringDiameter;
+            splitMergeOwnerRing.color = splitMergeTelegraphColor;
+            splitMergeOwnerRing.sortingOrder = 13;
+
+            GameObject cloneRing = new GameObject("CloneRing");
+            cloneRing.transform.SetParent(splitMergeTelegraphRoot.transform, false);
+            splitMergeCloneRing = cloneRing.AddComponent<SpriteRenderer>();
+            splitMergeCloneRing.sprite = CircleSpriteProvider.Get();
+            splitMergeCloneRing.drawMode = SpriteDrawMode.Sliced;
+            splitMergeCloneRing.size = Vector2.one * ringDiameter;
+            splitMergeCloneRing.color = splitMergeTelegraphColor;
+            splitMergeCloneRing.sortingOrder = 13;
+        }
+
+        if (splitMergeOwnerRing != null)
+        {
+            splitMergeOwnerRing.size = Vector2.one * ringDiameter;
+        }
+
+        if (splitMergeCloneRing != null)
+        {
+            splitMergeCloneRing.size = Vector2.one * ringDiameter;
+        }
+
+        while (splitMergeBridgeSegments.Count > desiredSegments)
+        {
+            int last = splitMergeBridgeSegments.Count - 1;
+            SpriteRenderer seg = splitMergeBridgeSegments[last];
+            splitMergeBridgeSegments.RemoveAt(last);
+            if (seg != null)
+            {
+                Destroy(seg.gameObject);
+            }
+        }
+
+        while (splitMergeBridgeSegments.Count < desiredSegments)
+        {
+            GameObject segGo = new GameObject($"Bridge_{splitMergeBridgeSegments.Count}");
+            segGo.transform.SetParent(splitMergeTelegraphRoot.transform, false);
+            SpriteRenderer sr = segGo.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.size = splitMergeTelegraphSegmentSize;
+            sr.color = splitMergeTelegraphColor;
+            sr.sortingOrder = 13;
+            splitMergeBridgeSegments.Add(sr);
+        }
+    }
+
+    private void DestroySplitMergeTelegraphImmediate()
+    {
+        if (splitMergeTelegraphRoot == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(splitMergeTelegraphRoot);
+        }
+        else
+        {
+            DestroyImmediate(splitMergeTelegraphRoot);
+        }
+
+        splitMergeTelegraphRoot = null;
+        splitMergeOwnerRing = null;
+        splitMergeCloneRing = null;
+        splitMergeBridgeSegments.Clear();
     }
 
     private void FireExpansionShoot()
