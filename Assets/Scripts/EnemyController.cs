@@ -352,7 +352,7 @@ public class EnemyController : MonoBehaviour
 
         UpdateStuckDetection(strategicTarget);
 
-        float speed = baseMoveSpeed * gameManager.DifficultyMultiplier;
+        float speed = baseMoveSpeed;
         if (currentPattern == BehaviorPattern.ErraticBurst)
         {
             speed *= erraticBurstMultiplier;
@@ -885,7 +885,7 @@ public class EnemyController : MonoBehaviour
             lastMoveDirection = desiredDirection;
         }
 
-        float speed = baseMoveSpeed * gameManager.DifficultyMultiplier * Mathf.Max(0.2f, splitMergeOwnerSpeedMultiplier);
+        float speed = baseMoveSpeed * Mathf.Max(0.2f, splitMergeOwnerSpeedMultiplier);
         Vector2 desiredVelocity = desiredDirection * speed;
         rb.linearVelocity = Vector2.MoveTowards(rb.linearVelocity, desiredVelocity, velocityResponsiveness * 1.15f * Time.deltaTime);
     }
@@ -1263,7 +1263,7 @@ public class EnemyController : MonoBehaviour
     {
         Vector2 playerVelocity = player.CurrentVelocity;
         float distance = Vector2.Distance(enemyPosition, playerPosition);
-        float enemySpeed = Mathf.Max(0.1f, baseMoveSpeed * gameManager.DifficultyMultiplier);
+        float enemySpeed = Mathf.Max(0.1f, baseMoveSpeed);
 
         float leadTime = distance / enemySpeed;
         leadTime = Mathf.Clamp(leadTime, minLeadTime, maxLeadTime);
