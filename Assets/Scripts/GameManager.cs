@@ -46,9 +46,12 @@ public class GameManager : MonoBehaviour
     private float goFlashTimer;
     private int countdownStartValue;
     private ProceduralArenaGenerator arenaGenerator;
+    private EnemyController enemyController;
     private string levelType = "Unknown";
     private GUIStyle countdownStyle;
     private GUIStyle countdownSubStyle;
+    private GUIStyle bossStateStyle;
+    private GUIStyle bossStateValueStyle;
 
     private void Awake()
     {
@@ -70,6 +73,11 @@ public class GameManager : MonoBehaviour
         else if (levelType != arenaGenerator.ActiveThemeLabel)
         {
             levelType = arenaGenerator.ActiveThemeLabel;
+        }
+
+        if (enemyController == null)
+        {
+            enemyController = FindAnyObjectByType<EnemyController>();
         }
 
         if (IsGameOver)
@@ -127,6 +135,7 @@ public class GameManager : MonoBehaviour
         GUI.Label(new Rect(margin, margin + 22f, 350f, 25f), $"Threat Level: x{DifficultyMultiplier:F2}");
         GUI.Label(new Rect(margin, margin + 44f, 350f, 25f), $"Pattern Shift: {CurrentBehaviorChangeInterval:F1}s");
         GUI.Label(new Rect(margin, margin + 66f, 350f, 25f), $"Level Type: {levelType}");
+        DrawBossStateHud();
 
         if (IsGameOver)
         {
@@ -326,10 +335,86 @@ public class GameManager : MonoBehaviour
     private void RefreshLevelType()
     {
         arenaGenerator = FindAnyObjectByType<ProceduralArenaGenerator>();
+        enemyController = FindAnyObjectByType<EnemyController>();
         if (arenaGenerator != null)
         {
             levelType = arenaGenerator.ActiveThemeLabel;
         }
+    }
+
+    private void DrawBossStateHud()
+    {
+        EnsureBossStateStyles();
+
+        string stateValue = "Unknown";
+        if (enemyController != null)
+        {
+            stateValue = ToBossStateLabel(enemyController.CurrentStateLabel);
+        }
+
+        const float width = 440f;
+        const float lineHeight = 24f;
+        float x = (Screen.width - width) * 0.5f;
+        float y = 10f;
+
+        GUI.Label(new Rect(x, y, width, lineHeight), "Anomaly State", bossStateStyle);
+        GUI.Label(new Rect(x, y + 20f, width, lineHeight), stateValue, bossStateValueStyle);
+    }
+
+    private static string ToBossStateLabel(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return "Unknown";
+        }
+
+        switch (raw)
+        {
+            case "DirectChase":
+                return "Direct Chase";
+            case "PredictiveIntercept":
+                return "Predictive Intercept";
+            case "CutoffFlank":
+                return "Cutoff Flank";
+            case "ErraticBurst":
+                return "Erratic Burst";
+            case "Split":
+                return "Split";
+            case "ExpansionShoot":
+                return "Expansion Shoot";
+            case "SpeedSurge":
+                return "Speed Surge";
+            case "RicochetHunter":
+                return "Ricochet Hunter";
+            case "Destroyer":
+                return "Destroyer";
+            default:
+                return raw;
+        }
+    }
+
+    private void EnsureBossStateStyles()
+    {
+        if (bossStateStyle != null && bossStateValueStyle != null)
+        {
+            return;
+        }
+
+        bossStateStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 14,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter
+        };
+        bossStateStyle.normal.textColor = new Color(0.92f, 0.87f, 0.95f, 0.90f);
+
+        bossStateValueStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 17,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter
+        };
+        bossStateValueStyle.normal.textColor = new Color(1f, 0.76f, 0.82f, 0.98f);
     }
 
     private void EnsureMenuController()
