@@ -122,8 +122,9 @@ public class SplitAnomalyCloneController : MonoBehaviour
         Vector2 ownerPos = owner != null ? owner.GetCurrentPosition() : (Vector2)transform.position;
         Vector2 toOwner = ownerPos - rb.position;
         float distance = toOwner.magnitude;
+        float mergeThreshold = owner != null ? owner.GetSplitMergeDistanceThreshold() : 0.18f;
 
-        if (distance <= 0.14f)
+        if (distance <= mergeThreshold)
         {
             owner?.NotifySplitCloneMerged(this);
             Destroy(gameObject);
