@@ -64,6 +64,11 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float expansionShootSpawnRadius = 0.7f;
     [SerializeField] private Color expansionShootProjectileColor = new Color(1f, 0.48f, 0.63f, 1f);
     [SerializeField] private Vector2 expansionShootProjectileSize = new Vector2(0.24f, 0.24f);
+    [SerializeField] private float expansionShootTelegraphLeadTime = 0.6f;
+    [SerializeField] private Color expansionShootTelegraphColor = new Color(1f, 0.50f, 0.68f, 0.8f);
+    [SerializeField] private float expansionShootTelegraphPulseSpeed = 8.5f;
+    [SerializeField] private float expansionShootTelegraphRingRadius = 0.9f;
+    [SerializeField] private Vector2 expansionShootTelegraphTickSize = new Vector2(0.22f, 0.06f);
 
     [Header("State Weights")]
     [SerializeField, Min(0f)] private float directChaseWeight = 1f;
@@ -116,6 +121,9 @@ public class EnemyController : MonoBehaviour
     private float expansionShootTimer;
     private float flankSide = 1f;
     private int projectileSerial;
+    private GameObject expansionTelegraphRoot;
+    private SpriteRenderer expansionTelegraphRing;
+    private readonly List<SpriteRenderer> expansionTelegraphTicks = new List<SpriteRenderer>();
 
     private Vector2 erraticTarget;
     private Vector2 lastMoveDirection = Vector2.right;
@@ -416,6 +424,7 @@ public class EnemyController : MonoBehaviour
     private void OnStateEntered()
     {
         expansionShootTimer = 0f;
+        HideExpansionShootTelegraphVisual();
 
         if (currentPattern == BehaviorPattern.ErraticBurst)
         {
@@ -534,16 +543,31 @@ public class EnemyController : MonoBehaviour
     {
         if (currentState != AnomalyState.ExpansionShoot)
         {
+            HideExpansionShootTelegraphVisual();
             return;
         }
 
         expansionShootTimer += Time.deltaTime;
-        if (expansionShootTimer < Mathf.Max(0.15f, expansionShootInterval))
+        float interval = Mathf.Max(0.15f, expansionShootInterval);
+        float lead = Mathf.Clamp(expansionShootTelegraphLeadTime, 0.05f, interval);
+        float remaining = interval - expansionShootTimer;
+        if (remaining <= lead && remaining > 0f)
+        {
+            float progress = 1f - Mathf.Clamp01(remaining / lead);
+            UpdateExpansionShootTelegraphVisual(progress);
+        }
+        else
+        {
+            HideExpansionShootTelegraphVisual();
+        }
+
+        if (expansionShootTimer < interval)
         {
             return;
         }
 
         expansionShootTimer = 0f;
+        HideExpansionShootTelegraphVisual();
         FireExpansionShoot();
     }
 
@@ -585,6 +609,124 @@ public class EnemyController : MonoBehaviour
             expansionShootProjectileLifetime,
             obstacleMask,
             gameManager);
+    }
+
+    private void UpdateExpansionShootTelegraphVisual(float chargeProgress)
+    {
+        EnsureExpansionTelegraphVisuals();
+        if (expansionTelegraphRoot == null)
+        {
+            return;
+        }
+
+        if (!expansionTelegraphRoot.activeSelf)
+        {
+            expansionTelegraphRoot.SetActive(true);
+        }
+
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Max(0.1f, expansionShootTelegraphPulseSpeed));
+        float intensity = Mathf.Lerp(0.35f, 1f, Mathf.Clamp01(chargeProgress));
+        float alpha = Mathf.Clamp01((0.25f + pulse * 0.55f) * intensity);
+
+        Color ringColor = expansionShootTelegraphColor;
+        ringColor.a *= alpha * 0.95f;
+        if (expansionTelegraphRing != null)
+        {
+            expansionTelegraphRing.color = ringColor;
+            float scalePulse = 1f + pulse * 0.07f;
+            expansionTelegraphRing.transform.localScale = new Vector3(scalePulse, scalePulse, 1f);
+        }
+
+        Color tickColor = expansionShootTelegraphColor;
+        tickColor.a *= alpha;
+        for (int i = 0; i < expansionTelegraphTicks.Count; i++)
+        {
+            SpriteRenderer tick = expansionTelegraphTicks[i];
+            if (tick == null)
+            {
+                continue;
+            }
+
+            tick.color = tickColor;
+        }
+    }
+
+    private void HideExpansionShootTelegraphVisual()
+    {
+        if (expansionTelegraphRoot != null && expansionTelegraphRoot.activeSelf)
+        {
+            expansionTelegraphRoot.SetActive(false);
+        }
+    }
+
+    private void EnsureExpansionTelegraphVisuals()
+    {
+        int desiredTicks = Mathf.Max(4, expansionShootProjectileCount);
+
+        if (expansionTelegraphRoot == null)
+        {
+            expansionTelegraphRoot = new GameObject("ExpansionShootTelegraph");
+            expansionTelegraphRoot.transform.SetParent(transform, false);
+            expansionTelegraphRoot.transform.localPosition = Vector3.zero;
+            expansionTelegraphRoot.transform.localRotation = Quaternion.identity;
+            expansionTelegraphRoot.transform.localScale = Vector3.one;
+            expansionTelegraphRoot.SetActive(false);
+
+            GameObject ring = new GameObject("Ring");
+            ring.transform.SetParent(expansionTelegraphRoot.transform, false);
+            SpriteRenderer ringRenderer = ring.AddComponent<SpriteRenderer>();
+            ringRenderer.sprite = CircleSpriteProvider.Get();
+            ringRenderer.drawMode = SpriteDrawMode.Sliced;
+            ringRenderer.size = Vector2.one * (Mathf.Max(0.2f, expansionShootTelegraphRingRadius) * 2f);
+            ringRenderer.color = expansionShootTelegraphColor;
+            ringRenderer.sortingOrder = 12;
+            expansionTelegraphRing = ringRenderer;
+        }
+
+        if (expansionTelegraphRing != null)
+        {
+            expansionTelegraphRing.size = Vector2.one * (Mathf.Max(0.2f, expansionShootTelegraphRingRadius) * 2f);
+        }
+
+        while (expansionTelegraphTicks.Count > desiredTicks)
+        {
+            int last = expansionTelegraphTicks.Count - 1;
+            SpriteRenderer tick = expansionTelegraphTicks[last];
+            expansionTelegraphTicks.RemoveAt(last);
+            if (tick != null)
+            {
+                Destroy(tick.gameObject);
+            }
+        }
+
+        while (expansionTelegraphTicks.Count < desiredTicks)
+        {
+            GameObject tickGo = new GameObject($"Tick_{expansionTelegraphTicks.Count}");
+            tickGo.transform.SetParent(expansionTelegraphRoot.transform, false);
+            SpriteRenderer tickRenderer = tickGo.AddComponent<SpriteRenderer>();
+            tickRenderer.sprite = SquareSpriteProvider.Get();
+            tickRenderer.drawMode = SpriteDrawMode.Sliced;
+            tickRenderer.size = expansionShootTelegraphTickSize;
+            tickRenderer.color = expansionShootTelegraphColor;
+            tickRenderer.sortingOrder = 12;
+            expansionTelegraphTicks.Add(tickRenderer);
+        }
+
+        float radius = Mathf.Max(0.2f, expansionShootTelegraphRingRadius);
+        for (int i = 0; i < expansionTelegraphTicks.Count; i++)
+        {
+            SpriteRenderer tick = expansionTelegraphTicks[i];
+            if (tick == null)
+            {
+                continue;
+            }
+
+            float angleDeg = (360f / expansionTelegraphTicks.Count) * i;
+            Vector2 dir = new Vector2(Mathf.Cos(angleDeg * Mathf.Deg2Rad), Mathf.Sin(angleDeg * Mathf.Deg2Rad));
+            tick.transform.localPosition = dir * radius;
+            tick.transform.localRotation = Quaternion.Euler(0f, 0f, angleDeg);
+            tick.size = expansionShootTelegraphTickSize;
+        }
     }
 
     private Vector2 GetStrategicTarget()
