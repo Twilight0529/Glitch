@@ -70,6 +70,15 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float expansionShootTelegraphRingRadius = 0.9f;
     [SerializeField] private Vector2 expansionShootTelegraphTickSize = new Vector2(0.22f, 0.06f);
 
+    [Header("Split")]
+    [SerializeField] private float splitCloneSpeedMultiplier = 0.95f;
+    [SerializeField] private float splitCloneVelocityResponsiveness = 20f;
+    [SerializeField] private float splitCloneSideOffset = 1.1f;
+    [SerializeField] private float splitCloneSpawnOffset = 0.8f;
+    [SerializeField] private float splitMergeLeadTime = 0.7f;
+    [SerializeField] private float splitMergeSpeed = 7.5f;
+    [SerializeField] private Color splitCloneColor = new Color(1f, 0.30f, 0.42f, 0.92f);
+
     [Header("State Weights")]
     [SerializeField, Min(0f)] private float directChaseWeight = 1f;
     [SerializeField, Min(0f)] private float predictiveInterceptWeight = 1f;
@@ -124,6 +133,10 @@ public class EnemyController : MonoBehaviour
     private GameObject expansionTelegraphRoot;
     private SpriteRenderer expansionTelegraphRing;
     private readonly List<SpriteRenderer> expansionTelegraphTicks = new List<SpriteRenderer>();
+    private SplitAnomalyCloneController splitClone;
+    private bool splitStateActive;
+    private bool splitMergeInProgress;
+    private int splitSideSign = 1;
 
     private Vector2 erraticTarget;
     private Vector2 lastMoveDirection = Vector2.right;
@@ -229,6 +242,11 @@ public class EnemyController : MonoBehaviour
 
         stuckCheckPosition = rb.position;
         SelectNextState(forceDifferent: false);
+    }
+
+    private void OnDisable()
+    {
+        DestroySplitCloneImmediate();
     }
 
     private void Update()
@@ -402,6 +420,7 @@ public class EnemyController : MonoBehaviour
 
     private void SelectNextState(bool forceDifferent)
     {
+        AnomalyState previousState = currentState;
         AnomalyState nextState = PickWeightedState(forceDifferent);
         currentState = nextState;
         currentPattern = ResolvePatternForState(currentState);
@@ -418,6 +437,7 @@ public class EnemyController : MonoBehaviour
             Debug.Log($"[Anomaly] State -> {currentState} ({currentStateDuration:F2}s)");
         }
 
+        HandleStateTransition(previousState, currentState);
         OnStateEntered();
     }
 
@@ -436,6 +456,20 @@ public class EnemyController : MonoBehaviour
         {
             flankRetargetTimer = 0f;
             flankSide = Random.value < 0.5f ? -1f : 1f;
+        }
+    }
+
+    private void HandleStateTransition(AnomalyState previous, AnomalyState next)
+    {
+        if (previous != AnomalyState.Split && next == AnomalyState.Split)
+        {
+            BeginSplitState();
+            return;
+        }
+
+        if (previous == AnomalyState.Split && next != AnomalyState.Split)
+        {
+            BeginSplitMerge();
         }
     }
 
@@ -541,6 +575,8 @@ public class EnemyController : MonoBehaviour
 
     private void UpdateStateAbilities()
     {
+        UpdateSplitAbility();
+
         if (currentState != AnomalyState.ExpansionShoot)
         {
             HideExpansionShootTelegraphVisual();
@@ -569,6 +605,164 @@ public class EnemyController : MonoBehaviour
         expansionShootTimer = 0f;
         HideExpansionShootTelegraphVisual();
         FireExpansionShoot();
+    }
+
+    private void UpdateSplitAbility()
+    {
+        if (currentState == AnomalyState.Split && splitStateActive && !splitMergeInProgress)
+        {
+            float remaining = Mathf.Max(0f, currentStateDuration - stateTimer);
+            if (remaining <= Mathf.Max(0.05f, splitMergeLeadTime))
+            {
+                BeginSplitMerge();
+            }
+        }
+
+        if (splitClone == null)
+        {
+            splitMergeInProgress = false;
+        }
+    }
+
+    private void BeginSplitState()
+    {
+        splitStateActive = true;
+        splitMergeInProgress = false;
+        splitSideSign = Random.value < 0.5f ? -1 : 1;
+
+        if (splitClone != null)
+        {
+            splitClone.ConfigureRuntime(player, gameManager, this, obstacleMask);
+            splitClone.SetSplitState(splitStateActive, splitMergeInProgress);
+            return;
+        }
+
+        Vector2 spawnPos = (Vector2)transform.position + ComputeSplitSpawnOffset();
+        GameObject cloneGo = new GameObject("AnomalySplitClone");
+        cloneGo.transform.position = new Vector3(spawnPos.x, spawnPos.y, 0f);
+        cloneGo.transform.localScale = transform.localScale;
+
+        SpriteRenderer sr = cloneGo.AddComponent<SpriteRenderer>();
+        sr.sprite = SquareSpriteProvider.Get();
+        sr.color = splitCloneColor;
+        sr.sortingOrder = 10;
+
+        CircleCollider2D col = cloneGo.AddComponent<CircleCollider2D>();
+        col.radius = Mathf.Max(0.2f, agentRadius * 0.95f);
+
+        Rigidbody2D rbClone = cloneGo.AddComponent<Rigidbody2D>();
+        rbClone.gravityScale = 0f;
+        rbClone.freezeRotation = true;
+        rbClone.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+        rbClone.interpolation = RigidbodyInterpolation2D.Interpolate;
+
+        EnsureNoFrictionMaterial();
+        col.sharedMaterial = noFrictionMaterial;
+
+        splitClone = cloneGo.AddComponent<SplitAnomalyCloneController>();
+        splitClone.ConfigureMovement(
+            Mathf.Max(0.5f, baseMoveSpeed * splitCloneSpeedMultiplier),
+            splitCloneVelocityResponsiveness,
+            splitCloneSideOffset,
+            splitMergeSpeed,
+            splitSideSign);
+        splitClone.ConfigureRuntime(player, gameManager, this, obstacleMask);
+        splitClone.SetSplitState(splitStateActive, splitMergeInProgress);
+    }
+
+    private void BeginSplitMerge()
+    {
+        splitStateActive = false;
+        if (splitClone == null)
+        {
+            splitMergeInProgress = false;
+            return;
+        }
+
+        splitMergeInProgress = true;
+        splitClone.SetSplitState(splitStateActive, splitMergeInProgress);
+    }
+
+    private Vector2 ComputeSplitSpawnOffset()
+    {
+        Vector2 toPlayer = player != null ? (player.GetPosition() - (Vector2)transform.position) : Vector2.right;
+        if (toPlayer.sqrMagnitude < 0.0001f)
+        {
+            toPlayer = Vector2.right;
+        }
+
+        Vector2 side = new Vector2(-toPlayer.y, toPlayer.x).normalized * splitSideSign;
+        float offset = Mathf.Max(0.2f, splitCloneSpawnOffset);
+        return side * offset;
+    }
+
+    public void NotifySplitCloneMerged(SplitAnomalyCloneController clone)
+    {
+        if (clone != null && clone == splitClone)
+        {
+            splitClone = null;
+        }
+
+        splitMergeInProgress = false;
+    }
+
+    public bool IsSplitStateActive()
+    {
+        return splitStateActive;
+    }
+
+    public bool IsSplitMergeInProgress()
+    {
+        return splitMergeInProgress;
+    }
+
+    public Vector2 GetCurrentPosition()
+    {
+        return rb != null ? rb.position : (Vector2)transform.position;
+    }
+
+    public Vector2 GetCurrentTargetForSplitClone()
+    {
+        if (player == null)
+        {
+            return GetCurrentPosition();
+        }
+
+        Vector2 target = player.GetPosition();
+        Vector2 toPlayer = target - GetCurrentPosition();
+        if (toPlayer.sqrMagnitude < 0.0001f)
+        {
+            return target;
+        }
+
+        Vector2 side = new Vector2(-toPlayer.y, toPlayer.x).normalized * splitSideSign;
+        return target + side * splitCloneSideOffset;
+    }
+
+    public bool CanDamagePlayer()
+    {
+        return gameManager != null && gameManager.IsRunActive && !gameManager.IsGameOver;
+    }
+
+    private void DestroySplitCloneImmediate()
+    {
+        if (splitClone == null)
+        {
+            splitMergeInProgress = false;
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(splitClone.gameObject);
+        }
+        else
+        {
+            DestroyImmediate(splitClone.gameObject);
+        }
+
+        splitClone = null;
+        splitMergeInProgress = false;
     }
 
     private void FireExpansionShoot()
@@ -1146,6 +1340,11 @@ public class EnemyController : MonoBehaviour
         }
 
         if (col.GetComponent<PlayerController>() != null || col.GetComponent<EnemyController>() != null)
+        {
+            return false;
+        }
+
+        if (col.GetComponent<SplitAnomalyCloneController>() != null)
         {
             return false;
         }
