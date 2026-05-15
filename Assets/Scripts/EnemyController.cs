@@ -56,6 +56,15 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float speedStateMultiplier = 1.55f;
     [SerializeField] private bool logStateChanges = false;
 
+    [Header("Expansion Shoot")]
+    [SerializeField] private int expansionShootProjectileCount = 10;
+    [SerializeField] private float expansionShootInterval = 3f;
+    [SerializeField] private float expansionShootProjectileSpeed = 8.5f;
+    [SerializeField] private float expansionShootProjectileLifetime = 3.2f;
+    [SerializeField] private float expansionShootSpawnRadius = 0.7f;
+    [SerializeField] private Color expansionShootProjectileColor = new Color(1f, 0.48f, 0.63f, 1f);
+    [SerializeField] private Vector2 expansionShootProjectileSize = new Vector2(0.24f, 0.24f);
+
     [Header("State Weights")]
     [SerializeField, Min(0f)] private float directChaseWeight = 1f;
     [SerializeField, Min(0f)] private float predictiveInterceptWeight = 1f;
@@ -104,7 +113,9 @@ public class EnemyController : MonoBehaviour
     private float currentStateDuration;
     private float erraticRefreshTimer;
     private float flankRetargetTimer;
+    private float expansionShootTimer;
     private float flankSide = 1f;
+    private int projectileSerial;
 
     private Vector2 erraticTarget;
     private Vector2 lastMoveDirection = Vector2.right;
@@ -222,6 +233,7 @@ public class EnemyController : MonoBehaviour
 
         HandleStateSwitch();
         UpdatePatternInternals();
+        UpdateStateAbilities();
 
         gridRefreshTimer += Time.deltaTime;
         if (gridRefreshTimer >= gridRefreshInterval)
@@ -403,6 +415,8 @@ public class EnemyController : MonoBehaviour
 
     private void OnStateEntered()
     {
+        expansionShootTimer = 0f;
+
         if (currentPattern == BehaviorPattern.ErraticBurst)
         {
             erraticRefreshTimer = 0f;
@@ -514,6 +528,63 @@ public class EnemyController : MonoBehaviour
                 flankSide *= -1f;
             }
         }
+    }
+
+    private void UpdateStateAbilities()
+    {
+        if (currentState != AnomalyState.ExpansionShoot)
+        {
+            return;
+        }
+
+        expansionShootTimer += Time.deltaTime;
+        if (expansionShootTimer < Mathf.Max(0.15f, expansionShootInterval))
+        {
+            return;
+        }
+
+        expansionShootTimer = 0f;
+        FireExpansionShoot();
+    }
+
+    private void FireExpansionShoot()
+    {
+        int count = Mathf.Max(4, expansionShootProjectileCount);
+        float spawnRadius = Mathf.Max(0.05f, expansionShootSpawnRadius);
+        Vector2 origin = rb != null ? rb.position : (Vector2)transform.position;
+
+        for (int i = 0; i < count; i++)
+        {
+            float angleDeg = (360f / count) * i;
+            Vector2 dir = new Vector2(Mathf.Cos(angleDeg * Mathf.Deg2Rad), Mathf.Sin(angleDeg * Mathf.Deg2Rad));
+            Vector2 spawnPos = origin + dir * spawnRadius;
+            CreateProjectile(spawnPos, dir);
+        }
+    }
+
+    private void CreateProjectile(Vector2 position, Vector2 direction)
+    {
+        GameObject go = new GameObject($"AnomalyProjectile_{projectileSerial++}");
+        go.transform.position = new Vector3(position.x, position.y, 0f);
+
+        SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = SquareSpriteProvider.Get();
+        sr.drawMode = SpriteDrawMode.Sliced;
+        sr.size = expansionShootProjectileSize;
+        sr.color = expansionShootProjectileColor;
+        sr.sortingOrder = 11;
+
+        CircleCollider2D col = go.AddComponent<CircleCollider2D>();
+        col.isTrigger = true;
+        col.radius = Mathf.Max(0.04f, Mathf.Min(expansionShootProjectileSize.x, expansionShootProjectileSize.y) * 0.48f);
+
+        AnomalyProjectile projectile = go.AddComponent<AnomalyProjectile>();
+        projectile.Configure(
+            direction,
+            expansionShootProjectileSpeed,
+            expansionShootProjectileLifetime,
+            obstacleMask,
+            gameManager);
     }
 
     private Vector2 GetStrategicTarget()
