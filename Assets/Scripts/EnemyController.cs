@@ -88,6 +88,12 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private int splitMergeTelegraphSegments = 8;
     [SerializeField] private Vector2 splitMergeTelegraphSegmentSize = new Vector2(0.18f, 0.04f);
 
+    [Header("Destroyer")]
+    [SerializeField] private int destroyerMinBreaks = 3;
+    [SerializeField] private int destroyerMaxBreaks = 5;
+    [SerializeField] private float destroyerTouchCooldown = 0.06f;
+    [SerializeField, Range(0f, 1f)] private float destroyerRepulsionFactor = 0.12f;
+
     [Header("State Weights")]
     [SerializeField, Min(0f)] private float directChaseWeight = 1f;
     [SerializeField, Min(0f)] private float predictiveInterceptWeight = 1f;
@@ -152,6 +158,10 @@ public class EnemyController : MonoBehaviour
     private SpriteRenderer splitMergeOwnerRing;
     private SpriteRenderer splitMergeCloneRing;
     private readonly List<SpriteRenderer> splitMergeBridgeSegments = new List<SpriteRenderer>();
+    private int destroyerBreakLimit;
+    private int destroyerBreakCount;
+    private float destroyerTouchCooldownTimer;
+    private readonly HashSet<int> destroyerDestroyedIds = new HashSet<int>();
 
     private Vector2 erraticTarget;
     private Vector2 lastMoveDirection = Vector2.right;
@@ -293,15 +303,19 @@ public class EnemyController : MonoBehaviour
         }
 
         Vector2 strategicTarget = ClampToArena(GetStrategicTarget());
+        bool useDestroyerSteering = currentState == AnomalyState.Destroyer;
 
-        repathTimer += Time.deltaTime;
-        bool targetMoved = Vector2.Distance(strategicTarget, lastPathGoal) >= targetRepathThreshold;
-        if (repathTimer >= repathInterval || targetMoved || pathWorld.Count == 0)
+        if (!useDestroyerSteering)
         {
-            RebuildPathTo(strategicTarget);
+            repathTimer += Time.deltaTime;
+            bool targetMoved = Vector2.Distance(strategicTarget, lastPathGoal) >= targetRepathThreshold;
+            if (repathTimer >= repathInterval || targetMoved || pathWorld.Count == 0)
+            {
+                RebuildPathTo(strategicTarget);
+            }
         }
 
-        Vector2 steeringTarget = SelectSteeringTarget(strategicTarget);
+        Vector2 steeringTarget = useDestroyerSteering ? strategicTarget : SelectSteeringTarget(strategicTarget);
         Vector2 desiredDirection = steeringTarget - rb.position;
 
         if (desiredDirection.sqrMagnitude < 0.0001f)
@@ -313,7 +327,19 @@ public class EnemyController : MonoBehaviour
             desiredDirection.Normalize();
         }
 
-        desiredDirection = ApplyObstacleRepulsion(desiredDirection);
+        if (useDestroyerSteering)
+        {
+            Vector2 repulsed = ApplyObstacleRepulsion(desiredDirection);
+            desiredDirection = Vector2.Lerp(desiredDirection, repulsed, Mathf.Clamp01(destroyerRepulsionFactor));
+            if (desiredDirection.sqrMagnitude > 0.0001f)
+            {
+                desiredDirection.Normalize();
+            }
+        }
+        else
+        {
+            desiredDirection = ApplyObstacleRepulsion(desiredDirection);
+        }
         if (desiredDirection.sqrMagnitude > 0.0001f)
         {
             lastMoveDirection = desiredDirection;
@@ -469,6 +495,21 @@ public class EnemyController : MonoBehaviour
     {
         expansionShootTimer = 0f;
         HideExpansionShootTelegraphVisual();
+        destroyerTouchCooldownTimer = 0f;
+        destroyerDestroyedIds.Clear();
+
+        if (currentState == AnomalyState.Destroyer)
+        {
+            int minBreaks = Mathf.Max(0, Mathf.Min(destroyerMinBreaks, destroyerMaxBreaks));
+            int maxBreaks = Mathf.Max(minBreaks, Mathf.Max(destroyerMinBreaks, destroyerMaxBreaks));
+            destroyerBreakLimit = Random.Range(minBreaks, maxBreaks + 1);
+            destroyerBreakCount = 0;
+        }
+        else
+        {
+            destroyerBreakLimit = 0;
+            destroyerBreakCount = 0;
+        }
 
         if (currentPattern == BehaviorPattern.ErraticBurst)
         {
@@ -600,6 +641,7 @@ public class EnemyController : MonoBehaviour
     private void UpdateStateAbilities()
     {
         UpdateSplitAbility();
+        UpdateDestroyerAbility();
 
         if (currentState != AnomalyState.ExpansionShoot)
         {
@@ -629,6 +671,14 @@ public class EnemyController : MonoBehaviour
         expansionShootTimer = 0f;
         HideExpansionShootTelegraphVisual();
         FireExpansionShoot();
+    }
+
+    private void UpdateDestroyerAbility()
+    {
+        if (destroyerTouchCooldownTimer > 0f)
+        {
+            destroyerTouchCooldownTimer -= Time.deltaTime;
+        }
     }
 
     private void UpdateSplitAbility()
@@ -1613,6 +1663,78 @@ public class EnemyController : MonoBehaviour
         return true;
     }
 
+    private void TryDestroyObstacle(Collider2D col)
+    {
+        if (currentState != AnomalyState.Destroyer)
+        {
+            return;
+        }
+
+        if (destroyerBreakCount >= destroyerBreakLimit)
+        {
+            return;
+        }
+
+        if (destroyerTouchCooldownTimer > 0f)
+        {
+            return;
+        }
+
+        if (!CanDestroyThisCollider(col))
+        {
+            return;
+        }
+
+        GameObject target = col.gameObject;
+        int id = target.GetInstanceID();
+        if (!destroyerDestroyedIds.Add(id))
+        {
+            return;
+        }
+
+        destroyerBreakCount++;
+        destroyerTouchCooldownTimer = Mathf.Max(0f, destroyerTouchCooldown);
+
+        if (Application.isPlaying)
+        {
+            Destroy(target);
+        }
+        else
+        {
+            DestroyImmediate(target);
+        }
+
+        BuildNavigationGrid();
+        pathWorld.Clear();
+        pathIndex = 0;
+    }
+
+    private bool CanDestroyThisCollider(Collider2D col)
+    {
+        if (col == null || col.isTrigger || col == ownCollider)
+        {
+            return false;
+        }
+
+        if (col.GetComponent<PlayerController>() != null || col.GetComponent<EnemyController>() != null || col.GetComponent<SplitAnomalyCloneController>() != null)
+        {
+            return false;
+        }
+
+        Transform t = col.transform;
+        while (t != null)
+        {
+            if (t.name == "Bounds")
+            {
+                return false;
+            }
+
+            t = t.parent;
+        }
+
+        return true;
+    }
+
     private static Vector2 Rotate(Vector2 v, float degrees)
     {
         float r = degrees * Mathf.Deg2Rad;
@@ -1628,6 +1750,8 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
+        TryDestroyObstacle(collision.collider);
+
         if (collision.collider.GetComponent<PlayerController>() != null)
         {
             gameManager?.TriggerGameOver();
@@ -1640,6 +1764,8 @@ public class EnemyController : MonoBehaviour
         {
             return;
         }
+
+        TryDestroyObstacle(other);
 
         if (other.GetComponent<PlayerController>() != null)
         {
