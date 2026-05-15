@@ -384,8 +384,8 @@ public class GameManager : MonoBehaviour
                 return "Expansion Shoot";
             case "SpeedSurge":
                 return "Speed Surge";
-            case "RicochetHunter":
-                return "Ricochet Hunter";
+            case "WeaveHunter":
+                return "Weave Hunter";
             case "Destroyer":
                 return "Destroyer";
             default:
