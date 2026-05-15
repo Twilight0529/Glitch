@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using System.Collections;
 
 [RequireComponent(typeof(Rigidbody2D))]
 [RequireComponent(typeof(Collider2D))]
@@ -93,6 +94,10 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private int destroyerMaxBreaks = 5;
     [SerializeField] private float destroyerTouchCooldown = 0.06f;
     [SerializeField, Range(0f, 1f)] private float destroyerRepulsionFactor = 0.12f;
+    [SerializeField] private float destroyerFractureDuration = 0.12f;
+    [SerializeField] private Color destroyerFractureFlashColor = new Color(1f, 0.82f, 0.86f, 1f);
+    [SerializeField, Range(0.1f, 1f)] private float destroyerFractureEndScale = 0.2f;
+    [SerializeField] private float destroyerFractureSpinDegrees = 25f;
 
     [Header("State Weights")]
     [SerializeField, Min(0f)] private float directChaseWeight = 1f;
@@ -1694,19 +1699,101 @@ public class EnemyController : MonoBehaviour
 
         destroyerBreakCount++;
         destroyerTouchCooldownTimer = Mathf.Max(0f, destroyerTouchCooldown);
-
-        if (Application.isPlaying)
-        {
-            Destroy(target);
-        }
-        else
-        {
-            DestroyImmediate(target);
-        }
+        BeginDestroyFracture(target);
 
         BuildNavigationGrid();
         pathWorld.Clear();
         pathIndex = 0;
+    }
+
+    private void BeginDestroyFracture(GameObject target)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        Collider2D[] colliders = target.GetComponentsInChildren<Collider2D>(true);
+        for (int i = 0; i < colliders.Length; i++)
+        {
+            if (colliders[i] != null)
+            {
+                colliders[i].enabled = false;
+            }
+        }
+
+        Rigidbody2D rbTarget = target.GetComponent<Rigidbody2D>();
+        if (rbTarget != null)
+        {
+            rbTarget.linearVelocity = Vector2.zero;
+            rbTarget.angularVelocity = 0f;
+            rbTarget.simulated = false;
+        }
+
+        if (!Application.isPlaying)
+        {
+            DestroyImmediate(target);
+            return;
+        }
+
+        StartCoroutine(DestroyFractureRoutine(target));
+    }
+
+    private IEnumerator DestroyFractureRoutine(GameObject target)
+    {
+        if (target == null)
+        {
+            yield break;
+        }
+
+        SpriteRenderer[] renderers = target.GetComponentsInChildren<SpriteRenderer>(true);
+        Color[] baseColors = new Color[renderers.Length];
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            baseColors[i] = renderers[i] != null ? renderers[i].color : Color.white;
+        }
+
+        Transform tr = target.transform;
+        Vector3 startScale = tr.localScale;
+        Quaternion startRot = tr.localRotation;
+        float duration = Mathf.Max(0.02f, destroyerFractureDuration);
+        float elapsed = 0f;
+        float spinSign = Random.value < 0.5f ? -1f : 1f;
+
+        while (elapsed < duration && target != null)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            float eased = 1f - Mathf.Pow(1f - t, 2f);
+
+            if (tr != null)
+            {
+                float endScale = Mathf.Clamp01(destroyerFractureEndScale);
+                tr.localScale = Vector3.Lerp(startScale, startScale * endScale, eased);
+                float z = Mathf.Lerp(0f, destroyerFractureSpinDegrees * spinSign, eased);
+                tr.localRotation = startRot * Quaternion.Euler(0f, 0f, z);
+            }
+
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                SpriteRenderer sr = renderers[i];
+                if (sr == null)
+                {
+                    continue;
+                }
+
+                Color flash = Color.Lerp(baseColors[i], destroyerFractureFlashColor, eased);
+                flash.a = Mathf.Lerp(baseColors[i].a, 0f, eased);
+                sr.color = flash;
+            }
+
+            yield return null;
+        }
+
+        if (target != null)
+        {
+            Destroy(target);
+        }
     }
 
     private bool CanDestroyThisCollider(Collider2D col)
