@@ -99,6 +99,12 @@ public class EnemyController : MonoBehaviour
     [SerializeField, Range(0.1f, 1f)] private float destroyerFractureEndScale = 0.2f;
     [SerializeField] private float destroyerFractureSpinDegrees = 25f;
 
+    [Header("Ricochet Hunter")]
+    [SerializeField] private float ricochetSpeedMultiplier = 1.18f;
+    [SerializeField] private float ricochetRetargetInterval = 0.72f;
+    [SerializeField, Range(0f, 1f)] private float ricochetRetargetBlend = 0.38f;
+    [SerializeField, Range(0.1f, 1f)] private float ricochetBounceEnergy = 0.94f;
+
     [Header("State Weights")]
     [SerializeField, Min(0f)] private float directChaseWeight = 1f;
     [SerializeField, Min(0f)] private float predictiveInterceptWeight = 1f;
@@ -167,6 +173,9 @@ public class EnemyController : MonoBehaviour
     private int destroyerBreakCount;
     private float destroyerTouchCooldownTimer;
     private readonly HashSet<int> destroyerDestroyedIds = new HashSet<int>();
+    private bool ricochetInitialized;
+    private Vector2 ricochetDirection = Vector2.right;
+    private float ricochetRetargetTimer;
 
     private Vector2 erraticTarget;
     private Vector2 lastMoveDirection = Vector2.right;
@@ -299,6 +308,12 @@ public class EnemyController : MonoBehaviour
             return;
         }
         HideSplitMergeTelegraphVisual();
+
+        if (currentState == AnomalyState.RicochetHunter)
+        {
+            TickRicochetHunterMovement();
+            return;
+        }
 
         gridRefreshTimer += Time.deltaTime;
         if (gridRefreshTimer >= gridRefreshInterval)
@@ -516,6 +531,16 @@ public class EnemyController : MonoBehaviour
             destroyerBreakCount = 0;
         }
 
+        if (currentState == AnomalyState.RicochetHunter)
+        {
+            ricochetInitialized = false;
+            ricochetRetargetTimer = 0f;
+        }
+        else
+        {
+            ricochetInitialized = false;
+        }
+
         if (currentPattern == BehaviorPattern.ErraticBurst)
         {
             erraticRefreshTimer = 0f;
@@ -612,7 +637,7 @@ public class EnemyController : MonoBehaviour
             case AnomalyState.SpeedSurge:
                 return BehaviorPattern.DirectChase;
             case AnomalyState.RicochetHunter:
-                return BehaviorPattern.ErraticBurst;
+                return BehaviorPattern.DirectChase;
             case AnomalyState.Destroyer:
                 return BehaviorPattern.DirectChase;
             default:
@@ -888,6 +913,114 @@ public class EnemyController : MonoBehaviour
         float speed = baseMoveSpeed * Mathf.Max(0.2f, splitMergeOwnerSpeedMultiplier);
         Vector2 desiredVelocity = desiredDirection * speed;
         rb.linearVelocity = Vector2.MoveTowards(rb.linearVelocity, desiredVelocity, velocityResponsiveness * 1.15f * Time.deltaTime);
+    }
+
+    private void TickRicochetHunterMovement()
+    {
+        if (!ricochetInitialized)
+        {
+            ricochetDirection = ComputeDirectionToPlayerOrFallback();
+            ricochetInitialized = true;
+            ricochetRetargetTimer = 0f;
+        }
+
+        ricochetRetargetTimer += Time.deltaTime;
+        if (ricochetRetargetTimer >= Mathf.Max(0.08f, ricochetRetargetInterval))
+        {
+            ricochetRetargetTimer = 0f;
+            BlendRicochetDirectionTowardsPlayer(Mathf.Clamp01(ricochetRetargetBlend));
+        }
+
+        Vector2 dir = ricochetDirection.sqrMagnitude > 0.0001f ? ricochetDirection.normalized : ComputeDirectionToPlayerOrFallback();
+        ricochetDirection = dir;
+        lastMoveDirection = dir;
+
+        float speed = Mathf.Max(0.1f, baseMoveSpeed * Mathf.Max(0.1f, ricochetSpeedMultiplier));
+        Vector2 desiredVelocity = dir * speed;
+        rb.linearVelocity = Vector2.MoveTowards(rb.linearVelocity, desiredVelocity, velocityResponsiveness * 1.35f * Time.deltaTime);
+
+        HandleRicochetArenaBounce();
+    }
+
+    private void HandleRicochetArenaBounce()
+    {
+        float margin = agentRadius + 0.1f;
+        float minX = navOrigin.x + margin;
+        float maxX = navOrigin.x + navSize.x - margin;
+        float minY = navOrigin.y + margin;
+        float maxY = navOrigin.y + navSize.y - margin;
+
+        Vector2 pos = rb.position;
+        bool bounced = false;
+
+        if (pos.x < minX || pos.x > maxX)
+        {
+            ricochetDirection = new Vector2(-ricochetDirection.x, ricochetDirection.y);
+            pos.x = Mathf.Clamp(pos.x, minX, maxX);
+            bounced = true;
+        }
+
+        if (pos.y < minY || pos.y > maxY)
+        {
+            ricochetDirection = new Vector2(ricochetDirection.x, -ricochetDirection.y);
+            pos.y = Mathf.Clamp(pos.y, minY, maxY);
+            bounced = true;
+        }
+
+        if (bounced)
+        {
+            rb.position = pos;
+            BlendRicochetDirectionTowardsPlayer(Mathf.Clamp01(ricochetRetargetBlend * 0.45f));
+            float speed = Mathf.Max(0.1f, rb.linearVelocity.magnitude * Mathf.Clamp(ricochetBounceEnergy, 0.1f, 1f));
+            rb.linearVelocity = ricochetDirection.normalized * speed;
+        }
+    }
+
+    private void ApplyRicochetBounceFromNormal(Vector2 normal)
+    {
+        if (normal.sqrMagnitude < 0.0001f)
+        {
+            normal = -ricochetDirection;
+        }
+
+        normal.Normalize();
+        Vector2 incoming = rb.linearVelocity.sqrMagnitude > 0.001f ? rb.linearVelocity.normalized : ricochetDirection.normalized;
+        Vector2 reflected = Vector2.Reflect(incoming, normal);
+        if (reflected.sqrMagnitude < 0.0001f)
+        {
+            reflected = -incoming;
+        }
+
+        ricochetDirection = reflected.normalized;
+        BlendRicochetDirectionTowardsPlayer(Mathf.Clamp01(ricochetRetargetBlend * 0.45f));
+        ricochetRetargetTimer = 0f;
+
+        float speed = Mathf.Max(0.1f, rb.linearVelocity.magnitude * Mathf.Clamp(ricochetBounceEnergy, 0.1f, 1f));
+        rb.linearVelocity = ricochetDirection * speed;
+    }
+
+    private void BlendRicochetDirectionTowardsPlayer(float blend)
+    {
+        Vector2 toPlayer = ComputeDirectionToPlayerOrFallback();
+        Vector2 current = ricochetDirection.sqrMagnitude > 0.0001f ? ricochetDirection.normalized : toPlayer;
+        Vector2 mixed = Vector2.Lerp(current, toPlayer, Mathf.Clamp01(blend));
+        ricochetDirection = mixed.sqrMagnitude > 0.0001f ? mixed.normalized : current;
+    }
+
+    private Vector2 ComputeDirectionToPlayerOrFallback()
+    {
+        if (player == null)
+        {
+            return lastMoveDirection.sqrMagnitude > 0.0001f ? lastMoveDirection.normalized : Vector2.right;
+        }
+
+        Vector2 toPlayer = player.GetPosition() - rb.position;
+        if (toPlayer.sqrMagnitude < 0.0001f)
+        {
+            return lastMoveDirection.sqrMagnitude > 0.0001f ? lastMoveDirection.normalized : Vector2.right;
+        }
+
+        return toPlayer.normalized;
     }
 
     private void ForceCompleteSplitMerge()
@@ -1838,6 +1971,11 @@ public class EnemyController : MonoBehaviour
         }
 
         TryDestroyObstacle(collision.collider);
+
+        if (currentState == AnomalyState.RicochetHunter && collision.collider.GetComponent<PlayerController>() == null && collision.contactCount > 0)
+        {
+            ApplyRicochetBounceFromNormal(collision.GetContact(0).normal);
+        }
 
         if (collision.collider.GetComponent<PlayerController>() != null)
         {
