@@ -54,6 +54,7 @@ public class EnemyController : MonoBehaviour
     [Header("Anomaly State Machine")]
     [SerializeField] private bool enableAdvancedStates = true;
     [SerializeField] private Vector2 stateDurationMultiplierRange = new Vector2(0.85f, 1.25f);
+    [SerializeField] private Vector2 majorStateDurationRange = new Vector2(9f, 15f);
     [SerializeField] private float speedStateMultiplier = 1.55f;
     [SerializeField] private bool logStateChanges = false;
 
@@ -493,11 +494,7 @@ public class EnemyController : MonoBehaviour
         currentPattern = ResolvePatternForState(currentState);
         stateTimer = 0f;
 
-        float baseInterval = gameManager != null ? gameManager.CurrentBehaviorChangeInterval : 5f;
-        float minMul = Mathf.Min(stateDurationMultiplierRange.x, stateDurationMultiplierRange.y);
-        float maxMul = Mathf.Max(stateDurationMultiplierRange.x, stateDurationMultiplierRange.y);
-        float durationMultiplier = Random.Range(minMul, maxMul);
-        currentStateDuration = Mathf.Max(0.6f, baseInterval * durationMultiplier);
+        currentStateDuration = GetRandomDurationForState(currentState);
 
         if (logStateChanges)
         {
@@ -506,6 +503,25 @@ public class EnemyController : MonoBehaviour
 
         HandleStateTransition(previousState, currentState);
         OnStateEntered();
+    }
+
+    private float GetRandomDurationForState(AnomalyState state)
+    {
+        if (state == AnomalyState.Split ||
+            state == AnomalyState.ExpansionShoot ||
+            state == AnomalyState.Destroyer ||
+            state == AnomalyState.SpeedSurge)
+        {
+            float minMajor = Mathf.Max(0.6f, Mathf.Min(majorStateDurationRange.x, majorStateDurationRange.y));
+            float maxMajor = Mathf.Max(minMajor, Mathf.Max(majorStateDurationRange.x, majorStateDurationRange.y));
+            return Random.Range(minMajor, maxMajor);
+        }
+
+        float baseInterval = gameManager != null ? gameManager.CurrentBehaviorChangeInterval : 5f;
+        float minMul = Mathf.Min(stateDurationMultiplierRange.x, stateDurationMultiplierRange.y);
+        float maxMul = Mathf.Max(stateDurationMultiplierRange.x, stateDurationMultiplierRange.y);
+        float durationMultiplier = Random.Range(minMul, maxMul);
+        return Mathf.Max(0.6f, baseInterval * durationMultiplier);
     }
 
     private void OnStateEntered()
