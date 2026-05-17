@@ -32,11 +32,11 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private GameManager gameManager;
 
     [Header("Base Movement")]
-    [SerializeField] private float baseMoveSpeed = 4.88f;
-    [SerializeField] private float velocityResponsiveness = 36f;
+    [SerializeField] private float baseMoveSpeed = 6.5f;
+    [SerializeField] private float velocityResponsiveness = 48f;
 
     [Header("Pattern Timing")]
-    [SerializeField] private float flankRetargetInterval = 0.93f;
+    [SerializeField] private float flankRetargetInterval = 0.7f;
 
     [Header("Predictive Pattern")]
     [SerializeField] private float minLeadTime = 0.1f;
@@ -47,7 +47,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float flankLeadFactor = 1.1f;
 
     [Header("Erratic Pattern")]
-    [SerializeField] private float erraticDirectionRefresh = 0.23f;
+    [SerializeField] private float erraticDirectionRefresh = 0.18f;
     [SerializeField] private float erraticOffsetRadius = 2.7f;
     [SerializeField] private float erraticBurstMultiplier = 1.2f;
 
@@ -55,13 +55,13 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private bool enableAdvancedStates = true;
     [SerializeField] private Vector2 stateDurationMultiplierRange = new Vector2(0.85f, 1.25f);
     [SerializeField] private Vector2 majorStateDurationRange = new Vector2(9f, 15f);
-    [SerializeField] private float speedStateMultiplier = 1.65f;
+    [SerializeField] private float speedStateMultiplier = 1.55f;
     [SerializeField] private bool logStateChanges = false;
 
     [Header("Expansion Shoot")]
     [SerializeField] private int expansionShootProjectileCount = 10;
     [SerializeField] private float expansionShootInterval = 2f;
-    [SerializeField] private float expansionShootProjectileSpeed = 12.75f;
+    [SerializeField] private float expansionShootProjectileSpeed = 9.5f;
     [SerializeField] private float expansionShootProjectileLifetime = 3.2f;
     [SerializeField] private float expansionShootSpawnRadius = 0.7f;
     [SerializeField] private Color expansionShootProjectileColor = new Color(1f, 0.48f, 0.63f, 1f);
@@ -105,9 +105,9 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private Color destroyerRespawnWarningColor = new Color(1f, 0.72f, 0.84f, 0.85f);
 
     [Header("Weave Hunter")]
-    [SerializeField] private float weaveHunterSpeedMultiplier = 1.3f;
+    [SerializeField] private float weaveHunterSpeedMultiplier = 1.2f;
     [SerializeField] private float weaveHunterSideOffset = 2f;
-    [SerializeField] private float weaveHunterSwitchInterval = 0.31f;
+    [SerializeField] private float weaveHunterSwitchInterval = 0.23f;
     [SerializeField] private float weaveHunterPlayerVelocityBias = 0.75f;
 
     [Header("State Weights")]

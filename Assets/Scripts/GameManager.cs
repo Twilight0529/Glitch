@@ -18,7 +18,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float goFlashSeconds = 0.4f;
 
     [Header("Difficulty")]
-    [SerializeField] private float behaviorChangeInterval = 3.33f;
+    [SerializeField] private float behaviorChangeInterval = 2.5f;
     [SerializeField] private float difficultyRampPerSecond = 0.03f;
 
     [Header("Countdown Theme")]
