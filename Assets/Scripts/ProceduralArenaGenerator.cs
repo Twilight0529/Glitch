@@ -1278,15 +1278,10 @@ public class ProceduralArenaGenerator : MonoBehaviour
         GameObject go = CreateBlock(name, center, size, color, parent);
         go.transform.rotation = Quaternion.Euler(0f, 0f, 45f);
 
-        float h = diameter * 0.5f;
-        PolygonCollider2D collider = go.AddComponent<PolygonCollider2D>();
-        collider.points = new[]
-        {
-            new Vector2(0f, h),
-            new Vector2(h, 0f),
-            new Vector2(0f, -h),
-            new Vector2(-h, 0f)
-        };
+        // Keep collider identical to rendered square, then rotate both together (visual/hitbox match).
+        BoxCollider2D collider = go.AddComponent<BoxCollider2D>();
+        collider.size = size;
+        collider.offset = Vector2.zero;
 
         RegisterFootprint(footprint);
         return true;

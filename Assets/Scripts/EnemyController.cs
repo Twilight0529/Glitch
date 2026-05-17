@@ -337,7 +337,9 @@ public class EnemyController : MonoBehaviour
         }
 
         Vector2 strategicTarget = ClampToArena(GetStrategicTarget());
-        bool useDestroyerSteering = currentState == AnomalyState.Destroyer;
+        bool destroyerState = currentState == AnomalyState.Destroyer;
+        bool destroyerOutOfBreaks = destroyerState && destroyerBreakLimit > 0 && destroyerBreakCount >= destroyerBreakLimit;
+        bool useDestroyerSteering = destroyerState && !destroyerOutOfBreaks;
 
         if (!useDestroyerSteering)
         {
@@ -1885,6 +1887,7 @@ public class EnemyController : MonoBehaviour
     {
         if (snapshot == null || snapshot.target == null)
         {
+            destroyerDestroyedIds.Remove(targetId);
             destroyerPendingRespawnIds.Remove(targetId);
             yield break;
         }
@@ -1931,6 +1934,7 @@ public class EnemyController : MonoBehaviour
 
         if (snapshot.target == null)
         {
+            destroyerDestroyedIds.Remove(targetId);
             destroyerPendingRespawnIds.Remove(targetId);
             yield break;
         }
@@ -1956,6 +1960,7 @@ public class EnemyController : MonoBehaviour
 
         if (snapshot.target == null)
         {
+            destroyerDestroyedIds.Remove(targetId);
             destroyerPendingRespawnIds.Remove(targetId);
             yield break;
         }
@@ -1995,6 +2000,7 @@ public class EnemyController : MonoBehaviour
 
         if (snapshot.target == null)
         {
+            destroyerDestroyedIds.Remove(targetId);
             destroyerPendingRespawnIds.Remove(targetId);
             yield break;
         }
@@ -2032,6 +2038,7 @@ public class EnemyController : MonoBehaviour
             snapshot.rigidbody.angularVelocity = 0f;
         }
 
+        destroyerDestroyedIds.Remove(targetId);
         destroyerPendingRespawnIds.Remove(targetId);
 
         BuildNavigationGrid();
@@ -2088,6 +2095,16 @@ public class EnemyController : MonoBehaviour
         }
     }
 
+    private void OnCollisionStay2D(Collision2D collision)
+    {
+        if (gameManager == null || !gameManager.IsRunActive)
+        {
+            return;
+        }
+
+        TryDestroyObstacle(collision.collider);
+    }
+
     private void OnTriggerEnter2D(Collider2D other)
     {
         if (gameManager == null || !gameManager.IsRunActive)
@@ -2101,5 +2118,15 @@ public class EnemyController : MonoBehaviour
         {
             gameManager?.TriggerGameOver();
         }
+    }
+
+    private void OnTriggerStay2D(Collider2D other)
+    {
+        if (gameManager == null || !gameManager.IsRunActive)
+        {
+            return;
+        }
+
+        TryDestroyObstacle(other);
     }
 }
