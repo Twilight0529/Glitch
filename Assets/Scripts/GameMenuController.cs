@@ -423,7 +423,7 @@ public class GameMenuController : MonoBehaviour
     private static void DrawSolidRect(Rect rect, Color color)
     {
         Color old = GUI.color;
-        GUI.color = color;
+        GUI.color = color; 
         GUI.DrawTexture(rect, Texture2D.whiteTexture);
         GUI.color = old;  
     } 

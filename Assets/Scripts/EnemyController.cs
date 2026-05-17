@@ -77,6 +77,20 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private Vector2 peakFadeDurationMultiplierRange = new Vector2(0.7f, 0.95f);
     [SerializeField] private Vector2 relaxDurationMultiplierRange = new Vector2(0.85f, 1.05f);
 
+    [Header("Chaos Feel")]
+    [SerializeField] private bool chaosDriveEnabled = true;
+    [SerializeField, Range(1f, 2.5f)] private float chaosTempoMultiplier = 1.35f;
+    [SerializeField, Range(0.4f, 1f)] private float chaosMinorDurationMultiplier = 0.72f;
+    [SerializeField, Range(0.6f, 1.2f)] private float chaosExpansionIntervalMultiplier = 0.8f;
+    [SerializeField, Range(1f, 2f)] private float chaosExpansionProjectileMultiplier = 1.3f;
+    [SerializeField, Range(0.5f, 1.2f)] private float chaosRepathIntervalMultiplier = 0.8f;
+
+    [Header("State Pulse FX")]
+    [SerializeField] private bool statePulseFxEnabled = true;
+    [SerializeField] private float statePulseDuration = 0.24f;
+    [SerializeField, Range(0f, 1f)] private float statePulseLighten = 0.42f;
+    [SerializeField] private float statePulseScaleBoost = 1.08f;
+
     [Header("Expansion Shoot")]
     [SerializeField] private int expansionShootProjectileCount = 10;
     [SerializeField] private float expansionShootInterval = 2f;
@@ -172,6 +186,7 @@ public class EnemyController : MonoBehaviour
 
     private Rigidbody2D rb;
     private Collider2D ownCollider;
+    private SpriteRenderer ownRenderer;
 
     private AnomalyState currentState;
     private BehaviorPattern currentPattern;
@@ -205,6 +220,9 @@ public class EnemyController : MonoBehaviour
     private PacingPhase pacingPhase = PacingPhase.BuildUp;
     private int pacingMinorStatesRemaining;
     private int pacingMajorStatesRemaining;
+    private float statePulseTimer;
+    private Vector3 baseScale = Vector3.one;
+    private Color baseColor = Color.white;
 
     private Vector2 erraticTarget;
     private Vector2 lastMoveDirection = Vector2.right;
@@ -279,6 +297,7 @@ public class EnemyController : MonoBehaviour
     {
         rb = GetComponent<Rigidbody2D>();
         ownCollider = GetComponent<Collider2D>();
+        ownRenderer = GetComponent<SpriteRenderer>();
 
         rb.gravityScale = 0f;
         rb.freezeRotation = true;
@@ -292,6 +311,12 @@ public class EnemyController : MonoBehaviour
 
         EnsureNoFrictionMaterial();
         ownCollider.sharedMaterial = noFrictionMaterial;
+
+        baseScale = transform.localScale;
+        if (ownRenderer != null)
+        {
+            baseColor = ownRenderer.color;
+        }
     }
 
     private static void EnsureNoFrictionMaterial()
@@ -332,6 +357,12 @@ public class EnemyController : MonoBehaviour
     {
         DestroySplitCloneImmediate();
         DestroySplitMergeTelegraphImmediate();
+        if (ownRenderer != null)
+        {
+            ownRenderer.color = baseColor;
+        }
+
+        transform.localScale = baseScale;
     }
 
     private void Update()
@@ -339,12 +370,14 @@ public class EnemyController : MonoBehaviour
         if (gameManager == null || player == null || gameManager.IsGameOver || !gameManager.IsRunActive)
         {
             rb.linearVelocity = Vector2.zero;
+            UpdateStatePulseVisual();
             return;
         }
 
         HandleStateSwitch();
         UpdatePatternInternals();
         UpdateStateAbilities();
+        UpdateStatePulseVisual();
 
         if (splitMergeInProgress && splitClone != null)
         {
@@ -370,7 +403,10 @@ public class EnemyController : MonoBehaviour
         {
             repathTimer += Time.deltaTime;
             bool targetMoved = Vector2.Distance(strategicTarget, lastPathGoal) >= targetRepathThreshold;
-            if (repathTimer >= repathInterval || targetMoved || pathWorld.Count == 0)
+            float effectiveRepathInterval = Mathf.Max(
+                0.05f,
+                repathInterval * (chaosDriveEnabled ? chaosRepathIntervalMultiplier : 1f));
+            if (repathTimer >= effectiveRepathInterval || targetMoved || pathWorld.Count == 0)
             {
                 RebuildPathTo(strategicTarget);
             }
@@ -421,6 +457,11 @@ public class EnemyController : MonoBehaviour
         else if (currentState == AnomalyState.WeaveHunter)
         {
             speed *= Mathf.Max(0.1f, weaveHunterSpeedMultiplier);
+        }
+
+        if (chaosDriveEnabled)
+        {
+            speed *= Mathf.Lerp(1f, chaosTempoMultiplier, 0.42f);
         }
 
         Vector2 desiredVelocity = desiredDirection * speed;
@@ -549,6 +590,7 @@ public class EnemyController : MonoBehaviour
         }
 
         HandleStateTransition(previousState, currentState);
+        TriggerStatePulse();
         OnStateEntered();
         RegisterStateForPacing(currentState);
     }
@@ -581,6 +623,11 @@ public class EnemyController : MonoBehaviour
             float minRelax = Mathf.Min(relaxDurationMultiplierRange.x, relaxDurationMultiplierRange.y);
             float maxRelax = Mathf.Max(relaxDurationMultiplierRange.x, relaxDurationMultiplierRange.y);
             durationMultiplier *= Random.Range(minRelax, maxRelax);
+        }
+
+        if (chaosDriveEnabled)
+        {
+            durationMultiplier *= Mathf.Clamp(chaosMinorDurationMultiplier, 0.4f, 1f);
         }
 
         return Mathf.Max(0.6f, baseInterval * durationMultiplier);
@@ -683,7 +730,13 @@ public class EnemyController : MonoBehaviour
     {
         int min = Mathf.Max(1, Mathf.Min(sustainPeakMajorStatesMin, sustainPeakMajorStatesMax));
         int max = Mathf.Max(min, Mathf.Max(sustainPeakMajorStatesMin, sustainPeakMajorStatesMax));
-        return Random.Range(min, max + 1);
+        int rolled = Random.Range(min, max + 1);
+        if (chaosDriveEnabled)
+        {
+            rolled += 1;
+        }
+
+        return rolled;
     }
 
     private void OnStateEntered()
@@ -838,7 +891,43 @@ public class EnemyController : MonoBehaviour
 
     public bool IsMapEventSuppressed()
     {
-        return IsMajorState(currentState) || pacingPhase == PacingPhase.Relax;
+        return currentState == AnomalyState.Destroyer || destroyerPendingRespawnIds.Count > 0;
+    }
+
+    private void TriggerStatePulse()
+    {
+        if (!statePulseFxEnabled)
+        {
+            return;
+        }
+
+        statePulseTimer = Mathf.Max(0.04f, statePulseDuration);
+    }
+
+    private void UpdateStatePulseVisual()
+    {
+        if (ownRenderer == null)
+        {
+            return;
+        }
+
+        if (!statePulseFxEnabled || statePulseTimer <= 0f)
+        {
+            ownRenderer.color = baseColor;
+            transform.localScale = baseScale;
+            return;
+        }
+
+        statePulseTimer -= Time.deltaTime;
+        float normalized = 1f - Mathf.Clamp01(statePulseTimer / Mathf.Max(0.04f, statePulseDuration));
+        float pulse = Mathf.Sin(normalized * Mathf.PI);
+        float lighten = Mathf.Clamp01(statePulseLighten) * pulse;
+        float scale = Mathf.Lerp(1f, Mathf.Max(1f, statePulseScaleBoost), pulse);
+
+        Color boosted = Color.Lerp(baseColor, Color.white, lighten);
+        boosted.a = baseColor.a;
+        ownRenderer.color = boosted;
+        transform.localScale = baseScale * scale;
     }
 
     private AnomalyState GetPhaseFallbackState()
@@ -919,7 +1008,8 @@ public class EnemyController : MonoBehaviour
         }
 
         expansionShootTimer += Time.deltaTime;
-        float interval = Mathf.Max(0.15f, expansionShootInterval);
+        float intervalMultiplier = chaosDriveEnabled ? chaosExpansionIntervalMultiplier : 1f;
+        float interval = Mathf.Max(0.12f, expansionShootInterval * Mathf.Max(0.1f, intervalMultiplier));
         float lead = Mathf.Clamp(expansionShootTelegraphLeadTime, 0.05f, interval);
         float remaining = interval - expansionShootTimer;
         if (remaining <= lead && remaining > 0f)
@@ -1362,7 +1452,8 @@ public class EnemyController : MonoBehaviour
 
     private void FireExpansionShoot()
     {
-        int count = Mathf.Max(4, expansionShootProjectileCount);
+        float projectileMultiplier = chaosDriveEnabled ? chaosExpansionProjectileMultiplier : 1f;
+        int count = Mathf.Max(4, Mathf.RoundToInt(expansionShootProjectileCount * Mathf.Max(1f, projectileMultiplier)));
         float spawnRadius = Mathf.Max(0.05f, expansionShootSpawnRadius);
         Vector2 origin = rb != null ? rb.position : (Vector2)transform.position;
 

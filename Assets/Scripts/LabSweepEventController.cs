@@ -29,6 +29,8 @@ public class LabSweepEventController : MonoBehaviour
     [SerializeField] private float intervalMax = 15f;
     [SerializeField] private float durationMin = 5.5f;
     [SerializeField] private float durationMax = 8.5f;
+    [SerializeField, Range(0.4f, 1f)] private float cadenceIntervalMultiplier = 0.72f;
+    [SerializeField, Range(0.8f, 1.5f)] private float cadenceDurationMultiplier = 1.16f;
 
     [Header("Lab Sweep")]
     [SerializeField] private float laneHeight = 2.1f;
@@ -196,6 +198,7 @@ public class LabSweepEventController : MonoBehaviour
         snapshots.Clear();
         moveAlongX = Random.value < 0.5f;
         eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
+        eventDuration *= Mathf.Max(0.1f, cadenceDurationMultiplier);
         eventCycles = Random.Range(Mathf.Min(minCycles, maxCycles), Mathf.Max(minCycles, maxCycles) + 1);
 
         Vector2 center = centerTransform.position;
@@ -530,7 +533,8 @@ public class LabSweepEventController : MonoBehaviour
     {
         float min = Mathf.Min(intervalMin, intervalMax);
         float max = Mathf.Max(intervalMin, intervalMax);
-        nextEventTimer = Random.Range(min, max);
+        float cadence = Mathf.Max(0.1f, cadenceIntervalMultiplier);
+        nextEventTimer = Random.Range(min, max) * cadence;
     }
 
     private bool IsMapEventSuppressed()

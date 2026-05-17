@@ -28,6 +28,8 @@ public class RuptureSpinEventController : MonoBehaviour
     [SerializeField] private float intervalMax = 14f;
     [SerializeField] private float durationMin = 7f;
     [SerializeField] private float durationMax = 11f;
+    [SerializeField, Range(0.4f, 1f)] private float cadenceIntervalMultiplier = 0.68f;
+    [SerializeField, Range(0.8f, 1.5f)] private float cadenceDurationMultiplier = 1.18f;
 
     [Header("Spin Motion (2D)")]
     [SerializeField] private float maxSweepAngle = 70f;
@@ -264,13 +266,14 @@ public class RuptureSpinEventController : MonoBehaviour
         targetAngularSpeedDeg = 0f;
         directionChangeTimer = 0f;
         eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
+        eventDuration *= Mathf.Max(0.1f, cadenceDurationMultiplier);
         ChooseNextDirectionAndSpeed(forceDirectionChange: false);
         eventTimer = 0f;
         eventActive = true;
 
         if (forceImmediate)
         {
-            nextEventTimer = Mathf.Max(intervalMin, 0.5f);
+            nextEventTimer = Mathf.Max(intervalMin * Mathf.Max(0.1f, cadenceIntervalMultiplier), 0.45f);
         }
     }
 
@@ -692,7 +695,8 @@ public class RuptureSpinEventController : MonoBehaviour
     {
         float min = Mathf.Min(intervalMin, intervalMax);
         float max = Mathf.Max(intervalMin, intervalMax);
-        nextEventTimer = Random.Range(min, max);
+        float cadence = Mathf.Max(0.1f, cadenceIntervalMultiplier);
+        nextEventTimer = Random.Range(min, max) * cadence;
     }
 
     private bool IsMapEventSuppressed()

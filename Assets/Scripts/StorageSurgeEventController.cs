@@ -29,6 +29,8 @@ public class StorageSurgeEventController : MonoBehaviour
     [SerializeField] private float intervalMax = 17f;
     [SerializeField] private float durationMin = 5f;
     [SerializeField] private float durationMax = 7.5f;
+    [SerializeField, Range(0.4f, 1f)] private float cadenceIntervalMultiplier = 0.7f;
+    [SerializeField, Range(0.8f, 1.5f)] private float cadenceDurationMultiplier = 1.15f;
 
     [Header("Storage Surge")]
     [SerializeField] private Vector2 displacementRange = new Vector2(0.8f, 1.6f);
@@ -195,6 +197,7 @@ public class StorageSurgeEventController : MonoBehaviour
         snapshots.Clear();
         surgeDirection = PickDirection();
         eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
+        eventDuration *= Mathf.Max(0.1f, cadenceDurationMultiplier);
         baseDisplacement = Random.Range(Mathf.Min(displacementRange.x, displacementRange.y), Mathf.Max(displacementRange.x, displacementRange.y));
         baseRotation = Random.Range(Mathf.Min(rotationRange.x, rotationRange.y), Mathf.Max(rotationRange.x, rotationRange.y));
 
@@ -569,7 +572,8 @@ public class StorageSurgeEventController : MonoBehaviour
     {
         float min = Mathf.Min(intervalMin, intervalMax);
         float max = Mathf.Max(intervalMin, intervalMax);
-        nextEventTimer = Random.Range(min, max);
+        float cadence = Mathf.Max(0.1f, cadenceIntervalMultiplier);
+        nextEventTimer = Random.Range(min, max) * cadence;
     }
 
     private bool IsMapEventSuppressed()

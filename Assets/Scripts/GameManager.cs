@@ -20,6 +20,8 @@ public class GameManager : MonoBehaviour
     [Header("Difficulty")]
     [SerializeField] private float behaviorChangeInterval = 2.5f;
     [SerializeField] private float difficultyRampPerSecond = 0.03f;
+    [SerializeField] private bool chaosTempoEnabled = true;
+    [SerializeField, Range(0.45f, 1f)] private float chaosBehaviorIntervalMultiplier = 0.72f;
 
     [Header("Countdown Theme")]
     [SerializeField] private float countdownPulseSpeed = 2.1f;
@@ -27,6 +29,12 @@ public class GameManager : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float countdownGlitchOpacity = 0.18f;
     [SerializeField] private Color countdownPrimary = new Color(0.98f, 0.63f, 0.73f, 1f);
     [SerializeField] private Color countdownAccent = new Color(0.33f, 0.93f, 1f, 1f);
+
+    [Header("Tempo Feedback")]
+    [SerializeField] private float statePulseOverlayDuration = 0.24f;
+    [SerializeField, Range(0f, 1f)] private float statePulseOverlayOpacity = 0.22f;
+    [SerializeField] private Color statePulseOverlayColorA = new Color(1f, 0.35f, 0.52f, 1f);
+    [SerializeField] private Color statePulseOverlayColorB = new Color(0.30f, 0.95f, 1f, 1f);
 
     public bool IsGameOver { get; private set; }
     public bool IsRunActive => runPhase == RunPhase.Active && !IsGameOver;
@@ -36,7 +44,16 @@ public class GameManager : MonoBehaviour
 
     public float CurrentBehaviorChangeInterval
     {
-        get { return behaviorChangeInterval; }
+        get
+        {
+            float interval = Mathf.Max(0.5f, behaviorChangeInterval);
+            if (!chaosTempoEnabled)
+            {
+                return interval;
+            }
+
+            return interval * Mathf.Max(0.1f, chaosBehaviorIntervalMultiplier);
+        }
     }
 
     private float reloadTimer;
@@ -53,6 +70,9 @@ public class GameManager : MonoBehaviour
     private GUIStyle bossStateStyle;
     private GUIStyle bossStateValueStyle;
     private GUIStyle bossPacingValueStyle;
+    private string lastBossStateRaw;
+    private string lastPacingPhaseRaw;
+    private float statePulseOverlayTimer;
 
     private void Awake()
     {
@@ -79,6 +99,16 @@ public class GameManager : MonoBehaviour
         if (enemyController == null)
         {
             enemyController = FindAnyObjectByType<EnemyController>();
+        }
+
+        if (enemyController != null)
+        {
+            TrackBossTempoPulse();
+        }
+
+        if (statePulseOverlayTimer > 0f)
+        {
+            statePulseOverlayTimer -= Time.deltaTime;
         }
 
         if (IsGameOver)
@@ -137,6 +167,7 @@ public class GameManager : MonoBehaviour
         GUI.Label(new Rect(margin, margin + 44f, 350f, 25f), $"Pattern Shift: {CurrentBehaviorChangeInterval:F1}s");
         GUI.Label(new Rect(margin, margin + 66f, 350f, 25f), $"Level Type: {levelType}");
         DrawBossStateHud();
+        DrawStatePulseOverlay();
 
         if (IsGameOver)
         {
@@ -158,6 +189,9 @@ public class GameManager : MonoBehaviour
         goFlashTimer = 0f;
         SurvivalTime = 0f;
         reloadTimer = 0f;
+        statePulseOverlayTimer = 0f;
+        lastBossStateRaw = null;
+        lastPacingPhaseRaw = null;
         Time.timeScale = 0f;
     }
 
@@ -341,6 +375,50 @@ public class GameManager : MonoBehaviour
         {
             levelType = arenaGenerator.ActiveThemeLabel;
         }
+    }
+
+    private void TrackBossTempoPulse()
+    {
+        if (enemyController == null)
+        {
+            return;
+        }
+
+        string stateRaw = enemyController.CurrentStateLabel;
+        string phaseRaw = enemyController.CurrentPacingPhaseLabel;
+
+        if (!string.Equals(lastBossStateRaw, stateRaw) || !string.Equals(lastPacingPhaseRaw, phaseRaw))
+        {
+            statePulseOverlayTimer = Mathf.Max(statePulseOverlayTimer, Mathf.Max(0.05f, statePulseOverlayDuration));
+            lastBossStateRaw = stateRaw;
+            lastPacingPhaseRaw = phaseRaw;
+        }
+    }
+
+    private void DrawStatePulseOverlay()
+    {
+        if (statePulseOverlayTimer <= 0f)
+        {
+            return;
+        }
+
+        float normalized = Mathf.Clamp01(statePulseOverlayTimer / Mathf.Max(0.05f, statePulseOverlayDuration));
+        float pulse = Mathf.Sin((1f - normalized) * Mathf.PI);
+        float alpha = Mathf.Clamp01(statePulseOverlayOpacity) * pulse;
+
+        Color tintA = statePulseOverlayColorA;
+        tintA.a = alpha;
+        Color tintB = statePulseOverlayColorB;
+        tintB.a = alpha * 0.85f;
+
+        float stripeHeight = Mathf.Lerp(4f, 10f, pulse);
+        DrawSolidRect(new Rect(0f, 0f, Screen.width, stripeHeight), tintA);
+        DrawSolidRect(new Rect(0f, Screen.height - stripeHeight, Screen.width, stripeHeight), tintB);
+
+        float midY = Screen.height * 0.5f;
+        float midWidth = Screen.width * Mathf.Lerp(0.2f, 0.65f, pulse);
+        float midX = (Screen.width - midWidth) * 0.5f;
+        DrawSolidRect(new Rect(midX, midY - 1f, midWidth, 2f), new Color(tintA.r, tintA.g, tintA.b, alpha * 0.8f));
     }
 
     private void DrawBossStateHud()
