@@ -64,6 +64,7 @@ public class StorageSurgeEventController : MonoBehaviour
     private Vector2 surgeDirection;
     private bool initialized;
     private bool eventActive;
+    private EnemyController enemyController;
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
@@ -87,6 +88,17 @@ public class StorageSurgeEventController : MonoBehaviour
     {
         if (!initialized || centerTransform == null)
         {
+            return;
+        }
+
+        if (IsDestroyerStateActive())
+        {
+            if (eventActive)
+            {
+                EndEvent(restoreControllers: true, snapBackToStart: true);
+                ScheduleNextEvent();
+            }
+
             return;
         }
 
@@ -558,5 +570,15 @@ public class StorageSurgeEventController : MonoBehaviour
         float min = Mathf.Min(intervalMin, intervalMax);
         float max = Mathf.Max(intervalMin, intervalMax);
         nextEventTimer = Random.Range(min, max);
+    }
+
+    private bool IsDestroyerStateActive()
+    {
+        if (enemyController == null)
+        {
+            enemyController = FindAnyObjectByType<EnemyController>();
+        }
+
+        return enemyController != null && enemyController.CurrentState == EnemyController.AnomalyState.Destroyer;
     }
 }

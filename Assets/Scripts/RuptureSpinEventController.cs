@@ -74,6 +74,7 @@ public class RuptureSpinEventController : MonoBehaviour
     private float safeNegativeAngleDeg;
     private bool initialized;
     private bool eventActive;
+    private EnemyController enemyController;
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
@@ -103,6 +104,17 @@ public class RuptureSpinEventController : MonoBehaviour
     {
         if (!initialized || centerTransform == null)
         {
+            return;
+        }
+
+        if (IsDestroyerStateActive())
+        {
+            if (eventActive)
+            {
+                EndEvent(restoreControllers: true);
+                ScheduleNextEvent();
+            }
+
             return;
         }
 
@@ -681,5 +693,15 @@ public class RuptureSpinEventController : MonoBehaviour
         float min = Mathf.Min(intervalMin, intervalMax);
         float max = Mathf.Max(intervalMin, intervalMax);
         nextEventTimer = Random.Range(min, max);
+    }
+
+    private bool IsDestroyerStateActive()
+    {
+        if (enemyController == null)
+        {
+            enemyController = FindAnyObjectByType<EnemyController>();
+        }
+
+        return enemyController != null && enemyController.CurrentState == EnemyController.AnomalyState.Destroyer;
     }
 }
