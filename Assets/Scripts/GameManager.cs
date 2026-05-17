@@ -52,6 +52,7 @@ public class GameManager : MonoBehaviour
     private GUIStyle countdownSubStyle;
     private GUIStyle bossStateStyle;
     private GUIStyle bossStateValueStyle;
+    private GUIStyle bossPacingValueStyle;
 
     private void Awake()
     {
@@ -347,18 +348,21 @@ public class GameManager : MonoBehaviour
         EnsureBossStateStyles();
 
         string stateValue = "Unknown";
+        string pacingValue = "Unknown";
         if (enemyController != null)
         {
             stateValue = ToBossStateLabel(enemyController.CurrentStateLabel);
+            pacingValue = ToPacingPhaseLabel(enemyController.CurrentPacingPhaseLabel);
         }
 
         const float width = 440f;
-        const float lineHeight = 24f;
+        const float lineHeight = 22f;
         float x = (Screen.width - width) * 0.5f;
         float y = 10f;
 
         GUI.Label(new Rect(x, y, width, lineHeight), "Anomaly State", bossStateStyle);
-        GUI.Label(new Rect(x, y + 20f, width, lineHeight), stateValue, bossStateValueStyle);
+        GUI.Label(new Rect(x, y + 18f, width, lineHeight), stateValue, bossStateValueStyle);
+        GUI.Label(new Rect(x, y + 38f, width, lineHeight), $"Pacing: {pacingValue}", bossPacingValueStyle);
     }
 
     private static string ToBossStateLabel(string raw)
@@ -393,9 +397,31 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    private static string ToPacingPhaseLabel(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return "Unknown";
+        }
+
+        switch (raw)
+        {
+            case "BuildUp":
+                return "Build Up";
+            case "SustainPeak":
+                return "Sustain Peak";
+            case "PeakFade":
+                return "Peak Fade";
+            case "Relax":
+                return "Relax";
+            default:
+                return raw;
+        }
+    }
+
     private void EnsureBossStateStyles()
     {
-        if (bossStateStyle != null && bossStateValueStyle != null)
+        if (bossStateStyle != null && bossStateValueStyle != null && bossPacingValueStyle != null)
         {
             return;
         }
@@ -415,6 +441,14 @@ public class GameManager : MonoBehaviour
             alignment = TextAnchor.MiddleCenter
         };
         bossStateValueStyle.normal.textColor = new Color(1f, 0.76f, 0.82f, 0.98f);
+
+        bossPacingValueStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 13,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter
+        };
+        bossPacingValueStyle.normal.textColor = new Color(0.78f, 0.90f, 1f, 0.95f);
     }
 
     private void EnsureMenuController()

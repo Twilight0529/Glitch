@@ -27,6 +27,14 @@ public class EnemyController : MonoBehaviour
         ErraticBurst
     }
 
+    public enum PacingPhase
+    {
+        BuildUp,
+        SustainPeak,
+        PeakFade,
+        Relax
+    }
+
     [Header("References")]
     [SerializeField] private PlayerController player;
     [SerializeField] private GameManager gameManager;
@@ -57,6 +65,17 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private Vector2 majorStateDurationRange = new Vector2(9f, 15f);
     [SerializeField] private float speedStateMultiplier = 1.55f;
     [SerializeField] private bool logStateChanges = false;
+
+    [Header("Pacing Director")]
+    [SerializeField] private int buildUpMinorStatesMin = 2;
+    [SerializeField] private int buildUpMinorStatesMax = 4;
+    [SerializeField] private int sustainPeakMajorStatesMin = 1;
+    [SerializeField] private int sustainPeakMajorStatesMax = 2;
+    [SerializeField] private int peakFadeMinorStates = 1;
+    [SerializeField] private int relaxMinorStatesMin = 1;
+    [SerializeField] private int relaxMinorStatesMax = 2;
+    [SerializeField] private Vector2 peakFadeDurationMultiplierRange = new Vector2(0.7f, 0.95f);
+    [SerializeField] private Vector2 relaxDurationMultiplierRange = new Vector2(0.85f, 1.05f);
 
     [Header("Expansion Shoot")]
     [SerializeField] private int expansionShootProjectileCount = 10;
@@ -123,6 +142,8 @@ public class EnemyController : MonoBehaviour
 
     public AnomalyState CurrentState => currentState;
     public string CurrentStateLabel => currentState.ToString();
+    public PacingPhase CurrentPacingPhase => pacingPhase;
+    public string CurrentPacingPhaseLabel => pacingPhase.ToString();
 
     [Header("Navigation Grid")]
     [SerializeField] private LayerMask obstacleMask = ~0;
@@ -181,6 +202,9 @@ public class EnemyController : MonoBehaviour
     private readonly HashSet<int> destroyerPendingRespawnIds = new HashSet<int>();
     private float weaveHunterTimer;
     private float weaveHunterSideSign = 1f;
+    private PacingPhase pacingPhase = PacingPhase.BuildUp;
+    private int pacingMinorStatesRemaining;
+    private int pacingMajorStatesRemaining;
 
     private Vector2 erraticTarget;
     private Vector2 lastMoveDirection = Vector2.right;
@@ -298,6 +322,7 @@ public class EnemyController : MonoBehaviour
 
         ResolveArenaBounds();
         BuildNavigationGrid();
+        InitializePacingDirector();
 
         stuckCheckPosition = rb.position;
         SelectNextState(forceDifferent: false);
@@ -520,11 +545,12 @@ public class EnemyController : MonoBehaviour
 
         if (logStateChanges)
         {
-            Debug.Log($"[Anomaly] State -> {currentState} ({currentStateDuration:F2}s)");
+            Debug.Log($"[Anomaly] State -> {currentState} ({currentStateDuration:F2}s) | Phase: {pacingPhase}");
         }
 
         HandleStateTransition(previousState, currentState);
         OnStateEntered();
+        RegisterStateForPacing(currentState);
     }
 
     private float GetRandomDurationForState(AnomalyState state)
@@ -543,7 +569,121 @@ public class EnemyController : MonoBehaviour
         float minMul = Mathf.Min(stateDurationMultiplierRange.x, stateDurationMultiplierRange.y);
         float maxMul = Mathf.Max(stateDurationMultiplierRange.x, stateDurationMultiplierRange.y);
         float durationMultiplier = Random.Range(minMul, maxMul);
+
+        if (pacingPhase == PacingPhase.PeakFade)
+        {
+            float minFade = Mathf.Min(peakFadeDurationMultiplierRange.x, peakFadeDurationMultiplierRange.y);
+            float maxFade = Mathf.Max(peakFadeDurationMultiplierRange.x, peakFadeDurationMultiplierRange.y);
+            durationMultiplier *= Random.Range(minFade, maxFade);
+        }
+        else if (pacingPhase == PacingPhase.Relax)
+        {
+            float minRelax = Mathf.Min(relaxDurationMultiplierRange.x, relaxDurationMultiplierRange.y);
+            float maxRelax = Mathf.Max(relaxDurationMultiplierRange.x, relaxDurationMultiplierRange.y);
+            durationMultiplier *= Random.Range(minRelax, maxRelax);
+        }
+
         return Mathf.Max(0.6f, baseInterval * durationMultiplier);
+    }
+
+    private void InitializePacingDirector()
+    {
+        pacingPhase = PacingPhase.BuildUp;
+        pacingMinorStatesRemaining = RollBuildUpMinorCount();
+        pacingMajorStatesRemaining = 0;
+    }
+
+    private void RegisterStateForPacing(AnomalyState state)
+    {
+        bool major = IsMajorState(state);
+        switch (pacingPhase)
+        {
+            case PacingPhase.BuildUp:
+                if (!major)
+                {
+                    pacingMinorStatesRemaining--;
+                    if (pacingMinorStatesRemaining <= 0)
+                    {
+                        TransitionToPacingPhase(PacingPhase.SustainPeak);
+                    }
+                }
+                break;
+            case PacingPhase.SustainPeak:
+                if (major)
+                {
+                    pacingMajorStatesRemaining--;
+                    if (pacingMajorStatesRemaining <= 0)
+                    {
+                        TransitionToPacingPhase(PacingPhase.PeakFade);
+                    }
+                }
+                break;
+            case PacingPhase.PeakFade:
+                if (!major)
+                {
+                    pacingMinorStatesRemaining--;
+                    if (pacingMinorStatesRemaining <= 0)
+                    {
+                        TransitionToPacingPhase(PacingPhase.Relax);
+                    }
+                }
+                break;
+            case PacingPhase.Relax:
+                if (!major)
+                {
+                    pacingMinorStatesRemaining--;
+                    if (pacingMinorStatesRemaining <= 0)
+                    {
+                        TransitionToPacingPhase(PacingPhase.BuildUp);
+                    }
+                }
+                break;
+        }
+    }
+
+    private void TransitionToPacingPhase(PacingPhase nextPhase)
+    {
+        pacingPhase = nextPhase;
+        switch (pacingPhase)
+        {
+            case PacingPhase.BuildUp:
+                pacingMinorStatesRemaining = RollBuildUpMinorCount();
+                pacingMajorStatesRemaining = 0;
+                break;
+            case PacingPhase.SustainPeak:
+                pacingMinorStatesRemaining = 0;
+                pacingMajorStatesRemaining = RollSustainPeakMajorCount();
+                break;
+            case PacingPhase.PeakFade:
+                pacingMinorStatesRemaining = Mathf.Max(1, peakFadeMinorStates);
+                pacingMajorStatesRemaining = 0;
+                break;
+            case PacingPhase.Relax:
+                pacingMinorStatesRemaining = RollRelaxMinorCount();
+                pacingMajorStatesRemaining = 0;
+                break;
+        }
+    }
+
+    private int RollBuildUpMinorCount()
+    {
+        int min = Mathf.Max(1, Mathf.Min(buildUpMinorStatesMin, buildUpMinorStatesMax));
+        int max = Mathf.Max(min, Mathf.Max(buildUpMinorStatesMin, buildUpMinorStatesMax));
+        return Random.Range(min, max + 1);
+    }
+
+    private int RollRelaxMinorCount()
+    {
+        int min = Mathf.Max(1, Mathf.Min(relaxMinorStatesMin, relaxMinorStatesMax));
+        int max = Mathf.Max(min, Mathf.Max(relaxMinorStatesMin, relaxMinorStatesMax));
+        return Random.Range(min, max + 1);
+    }
+
+    private int RollSustainPeakMajorCount()
+    {
+        int min = Mathf.Max(1, Mathf.Min(sustainPeakMajorStatesMin, sustainPeakMajorStatesMax));
+        int max = Mathf.Max(min, Mathf.Max(sustainPeakMajorStatesMin, sustainPeakMajorStatesMax));
+        return Random.Range(min, max + 1);
     }
 
     private void OnStateEntered()
@@ -601,7 +741,7 @@ public class EnemyController : MonoBehaviour
 
     private AnomalyState PickWeightedState(bool forceDifferent)
     {
-        List<StateWeight> options = new List<StateWeight>
+        List<StateWeight> fullOptions = new List<StateWeight>
         {
             new StateWeight(AnomalyState.DirectChase, directChaseWeight),
             new StateWeight(AnomalyState.PredictiveIntercept, predictiveInterceptWeight),
@@ -611,16 +751,31 @@ public class EnemyController : MonoBehaviour
 
         if (enableAdvancedStates)
         {
-            options.Add(new StateWeight(AnomalyState.Split, splitWeight));
-            options.Add(new StateWeight(AnomalyState.ExpansionShoot, expansionShootWeight));
-            options.Add(new StateWeight(AnomalyState.SpeedSurge, speedSurgeWeight));
-            options.Add(new StateWeight(AnomalyState.WeaveHunter, weaveHunterWeight));
-            options.Add(new StateWeight(AnomalyState.Destroyer, destroyerWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.Split, splitWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.ExpansionShoot, expansionShootWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.SpeedSurge, speedSurgeWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.WeaveHunter, weaveHunterWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.Destroyer, destroyerWeight));
         }
 
-        if (forceDifferent && options.Count > 1)
+        List<StateWeight> filtered = new List<StateWeight>(fullOptions);
+        ApplyPacingFilter(filtered);
+
+        List<StateWeight> options = filtered.Count > 0 ? filtered : new List<StateWeight>(fullOptions);
+
+        if (forceDifferent)
         {
-            options.RemoveAll(o => o.state == currentState);
+            List<StateWeight> forceDifferentOptions = new List<StateWeight>(options);
+            forceDifferentOptions.RemoveAll(o => o.state == currentState);
+            if (forceDifferentOptions.Count > 0)
+            {
+                options = forceDifferentOptions;
+            }
+        }
+
+        if (options.Count == 0)
+        {
+            options.Add(new StateWeight(GetPhaseFallbackState(), 1f));
         }
 
         float totalWeight = 0f;
@@ -631,7 +786,7 @@ public class EnemyController : MonoBehaviour
 
         if (totalWeight <= 0.0001f)
         {
-            return AnomalyState.DirectChase;
+            return GetPhaseFallbackState();
         }
 
         float roll = Random.Range(0f, totalWeight);
@@ -647,6 +802,58 @@ public class EnemyController : MonoBehaviour
         }
 
         return options[options.Count - 1].state;
+    }
+
+    private void ApplyPacingFilter(List<StateWeight> options)
+    {
+        switch (pacingPhase)
+        {
+            case PacingPhase.SustainPeak:
+                options.RemoveAll(o => !IsMajorState(o.state));
+                break;
+            case PacingPhase.BuildUp:
+            case PacingPhase.PeakFade:
+                options.RemoveAll(o => IsMajorState(o.state));
+                break;
+            case PacingPhase.Relax:
+                options.RemoveAll(o => !IsCalmMinorState(o.state));
+                break;
+        }
+    }
+
+    private static bool IsMajorState(AnomalyState state)
+    {
+        return state == AnomalyState.Split ||
+               state == AnomalyState.ExpansionShoot ||
+               state == AnomalyState.Destroyer ||
+               state == AnomalyState.SpeedSurge;
+    }
+
+    private static bool IsCalmMinorState(AnomalyState state)
+    {
+        return state == AnomalyState.DirectChase ||
+               state == AnomalyState.PredictiveIntercept ||
+               state == AnomalyState.CutoffFlank;
+    }
+
+    public bool IsMapEventSuppressed()
+    {
+        return IsMajorState(currentState) || pacingPhase == PacingPhase.Relax;
+    }
+
+    private AnomalyState GetPhaseFallbackState()
+    {
+        switch (pacingPhase)
+        {
+            case PacingPhase.SustainPeak:
+                return enableAdvancedStates ? AnomalyState.SpeedSurge : AnomalyState.DirectChase;
+            case PacingPhase.Relax:
+                return AnomalyState.DirectChase;
+            case PacingPhase.PeakFade:
+            case PacingPhase.BuildUp:
+            default:
+                return AnomalyState.PredictiveIntercept;
+        }
     }
 
     private static BehaviorPattern ResolvePatternForState(AnomalyState state)

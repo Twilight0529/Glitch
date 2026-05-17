@@ -107,7 +107,7 @@ public class RuptureSpinEventController : MonoBehaviour
             return;
         }
 
-        if (IsDestroyerStateActive())
+        if (IsMapEventSuppressed())
         {
             if (eventActive)
             {
@@ -695,13 +695,13 @@ public class RuptureSpinEventController : MonoBehaviour
         nextEventTimer = Random.Range(min, max);
     }
 
-    private bool IsDestroyerStateActive()
+    private bool IsMapEventSuppressed()
     {
         if (enemyController == null)
         {
             enemyController = FindAnyObjectByType<EnemyController>();
         }
 
-        return enemyController != null && enemyController.CurrentState == EnemyController.AnomalyState.Destroyer;
+        return enemyController != null && enemyController.IsMapEventSuppressed();
     }
 }
