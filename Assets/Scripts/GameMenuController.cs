@@ -426,5 +426,5 @@ public class GameMenuController : MonoBehaviour
         GUI.color = color;
         GUI.DrawTexture(rect, Texture2D.whiteTexture);
         GUI.color = old;  
-    }
+    } 
 }
