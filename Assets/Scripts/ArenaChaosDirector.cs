@@ -1,0 +1,364 @@
+using System.Collections;
+using UnityEngine;
+
+public class ArenaChaosDirector : MonoBehaviour
+{
+    [Header("Powerups")]
+    [SerializeField] private bool enablePowerups = true;
+    [SerializeField] private Vector2 powerupIntervalRange = new Vector2(8f, 13f);
+    [SerializeField] private float powerupLifetime = 10f;
+    [SerializeField] private float speedBoostMultiplier = 1.38f;
+    [SerializeField] private float speedBoostDuration = 3.2f;
+    [SerializeField] private float shieldDuration = 5.5f;
+    [SerializeField, Range(0f, 1f)] private float shieldPickupChance = 0.35f;
+
+    [Header("Mini Events")]
+    [SerializeField] private bool enablePulseEvents = true;
+    [SerializeField] private Vector2 pulseEventIntervalRange = new Vector2(10f, 16f);
+    [SerializeField] private Vector2 pulseRadiusRange = new Vector2(1.2f, 1.85f);
+    [SerializeField] private int pulseHazardsMin = 2;
+    [SerializeField] private int pulseHazardsMax = 4;
+    [SerializeField] private float pulseTelegraphSeconds = 0.9f;
+    [SerializeField] private float pulseActiveSeconds = 1.8f;
+    [SerializeField] private float pulseSpawnStagger = 0.15f;
+    [SerializeField] private Color pulseColor = new Color(1f, 0.38f, 0.53f, 0.92f);
+
+    [Header("Spawn Rules")]
+    [SerializeField] private float edgePadding = 1.1f;
+    [SerializeField] private float actorClearance = 2.2f;
+    [SerializeField] private float pickupProbeRadius = 0.55f;
+    [SerializeField] private float hazardProbeRadius = 0.9f;
+    [SerializeField] private int spawnAttempts = 24;
+
+    [Header("Event Banner")]
+    [SerializeField] private float bannerDuration = 2f;
+
+    private ProceduralArenaGenerator arena;
+    private PlayerController player;
+    private EnemyController enemy;
+    private GameManager gameManager;
+
+    private float powerupTimer;
+    private float pulseEventTimer;
+    private ArenaPowerupPickup activePickup;
+
+    private string activeEventLabel = string.Empty;
+    private float eventLabelTimer;
+
+    private Transform runtimeRoot;
+
+    public string ActiveEventLabel => eventLabelTimer > 0f ? activeEventLabel : string.Empty;
+
+    public void Configure(ProceduralArenaGenerator arenaGenerator)
+    {
+        arena = arenaGenerator;
+        RefreshReferences();
+        EnsureRuntimeRoot();
+        ClearRuntimeObjects();
+        SchedulePowerup();
+        SchedulePulseEvent();
+    }
+
+    private void Start()
+    {
+        if (arena == null)
+        {
+            arena = GetComponent<ProceduralArenaGenerator>();
+        }
+
+        RefreshReferences();
+        EnsureRuntimeRoot();
+        SchedulePowerup();
+        SchedulePulseEvent();
+    }
+
+    private void Update()
+    {
+        if (arena == null)
+        {
+            arena = GetComponent<ProceduralArenaGenerator>();
+        }
+
+        if (eventLabelTimer > 0f)
+        {
+            eventLabelTimer -= Time.deltaTime;
+        }
+
+        RefreshReferences();
+        if (gameManager == null || !gameManager.IsRunActive || gameManager.IsGameOver)
+        {
+            return;
+        }
+
+        if (enablePowerups && activePickup == null)
+        {
+            powerupTimer -= Time.deltaTime;
+            if (powerupTimer <= 0f)
+            {
+                TrySpawnPowerup();
+                SchedulePowerup();
+            }
+        }
+
+        if (enablePulseEvents && (enemy == null || !enemy.IsMapEventSuppressed()))
+        {
+            pulseEventTimer -= Time.deltaTime;
+            if (pulseEventTimer <= 0f)
+            {
+                StartCoroutine(SpawnPulseEventRoutine());
+                SchedulePulseEvent();
+            }
+        }
+    }
+
+    public void NotifyPickupConsumed(ArenaPowerupPickup pickup)
+    {
+        if (pickup != null && pickup == activePickup)
+        {
+            activePickup = null;
+        }
+    }
+
+    public void NotifyPickupDestroyed(ArenaPowerupPickup pickup)
+    {
+        if (pickup != null && pickup == activePickup)
+        {
+            activePickup = null;
+        }
+    }
+
+    private void RefreshReferences()
+    {
+        if (player == null)
+        {
+            player = FindAnyObjectByType<PlayerController>();
+        }
+
+        if (enemy == null)
+        {
+            enemy = FindAnyObjectByType<EnemyController>();
+        }
+
+        if (gameManager == null)
+        {
+            gameManager = FindAnyObjectByType<GameManager>();
+        }
+    }
+
+    private void EnsureRuntimeRoot()
+    {
+        if (runtimeRoot != null)
+        {
+            return;
+        }
+
+        GameObject root = new GameObject("ChaosRuntime");
+        root.transform.SetParent(transform, false);
+        runtimeRoot = root.transform;
+    }
+
+    private void ClearRuntimeObjects()
+    {
+        if (runtimeRoot == null)
+        {
+            return;
+        }
+
+        for (int i = runtimeRoot.childCount - 1; i >= 0; i--)
+        {
+            Transform child = runtimeRoot.GetChild(i);
+            if (child == null)
+            {
+                continue;
+            }
+
+            if (Application.isPlaying)
+            {
+                Destroy(child.gameObject);
+            }
+            else
+            {
+                DestroyImmediate(child.gameObject);
+            }
+        }
+
+        activePickup = null;
+    }
+
+    private void SchedulePowerup()
+    {
+        float min = Mathf.Min(powerupIntervalRange.x, powerupIntervalRange.y);
+        float max = Mathf.Max(powerupIntervalRange.x, powerupIntervalRange.y);
+        powerupTimer = Random.Range(min, max);
+    }
+
+    private void SchedulePulseEvent()
+    {
+        float min = Mathf.Min(pulseEventIntervalRange.x, pulseEventIntervalRange.y);
+        float max = Mathf.Max(pulseEventIntervalRange.x, pulseEventIntervalRange.y);
+        pulseEventTimer = Random.Range(min, max);
+    }
+
+    private void TrySpawnPowerup()
+    {
+        if (!TryFindSpawnPoint(pickupProbeRadius, out Vector2 position))
+        {
+            return;
+        }
+
+        ArenaPowerupPickup.PickupKind kind =
+            Random.value < Mathf.Clamp01(shieldPickupChance)
+                ? ArenaPowerupPickup.PickupKind.Shield
+                : ArenaPowerupPickup.PickupKind.SpeedBurst;
+
+        GameObject go = new GameObject($"Powerup_{kind}");
+        go.transform.SetParent(runtimeRoot, false);
+        go.transform.position = new Vector3(position.x, position.y, 0f);
+        go.transform.localScale = Vector3.one;
+
+        SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = CircleSpriteProvider.Get();
+        sr.drawMode = SpriteDrawMode.Sliced;
+        sr.size = Vector2.one * 0.62f;
+        sr.sortingOrder = 12;
+
+        CircleCollider2D col = go.AddComponent<CircleCollider2D>();
+        col.isTrigger = true;
+        col.radius = 0.34f;
+
+        ArenaPowerupPickup pickup = go.AddComponent<ArenaPowerupPickup>();
+        pickup.Configure(this, kind, powerupLifetime, speedBoostMultiplier, speedBoostDuration, shieldDuration);
+        activePickup = pickup;
+
+        RaiseEvent(kind == ArenaPowerupPickup.PickupKind.Shield ? "Shield Materialized" : "Speed Core Materialized");
+    }
+
+    private IEnumerator SpawnPulseEventRoutine()
+    {
+        int minCount = Mathf.Max(1, Mathf.Min(pulseHazardsMin, pulseHazardsMax));
+        int maxCount = Mathf.Max(minCount, Mathf.Max(pulseHazardsMin, pulseHazardsMax));
+        int count = Random.Range(minCount, maxCount + 1);
+
+        RaiseEvent("Containment Pulse");
+
+        for (int i = 0; i < count; i++)
+        {
+            if (!TryFindSpawnPoint(hazardProbeRadius, out Vector2 position))
+            {
+                continue;
+            }
+
+            float radius = Random.Range(
+                Mathf.Min(pulseRadiusRange.x, pulseRadiusRange.y),
+                Mathf.Max(pulseRadiusRange.x, pulseRadiusRange.y));
+
+            GameObject zone = new GameObject($"PulseHazard_{i}");
+            zone.transform.SetParent(runtimeRoot, false);
+            zone.transform.position = new Vector3(position.x, position.y, 0f);
+            zone.transform.localScale = Vector3.one;
+
+            SpriteRenderer sr = zone.AddComponent<SpriteRenderer>();
+            sr.sprite = CircleSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+
+            CircleCollider2D col = zone.AddComponent<CircleCollider2D>();
+            col.isTrigger = true;
+
+            ContainmentHazardZone hazard = zone.AddComponent<ContainmentHazardZone>();
+            hazard.Configure(gameManager, player, radius, pulseTelegraphSeconds, pulseActiveSeconds, pulseColor);
+
+            float stagger = Mathf.Max(0f, pulseSpawnStagger);
+            if (stagger > 0f && i < count - 1)
+            {
+                yield return new WaitForSeconds(stagger);
+            }
+        }
+    }
+
+    private bool TryFindSpawnPoint(float probeRadius, out Vector2 result)
+    {
+        result = Vector2.zero;
+        if (arena == null)
+        {
+            return false;
+        }
+
+        float halfW = arena.ArenaWidth * 0.5f;
+        float halfH = arena.ArenaHeight * 0.5f;
+        float minX = -halfW + edgePadding;
+        float maxX = halfW - edgePadding;
+        float minY = -halfH + edgePadding;
+        float maxY = halfH - edgePadding;
+
+        for (int i = 0; i < spawnAttempts; i++)
+        {
+            float x = Random.Range(minX, maxX);
+            float y = Random.Range(minY, maxY);
+            Vector2 point = new Vector2(x, y) + (Vector2)transform.position;
+
+            if (!IsFarFromActors(point))
+            {
+                continue;
+            }
+
+            if (!IsFree(point, probeRadius))
+            {
+                continue;
+            }
+
+            result = point;
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool IsFarFromActors(Vector2 point)
+    {
+        float minDist = Mathf.Max(0.5f, actorClearance);
+        if (player != null && Vector2.Distance(point, player.GetPosition()) < minDist)
+        {
+            return false;
+        }
+
+        if (enemy != null && Vector2.Distance(point, enemy.GetCurrentPosition()) < minDist)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsFree(Vector2 point, float radius)
+    {
+        Collider2D[] hits = Physics2D.OverlapCircleAll(point, Mathf.Max(0.05f, radius));
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider2D hit = hits[i];
+            if (hit == null || hit.isTrigger)
+            {
+                continue;
+            }
+
+            if (hit.GetComponent<PlayerController>() != null || hit.GetComponent<EnemyController>() != null)
+            {
+                continue;
+            }
+
+            if (hit.GetComponent<SplitAnomalyCloneController>() != null)
+            {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private void RaiseEvent(string label)
+    {
+        activeEventLabel = label;
+        eventLabelTimer = Mathf.Max(0.2f, bannerDuration);
+    }
+}

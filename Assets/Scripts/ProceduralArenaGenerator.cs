@@ -172,6 +172,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
         CreateThemedDynamicObstacles(dynamicRoot);
         CreateThemedDetails(detailsRoot);
         ConfigureThemeMapEvents(obstaclesRoot, dynamicRoot);
+        ConfigureChaosSystems();
     }
 
     public void SetRuntimeReferences(Transform player, Transform anomaly)
@@ -317,6 +318,17 @@ public class ProceduralArenaGenerator : MonoBehaviour
         ConfigureThemeMapEventController("RuptureSpinEventController", activeTheme == ArenaTheme.RuptureZone, obstaclesRoot, dynamicRoot);
         ConfigureThemeMapEventController("LabSweepEventController", activeTheme == ArenaTheme.ContainmentLab, obstaclesRoot, dynamicRoot);
         ConfigureThemeMapEventController("StorageSurgeEventController", activeTheme == ArenaTheme.StorageBay, obstaclesRoot, dynamicRoot);
+    }
+
+    private void ConfigureChaosSystems()
+    {
+        ArenaChaosDirector chaosDirector = GetComponent<ArenaChaosDirector>();
+        if (chaosDirector == null)
+        {
+            chaosDirector = gameObject.AddComponent<ArenaChaosDirector>();
+        }
+
+        chaosDirector.Configure(this);
     }
 
     private void ConfigureThemeMapEventController(

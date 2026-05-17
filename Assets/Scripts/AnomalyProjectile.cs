@@ -56,6 +56,12 @@ public class AnomalyProjectile : MonoBehaviour
         PlayerController player = other.GetComponent<PlayerController>();
         if (player != null)
         {
+            if (player.TryAbsorbHit())
+            {
+                Destroy(gameObject);
+                return;
+            }
+
             if (gameManager == null)
             {
                 gameManager = FindAnyObjectByType<GameManager>();

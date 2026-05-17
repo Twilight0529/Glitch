@@ -203,6 +203,12 @@ public class SplitAnomalyCloneController : MonoBehaviour
 
         if (collision.collider.GetComponent<PlayerController>() != null)
         {
+            PlayerController hitPlayer = collision.collider.GetComponent<PlayerController>();
+            if (hitPlayer != null && hitPlayer.TryAbsorbHit())
+            {
+                return;
+            }
+
             gameManager?.TriggerGameOver();
         }
     }
@@ -216,6 +222,12 @@ public class SplitAnomalyCloneController : MonoBehaviour
 
         if (other.GetComponent<PlayerController>() != null)
         {
+            PlayerController hitPlayer = other.GetComponent<PlayerController>();
+            if (hitPlayer != null && hitPlayer.TryAbsorbHit())
+            {
+                return;
+            }
+
             gameManager?.TriggerGameOver();
         }
     }

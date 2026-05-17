@@ -64,6 +64,8 @@ public class GameManager : MonoBehaviour
     private int countdownStartValue;
     private ProceduralArenaGenerator arenaGenerator;
     private EnemyController enemyController;
+    private PlayerController playerController;
+    private ArenaChaosDirector chaosDirector;
     private string levelType = "Unknown";
     private GUIStyle countdownStyle;
     private GUIStyle countdownSubStyle;
@@ -99,6 +101,14 @@ public class GameManager : MonoBehaviour
         if (enemyController == null)
         {
             enemyController = FindAnyObjectByType<EnemyController>();
+        }
+        if (playerController == null)
+        {
+            playerController = FindAnyObjectByType<PlayerController>();
+        }
+        if (chaosDirector == null)
+        {
+            chaosDirector = FindAnyObjectByType<ArenaChaosDirector>();
         }
 
         if (enemyController != null)
@@ -166,12 +176,14 @@ public class GameManager : MonoBehaviour
         GUI.Label(new Rect(margin, margin + 22f, 350f, 25f), $"Threat Level: x{DifficultyMultiplier:F2}");
         GUI.Label(new Rect(margin, margin + 44f, 350f, 25f), $"Pattern Shift: {CurrentBehaviorChangeInterval:F1}s");
         GUI.Label(new Rect(margin, margin + 66f, 350f, 25f), $"Level Type: {levelType}");
+        GUI.Label(new Rect(margin, margin + 88f, 380f, 25f), $"Player Effect: {GetPlayerEffectLabel()}");
+        GUI.Label(new Rect(margin, margin + 110f, 480f, 25f), $"Map Event: {GetMapEventLabel()}");
         DrawBossStateHud();
         DrawStatePulseOverlay();
 
         if (IsGameOver)
         {
-            GUI.Label(new Rect(margin, margin + 96f, 500f, 25f), "GAME OVER - The anomaly reached you.");
+            GUI.Label(new Rect(margin, margin + 132f, 500f, 25f), "GAME OVER - The anomaly reached you.");
         }
 
         if (runPhase == RunPhase.StartupDelay || runPhase == RunPhase.Countdown || runPhase == RunPhase.GoFlash)
@@ -371,10 +383,38 @@ public class GameManager : MonoBehaviour
     {
         arenaGenerator = FindAnyObjectByType<ProceduralArenaGenerator>();
         enemyController = FindAnyObjectByType<EnemyController>();
+        playerController = FindAnyObjectByType<PlayerController>();
+        chaosDirector = FindAnyObjectByType<ArenaChaosDirector>();
         if (arenaGenerator != null)
         {
             levelType = arenaGenerator.ActiveThemeLabel;
         }
+    }
+
+    private string GetPlayerEffectLabel()
+    {
+        if (playerController == null)
+        {
+            return "None";
+        }
+
+        return playerController.ActivePowerupLabel;
+    }
+
+    private string GetMapEventLabel()
+    {
+        if (chaosDirector == null)
+        {
+            return "Nominal";
+        }
+
+        string label = chaosDirector.ActiveEventLabel;
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return "Nominal";
+        }
+
+        return label;
     }
 
     private void TrackBossTempoPulse()

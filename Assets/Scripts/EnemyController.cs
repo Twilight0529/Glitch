@@ -2387,8 +2387,14 @@ public class EnemyController : MonoBehaviour
 
         TryDestroyObstacle(collision.collider);
 
-        if (collision.collider.GetComponent<PlayerController>() != null)
+        PlayerController hitPlayer = collision.collider.GetComponent<PlayerController>();
+        if (hitPlayer != null)
         {
+            if (hitPlayer.TryAbsorbHit())
+            {
+                return;
+            }
+
             gameManager?.TriggerGameOver();
         }
     }
@@ -2412,8 +2418,14 @@ public class EnemyController : MonoBehaviour
 
         TryDestroyObstacle(other);
 
-        if (other.GetComponent<PlayerController>() != null)
+        PlayerController hitPlayer = other.GetComponent<PlayerController>();
+        if (hitPlayer != null)
         {
+            if (hitPlayer.TryAbsorbHit())
+            {
+                return;
+            }
+
             gameManager?.TriggerGameOver();
         }
     }
