@@ -99,6 +99,10 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private Color destroyerFractureFlashColor = new Color(1f, 0.82f, 0.86f, 1f);
     [SerializeField, Range(0.1f, 1f)] private float destroyerFractureEndScale = 0.2f;
     [SerializeField] private float destroyerFractureSpinDegrees = 25f;
+    [SerializeField] private float destroyerRespawnDelay = 8f;
+    [SerializeField] private float destroyerRespawnWarningLeadTime = 2f;
+    [SerializeField] private float destroyerRespawnWarningPulseSpeed = 7.5f;
+    [SerializeField] private Color destroyerRespawnWarningColor = new Color(1f, 0.72f, 0.84f, 0.85f);
 
     [Header("Weave Hunter")]
     [SerializeField] private float weaveHunterSpeedMultiplier = 1.14f;
@@ -174,6 +178,7 @@ public class EnemyController : MonoBehaviour
     private int destroyerBreakCount;
     private float destroyerTouchCooldownTimer;
     private readonly HashSet<int> destroyerDestroyedIds = new HashSet<int>();
+    private readonly HashSet<int> destroyerPendingRespawnIds = new HashSet<int>();
     private float weaveHunterTimer;
     private float weaveHunterSideSign = 1f;
 
@@ -229,6 +234,21 @@ public class EnemyController : MonoBehaviour
             this.state = state;
             this.weight = weight;
         }
+    }
+
+    private sealed class DestroyerRespawnSnapshot
+    {
+        public GameObject target;
+        public Transform targetTransform;
+        public Vector3 startScale;
+        public Quaternion startRotation;
+        public Collider2D[] colliders;
+        public bool[] colliderEnabled;
+        public Rigidbody2D rigidbody;
+        public bool rigidbodySimulated;
+        public SpriteRenderer[] renderers;
+        public bool[] rendererEnabled;
+        public Color[] rendererColors;
     }
 
     private void Awake()
@@ -1781,54 +1801,104 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
-        Collider2D[] colliders = target.GetComponentsInChildren<Collider2D>(true);
-        for (int i = 0; i < colliders.Length; i++)
+        int id = target.GetInstanceID();
+        if (!destroyerPendingRespawnIds.Add(id))
         {
-            if (colliders[i] != null)
+            return;
+        }
+
+        if (!TryCreateDestroyerRespawnSnapshot(target, out DestroyerRespawnSnapshot snapshot))
+        {
+            destroyerPendingRespawnIds.Remove(id);
+            return;
+        }
+
+        for (int i = 0; i < snapshot.colliders.Length; i++)
+        {
+            if (snapshot.colliders[i] != null)
             {
-                colliders[i].enabled = false;
+                snapshot.colliders[i].enabled = false;
             }
         }
 
-        Rigidbody2D rbTarget = target.GetComponent<Rigidbody2D>();
-        if (rbTarget != null)
+        if (snapshot.rigidbody != null)
         {
-            rbTarget.linearVelocity = Vector2.zero;
-            rbTarget.angularVelocity = 0f;
-            rbTarget.simulated = false;
+            snapshot.rigidbody.linearVelocity = Vector2.zero;
+            snapshot.rigidbody.angularVelocity = 0f;
+            snapshot.rigidbody.simulated = false;
         }
 
         if (!Application.isPlaying)
         {
             DestroyImmediate(target);
+            destroyerPendingRespawnIds.Remove(id);
             return;
         }
 
-        StartCoroutine(DestroyFractureRoutine(target));
+        StartCoroutine(DestroyFractureRoutine(snapshot, id));
     }
 
-    private IEnumerator DestroyFractureRoutine(GameObject target)
+    private bool TryCreateDestroyerRespawnSnapshot(GameObject target, out DestroyerRespawnSnapshot snapshot)
     {
+        snapshot = null;
         if (target == null)
         {
+            return false;
+        }
+
+        DestroyerRespawnSnapshot data = new DestroyerRespawnSnapshot();
+        data.target = target;
+        data.targetTransform = target.transform;
+        data.startScale = target.transform.localScale;
+        data.startRotation = target.transform.localRotation;
+        data.colliders = target.GetComponentsInChildren<Collider2D>(true);
+        data.colliderEnabled = new bool[data.colliders.Length];
+        for (int i = 0; i < data.colliders.Length; i++)
+        {
+            data.colliderEnabled[i] = data.colliders[i] != null && data.colliders[i].enabled;
+        }
+
+        data.rigidbody = target.GetComponent<Rigidbody2D>();
+        data.rigidbodySimulated = data.rigidbody != null && data.rigidbody.simulated;
+        data.renderers = target.GetComponentsInChildren<SpriteRenderer>(true);
+        data.rendererEnabled = new bool[data.renderers.Length];
+        data.rendererColors = new Color[data.renderers.Length];
+
+        for (int i = 0; i < data.renderers.Length; i++)
+        {
+            if (data.renderers[i] == null)
+            {
+                data.rendererEnabled[i] = false;
+                data.rendererColors[i] = Color.white;
+                continue;
+            }
+
+            data.rendererEnabled[i] = data.renderers[i].enabled;
+            data.rendererColors[i] = data.renderers[i].color;
+        }
+
+        snapshot = data;
+        return true;
+    }
+
+    private IEnumerator DestroyFractureRoutine(DestroyerRespawnSnapshot snapshot, int targetId)
+    {
+        if (snapshot == null || snapshot.target == null)
+        {
+            destroyerPendingRespawnIds.Remove(targetId);
             yield break;
         }
 
-        SpriteRenderer[] renderers = target.GetComponentsInChildren<SpriteRenderer>(true);
-        Color[] baseColors = new Color[renderers.Length];
-        for (int i = 0; i < renderers.Length; i++)
-        {
-            baseColors[i] = renderers[i] != null ? renderers[i].color : Color.white;
-        }
-
-        Transform tr = target.transform;
-        Vector3 startScale = tr.localScale;
-        Quaternion startRot = tr.localRotation;
+        Transform tr = snapshot.targetTransform;
+        SpriteRenderer[] renderers = snapshot.renderers;
+        Color[] baseColors = snapshot.rendererColors;
+        Vector3 startScale = snapshot.startScale;
+        Quaternion startRot = snapshot.startRotation;
         float duration = Mathf.Max(0.02f, destroyerFractureDuration);
         float elapsed = 0f;
         float spinSign = Random.value < 0.5f ? -1f : 1f;
 
-        while (elapsed < duration && target != null)
+        while (elapsed < duration && snapshot.target != null)
         {
             elapsed += Time.deltaTime;
             float t = Mathf.Clamp01(elapsed / duration);
@@ -1852,16 +1922,121 @@ public class EnemyController : MonoBehaviour
 
                 Color flash = Color.Lerp(baseColors[i], destroyerFractureFlashColor, eased);
                 flash.a = Mathf.Lerp(baseColors[i].a, 0f, eased);
+                sr.enabled = true;
                 sr.color = flash;
             }
 
             yield return null;
         }
 
-        if (target != null)
+        if (snapshot.target == null)
         {
-            Destroy(target);
+            destroyerPendingRespawnIds.Remove(targetId);
+            yield break;
         }
+
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            if (renderers[i] != null)
+            {
+                renderers[i].enabled = false;
+            }
+        }
+
+        float totalDelay = Mathf.Max(0f, destroyerRespawnDelay);
+        float warningDuration = Mathf.Clamp(destroyerRespawnWarningLeadTime, 0f, totalDelay);
+        float hiddenDuration = Mathf.Max(0f, totalDelay - warningDuration);
+
+        float hiddenTimer = 0f;
+        while (hiddenTimer < hiddenDuration && snapshot.target != null)
+        {
+            hiddenTimer += Time.deltaTime;
+            yield return null;
+        }
+
+        if (snapshot.target == null)
+        {
+            destroyerPendingRespawnIds.Remove(targetId);
+            yield break;
+        }
+
+        if (warningDuration > 0f)
+        {
+            float warningTimer = 0f;
+            while (warningTimer < warningDuration && snapshot.target != null)
+            {
+                warningTimer += Time.deltaTime;
+                float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Max(0.1f, destroyerRespawnWarningPulseSpeed));
+
+                if (tr != null)
+                {
+                    float scalePulse = Mathf.Lerp(0.93f, 1.03f, pulse);
+                    tr.localScale = startScale * scalePulse;
+                    tr.localRotation = startRot;
+                }
+
+                for (int i = 0; i < renderers.Length; i++)
+                {
+                    SpriteRenderer sr = renderers[i];
+                    if (sr == null || !snapshot.rendererEnabled[i])
+                    {
+                        continue;
+                    }
+
+                    sr.enabled = true;
+                    Color c = Color.Lerp(baseColors[i], destroyerRespawnWarningColor, 0.65f);
+                    c.a = Mathf.Lerp(0.18f, 0.65f, pulse);
+                    sr.color = c;
+                }
+
+                yield return null;
+            }
+        }
+
+        if (snapshot.target == null)
+        {
+            destroyerPendingRespawnIds.Remove(targetId);
+            yield break;
+        }
+
+        if (tr != null)
+        {
+            tr.localScale = startScale;
+            tr.localRotation = startRot;
+        }
+
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            if (renderers[i] == null)
+            {
+                continue;
+            }
+
+            renderers[i].enabled = snapshot.rendererEnabled[i];
+            renderers[i].color = baseColors[i];
+        }
+
+        for (int i = 0; i < snapshot.colliders.Length; i++)
+        {
+            Collider2D col = snapshot.colliders[i];
+            if (col != null)
+            {
+                col.enabled = snapshot.colliderEnabled[i];
+            }
+        }
+
+        if (snapshot.rigidbody != null)
+        {
+            snapshot.rigidbody.simulated = snapshot.rigidbodySimulated;
+            snapshot.rigidbody.linearVelocity = Vector2.zero;
+            snapshot.rigidbody.angularVelocity = 0f;
+        }
+
+        destroyerPendingRespawnIds.Remove(targetId);
+
+        BuildNavigationGrid();
+        pathWorld.Clear();
+        pathIndex = 0;
     }
 
     private bool CanDestroyThisCollider(Collider2D col)
