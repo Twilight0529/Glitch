@@ -221,6 +221,8 @@ public class EnemyController : MonoBehaviour
     private int pacingMinorStatesRemaining;
     private int pacingMajorStatesRemaining;
     private float statePulseTimer;
+    private float externalSpeedTimer;
+    private float externalSpeedMultiplier = 1f;
     private Vector3 baseScale = Vector3.one;
     private Color baseColor = Color.white;
 
@@ -378,6 +380,7 @@ public class EnemyController : MonoBehaviour
         UpdatePatternInternals();
         UpdateStateAbilities();
         UpdateStatePulseVisual();
+        UpdateExternalSpeedEffects();
 
         if (splitMergeInProgress && splitClone != null)
         {
@@ -462,6 +465,11 @@ public class EnemyController : MonoBehaviour
         if (chaosDriveEnabled)
         {
             speed *= Mathf.Lerp(1f, chaosTempoMultiplier, 0.42f);
+        }
+
+        if (externalSpeedTimer > 0f)
+        {
+            speed *= externalSpeedMultiplier;
         }
 
         Vector2 desiredVelocity = desiredDirection * speed;
@@ -894,6 +902,18 @@ public class EnemyController : MonoBehaviour
         return currentState == AnomalyState.Destroyer || destroyerPendingRespawnIds.Count > 0;
     }
 
+    public void ApplyExternalSpeedModifier(float multiplier, float duration)
+    {
+        if (multiplier <= 1f || duration <= 0f)
+        {
+            return;
+        }
+
+        externalSpeedMultiplier = Mathf.Max(externalSpeedMultiplier, multiplier);
+        externalSpeedTimer = Mathf.Max(externalSpeedTimer, duration);
+        TriggerStatePulse();
+    }
+
     private void TriggerStatePulse()
     {
         if (!statePulseFxEnabled)
@@ -928,6 +948,23 @@ public class EnemyController : MonoBehaviour
         boosted.a = baseColor.a;
         ownRenderer.color = boosted;
         transform.localScale = baseScale * scale;
+    }
+
+    private void UpdateExternalSpeedEffects()
+    {
+        if (externalSpeedTimer <= 0f)
+        {
+            externalSpeedTimer = 0f; 
+            externalSpeedMultiplier = 1f;
+            return;
+        }
+
+        externalSpeedTimer -= Time.deltaTime;
+        if (externalSpeedTimer <= 0f)
+        {
+            externalSpeedTimer = 0f;
+            externalSpeedMultiplier = 1f;
+        }
     }
 
     private AnomalyState GetPhaseFallbackState()

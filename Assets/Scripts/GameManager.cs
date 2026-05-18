@@ -72,6 +72,7 @@ public class GameManager : MonoBehaviour
     private GUIStyle bossStateStyle;
     private GUIStyle bossStateValueStyle;
     private GUIStyle bossPacingValueStyle;
+    private GUIStyle eventWarningStyle;
     private string lastBossStateRaw;
     private string lastPacingPhaseRaw;
     private float statePulseOverlayTimer;
@@ -180,6 +181,7 @@ public class GameManager : MonoBehaviour
         GUI.Label(new Rect(margin, margin + 110f, 480f, 25f), $"Map Event: {GetMapEventLabel()}");
         DrawBossStateHud();
         DrawStatePulseOverlay();
+        DrawChaosWarningOverlay();
 
         if (IsGameOver)
         {
@@ -408,6 +410,12 @@ public class GameManager : MonoBehaviour
             return "Nominal";
         }
 
+        string warning = chaosDirector.ActiveWarningLabel;
+        if (!string.IsNullOrWhiteSpace(warning))
+        {
+            return warning;
+        }
+
         string label = chaosDirector.ActiveEventLabel;
         if (string.IsNullOrWhiteSpace(label))
         {
@@ -415,6 +423,36 @@ public class GameManager : MonoBehaviour
         }
 
         return label;
+    }
+
+    private void DrawChaosWarningOverlay()
+    {
+        if (chaosDirector == null)
+        {
+            return;
+        }
+
+        string warning = chaosDirector.ActiveWarningLabel;
+        if (string.IsNullOrWhiteSpace(warning))
+        {
+            return;
+        }
+
+        EnsureWarningStyle();
+        float t = chaosDirector.ActiveWarningNormalized;
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 7.5f);
+        float alpha = Mathf.Lerp(0.9f, 0.45f, t) + pulse * 0.08f;
+
+        Color old = GUI.color;
+        GUI.color = new Color(1f, 0.56f, 0.66f, Mathf.Clamp01(alpha));
+
+        float w = 720f;
+        float h = 54f;
+        float x = (Screen.width - w) * 0.5f;
+        float y = Screen.height * 0.2f;
+        GUI.Label(new Rect(x, y, w, h), warning.ToUpperInvariant(), eventWarningStyle);
+
+        GUI.color = old;
     }
 
     private void TrackBossTempoPulse()
@@ -567,6 +605,22 @@ public class GameManager : MonoBehaviour
             alignment = TextAnchor.MiddleCenter
         };
         bossPacingValueStyle.normal.textColor = new Color(0.78f, 0.90f, 1f, 0.95f);
+    }
+
+    private void EnsureWarningStyle()
+    {
+        if (eventWarningStyle != null)
+        {
+            return;
+        }
+
+        eventWarningStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 30,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter
+        };
+        eventWarningStyle.normal.textColor = new Color(1f, 0.6f, 0.72f, 0.95f);
     }
 
     private void EnsureMenuController()

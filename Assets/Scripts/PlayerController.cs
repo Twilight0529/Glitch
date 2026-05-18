@@ -9,6 +9,7 @@ public class PlayerController : MonoBehaviour
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 11f;
     [SerializeField] private float maxBoostMultiplier = 1.9f;
+    [SerializeField, Range(0.2f, 1f)] private float minSlowMultiplier = 0.3f;
 
     [Header("Shield Visual")]
     [SerializeField] private Color shieldColor = new Color(0.95f, 0.64f, 0.88f, 0.85f);
@@ -19,6 +20,8 @@ public class PlayerController : MonoBehaviour
     private Vector2 moveInput;
     private float speedBoostTimer;
     private float speedBoostMultiplier = 1f;
+    private float movementSlowTimer;
+    private float movementSlowMultiplier = 1f;
     private float shieldTimer;
     private SpriteRenderer shieldRenderer;
     private GameObject shieldVisual;
@@ -26,10 +29,31 @@ public class PlayerController : MonoBehaviour
     public Vector2 CurrentVelocity => rb != null ? rb.linearVelocity : Vector2.zero;
     public bool HasShield => shieldTimer > 0f;
     public bool HasSpeedBoost => speedBoostTimer > 0f;
+    public bool HasMovementSlow => movementSlowTimer > 0f;
     public string ActivePowerupLabel
     {
         get
         {
+            if (HasMovementSlow && HasShield && HasSpeedBoost)
+            {
+                return "Shield + Speed + Suppressed";
+            }
+
+            if (HasMovementSlow && HasShield)
+            {
+                return "Shield + Suppressed";
+            }
+
+            if (HasMovementSlow && HasSpeedBoost)
+            {
+                return "Speed + Suppressed";
+            }
+
+            if (HasMovementSlow)
+            {
+                return "Suppressed";
+            }
+
             if (HasShield && HasSpeedBoost)
             {
                 return "Shield + Speed";
@@ -78,6 +102,10 @@ public class PlayerController : MonoBehaviour
         {
             effectiveSpeed *= speedBoostMultiplier;
         }
+        if (movementSlowTimer > 0f)
+        {
+            effectiveSpeed *= movementSlowMultiplier;
+        }
 
         rb.linearVelocity = moveInput * effectiveSpeed;
     }
@@ -118,6 +146,14 @@ public class PlayerController : MonoBehaviour
         shieldTimer = Mathf.Max(shieldTimer, Mathf.Max(0.1f, duration));
     }
 
+    public void ApplyMovementSlow(float multiplier, float duration)
+    {
+        movementSlowMultiplier = Mathf.Min(
+            movementSlowTimer > 0f ? movementSlowMultiplier : 1f,
+            Mathf.Clamp(multiplier, minSlowMultiplier, 1f));
+        movementSlowTimer = Mathf.Max(movementSlowTimer, Mathf.Max(0.05f, duration));
+    }
+
     public bool TryAbsorbHit()
     {
         if (shieldTimer <= 0f)
@@ -147,6 +183,16 @@ public class PlayerController : MonoBehaviour
             if (shieldTimer < 0f)
             {
                 shieldTimer = 0f;
+            }
+        }
+
+        if (movementSlowTimer > 0f)
+        {
+            movementSlowTimer -= Time.deltaTime;
+            if (movementSlowTimer <= 0f)
+            {
+                movementSlowTimer = 0f;
+                movementSlowMultiplier = 1f;
             }
         }
     }

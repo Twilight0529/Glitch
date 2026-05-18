@@ -18,9 +18,17 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private Vector2 pulseRadiusRange = new Vector2(1.2f, 1.85f);
     [SerializeField] private int pulseHazardsMin = 2;
     [SerializeField] private int pulseHazardsMax = 4;
+    [SerializeField] private float pulsePreWarningSeconds = 0.9f;
     [SerializeField] private float pulseTelegraphSeconds = 0.9f;
-    [SerializeField] private float pulseActiveSeconds = 1.8f;
+    [SerializeField] private float pulseActiveSeconds = 2.3f;
     [SerializeField] private float pulseSpawnStagger = 0.15f;
+    [SerializeField] private float pulseTargetLeadSeconds = 0.5f;
+    [SerializeField] private float pulseClusterRadius = 2.8f;
+    [SerializeField] private float pulseSlowMultiplier = 0.58f;
+    [SerializeField] private float pulseSlowDuration = 0.24f;
+    [SerializeField] private float pulseEnemyBoostMultiplier = 1.23f;
+    [SerializeField] private float pulseEnemyBoostDuration = 1.1f;
+    [SerializeField] private float pulseEnemyBoostCooldown = 0.33f;
     [SerializeField] private Color pulseColor = new Color(1f, 0.38f, 0.53f, 0.92f);
 
     [Header("Spawn Rules")]
@@ -44,10 +52,15 @@ public class ArenaChaosDirector : MonoBehaviour
 
     private string activeEventLabel = string.Empty;
     private float eventLabelTimer;
+    private string activeWarningLabel = string.Empty;
+    private float warningTimer;
+    private float warningDuration;
 
     private Transform runtimeRoot;
 
     public string ActiveEventLabel => eventLabelTimer > 0f ? activeEventLabel : string.Empty;
+    public string ActiveWarningLabel => warningTimer > 0f ? activeWarningLabel : string.Empty;
+    public float ActiveWarningNormalized => warningTimer > 0f ? Mathf.Clamp01(warningTimer / Mathf.Max(0.001f, warningDuration)) : 0f;
 
     public void Configure(ProceduralArenaGenerator arenaGenerator)
     {
@@ -82,6 +95,10 @@ public class ArenaChaosDirector : MonoBehaviour
         if (eventLabelTimer > 0f)
         {
             eventLabelTimer -= Time.deltaTime;
+        }
+        if (warningTimer > 0f)
+        {
+            warningTimer -= Time.deltaTime;
         }
 
         RefreshReferences();
@@ -183,6 +200,9 @@ public class ArenaChaosDirector : MonoBehaviour
         }
 
         activePickup = null;
+        activeWarningLabel = string.Empty;
+        warningTimer = 0f;
+        warningDuration = 0f;
     }
 
     private void SchedulePowerup()
@@ -239,11 +259,30 @@ public class ArenaChaosDirector : MonoBehaviour
         int maxCount = Mathf.Max(minCount, Mathf.Max(pulseHazardsMin, pulseHazardsMax));
         int count = Random.Range(minCount, maxCount + 1);
 
-        RaiseEvent("Containment Pulse");
+        RaiseWarning("Containment Pulse Incoming", pulsePreWarningSeconds);
+        if (pulsePreWarningSeconds > 0f)
+        {
+            yield return new WaitForSeconds(Mathf.Max(0f, pulsePreWarningSeconds));
+        }
+
+        if (gameManager == null || !gameManager.IsRunActive || gameManager.IsGameOver)
+        {
+            yield break;
+        }
+
+        RaiseEvent("Containment Lock");
+
+        Vector2 pulseCenter = GetPulseFocusCenter();
+        float clusterRadius = Mathf.Max(0.75f, pulseClusterRadius);
+        float basePhase = Random.Range(0f, 360f);
 
         for (int i = 0; i < count; i++)
         {
-            if (!TryFindSpawnPoint(hazardProbeRadius, out Vector2 position))
+            float ringAngle = basePhase + ((360f / Mathf.Max(1, count)) * i);
+            Vector2 ringDirection = new Vector2(Mathf.Cos(ringAngle * Mathf.Deg2Rad), Mathf.Sin(ringAngle * Mathf.Deg2Rad));
+            Vector2 preferred = pulseCenter + ringDirection * Random.Range(clusterRadius * 0.3f, clusterRadius);
+
+            if (!TryFindPulseSpawnPoint(preferred, pulseCenter, hazardProbeRadius, clusterRadius, out Vector2 position))
             {
                 continue;
             }
@@ -265,7 +304,19 @@ public class ArenaChaosDirector : MonoBehaviour
             col.isTrigger = true;
 
             ContainmentHazardZone hazard = zone.AddComponent<ContainmentHazardZone>();
-            hazard.Configure(gameManager, player, radius, pulseTelegraphSeconds, pulseActiveSeconds, pulseColor);
+            hazard.Configure(
+                gameManager,
+                player,
+                enemy,
+                radius,
+                pulseTelegraphSeconds,
+                pulseActiveSeconds,
+                pulseColor,
+                pulseSlowMultiplier,
+                pulseSlowDuration,
+                pulseEnemyBoostMultiplier,
+                pulseEnemyBoostDuration,
+                pulseEnemyBoostCooldown);
 
             float stagger = Mathf.Max(0f, pulseSpawnStagger);
             if (stagger > 0f && i < count - 1)
@@ -313,6 +364,63 @@ public class ArenaChaosDirector : MonoBehaviour
         return false;
     }
 
+    private bool TryFindPulseSpawnPoint(
+        Vector2 preferred,
+        Vector2 center,
+        float probeRadius,
+        float clusterRadius,
+        out Vector2 result)
+    {
+        result = Vector2.zero;
+        if (arena == null)
+        {
+            return false;
+        }
+
+        float halfW = arena.ArenaWidth * 0.5f;
+        float halfH = arena.ArenaHeight * 0.5f;
+        Vector2 arenaCenter = transform.position;
+        float minX = arenaCenter.x - halfW + edgePadding;
+        float maxX = arenaCenter.x + halfW - edgePadding;
+        float minY = arenaCenter.y - halfH + edgePadding;
+        float maxY = arenaCenter.y + halfH - edgePadding;
+
+        Vector2 clampedPreferred = new Vector2(
+            Mathf.Clamp(preferred.x, minX, maxX),
+            Mathf.Clamp(preferred.y, minY, maxY));
+
+        if (Vector2.Distance(clampedPreferred, center) <= clusterRadius + 0.2f &&
+            IsFree(clampedPreferred, probeRadius))
+        {
+            result = clampedPreferred;
+            return true;
+        }
+
+        for (int i = 0; i < spawnAttempts; i++)
+        {
+            Vector2 randomDir = Random.insideUnitCircle.normalized;
+            if (randomDir.sqrMagnitude < 0.0001f)
+            {
+                randomDir = Vector2.right;
+            }
+
+            float randomRadius = Random.Range(clusterRadius * 0.2f, clusterRadius);
+            Vector2 point = center + randomDir * randomRadius;
+            point.x = Mathf.Clamp(point.x, minX, maxX);
+            point.y = Mathf.Clamp(point.y, minY, maxY);
+
+            if (!IsFree(point, probeRadius))
+            {
+                continue;
+            }
+
+            result = point;
+            return true;
+        }
+
+        return TryFindSpawnPoint(probeRadius, out result);
+    }
+
     private bool IsFarFromActors(Vector2 point)
     {
         float minDist = Mathf.Max(0.5f, actorClearance);
@@ -356,9 +464,50 @@ public class ArenaChaosDirector : MonoBehaviour
         return true;
     }
 
+    private Vector2 GetPulseFocusCenter()
+    {
+        Vector2 center = transform.position;
+        if (player == null)
+        {
+            return center;
+        }
+
+        Vector2 predicted = player.GetPosition() + player.CurrentVelocity * Mathf.Max(0f, pulseTargetLeadSeconds);
+        if (enemy != null)
+        {
+            Vector2 toPlayer = predicted - enemy.GetCurrentPosition();
+            if (toPlayer.sqrMagnitude > 0.0001f)
+            {
+                predicted += toPlayer.normalized * 0.6f;
+            }
+        }
+
+        if (arena != null)
+        {
+            float halfW = arena.ArenaWidth * 0.5f;
+            float halfH = arena.ArenaHeight * 0.5f;
+            Vector2 arenaCenter = transform.position;
+            float minX = arenaCenter.x - halfW + edgePadding;
+            float maxX = arenaCenter.x + halfW - edgePadding;
+            float minY = arenaCenter.y - halfH + edgePadding;
+            float maxY = arenaCenter.y + halfH - edgePadding;
+            predicted.x = Mathf.Clamp(predicted.x, minX, maxX);
+            predicted.y = Mathf.Clamp(predicted.y, minY, maxY);
+        }
+
+        return predicted;
+    }
+
     private void RaiseEvent(string label)
     {
         activeEventLabel = label;
         eventLabelTimer = Mathf.Max(0.2f, bannerDuration);
+    }
+
+    private void RaiseWarning(string label, float duration)
+    {
+        activeWarningLabel = label;
+        warningDuration = Mathf.Max(0.05f, duration);
+        warningTimer = warningDuration;
     }
 }
