@@ -44,6 +44,9 @@ public class LabSweepEventController : MonoBehaviour
     [Header("Lab Distinctive Event - Sterilization Sweep")]
     [SerializeField] private bool enableSterilizationSweep = true;
     [SerializeField] private float sterilizationBandWidth = 2.25f;
+    [SerializeField, Range(0.2f, 0.9f)] private float sterilizationCoverageMin = 0.38f;
+    [SerializeField, Range(0.25f, 0.95f)] private float sterilizationCoverageMax = 0.62f;
+    [SerializeField, Range(0.1f, 0.6f)] private float sterilizationTelegraphFraction = 0.28f;
     [SerializeField] private int sterilizationPassesMin = 2;
     [SerializeField] private int sterilizationPassesMax = 4;
     [SerializeField] private int sterilizationSafeCorridorsMin = 1;
@@ -57,7 +60,9 @@ public class LabSweepEventController : MonoBehaviour
     [SerializeField] private float sterilizationHazardPulseSpeed = 2.4f;
     [SerializeField, Range(0.2f, 0.95f)] private float sterilizationHazardDutyCycle = 0.66f;
     [SerializeField] private Color sterilizationColor = new Color(0.98f, 0.57f, 0.63f, 0.68f);
+    [SerializeField] private Color sterilizationTelegraphColor = new Color(1f, 0.87f, 0.55f, 0.45f);
     [SerializeField] private float sterilizationPulseSpeed = 4.2f;
+    [SerializeField] private float sterilizationTelegraphPulseSpeed = 3.1f;
     [SerializeField] private Color sterilizationSafeColor = new Color(0.32f, 0.94f, 1f, 0.45f);
     [SerializeField] private float sterilizationSafeMarkerThickness = 0.14f;
     [SerializeField] private float sterilizationSafePulseSpeed = 2.8f;
@@ -95,9 +100,13 @@ public class LabSweepEventController : MonoBehaviour
     private float sterilizationEnemyBoostCooldownTimer;
     private GameObject sterilizationVisualRoot;
     private SpriteRenderer sterilizationVisualRenderer;
+    private GameObject sterilizationTelegraphRoot;
+    private SpriteRenderer sterilizationTelegraphRenderer;
     private GameObject sterilizationSafeRoot;
     private readonly List<SpriteRenderer> sterilizationSafeMarkers = new List<SpriteRenderer>();
     private readonly List<float> sterilizationSafeAxisValues = new List<float>();
+    private readonly List<float> sterilizationPassPerpCenters = new List<float>();
+    private readonly List<float> sterilizationPassPerpHalfExtents = new List<float>();
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
@@ -235,8 +244,7 @@ public class LabSweepEventController : MonoBehaviour
         sterilizationPassCount = RollSterilizationPassCount();
         sterilizationEnemyBoostCooldownTimer = 0f;
         EnsureSterilizationVisual();
-        BuildSterilizationSafeCorridors();
-        UpdateSterilizationSafeMarkers();
+        BuildSterilizationPassLayout();
         HideSterilizationVisuals();
 
         Vector2 center = centerTransform.position;
@@ -374,6 +382,8 @@ public class LabSweepEventController : MonoBehaviour
         sterilizationEnemyBoostCooldownTimer = 0f;
         HideSterilizationVisuals();
         sterilizationSafeAxisValues.Clear();
+        sterilizationPassPerpCenters.Clear();
+        sterilizationPassPerpHalfExtents.Clear();
     }
 
     private void ApplyActiveColorPulse(float progress)
@@ -597,6 +607,58 @@ public class LabSweepEventController : MonoBehaviour
         return Random.Range(min, max + 1);
     }
 
+    private void BuildSterilizationPassLayout()
+    {
+        sterilizationPassPerpCenters.Clear();
+        sterilizationPassPerpHalfExtents.Clear();
+
+        int passCount = Mathf.Max(1, sterilizationPassCount);
+        float perpendicularMin = sterilizationAlongX ? interiorBottom : interiorLeft;
+        float perpendicularMax = sterilizationAlongX ? interiorTop : interiorRight;
+        float perpendicularSpan = Mathf.Max(0.5f, perpendicularMax - perpendicularMin);
+
+        float minCoverage = Mathf.Clamp01(Mathf.Min(sterilizationCoverageMin, sterilizationCoverageMax));
+        float maxCoverage = Mathf.Clamp01(Mathf.Max(sterilizationCoverageMin, sterilizationCoverageMax));
+        minCoverage = Mathf.Clamp(minCoverage, 0.2f, 0.95f);
+        maxCoverage = Mathf.Clamp(maxCoverage, minCoverage, 0.98f);
+
+        for (int i = 0; i < passCount; i++)
+        {
+            float coverage = Random.Range(minCoverage, maxCoverage);
+            float halfExtent = Mathf.Max(0.4f, perpendicularSpan * coverage * 0.5f);
+            halfExtent = Mathf.Min(halfExtent, perpendicularSpan * 0.5f - 0.1f);
+
+            float centerMin = perpendicularMin + halfExtent;
+            float centerMax = perpendicularMax - halfExtent;
+            float center = centerMin <= centerMax
+                ? Random.Range(centerMin, centerMax)
+                : (perpendicularMin + perpendicularMax) * 0.5f;
+
+            sterilizationPassPerpCenters.Add(center);
+            sterilizationPassPerpHalfExtents.Add(halfExtent);
+        }
+    }
+
+    private float GetSterilizationPassPerpendicularCenter(int passIndex, float fallback)
+    {
+        if (passIndex >= 0 && passIndex < sterilizationPassPerpCenters.Count)
+        {
+            return sterilizationPassPerpCenters[passIndex];
+        }
+
+        return fallback;
+    }
+
+    private float GetSterilizationPassPerpendicularHalfExtent(int passIndex, float fallback)
+    {
+        if (passIndex >= 0 && passIndex < sterilizationPassPerpHalfExtents.Count)
+        {
+            return sterilizationPassPerpHalfExtents[passIndex];
+        }
+
+        return fallback;
+    }
+
     private void TickSterilizationSweep(float progress, float dt)
     {
         if (!enableSterilizationSweep)
@@ -616,14 +678,9 @@ public class LabSweepEventController : MonoBehaviour
         }
 
         EnsureSterilizationVisual();
-        if (sterilizationVisualRoot == null || sterilizationVisualRenderer == null)
+        if (sterilizationVisualRoot == null || sterilizationVisualRenderer == null || sterilizationTelegraphRoot == null || sterilizationTelegraphRenderer == null)
         {
             return;
-        }
-
-        if (!sterilizationVisualRoot.activeSelf)
-        {
-            sterilizationVisualRoot.SetActive(true);
         }
 
         if (sterilizationEnemyBoostCooldownTimer > 0f)
@@ -631,46 +688,91 @@ public class LabSweepEventController : MonoBehaviour
             sterilizationEnemyBoostCooldownTimer -= dt;
         }
 
-        UpdateSterilizationSafeMarkersPulse();
+        int passCount = Mathf.Max(1, sterilizationPassCount);
+        float raw = Mathf.Clamp01(progress) * passCount;
+        int passIndex = Mathf.Clamp(Mathf.FloorToInt(raw), 0, passCount - 1);
+        float passT = Mathf.Clamp01(raw - passIndex);
+        float telegraphFraction = Mathf.Clamp(sterilizationTelegraphFraction, 0.1f, 0.6f);
+        bool inTelegraph = passT < telegraphFraction;
+        float sweepT = inTelegraph ? 0f : Mathf.Clamp01((passT - telegraphFraction) / Mathf.Max(0.01f, 1f - telegraphFraction));
 
-        float raw = progress * Mathf.Max(1, sterilizationPassCount);
-        int passIndex = Mathf.FloorToInt(raw);
-        float passT = raw - passIndex;
-        if ((passIndex & 1) == 1)
-        {
-            passT = 1f - passT;
-        }
-
+        bool reverse = (passIndex & 1) == 1;
+        float axisT = reverse ? 1f - sweepT : sweepT;
         float bandHalf = Mathf.Max(0.2f, sterilizationBandWidth) * 0.5f;
         float minAxis = sterilizationAlongX ? interiorLeft : interiorBottom;
         float maxAxis = sterilizationAlongX ? interiorRight : interiorTop;
-        float axisValue = Mathf.Lerp(minAxis, maxAxis, Mathf.Clamp01(passT));
+        float axisValue = Mathf.Lerp(minAxis, maxAxis, axisT);
 
-        Vector2 center = new Vector2((interiorLeft + interiorRight) * 0.5f, (interiorBottom + interiorTop) * 0.5f);
-        Vector2 size;
+        float perpMin = sterilizationAlongX ? interiorBottom : interiorLeft;
+        float perpMax = sterilizationAlongX ? interiorTop : interiorRight;
+        float perpSpan = Mathf.Max(0.5f, perpMax - perpMin);
+        float perpendicularCenter = GetSterilizationPassPerpendicularCenter(passIndex, (perpMin + perpMax) * 0.5f);
+        float perpendicularHalfExtent = GetSterilizationPassPerpendicularHalfExtent(passIndex, perpSpan * 0.25f);
+        perpendicularHalfExtent = Mathf.Clamp(perpendicularHalfExtent, 0.35f, perpSpan * 0.5f);
+        perpendicularCenter = Mathf.Clamp(perpendicularCenter, perpMin + perpendicularHalfExtent, perpMax - perpendicularHalfExtent);
+        float segmentLength = perpendicularHalfExtent * 2f;
+
+        Vector2 sweepCenter = new Vector2((interiorLeft + interiorRight) * 0.5f, (interiorBottom + interiorTop) * 0.5f);
+        Vector2 sweepSize;
+        Vector2 telegraphCenter = sweepCenter;
+        Vector2 telegraphSize;
         if (sterilizationAlongX)
         {
-            center.x = axisValue;
-            size = new Vector2(Mathf.Max(0.5f, sterilizationBandWidth), Mathf.Max(0.5f, interiorTop - interiorBottom));
+            sweepCenter.x = axisValue;
+            sweepCenter.y = perpendicularCenter;
+            sweepSize = new Vector2(Mathf.Max(0.5f, sterilizationBandWidth), Mathf.Max(0.5f, segmentLength));
+
+            telegraphCenter.x = (interiorLeft + interiorRight) * 0.5f;
+            telegraphCenter.y = perpendicularCenter;
+            telegraphSize = new Vector2(Mathf.Max(0.5f, interiorRight - interiorLeft), Mathf.Max(0.5f, segmentLength));
         }
         else
         {
-            center.y = axisValue;
-            size = new Vector2(Mathf.Max(0.5f, interiorRight - interiorLeft), Mathf.Max(0.5f, sterilizationBandWidth));
+            sweepCenter.x = perpendicularCenter;
+            sweepCenter.y = axisValue;
+            sweepSize = new Vector2(Mathf.Max(0.5f, segmentLength), Mathf.Max(0.5f, sterilizationBandWidth));
+
+            telegraphCenter.x = perpendicularCenter;
+            telegraphCenter.y = (interiorBottom + interiorTop) * 0.5f;
+            telegraphSize = new Vector2(Mathf.Max(0.5f, segmentLength), Mathf.Max(0.5f, interiorTop - interiorBottom));
         }
 
-        sterilizationVisualRoot.transform.position = new Vector3(center.x, center.y, 0f);
-        sterilizationVisualRenderer.size = size;
+        sterilizationVisualRoot.transform.position = new Vector3(sweepCenter.x, sweepCenter.y, 0f);
+        sterilizationVisualRenderer.size = sweepSize;
+        sterilizationTelegraphRoot.transform.position = new Vector3(telegraphCenter.x, telegraphCenter.y, 0f);
+        sterilizationTelegraphRenderer.size = telegraphSize;
+
+        if (!sterilizationVisualRoot.activeSelf)
+        {
+            sterilizationVisualRoot.SetActive(true);
+        }
+        if (!sterilizationTelegraphRoot.activeSelf)
+        {
+            sterilizationTelegraphRoot.SetActive(true);
+        }
+
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Max(0.1f, sterilizationPulseSpeed));
         float hazardCycle = Mathf.Repeat(Time.time * Mathf.Max(0.1f, sterilizationHazardPulseSpeed), 1f);
-        bool hazardActive = hazardCycle <= Mathf.Clamp01(sterilizationHazardDutyCycle);
+        bool hazardActive = !inTelegraph && hazardCycle <= Mathf.Clamp01(sterilizationHazardDutyCycle);
         Color c = sterilizationColor;
         c.a = hazardActive
             ? Mathf.Lerp(0.42f, 0.82f, pulse)
             : Mathf.Lerp(0.15f, 0.28f, pulse);
         sterilizationVisualRenderer.color = c;
 
+        float tPulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Max(0.1f, sterilizationTelegraphPulseSpeed));
+        Color tColor = sterilizationTelegraphColor;
+        tColor.a = inTelegraph
+            ? Mathf.Lerp(0.22f, 0.58f, tPulse)
+            : Mathf.Lerp(0.04f, 0.12f, tPulse);
+        sterilizationTelegraphRenderer.color = tColor;
+
         if (playerController == null)
+        {
+            return;
+        }
+
+        if (inTelegraph || !hazardActive)
         {
             return;
         }
@@ -683,13 +785,9 @@ public class LabSweepEventController : MonoBehaviour
             return;
         }
 
-        if (!hazardActive)
-        {
-            return;
-        }
-
         float playerPerpendicularAxis = sterilizationAlongX ? playerPos.y : playerPos.x;
-        if (IsInsideSafeCorridor(playerPerpendicularAxis))
+        bool inSegment = Mathf.Abs(playerPerpendicularAxis - perpendicularCenter) <= perpendicularHalfExtent;
+        if (!inSegment)
         {
             return;
         }
@@ -704,7 +802,10 @@ public class LabSweepEventController : MonoBehaviour
 
     private void EnsureSterilizationVisual()
     {
-        if (sterilizationVisualRoot != null && sterilizationVisualRenderer != null)
+        if (sterilizationVisualRoot != null
+            && sterilizationVisualRenderer != null
+            && sterilizationTelegraphRoot != null
+            && sterilizationTelegraphRenderer != null)
         {
             return;
         }
@@ -725,9 +826,29 @@ public class LabSweepEventController : MonoBehaviour
 
         sterilizationVisualRenderer.sprite = SquareSpriteProvider.Get();
         sterilizationVisualRenderer.drawMode = SpriteDrawMode.Sliced;
-        sterilizationVisualRenderer.sortingOrder = 5;
+        sterilizationVisualRenderer.sortingOrder = 7;
         sterilizationVisualRenderer.color = sterilizationColor;
         sterilizationVisualRoot.SetActive(false);
+
+        if (sterilizationTelegraphRoot == null)
+        {
+            sterilizationTelegraphRoot = new GameObject("LabSterilizationTelegraph");
+        }
+
+        sterilizationTelegraphRoot.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
+        sterilizationTelegraphRoot.transform.localScale = Vector3.one;
+
+        sterilizationTelegraphRenderer = sterilizationTelegraphRoot.GetComponent<SpriteRenderer>();
+        if (sterilizationTelegraphRenderer == null)
+        {
+            sterilizationTelegraphRenderer = sterilizationTelegraphRoot.AddComponent<SpriteRenderer>();
+        }
+
+        sterilizationTelegraphRenderer.sprite = SquareSpriteProvider.Get();
+        sterilizationTelegraphRenderer.drawMode = SpriteDrawMode.Sliced;
+        sterilizationTelegraphRenderer.sortingOrder = 6;
+        sterilizationTelegraphRenderer.color = sterilizationTelegraphColor;
+        sterilizationTelegraphRoot.SetActive(false);
     }
 
     private void HideSterilizationVisuals()
@@ -735,6 +856,11 @@ public class LabSweepEventController : MonoBehaviour
         if (sterilizationVisualRoot != null && sterilizationVisualRoot.activeSelf)
         {
             sterilizationVisualRoot.SetActive(false);
+        }
+
+        if (sterilizationTelegraphRoot != null && sterilizationTelegraphRoot.activeSelf)
+        {
+            sterilizationTelegraphRoot.SetActive(false);
         }
 
         if (sterilizationSafeRoot != null && sterilizationSafeRoot.activeSelf)
@@ -746,10 +872,14 @@ public class LabSweepEventController : MonoBehaviour
     private void DestroySterilizationVisuals()
     {
         DestroyVisualGameObject(ref sterilizationVisualRoot);
+        DestroyVisualGameObject(ref sterilizationTelegraphRoot);
         DestroyVisualGameObject(ref sterilizationSafeRoot);
         sterilizationVisualRenderer = null;
+        sterilizationTelegraphRenderer = null;
         sterilizationSafeMarkers.Clear();
         sterilizationSafeAxisValues.Clear();
+        sterilizationPassPerpCenters.Clear();
+        sterilizationPassPerpHalfExtents.Clear();
     }
 
     private void BuildSterilizationSafeCorridors()
