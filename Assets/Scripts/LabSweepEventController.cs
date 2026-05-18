@@ -46,13 +46,21 @@ public class LabSweepEventController : MonoBehaviour
     [SerializeField] private float sterilizationBandWidth = 2.25f;
     [SerializeField] private int sterilizationPassesMin = 2;
     [SerializeField] private int sterilizationPassesMax = 4;
+    [SerializeField] private int sterilizationSafeCorridorsMin = 1;
+    [SerializeField] private int sterilizationSafeCorridorsMax = 2;
+    [SerializeField] private float sterilizationSafeCorridorHalfWidth = 1.2f;
     [SerializeField, Range(0.2f, 1f)] private float sterilizationSlowMultiplier = 0.62f;
     [SerializeField] private float sterilizationSlowDuration = 0.24f;
     [SerializeField] private float sterilizationEnemyBoostMultiplier = 1.18f;
     [SerializeField] private float sterilizationEnemyBoostDuration = 0.9f;
     [SerializeField] private float sterilizationEnemyBoostCooldown = 0.33f;
+    [SerializeField] private float sterilizationHazardPulseSpeed = 2.4f;
+    [SerializeField, Range(0.2f, 0.95f)] private float sterilizationHazardDutyCycle = 0.66f;
     [SerializeField] private Color sterilizationColor = new Color(0.98f, 0.57f, 0.63f, 0.68f);
     [SerializeField] private float sterilizationPulseSpeed = 4.2f;
+    [SerializeField] private Color sterilizationSafeColor = new Color(0.32f, 0.94f, 1f, 0.45f);
+    [SerializeField] private float sterilizationSafeMarkerThickness = 0.14f;
+    [SerializeField] private float sterilizationSafePulseSpeed = 2.8f;
 
     [Header("Visual Telegraph")]
     [SerializeField, Range(0f, 1f)] private float activeColorPulseStrength = 0.6f;
@@ -87,6 +95,9 @@ public class LabSweepEventController : MonoBehaviour
     private float sterilizationEnemyBoostCooldownTimer;
     private GameObject sterilizationVisualRoot;
     private SpriteRenderer sterilizationVisualRenderer;
+    private GameObject sterilizationSafeRoot;
+    private readonly List<SpriteRenderer> sterilizationSafeMarkers = new List<SpriteRenderer>();
+    private readonly List<float> sterilizationSafeAxisValues = new List<float>();
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
@@ -104,7 +115,7 @@ public class LabSweepEventController : MonoBehaviour
     private void OnDisable()
     {
         EndEvent(restoreControllers: true, snapBackToStart: true);
-        DestroySterilizationVisual();
+        DestroySterilizationVisuals();
     }
 
     private void Update()
@@ -224,7 +235,9 @@ public class LabSweepEventController : MonoBehaviour
         sterilizationPassCount = RollSterilizationPassCount();
         sterilizationEnemyBoostCooldownTimer = 0f;
         EnsureSterilizationVisual();
-        HideSterilizationVisual();
+        BuildSterilizationSafeCorridors();
+        UpdateSterilizationSafeMarkers();
+        HideSterilizationVisuals();
 
         Vector2 center = centerTransform.position;
         float laneStep = Mathf.Max(0.8f, laneHeight);
@@ -359,7 +372,8 @@ public class LabSweepEventController : MonoBehaviour
         eventActive = false;
         eventTimer = 0f;
         sterilizationEnemyBoostCooldownTimer = 0f;
-        HideSterilizationVisual();
+        HideSterilizationVisuals();
+        sterilizationSafeAxisValues.Clear();
     }
 
     private void ApplyActiveColorPulse(float progress)
@@ -587,7 +601,7 @@ public class LabSweepEventController : MonoBehaviour
     {
         if (!enableSterilizationSweep)
         {
-            HideSterilizationVisual();
+            HideSterilizationVisuals();
             return;
         }
 
@@ -616,6 +630,8 @@ public class LabSweepEventController : MonoBehaviour
         {
             sterilizationEnemyBoostCooldownTimer -= dt;
         }
+
+        UpdateSterilizationSafeMarkersPulse();
 
         float raw = progress * Mathf.Max(1, sterilizationPassCount);
         int passIndex = Mathf.FloorToInt(raw);
@@ -646,8 +662,12 @@ public class LabSweepEventController : MonoBehaviour
         sterilizationVisualRoot.transform.position = new Vector3(center.x, center.y, 0f);
         sterilizationVisualRenderer.size = size;
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Max(0.1f, sterilizationPulseSpeed));
+        float hazardCycle = Mathf.Repeat(Time.time * Mathf.Max(0.1f, sterilizationHazardPulseSpeed), 1f);
+        bool hazardActive = hazardCycle <= Mathf.Clamp01(sterilizationHazardDutyCycle);
         Color c = sterilizationColor;
-        c.a = Mathf.Lerp(0.35f, 0.78f, pulse);
+        c.a = hazardActive
+            ? Mathf.Lerp(0.42f, 0.82f, pulse)
+            : Mathf.Lerp(0.15f, 0.28f, pulse);
         sterilizationVisualRenderer.color = c;
 
         if (playerController == null)
@@ -659,6 +679,17 @@ public class LabSweepEventController : MonoBehaviour
         float playerAxis = sterilizationAlongX ? playerPos.x : playerPos.y;
         bool playerInside = Mathf.Abs(playerAxis - axisValue) <= bandHalf;
         if (!playerInside)
+        {
+            return;
+        }
+
+        if (!hazardActive)
+        {
+            return;
+        }
+
+        float playerPerpendicularAxis = sterilizationAlongX ? playerPos.y : playerPos.x;
+        if (IsInsideSafeCorridor(playerPerpendicularAxis))
         {
             return;
         }
@@ -699,31 +730,211 @@ public class LabSweepEventController : MonoBehaviour
         sterilizationVisualRoot.SetActive(false);
     }
 
-    private void HideSterilizationVisual()
+    private void HideSterilizationVisuals()
     {
         if (sterilizationVisualRoot != null && sterilizationVisualRoot.activeSelf)
         {
             sterilizationVisualRoot.SetActive(false);
         }
+
+        if (sterilizationSafeRoot != null && sterilizationSafeRoot.activeSelf)
+        {
+            sterilizationSafeRoot.SetActive(false);
+        }
     }
 
-    private void DestroySterilizationVisual()
+    private void DestroySterilizationVisuals()
     {
-        if (sterilizationVisualRoot == null)
+        DestroyVisualGameObject(ref sterilizationVisualRoot);
+        DestroyVisualGameObject(ref sterilizationSafeRoot);
+        sterilizationVisualRenderer = null;
+        sterilizationSafeMarkers.Clear();
+        sterilizationSafeAxisValues.Clear();
+    }
+
+    private void BuildSterilizationSafeCorridors()
+    {
+        sterilizationSafeAxisValues.Clear();
+
+        float axisMin = sterilizationAlongX ? interiorBottom : interiorLeft;
+        float axisMax = sterilizationAlongX ? interiorTop : interiorRight;
+        float halfWidth = Mathf.Max(0.2f, sterilizationSafeCorridorHalfWidth);
+        int corridorMin = Mathf.Max(2, Mathf.Min(sterilizationSafeCorridorsMin, sterilizationSafeCorridorsMax));
+        int corridorMax = Mathf.Max(corridorMin, Mathf.Max(sterilizationSafeCorridorsMin, sterilizationSafeCorridorsMax));
+        int corridorCount = Random.Range(corridorMin, corridorMax + 1);
+
+        float innerMin = axisMin + halfWidth;
+        float innerMax = axisMax - halfWidth;
+        if (innerMax <= innerMin)
+        {
+            sterilizationSafeAxisValues.Add((axisMin + axisMax) * 0.5f);
+            return;
+        }
+
+        float innerSpan = Mathf.Max(0.01f, innerMax - innerMin);
+        float desiredSpacing = Mathf.Max(halfWidth * 2f + 0.45f, 0.8f);
+        int maxNonOverlapping = Mathf.Max(1, Mathf.FloorToInt(innerSpan / desiredSpacing));
+        corridorCount = Mathf.Clamp(corridorCount, 1, maxNonOverlapping);
+
+        float segment = innerSpan / Mathf.Max(1, corridorCount + 1);
+        for (int i = 0; i < corridorCount; i++)
+        {
+            float target = innerMin + segment * (i + 1);
+            float jitter = Random.Range(-segment * 0.18f, segment * 0.18f);
+            float axisValue = Mathf.Clamp(target + jitter, innerMin, innerMax);
+            sterilizationSafeAxisValues.Add(axisValue);
+        }
+
+        sterilizationSafeAxisValues.Sort();
+        float minSpacing = Mathf.Max(halfWidth * 1.7f, 0.7f);
+        for (int i = 1; i < sterilizationSafeAxisValues.Count; i++)
+        {
+            float prev = sterilizationSafeAxisValues[i - 1];
+            float current = sterilizationSafeAxisValues[i];
+            if (current - prev >= minSpacing)
+            {
+                continue;
+            }
+
+            float corrected = Mathf.Clamp(prev + minSpacing, innerMin, innerMax);
+            sterilizationSafeAxisValues[i] = corrected;
+        }
+
+        if (sterilizationSafeAxisValues.Count == 0)
+        {
+            sterilizationSafeAxisValues.Add((axisMin + axisMax) * 0.5f);
+        }
+    }
+
+    private void UpdateSterilizationSafeMarkers()
+    {
+        EnsureSterilizationSafeRoot();
+        if (sterilizationSafeRoot == null)
+        {
+            return;
+        }
+
+        while (sterilizationSafeMarkers.Count > sterilizationSafeAxisValues.Count)
+        {
+            int last = sterilizationSafeMarkers.Count - 1;
+            SpriteRenderer marker = sterilizationSafeMarkers[last];
+            sterilizationSafeMarkers.RemoveAt(last);
+            if (marker != null)
+            {
+                if (Application.isPlaying)
+                {
+                    Destroy(marker.gameObject);
+                }
+                else
+                {
+                    DestroyImmediate(marker.gameObject);
+                }
+            }
+        }
+
+        while (sterilizationSafeMarkers.Count < sterilizationSafeAxisValues.Count)
+        {
+            GameObject markerGo = new GameObject($"SafeCorridor_{sterilizationSafeMarkers.Count}");
+            markerGo.transform.SetParent(sterilizationSafeRoot.transform, false);
+            SpriteRenderer sr = markerGo.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.sortingOrder = 6;
+            sterilizationSafeMarkers.Add(sr);
+        }
+
+        float thickness = Mathf.Max(0.03f, sterilizationSafeMarkerThickness);
+        float left = interiorLeft;
+        float right = interiorRight;
+        float bottom = interiorBottom;
+        float top = interiorTop;
+        for (int i = 0; i < sterilizationSafeMarkers.Count; i++)
+        {
+            SpriteRenderer marker = sterilizationSafeMarkers[i];
+            if (marker == null)
+            {
+                continue;
+            }
+
+            float axis = sterilizationSafeAxisValues[i];
+            if (sterilizationAlongX)
+            {
+                marker.transform.position = new Vector3((left + right) * 0.5f, axis, 0f);
+                marker.size = new Vector2(Mathf.Max(0.5f, right - left), thickness);
+            }
+            else
+            {
+                marker.transform.position = new Vector3(axis, (bottom + top) * 0.5f, 0f);
+                marker.size = new Vector2(thickness, Mathf.Max(0.5f, top - bottom));
+            }
+        }
+
+        sterilizationSafeRoot.SetActive(true);
+        UpdateSterilizationSafeMarkersPulse();
+    }
+
+    private void UpdateSterilizationSafeMarkersPulse()
+    {
+        if (sterilizationSafeMarkers.Count == 0)
+        {
+            return;
+        }
+
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Max(0.1f, sterilizationSafePulseSpeed));
+        Color color = sterilizationSafeColor;
+        color.a = Mathf.Lerp(0.24f, 0.62f, pulse);
+        for (int i = 0; i < sterilizationSafeMarkers.Count; i++)
+        {
+            if (sterilizationSafeMarkers[i] != null)
+            {
+                sterilizationSafeMarkers[i].color = color;
+            }
+        }
+    }
+
+    private bool IsInsideSafeCorridor(float axisValue)
+    {
+        float halfWidth = Mathf.Max(0.05f, sterilizationSafeCorridorHalfWidth);
+        for (int i = 0; i < sterilizationSafeAxisValues.Count; i++)
+        {
+            if (Mathf.Abs(axisValue - sterilizationSafeAxisValues[i]) <= halfWidth)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void EnsureSterilizationSafeRoot()
+    {
+        if (sterilizationSafeRoot != null)
+        {
+            return;
+        }
+
+        sterilizationSafeRoot = new GameObject("LabSterilizationSafeLanes");
+        sterilizationSafeRoot.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
+        sterilizationSafeRoot.transform.localScale = Vector3.one;
+        sterilizationSafeRoot.SetActive(false);
+    }
+
+    private static void DestroyVisualGameObject(ref GameObject target)
+    {
+        if (target == null)
         {
             return;
         }
 
         if (Application.isPlaying)
         {
-            Destroy(sterilizationVisualRoot);
+            Destroy(target);
         }
         else
         {
-            DestroyImmediate(sterilizationVisualRoot);
+            DestroyImmediate(target);
         }
 
-        sterilizationVisualRoot = null;
-        sterilizationVisualRenderer = null;
+        target = null;
     }
 }
