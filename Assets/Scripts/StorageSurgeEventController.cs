@@ -20,6 +20,8 @@ public class StorageSurgeEventController : MonoBehaviour
         public bool dynamicWasEnabled;
         public float displacementScale;
         public float phaseDelay;
+        public float laneSign;
+        public float lateralOffset;
         public SpriteRenderer[] renderers;
         public Color[] baseColors;
     }
@@ -32,11 +34,14 @@ public class StorageSurgeEventController : MonoBehaviour
     [SerializeField, Range(0.4f, 1f)] private float cadenceIntervalMultiplier = 0.7f;
     [SerializeField, Range(0.8f, 1.5f)] private float cadenceDurationMultiplier = 1.15f;
 
-    [Header("Storage Surge")]
-    [SerializeField] private Vector2 displacementRange = new Vector2(0.8f, 1.6f);
-    [SerializeField] private Vector2 rotationRange = new Vector2(4f, 13f);
-    [SerializeField] private float waveStaggerSeconds = 0.7f;
-    [SerializeField] private float recoilStrength = 0.28f;
+    [Header("Storage Distinctive Event - Cargo Reflow")]
+    [SerializeField] private Vector2 displacementRange = new Vector2(1.2f, 2.2f);
+    [SerializeField] private Vector2 rotationRange = new Vector2(5f, 16f);
+    [SerializeField] private float waveStaggerSeconds = 0.6f;
+    [SerializeField] private float recoilStrength = 0.22f;
+    [SerializeField] private float laneHeight = 2.6f;
+    [SerializeField] private float lateralOffsetMax = 0.2f;
+    [SerializeField] private float laneFlipChance = 0.35f;
     [SerializeField] private float boundsPadding = 0.08f;
 
     [Header("Visual Telegraph")]
@@ -63,7 +68,8 @@ public class StorageSurgeEventController : MonoBehaviour
     private float eventDuration;
     private float baseDisplacement;
     private float baseRotation;
-    private Vector2 surgeDirection;
+    private Vector2 surgeAxis;
+    private Vector2 lateralAxis;
     private bool initialized;
     private bool eventActive;
     private EnemyController enemyController;
@@ -195,11 +201,15 @@ public class StorageSurgeEventController : MonoBehaviour
 
         BuildInteriorBounds();
         snapshots.Clear();
-        surgeDirection = PickDirection();
+        surgeAxis = PickPrimaryAxis();
+        lateralAxis = new Vector2(-surgeAxis.y, surgeAxis.x);
         eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
         eventDuration *= Mathf.Max(0.1f, cadenceDurationMultiplier);
         baseDisplacement = Random.Range(Mathf.Min(displacementRange.x, displacementRange.y), Mathf.Max(displacementRange.x, displacementRange.y));
         baseRotation = Random.Range(Mathf.Min(rotationRange.x, rotationRange.y), Mathf.Max(rotationRange.x, rotationRange.y));
+
+        float laneStep = Mathf.Max(1f, laneHeight);
+        bool flipAllLanes = Random.value < Mathf.Clamp01(laneFlipChance);
 
         float minProj = float.PositiveInfinity;
         float maxProj = float.NegativeInfinity;
@@ -211,7 +221,7 @@ public class StorageSurgeEventController : MonoBehaviour
                 continue;
             }
 
-            float proj = Vector2.Dot((Vector2)tr.position, surgeDirection);
+            float proj = Vector2.Dot((Vector2)tr.position, surgeAxis);
             if (proj < minProj)
             {
                 minProj = proj;
@@ -238,9 +248,16 @@ public class StorageSurgeEventController : MonoBehaviour
                 binding.dynamicController.enabled = false;
             }
 
-            float proj = Vector2.Dot((Vector2)binding.transform.position, surgeDirection);
+            float proj = Vector2.Dot((Vector2)binding.transform.position, surgeAxis);
             float normalized = Mathf.InverseLerp(minProj, maxProj, proj);
             float delay = normalized * Mathf.Max(0f, waveStaggerSeconds);
+            float laneCoord = Vector2.Dot((Vector2)binding.transform.position, lateralAxis);
+            int laneIndex = Mathf.FloorToInt(laneCoord / laneStep);
+            float laneSign = (laneIndex & 1) == 0 ? 1f : -1f;
+            if (flipAllLanes)
+            {
+                laneSign *= -1f;
+            }
 
             snapshots.Add(new ObstacleSnapshot
             {
@@ -250,6 +267,8 @@ public class StorageSurgeEventController : MonoBehaviour
                 dynamicWasEnabled = dynamicWasEnabled,
                 displacementScale = Random.Range(0.78f, 1.18f),
                 phaseDelay = delay,
+                laneSign = laneSign,
+                lateralOffset = Random.Range(-Mathf.Abs(lateralOffsetMax), Mathf.Abs(lateralOffsetMax)),
                 renderers = binding.transform.GetComponentsInChildren<SpriteRenderer>(includeInactive: true),
                 baseColors = null
             });
@@ -291,19 +310,15 @@ public class StorageSurgeEventController : MonoBehaviour
             float primary = Mathf.Sin(localT * Mathf.PI);
             float recoil = Mathf.Sin(localT * Mathf.PI * 2f) * Mathf.Exp(-3.6f * localT) * recoilStrength;
             float envelope = Mathf.Sin(eventProgress * Mathf.PI);
-            float displacement = (primary + recoil) * envelope * baseDisplacement * snapshot.displacementScale;
+            float displacement = (primary + recoil) * envelope * baseDisplacement * snapshot.displacementScale * snapshot.laneSign;
 
-            Vector2 target = snapshot.startPosition + surgeDirection * displacement;
+            float lateralWave = Mathf.Sin((localT * Mathf.PI * 2f) + (snapshot.phaseDelay * 3f)) * 0.5f;
+            float lateralDisplacement = lateralWave * snapshot.lateralOffset * envelope;
+            Vector2 target = snapshot.startPosition + (surgeAxis * displacement) + (lateralAxis * lateralDisplacement);
             target = ClampToInterior(target, binding.obstacleRadius);
             MoveTransform(binding, target);
 
-            float lateralSign = Mathf.Sign(Vector2.Dot((Vector2)snapshot.startPosition, new Vector2(-surgeDirection.y, surgeDirection.x)));
-            if (Mathf.Approximately(lateralSign, 0f))
-            {
-                lateralSign = Random.value < 0.5f ? -1f : 1f;
-            }
-
-            float rot = snapshot.startRotationZ + displacement * baseRotation * 0.55f * lateralSign;
+            float rot = snapshot.startRotationZ + displacement * baseRotation * 0.48f;
             RotateTransform(binding, rot);
         }
         ApplyActiveColorPulse(eventProgress);
@@ -420,18 +435,14 @@ public class StorageSurgeEventController : MonoBehaviour
         }
     }
 
-    private static Vector2 PickDirection()
+    private static Vector2 PickPrimaryAxis()
     {
-        switch (Random.Range(0, 4))
+        switch (Random.Range(0, 2))
         {
             case 0:
                 return Vector2.right;
-            case 1:
-                return Vector2.left;
-            case 2:
-                return Vector2.up;
             default:
-                return Vector2.down;
+                return Vector2.up;
         }
     }
 
