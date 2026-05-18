@@ -117,7 +117,7 @@ public class ArenaChaosDirector : MonoBehaviour
             }
         }
 
-        if (enablePulseEvents && (enemy == null || !enemy.IsMapEventSuppressed()))
+        if (ShouldRunPulseEvents() && (enemy == null || !enemy.IsMapEventSuppressed()))
         {
             pulseEventTimer -= Time.deltaTime;
             if (pulseEventTimer <= 0f)
@@ -336,10 +336,11 @@ public class ArenaChaosDirector : MonoBehaviour
 
         float halfW = arena.ArenaWidth * 0.5f;
         float halfH = arena.ArenaHeight * 0.5f;
-        float minX = -halfW + edgePadding;
-        float maxX = halfW - edgePadding;
-        float minY = -halfH + edgePadding;
-        float maxY = halfH - edgePadding;
+        Vector2 arenaCenter = transform.position;
+        float minX = arenaCenter.x - halfW + edgePadding;
+        float maxX = arenaCenter.x + halfW - edgePadding;
+        float minY = arenaCenter.y - halfH + edgePadding;
+        float maxY = arenaCenter.y + halfH - edgePadding;
 
         for (int i = 0; i < spawnAttempts; i++)
         {
@@ -509,5 +510,21 @@ public class ArenaChaosDirector : MonoBehaviour
         activeWarningLabel = label;
         warningDuration = Mathf.Max(0.05f, duration);
         warningTimer = warningDuration;
+    }
+
+    private bool ShouldRunPulseEvents()
+    {
+        if (!enablePulseEvents)
+        {
+            return false;
+        }
+
+        if (arena != null && arena.ActiveTheme == ProceduralArenaGenerator.ArenaTheme.RuptureZone)
+        {
+            // Rupture keeps its identity through the dedicated orbital event.
+            return false;
+        }
+
+        return true;
     }
 }
