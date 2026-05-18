@@ -514,17 +514,6 @@ public class ArenaChaosDirector : MonoBehaviour
 
     private bool ShouldRunPulseEvents()
     {
-        if (!enablePulseEvents)
-        {
-            return false;
-        }
-
-        if (arena != null && arena.ActiveTheme == ProceduralArenaGenerator.ArenaTheme.RuptureZone)
-        {
-            // Rupture keeps its identity through the dedicated orbital event.
-            return false;
-        }
-
-        return true;
+        return enablePulseEvents;
     }
 }

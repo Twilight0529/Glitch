@@ -41,6 +41,19 @@ public class LabSweepEventController : MonoBehaviour
     [SerializeField, Range(0.35f, 0.95f)] private float envelopeFactor = 0.75f;
     [SerializeField] private float boundsPadding = 0.08f;
 
+    [Header("Lab Distinctive Event - Sterilization Sweep")]
+    [SerializeField] private bool enableSterilizationSweep = true;
+    [SerializeField] private float sterilizationBandWidth = 2.25f;
+    [SerializeField] private int sterilizationPassesMin = 2;
+    [SerializeField] private int sterilizationPassesMax = 4;
+    [SerializeField, Range(0.2f, 1f)] private float sterilizationSlowMultiplier = 0.62f;
+    [SerializeField] private float sterilizationSlowDuration = 0.24f;
+    [SerializeField] private float sterilizationEnemyBoostMultiplier = 1.18f;
+    [SerializeField] private float sterilizationEnemyBoostDuration = 0.9f;
+    [SerializeField] private float sterilizationEnemyBoostCooldown = 0.33f;
+    [SerializeField] private Color sterilizationColor = new Color(0.98f, 0.57f, 0.63f, 0.68f);
+    [SerializeField] private float sterilizationPulseSpeed = 4.2f;
+
     [Header("Visual Telegraph")]
     [SerializeField, Range(0f, 1f)] private float activeColorPulseStrength = 0.6f;
     [SerializeField, Range(0f, 1f)] private float activeColorLightenAmount = 0.34f;
@@ -68,6 +81,12 @@ public class LabSweepEventController : MonoBehaviour
     private bool initialized;
     private bool eventActive;
     private EnemyController enemyController;
+    private PlayerController playerController;
+    private bool sterilizationAlongX;
+    private int sterilizationPassCount;
+    private float sterilizationEnemyBoostCooldownTimer;
+    private GameObject sterilizationVisualRoot;
+    private SpriteRenderer sterilizationVisualRenderer;
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
@@ -85,6 +104,7 @@ public class LabSweepEventController : MonoBehaviour
     private void OnDisable()
     {
         EndEvent(restoreControllers: true, snapBackToStart: true);
+        DestroySterilizationVisual();
     }
 
     private void Update()
@@ -200,6 +220,11 @@ public class LabSweepEventController : MonoBehaviour
         eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
         eventDuration *= Mathf.Max(0.1f, cadenceDurationMultiplier);
         eventCycles = Random.Range(Mathf.Min(minCycles, maxCycles), Mathf.Max(minCycles, maxCycles) + 1);
+        sterilizationAlongX = !moveAlongX;
+        sterilizationPassCount = RollSterilizationPassCount();
+        sterilizationEnemyBoostCooldownTimer = 0f;
+        EnsureSterilizationVisual();
+        HideSterilizationVisual();
 
         Vector2 center = centerTransform.position;
         float laneStep = Mathf.Max(0.8f, laneHeight);
@@ -282,6 +307,8 @@ public class LabSweepEventController : MonoBehaviour
             float rot = snapshot.startRotationZ + snapshot.rotationOffset * phaseValue;
             RotateTransform(binding, rot);
         }
+
+        TickSterilizationSweep(progress, dt);
         ApplyActiveColorPulse(progress);
 
         if (progress >= 1f)
@@ -331,6 +358,8 @@ public class LabSweepEventController : MonoBehaviour
         snapshots.Clear();
         eventActive = false;
         eventTimer = 0f;
+        sterilizationEnemyBoostCooldownTimer = 0f;
+        HideSterilizationVisual();
     }
 
     private void ApplyActiveColorPulse(float progress)
@@ -545,5 +574,156 @@ public class LabSweepEventController : MonoBehaviour
         }
 
         return enemyController != null && enemyController.IsMapEventSuppressed();
+    }
+
+    private int RollSterilizationPassCount()
+    {
+        int min = Mathf.Max(1, Mathf.Min(sterilizationPassesMin, sterilizationPassesMax));
+        int max = Mathf.Max(min, Mathf.Max(sterilizationPassesMin, sterilizationPassesMax));
+        return Random.Range(min, max + 1);
+    }
+
+    private void TickSterilizationSweep(float progress, float dt)
+    {
+        if (!enableSterilizationSweep)
+        {
+            HideSterilizationVisual();
+            return;
+        }
+
+        if (playerController == null)
+        {
+            playerController = FindAnyObjectByType<PlayerController>();
+        }
+
+        if (enemyController == null)
+        {
+            enemyController = FindAnyObjectByType<EnemyController>();
+        }
+
+        EnsureSterilizationVisual();
+        if (sterilizationVisualRoot == null || sterilizationVisualRenderer == null)
+        {
+            return;
+        }
+
+        if (!sterilizationVisualRoot.activeSelf)
+        {
+            sterilizationVisualRoot.SetActive(true);
+        }
+
+        if (sterilizationEnemyBoostCooldownTimer > 0f)
+        {
+            sterilizationEnemyBoostCooldownTimer -= dt;
+        }
+
+        float raw = progress * Mathf.Max(1, sterilizationPassCount);
+        int passIndex = Mathf.FloorToInt(raw);
+        float passT = raw - passIndex;
+        if ((passIndex & 1) == 1)
+        {
+            passT = 1f - passT;
+        }
+
+        float bandHalf = Mathf.Max(0.2f, sterilizationBandWidth) * 0.5f;
+        float minAxis = sterilizationAlongX ? interiorLeft : interiorBottom;
+        float maxAxis = sterilizationAlongX ? interiorRight : interiorTop;
+        float axisValue = Mathf.Lerp(minAxis, maxAxis, Mathf.Clamp01(passT));
+
+        Vector2 center = new Vector2((interiorLeft + interiorRight) * 0.5f, (interiorBottom + interiorTop) * 0.5f);
+        Vector2 size;
+        if (sterilizationAlongX)
+        {
+            center.x = axisValue;
+            size = new Vector2(Mathf.Max(0.5f, sterilizationBandWidth), Mathf.Max(0.5f, interiorTop - interiorBottom));
+        }
+        else
+        {
+            center.y = axisValue;
+            size = new Vector2(Mathf.Max(0.5f, interiorRight - interiorLeft), Mathf.Max(0.5f, sterilizationBandWidth));
+        }
+
+        sterilizationVisualRoot.transform.position = new Vector3(center.x, center.y, 0f);
+        sterilizationVisualRenderer.size = size;
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Max(0.1f, sterilizationPulseSpeed));
+        Color c = sterilizationColor;
+        c.a = Mathf.Lerp(0.35f, 0.78f, pulse);
+        sterilizationVisualRenderer.color = c;
+
+        if (playerController == null)
+        {
+            return;
+        }
+
+        Vector2 playerPos = playerController.GetPosition();
+        float playerAxis = sterilizationAlongX ? playerPos.x : playerPos.y;
+        bool playerInside = Mathf.Abs(playerAxis - axisValue) <= bandHalf;
+        if (!playerInside)
+        {
+            return;
+        }
+
+        playerController.ApplyMovementSlow(sterilizationSlowMultiplier, sterilizationSlowDuration);
+        if (enemyController != null && sterilizationEnemyBoostCooldownTimer <= 0f)
+        {
+            enemyController.ApplyExternalSpeedModifier(sterilizationEnemyBoostMultiplier, sterilizationEnemyBoostDuration);
+            sterilizationEnemyBoostCooldownTimer = Mathf.Max(0.05f, sterilizationEnemyBoostCooldown);
+        }
+    }
+
+    private void EnsureSterilizationVisual()
+    {
+        if (sterilizationVisualRoot != null && sterilizationVisualRenderer != null)
+        {
+            return;
+        }
+
+        if (sterilizationVisualRoot == null)
+        {
+            sterilizationVisualRoot = new GameObject("LabSterilizationBand");
+        }
+
+        sterilizationVisualRoot.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
+        sterilizationVisualRoot.transform.localScale = Vector3.one;
+
+        sterilizationVisualRenderer = sterilizationVisualRoot.GetComponent<SpriteRenderer>();
+        if (sterilizationVisualRenderer == null)
+        {
+            sterilizationVisualRenderer = sterilizationVisualRoot.AddComponent<SpriteRenderer>();
+        }
+
+        sterilizationVisualRenderer.sprite = SquareSpriteProvider.Get();
+        sterilizationVisualRenderer.drawMode = SpriteDrawMode.Sliced;
+        sterilizationVisualRenderer.sortingOrder = 5;
+        sterilizationVisualRenderer.color = sterilizationColor;
+        sterilizationVisualRoot.SetActive(false);
+    }
+
+    private void HideSterilizationVisual()
+    {
+        if (sterilizationVisualRoot != null && sterilizationVisualRoot.activeSelf)
+        {
+            sterilizationVisualRoot.SetActive(false);
+        }
+    }
+
+    private void DestroySterilizationVisual()
+    {
+        if (sterilizationVisualRoot == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(sterilizationVisualRoot);
+        }
+        else
+        {
+            DestroyImmediate(sterilizationVisualRoot);
+        }
+
+        sterilizationVisualRoot = null;
+        sterilizationVisualRenderer = null;
     }
 }
