@@ -44,23 +44,23 @@ public class StorageSurgeEventController : MonoBehaviour
     [SerializeField] private float laneFlipChance = 0.35f;
     [SerializeField] private float boundsPadding = 0.08f;
 
-    [Header("Storage Distinctive Event - Cargo Lockdown")]
-    [SerializeField] private bool enableCargoLockdown = true;
-    [SerializeField] private Vector2 lockdownStartRange = new Vector2(0.22f, 0.46f);
-    [SerializeField] private Vector2 lockdownDurationRange = new Vector2(0.22f, 0.34f);
-    [SerializeField, Range(0.05f, 0.35f)] private float lockdownTelegraphLead = 0.14f;
-    [SerializeField] private int lockdownLaneCountMin = 1;
-    [SerializeField] private int lockdownLaneCountMax = 2;
-    [SerializeField] private Vector2 lockdownLaneWidthRange = new Vector2(1.55f, 2.45f);
-    [SerializeField] private float lockdownLaneSpacing = 0.9f;
-    [SerializeField, Range(0.2f, 1f)] private float lockdownPlayerSlowMultiplier = 0.56f;
-    [SerializeField] private float lockdownPlayerSlowDuration = 0.2f;
-    [SerializeField] private float lockdownEnemyBoostMultiplier = 1.24f;
-    [SerializeField] private float lockdownEnemyBoostDuration = 0.85f;
-    [SerializeField] private float lockdownEnemyBoostCooldown = 0.28f;
-    [SerializeField] private Color lockdownTelegraphColor = new Color(1f, 0.82f, 0.45f, 0.38f);
-    [SerializeField] private Color lockdownActiveColor = new Color(1f, 0.44f, 0.44f, 0.62f);
-    [SerializeField] private float lockdownPulseSpeed = 5.2f;
+    [Header("Storage Distinctive Event - Conveyor Overload")]
+    [SerializeField] private bool enableConveyorOverload = true;
+    [SerializeField] private Vector2 conveyorStartRange = new Vector2(0.22f, 0.46f);
+    [SerializeField] private Vector2 conveyorDurationRange = new Vector2(0.22f, 0.34f);
+    [SerializeField, Range(0.05f, 0.35f)] private float conveyorTelegraphLead = 0.14f;
+    [SerializeField] private int conveyorLaneCountMin = 1;
+    [SerializeField] private int conveyorLaneCountMax = 2;
+    [SerializeField] private Vector2 conveyorLaneWidthRange = new Vector2(1.55f, 2.45f);
+    [SerializeField] private float conveyorLaneSpacing = 0.9f;
+    [SerializeField] private float conveyorPlayerPushSpeed = 4.8f;
+    [SerializeField] private float conveyorEnemyPushSpeed = 3.9f;
+    [SerializeField] private Color conveyorTelegraphColor = new Color(0.47f, 0.85f, 1f, 0.34f);
+    [SerializeField] private Color conveyorActiveColor = new Color(0.26f, 0.68f, 1f, 0.6f);
+    [SerializeField] private float conveyorPulseSpeed = 5f;
+    [SerializeField] private float conveyorMarkerPulseSpeed = 6.4f;
+    [SerializeField] private Vector2 conveyorMarkerSize = new Vector2(0.36f, 0.12f);
+    [SerializeField] private float conveyorMarkerTravelSpeed = 4.1f;
 
     [Header("Visual Telegraph")]
     [SerializeField, Range(0f, 1f)] private float activeColorPulseStrength = 0.62f;
@@ -88,17 +88,21 @@ public class StorageSurgeEventController : MonoBehaviour
     private float baseRotation;
     private Vector2 surgeAxis;
     private Vector2 lateralAxis;
-    private float lockdownStartT;
-    private float lockdownEndT;
-    private float lockdownEnemyBoostCooldownTimer;
+    private float conveyorStartT;
+    private float conveyorEndT;
     private bool initialized;
     private bool eventActive;
     private EnemyController enemyController;
     private PlayerController playerController;
-    private GameObject lockdownVisualRoot;
-    private readonly List<SpriteRenderer> lockdownLaneRenderers = new List<SpriteRenderer>();
-    private readonly List<float> lockdownLaneCenters = new List<float>();
-    private readonly List<float> lockdownLaneHalfWidths = new List<float>();
+    private Rigidbody2D playerRigidbody;
+    private Rigidbody2D enemyRigidbody;
+    private GameObject conveyorVisualRoot;
+    private readonly List<SpriteRenderer> conveyorLaneRenderers = new List<SpriteRenderer>();
+    private readonly List<SpriteRenderer> conveyorLaneMarkers = new List<SpriteRenderer>();
+    private readonly List<float> conveyorLaneCenters = new List<float>();
+    private readonly List<float> conveyorLaneHalfWidths = new List<float>();
+    private readonly List<float> conveyorLaneMarkerPhases = new List<float>();
+    private readonly List<Vector2> conveyorLaneDirections = new List<Vector2>();
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
@@ -116,7 +120,7 @@ public class StorageSurgeEventController : MonoBehaviour
     private void OnDisable()
     {
         EndEvent(restoreControllers: true, snapBackToStart: true);
-        DestroyCargoLockdownVisuals();
+        DestroyConveyorVisuals();
     }
 
     private void Update()
@@ -234,10 +238,9 @@ public class StorageSurgeEventController : MonoBehaviour
         eventDuration *= Mathf.Max(0.1f, cadenceDurationMultiplier);
         baseDisplacement = Random.Range(Mathf.Min(displacementRange.x, displacementRange.y), Mathf.Max(displacementRange.x, displacementRange.y));
         baseRotation = Random.Range(Mathf.Min(rotationRange.x, rotationRange.y), Mathf.Max(rotationRange.x, rotationRange.y));
-        lockdownEnemyBoostCooldownTimer = 0f;
-        BuildCargoLockdownLayout();
-        EnsureCargoLockdownVisuals();
-        HideCargoLockdownVisuals();
+        BuildConveyorLayout();
+        EnsureConveyorVisuals();
+        HideConveyorVisuals();
 
         float laneStep = Mathf.Max(1f, laneHeight);
         bool flipAllLanes = Random.value < Mathf.Clamp01(laneFlipChance);
@@ -353,7 +356,7 @@ public class StorageSurgeEventController : MonoBehaviour
             RotateTransform(binding, rot);
         }
 
-        TickCargoLockdown(eventProgress, dt);
+        TickConveyorOverload(eventProgress, dt);
         ApplyActiveColorPulse(eventProgress);
 
         if (eventProgress >= 1f)
@@ -403,8 +406,7 @@ public class StorageSurgeEventController : MonoBehaviour
         snapshots.Clear();
         eventActive = false;
         eventTimer = 0f;
-        lockdownEnemyBoostCooldownTimer = 0f;
-        HideCargoLockdownVisuals();
+        HideConveyorVisuals();
     }
 
     private void ApplyActiveColorPulse(float progress)
@@ -470,46 +472,46 @@ public class StorageSurgeEventController : MonoBehaviour
         }
     }
 
-    private void BuildCargoLockdownLayout()
+    private void BuildConveyorLayout()
     {
-        lockdownLaneCenters.Clear();
-        lockdownLaneHalfWidths.Clear();
+        conveyorLaneCenters.Clear();
+        conveyorLaneHalfWidths.Clear();
+        conveyorLaneDirections.Clear();
+        conveyorLaneMarkerPhases.Clear();
 
-        if (!enableCargoLockdown)
+        if (!enableConveyorOverload)
         {
             return;
         }
 
-        float startMin = Mathf.Clamp01(Mathf.Min(lockdownStartRange.x, lockdownStartRange.y));
-        float startMax = Mathf.Clamp01(Mathf.Max(lockdownStartRange.x, lockdownStartRange.y));
-        lockdownStartT = Random.Range(startMin, startMax);
+        float startMin = Mathf.Clamp01(Mathf.Min(conveyorStartRange.x, conveyorStartRange.y));
+        float startMax = Mathf.Clamp01(Mathf.Max(conveyorStartRange.x, conveyorStartRange.y));
+        conveyorStartT = Random.Range(startMin, startMax);
 
-        float durationMinT = Mathf.Clamp01(Mathf.Min(lockdownDurationRange.x, lockdownDurationRange.y));
-        float durationMaxT = Mathf.Clamp01(Mathf.Max(lockdownDurationRange.x, lockdownDurationRange.y));
+        float durationMinT = Mathf.Clamp01(Mathf.Min(conveyorDurationRange.x, conveyorDurationRange.y));
+        float durationMaxT = Mathf.Clamp01(Mathf.Max(conveyorDurationRange.x, conveyorDurationRange.y));
         float durationT = Random.Range(durationMinT, durationMaxT);
-        lockdownEndT = Mathf.Clamp(lockdownStartT + durationT, lockdownStartT + 0.06f, 0.96f);
+        conveyorEndT = Mathf.Clamp(conveyorStartT + durationT, conveyorStartT + 0.08f, 0.97f);
 
         float axisMin = Mathf.Abs(surgeAxis.x) > 0.5f ? interiorBottom : interiorLeft;
         float axisMax = Mathf.Abs(surgeAxis.x) > 0.5f ? interiorTop : interiorRight;
-        float axisSpan = Mathf.Max(0.75f, axisMax - axisMin);
-
-        int minCount = Mathf.Max(1, Mathf.Min(lockdownLaneCountMin, lockdownLaneCountMax));
-        int maxCount = Mathf.Max(minCount, Mathf.Max(lockdownLaneCountMin, lockdownLaneCountMax));
+        int minCount = Mathf.Max(1, Mathf.Min(conveyorLaneCountMin, conveyorLaneCountMax));
+        int maxCount = Mathf.Max(minCount, Mathf.Max(conveyorLaneCountMin, conveyorLaneCountMax));
         int laneCount = Random.Range(minCount, maxCount + 1);
 
-        float halfWidthFloor = Mathf.Max(0.22f, Mathf.Min(lockdownLaneWidthRange.x, lockdownLaneWidthRange.y) * 0.5f);
-        float halfWidthCeil = Mathf.Max(halfWidthFloor, Mathf.Max(lockdownLaneWidthRange.x, lockdownLaneWidthRange.y) * 0.5f);
+        float halfWidthFloor = Mathf.Max(0.24f, Mathf.Min(conveyorLaneWidthRange.x, conveyorLaneWidthRange.y) * 0.5f);
+        float halfWidthCeil = Mathf.Max(halfWidthFloor, Mathf.Max(conveyorLaneWidthRange.x, conveyorLaneWidthRange.y) * 0.5f);
 
         int attempts = Mathf.Max(8, laneCount * 24);
-        for (int i = 0; i < attempts && lockdownLaneCenters.Count < laneCount; i++)
+        for (int i = 0; i < attempts && conveyorLaneCenters.Count < laneCount; i++)
         {
             float halfWidth = Random.Range(halfWidthFloor, halfWidthCeil);
             float center = Random.Range(axisMin + halfWidth, axisMax - halfWidth);
             bool overlaps = false;
-            for (int j = 0; j < lockdownLaneCenters.Count; j++)
+            for (int j = 0; j < conveyorLaneCenters.Count; j++)
             {
-                float requiredGap = lockdownLaneHalfWidths[j] + halfWidth + Mathf.Max(0f, lockdownLaneSpacing);
-                if (Mathf.Abs(center - lockdownLaneCenters[j]) < requiredGap)
+                float requiredGap = conveyorLaneHalfWidths[j] + halfWidth + Mathf.Max(0f, conveyorLaneSpacing);
+                if (Mathf.Abs(center - conveyorLaneCenters[j]) < requiredGap)
                 {
                     overlaps = true;
                     break;
@@ -521,62 +523,46 @@ public class StorageSurgeEventController : MonoBehaviour
                 continue;
             }
 
-            lockdownLaneCenters.Add(center);
-            lockdownLaneHalfWidths.Add(halfWidth);
+            conveyorLaneCenters.Add(center);
+            conveyorLaneHalfWidths.Add(halfWidth);
+            float dirSign = ((i & 1) == 0) ? 1f : -1f;
+            conveyorLaneDirections.Add(surgeAxis * dirSign);
+            conveyorLaneMarkerPhases.Add(Random.value);
         }
 
-        if (lockdownLaneCenters.Count == 0)
+        if (conveyorLaneCenters.Count == 0)
         {
-            lockdownLaneCenters.Add((axisMin + axisMax) * 0.5f);
-            lockdownLaneHalfWidths.Add(Mathf.Min(halfWidthCeil, axisSpan * 0.22f));
-            return;
-        }
-
-        if (lockdownLaneCenters.Count < laneCount)
-        {
-            lockdownLaneCenters.Sort();
-            int missing = laneCount - lockdownLaneCenters.Count;
-            for (int i = 0; i < missing; i++)
-            {
-                float t = (i + 1f) / (missing + 1f);
-                float center = Mathf.Lerp(axisMin + halfWidthFloor, axisMax - halfWidthFloor, t);
-                lockdownLaneCenters.Add(center);
-                lockdownLaneHalfWidths.Add(halfWidthFloor);
-            }
+            conveyorLaneCenters.Add((axisMin + axisMax) * 0.5f);
+            conveyorLaneHalfWidths.Add(halfWidthFloor);
+            conveyorLaneDirections.Add(surgeAxis);
+            conveyorLaneMarkerPhases.Add(Random.value);
         }
     }
 
-    private void TickCargoLockdown(float eventProgress, float dt)
+    private void TickConveyorOverload(float eventProgress, float dt)
     {
-        if (!enableCargoLockdown || lockdownLaneCenters.Count == 0)
+        if (!enableConveyorOverload || conveyorLaneCenters.Count == 0)
         {
-            HideCargoLockdownVisuals();
+            HideConveyorVisuals();
             return;
         }
 
-        EnsureCargoLockdownVisuals();
-        if (lockdownVisualRoot == null || lockdownLaneRenderers.Count == 0)
+        EnsureConveyorVisuals();
+        if (conveyorVisualRoot == null || conveyorLaneRenderers.Count == 0)
         {
             return;
         }
 
-        if (lockdownEnemyBoostCooldownTimer > 0f)
-        {
-            lockdownEnemyBoostCooldownTimer -= dt;
-        }
-
-        float telegraphStartT = Mathf.Clamp01(lockdownStartT - Mathf.Clamp01(lockdownTelegraphLead));
-        bool inTelegraph = eventProgress >= telegraphStartT && eventProgress < lockdownStartT;
-        bool inActive = eventProgress >= lockdownStartT && eventProgress <= lockdownEndT;
-
+        float telegraphStartT = Mathf.Clamp01(conveyorStartT - Mathf.Clamp01(conveyorTelegraphLead));
+        bool inTelegraph = eventProgress >= telegraphStartT && eventProgress < conveyorStartT;
+        bool inActive = eventProgress >= conveyorStartT && eventProgress <= conveyorEndT;
         if (!inTelegraph && !inActive)
         {
-            HideCargoLockdownVisuals();
+            HideConveyorVisuals();
             return;
         }
 
-        UpdateCargoLockdownVisuals(inTelegraph, inActive);
-
+        UpdateConveyorVisuals(inTelegraph, inActive, dt);
         if (!inActive)
         {
             return;
@@ -586,152 +572,208 @@ public class StorageSurgeEventController : MonoBehaviour
         {
             playerController = FindAnyObjectByType<PlayerController>();
         }
-
         if (enemyController == null)
         {
             enemyController = FindAnyObjectByType<EnemyController>();
         }
+        if (playerRigidbody == null && playerController != null)
+        {
+            playerRigidbody = playerController.GetComponent<Rigidbody2D>();
+        }
+        if (enemyRigidbody == null && enemyController != null)
+        {
+            enemyRigidbody = enemyController.GetComponent<Rigidbody2D>();
+        }
 
-        if (playerController == null)
+        ApplyConveyorDriftToActor(playerController != null ? playerController.transform : null, playerRigidbody, conveyorPlayerPushSpeed, dt);
+        ApplyConveyorDriftToActor(enemyController != null ? enemyController.transform : null, enemyRigidbody, conveyorEnemyPushSpeed, dt);
+    }
+
+    private void ApplyConveyorDriftToActor(Transform actor, Rigidbody2D actorRb, float pushSpeed, float dt)
+    {
+        if (actor == null || pushSpeed <= 0f || conveyorLaneCenters.Count == 0)
         {
             return;
         }
 
-        Vector2 playerPos = playerController.GetPosition();
-        float playerAxisCoord = Mathf.Abs(surgeAxis.x) > 0.5f ? playerPos.y : playerPos.x;
-        for (int i = 0; i < lockdownLaneCenters.Count; i++)
+        Vector2 pos = actor.position;
+        float actorAxisCoord = Mathf.Abs(surgeAxis.x) > 0.5f ? pos.y : pos.x;
+        for (int i = 0; i < conveyorLaneCenters.Count; i++)
         {
-            if (Mathf.Abs(playerAxisCoord - lockdownLaneCenters[i]) > lockdownLaneHalfWidths[i])
+            if (i >= conveyorLaneHalfWidths.Count || i >= conveyorLaneDirections.Count)
             {
                 continue;
             }
 
-            playerController.ApplyMovementSlow(lockdownPlayerSlowMultiplier, lockdownPlayerSlowDuration);
-            if (enemyController != null && lockdownEnemyBoostCooldownTimer <= 0f)
+            if (Mathf.Abs(actorAxisCoord - conveyorLaneCenters[i]) > conveyorLaneHalfWidths[i])
             {
-                enemyController.ApplyExternalSpeedModifier(lockdownEnemyBoostMultiplier, lockdownEnemyBoostDuration);
-                lockdownEnemyBoostCooldownTimer = Mathf.Max(0.05f, lockdownEnemyBoostCooldown);
+                continue;
+            }
+
+            Vector2 drift = conveyorLaneDirections[i].normalized * pushSpeed * dt;
+            Vector2 target = ClampToInterior(pos + drift, 0.15f);
+            if (actorRb != null && actorRb.bodyType == RigidbodyType2D.Kinematic)
+            {
+                actorRb.MovePosition(target);
+            }
+            else
+            {
+                actor.position = new Vector3(target.x, target.y, actor.position.z);
             }
 
             break;
         }
     }
 
-    private void EnsureCargoLockdownVisuals()
+    private void EnsureConveyorVisuals()
     {
-        if (lockdownVisualRoot == null)
+        if (conveyorVisualRoot == null)
         {
-            lockdownVisualRoot = new GameObject("StorageCargoLockdown");
-            lockdownVisualRoot.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
-            lockdownVisualRoot.transform.localScale = Vector3.one;
-            lockdownVisualRoot.SetActive(false);
+            conveyorVisualRoot = new GameObject("StorageConveyorOverload");
+            conveyorVisualRoot.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
+            conveyorVisualRoot.transform.localScale = Vector3.one;
+            conveyorVisualRoot.SetActive(false);
         }
 
-        while (lockdownLaneRenderers.Count > lockdownLaneCenters.Count)
+        while (conveyorLaneRenderers.Count > conveyorLaneCenters.Count)
         {
-            int last = lockdownLaneRenderers.Count - 1;
-            SpriteRenderer renderer = lockdownLaneRenderers[last];
-            lockdownLaneRenderers.RemoveAt(last);
-            if (renderer != null)
+            int last = conveyorLaneRenderers.Count - 1;
+            SpriteRenderer lane = conveyorLaneRenderers[last];
+            conveyorLaneRenderers.RemoveAt(last);
+            if (lane != null)
             {
-                if (Application.isPlaying)
-                {
-                    Destroy(renderer.gameObject);
-                }
-                else
-                {
-                    DestroyImmediate(renderer.gameObject);
-                }
+                if (Application.isPlaying) Destroy(lane.gameObject); else DestroyImmediate(lane.gameObject);
             }
         }
 
-        while (lockdownLaneRenderers.Count < lockdownLaneCenters.Count)
+        while (conveyorLaneMarkers.Count > conveyorLaneCenters.Count)
         {
-            GameObject lane = new GameObject($"LockdownLane_{lockdownLaneRenderers.Count}");
-            lane.transform.SetParent(lockdownVisualRoot.transform, false);
-            SpriteRenderer sr = lane.AddComponent<SpriteRenderer>();
-            sr.sprite = SquareSpriteProvider.Get();
-            sr.drawMode = SpriteDrawMode.Sliced;
-            sr.sortingOrder = 8;
-            lockdownLaneRenderers.Add(sr);
+            int last = conveyorLaneMarkers.Count - 1;
+            SpriteRenderer marker = conveyorLaneMarkers[last];
+            conveyorLaneMarkers.RemoveAt(last);
+            if (marker != null)
+            {
+                if (Application.isPlaying) Destroy(marker.gameObject); else DestroyImmediate(marker.gameObject);
+            }
+        }
+
+        while (conveyorLaneRenderers.Count < conveyorLaneCenters.Count)
+        {
+            int idx = conveyorLaneRenderers.Count;
+            GameObject lane = new GameObject($"ConveyorLane_{idx}");
+            lane.transform.SetParent(conveyorVisualRoot.transform, false);
+            SpriteRenderer laneSr = lane.AddComponent<SpriteRenderer>();
+            laneSr.sprite = SquareSpriteProvider.Get();
+            laneSr.drawMode = SpriteDrawMode.Sliced;
+            laneSr.sortingOrder = 8;
+            conveyorLaneRenderers.Add(laneSr);
+
+            GameObject marker = new GameObject($"ConveyorMarker_{idx}");
+            marker.transform.SetParent(conveyorVisualRoot.transform, false);
+            SpriteRenderer markerSr = marker.AddComponent<SpriteRenderer>();
+            markerSr.sprite = SquareSpriteProvider.Get();
+            markerSr.drawMode = SpriteDrawMode.Sliced;
+            markerSr.sortingOrder = 9;
+            conveyorLaneMarkers.Add(markerSr);
         }
     }
 
-    private void UpdateCargoLockdownVisuals(bool inTelegraph, bool inActive)
+    private void UpdateConveyorVisuals(bool inTelegraph, bool inActive, float dt)
     {
-        if (lockdownVisualRoot == null)
+        if (conveyorVisualRoot == null)
         {
             return;
         }
 
-        if (!lockdownVisualRoot.activeSelf)
+        if (!conveyorVisualRoot.activeSelf)
         {
-            lockdownVisualRoot.SetActive(true);
+            conveyorVisualRoot.SetActive(true);
         }
 
         float fullWidth = Mathf.Max(0.4f, interiorRight - interiorLeft);
         float fullHeight = Mathf.Max(0.4f, interiorTop - interiorBottom);
         float centerX = (interiorLeft + interiorRight) * 0.5f;
         float centerY = (interiorBottom + interiorTop) * 0.5f;
-        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Max(0.1f, lockdownPulseSpeed));
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Max(0.1f, conveyorPulseSpeed));
+        float markerPulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Max(0.1f, conveyorMarkerPulseSpeed));
+        float markerTravelHalfSpan = Mathf.Abs(surgeAxis.x) > 0.5f ? fullWidth * 0.45f : fullHeight * 0.45f;
 
-        for (int i = 0; i < lockdownLaneRenderers.Count; i++)
+        for (int i = 0; i < conveyorLaneRenderers.Count; i++)
         {
-            SpriteRenderer sr = lockdownLaneRenderers[i];
-            if (sr == null || i >= lockdownLaneCenters.Count || i >= lockdownLaneHalfWidths.Count)
+            if (i >= conveyorLaneCenters.Count || i >= conveyorLaneHalfWidths.Count || i >= conveyorLaneDirections.Count)
             {
                 continue;
             }
 
-            float laneCenter = lockdownLaneCenters[i];
-            float laneHalfWidth = lockdownLaneHalfWidths[i];
+            SpriteRenderer lane = conveyorLaneRenderers[i];
+            SpriteRenderer marker = i < conveyorLaneMarkers.Count ? conveyorLaneMarkers[i] : null;
+            if (lane == null)
+            {
+                continue;
+            }
+
+            float laneCenter = conveyorLaneCenters[i];
+            float laneHalfWidth = conveyorLaneHalfWidths[i];
+            Vector2 dir = conveyorLaneDirections[i].normalized;
             if (Mathf.Abs(surgeAxis.x) > 0.5f)
             {
-                sr.transform.position = new Vector3(centerX, laneCenter, 0f);
-                sr.size = new Vector2(fullWidth, Mathf.Max(0.2f, laneHalfWidth * 2f));
+                lane.transform.position = new Vector3(centerX, laneCenter, 0f);
+                lane.size = new Vector2(fullWidth, Mathf.Max(0.2f, laneHalfWidth * 2f));
             }
             else
             {
-                sr.transform.position = new Vector3(laneCenter, centerY, 0f);
-                sr.size = new Vector2(Mathf.Max(0.2f, laneHalfWidth * 2f), fullHeight);
+                lane.transform.position = new Vector3(laneCenter, centerY, 0f);
+                lane.size = new Vector2(Mathf.Max(0.2f, laneHalfWidth * 2f), fullHeight);
             }
 
-            Color baseColor = inActive ? lockdownActiveColor : lockdownTelegraphColor;
-            float alpha = inActive
-                ? Mathf.Lerp(0.35f, 0.78f, pulse)
-                : Mathf.Lerp(0.16f, 0.5f, pulse);
-            baseColor.a = alpha;
-            sr.color = baseColor;
+            Color laneColor = inActive ? conveyorActiveColor : conveyorTelegraphColor;
+            laneColor.a = inActive ? Mathf.Lerp(0.32f, 0.72f, pulse) : Mathf.Lerp(0.14f, 0.42f, pulse);
+            lane.color = laneColor;
+
+            if (marker == null)
+            {
+                continue;
+            }
+
+            conveyorLaneMarkerPhases[i] = Mathf.Repeat(
+                conveyorLaneMarkerPhases[i] + (dt * Mathf.Max(0.1f, conveyorMarkerTravelSpeed)),
+                1f);
+            float markerOffset = Mathf.Lerp(-markerTravelHalfSpan, markerTravelHalfSpan, conveyorLaneMarkerPhases[i]);
+            Vector2 laneCenterPos = (Mathf.Abs(surgeAxis.x) > 0.5f)
+                ? new Vector2(centerX, laneCenter)
+                : new Vector2(laneCenter, centerY);
+            Vector2 markerPos = laneCenterPos + dir * markerOffset;
+            marker.transform.position = new Vector3(markerPos.x, markerPos.y, 0f);
+            marker.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg);
+            marker.size = conveyorMarkerSize;
+            Color markerColor = inActive ? Color.Lerp(conveyorActiveColor, Color.white, 0.35f) : Color.Lerp(conveyorTelegraphColor, Color.white, 0.22f);
+            markerColor.a = inActive ? Mathf.Lerp(0.45f, 0.9f, markerPulse) : Mathf.Lerp(0.2f, 0.5f, markerPulse);
+            marker.color = markerColor;
         }
     }
 
-    private void HideCargoLockdownVisuals()
+    private void HideConveyorVisuals()
     {
-        if (lockdownVisualRoot != null && lockdownVisualRoot.activeSelf)
+        if (conveyorVisualRoot != null && conveyorVisualRoot.activeSelf)
         {
-            lockdownVisualRoot.SetActive(false);
+            conveyorVisualRoot.SetActive(false);
         }
     }
 
-    private void DestroyCargoLockdownVisuals()
+    private void DestroyConveyorVisuals()
     {
-        if (lockdownVisualRoot != null)
+        if (conveyorVisualRoot != null)
         {
-            if (Application.isPlaying)
-            {
-                Destroy(lockdownVisualRoot);
-            }
-            else
-            {
-                DestroyImmediate(lockdownVisualRoot);
-            }
-
-            lockdownVisualRoot = null;
+            if (Application.isPlaying) Destroy(conveyorVisualRoot); else DestroyImmediate(conveyorVisualRoot);
+            conveyorVisualRoot = null;
         }
 
-        lockdownLaneRenderers.Clear();
-        lockdownLaneCenters.Clear();
-        lockdownLaneHalfWidths.Clear();
+        conveyorLaneRenderers.Clear();
+        conveyorLaneMarkers.Clear();
+        conveyorLaneCenters.Clear();
+        conveyorLaneHalfWidths.Clear();
+        conveyorLaneMarkerPhases.Clear();
+        conveyorLaneDirections.Clear();
     }
 
     private static Vector2 PickPrimaryAxis()
