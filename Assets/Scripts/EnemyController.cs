@@ -819,6 +819,8 @@ public class EnemyController : MonoBehaviour
             fullOptions.Add(new StateWeight(AnomalyState.Destroyer, destroyerWeight));
         }
 
+        ApplyProgressionFilter(fullOptions);
+
         List<StateWeight> filtered = new List<StateWeight>(fullOptions);
         ApplyPacingFilter(filtered);
 
@@ -895,6 +897,29 @@ public class EnemyController : MonoBehaviour
         return state == AnomalyState.DirectChase ||
                state == AnomalyState.PredictiveIntercept ||
                state == AnomalyState.CutoffFlank;
+    }
+
+    private void ApplyProgressionFilter(List<StateWeight> options)
+    {
+        if (options == null || options.Count == 0)
+        {
+            return;
+        }
+
+        bool specialUnlocked = gameManager != null && gameManager.AreBossSpecialStatesUnlocked;
+        if (!specialUnlocked)
+        {
+            options.RemoveAll(o => IsPre60SpecialState(o.state));
+        }
+    }
+
+    private static bool IsPre60SpecialState(AnomalyState state)
+    {
+        return state == AnomalyState.Split ||
+               state == AnomalyState.ExpansionShoot ||
+               state == AnomalyState.SpeedSurge ||
+               state == AnomalyState.WeaveHunter ||
+               state == AnomalyState.Destroyer;
     }
 
     public bool IsMapEventSuppressed()

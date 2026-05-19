@@ -55,6 +55,7 @@ public class ArenaChaosDirector : MonoBehaviour
     private string activeWarningLabel = string.Empty;
     private float warningTimer;
     private float warningDuration;
+    private bool pulseWasUnlocked;
 
     private Transform runtimeRoot;
 
@@ -68,6 +69,7 @@ public class ArenaChaosDirector : MonoBehaviour
         RefreshReferences();
         EnsureRuntimeRoot();
         ClearRuntimeObjects();
+        pulseWasUnlocked = false;
         SchedulePowerup();
         SchedulePulseEvent();
     }
@@ -81,6 +83,7 @@ public class ArenaChaosDirector : MonoBehaviour
 
         RefreshReferences();
         EnsureRuntimeRoot();
+        pulseWasUnlocked = false;
         SchedulePowerup();
         SchedulePulseEvent();
     }
@@ -117,7 +120,14 @@ public class ArenaChaosDirector : MonoBehaviour
             }
         }
 
-        if (ShouldRunPulseEvents() && (enemy == null || !enemy.IsMapEventSuppressed()))
+        bool pulseUnlocked = ShouldRunPulseEvents();
+        if (pulseUnlocked && !pulseWasUnlocked)
+        {
+            pulseEventTimer = Mathf.Min(pulseEventTimer, 0.75f);
+        }
+        pulseWasUnlocked = pulseUnlocked;
+
+        if (pulseUnlocked && (enemy == null || !enemy.IsMapEventSuppressed()))
         {
             pulseEventTimer -= Time.deltaTime;
             if (pulseEventTimer <= 0f)
@@ -514,6 +524,6 @@ public class ArenaChaosDirector : MonoBehaviour
 
     private bool ShouldRunPulseEvents()
     {
-        return enablePulseEvents;
+        return enablePulseEvents && gameManager != null && gameManager.IsContainmentPulseUnlocked;
     }
 }

@@ -23,6 +23,11 @@ public class GameManager : MonoBehaviour
     [SerializeField] private bool chaosTempoEnabled = true;
     [SerializeField, Range(0.45f, 1f)] private float chaosBehaviorIntervalMultiplier = 0.72f;
 
+    [Header("Progression Gates")]
+    [SerializeField] private float bossSpecialStatesUnlockTime = 30f;
+    [SerializeField] private float mapEventsUnlockTime = 60f;
+    [SerializeField] private float containmentPulseUnlockTime = 90f;
+
     [Header("Countdown Theme")]
     [SerializeField] private float countdownPulseSpeed = 2.1f;
     [SerializeField, Range(0f, 1f)] private float countdownBackdropOpacity = 0.33f;
@@ -41,6 +46,9 @@ public class GameManager : MonoBehaviour
     public float SurvivalTime { get; private set; }
     public float DifficultyMultiplier => 1f + (SurvivalTime * difficultyRampPerSecond);
     public string CurrentLevelTypeLabel => levelType;
+    public bool AreBossSpecialStatesUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, bossSpecialStatesUnlockTime);
+    public bool AreMapEventsUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, mapEventsUnlockTime);
+    public bool IsContainmentPulseUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, containmentPulseUnlockTime);
 
     public float CurrentBehaviorChangeInterval
     {

@@ -92,7 +92,9 @@ public class StorageSurgeEventController : MonoBehaviour
     private float conveyorEndT;
     private bool initialized;
     private bool eventActive;
+    private bool mapEventsWereUnlocked;
     private EnemyController enemyController;
+    private GameManager gameManager;
     private PlayerController playerController;
     private Rigidbody2D playerRigidbody;
     private Rigidbody2D enemyRigidbody;
@@ -128,6 +130,24 @@ public class StorageSurgeEventController : MonoBehaviour
         if (!initialized || centerTransform == null)
         {
             return;
+        }
+
+        if (!IsMapEventsUnlocked())
+        {
+            mapEventsWereUnlocked = false;
+            if (eventActive)
+            {
+                EndEvent(restoreControllers: true, snapBackToStart: true);
+                ScheduleNextEvent();
+            }
+
+            return;
+        }
+
+        if (!mapEventsWereUnlocked)
+        {
+            mapEventsWereUnlocked = true;
+            nextEventTimer = Mathf.Min(nextEventTimer, 0.75f);
         }
 
         if (IsMapEventSuppressed())
@@ -832,5 +852,15 @@ public class StorageSurgeEventController : MonoBehaviour
         }
 
         return enemyController != null && enemyController.IsMapEventSuppressed();
+    }
+
+    private bool IsMapEventsUnlocked()
+    {
+        if (gameManager == null)
+        {
+            gameManager = FindAnyObjectByType<GameManager>();
+        }
+
+        return gameManager != null && gameManager.AreMapEventsUnlocked;
     }
 }

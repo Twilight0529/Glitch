@@ -93,7 +93,9 @@ public class LabSweepEventController : MonoBehaviour
     private bool moveAlongX;
     private bool initialized;
     private bool eventActive;
+    private bool mapEventsWereUnlocked;
     private EnemyController enemyController;
+    private GameManager gameManager;
     private PlayerController playerController;
     private bool sterilizationAlongX;
     private int sterilizationPassCount;
@@ -132,6 +134,24 @@ public class LabSweepEventController : MonoBehaviour
         if (!initialized || centerTransform == null)
         {
             return;
+        }
+
+        if (!IsMapEventsUnlocked())
+        {
+            mapEventsWereUnlocked = false;
+            if (eventActive)
+            {
+                EndEvent(restoreControllers: true, snapBackToStart: true);
+                ScheduleNextEvent();
+            }
+
+            return;
+        }
+
+        if (!mapEventsWereUnlocked)
+        {
+            mapEventsWereUnlocked = true;
+            nextEventTimer = Mathf.Min(nextEventTimer, 0.75f);
         }
 
         if (IsMapEventSuppressed())
@@ -526,6 +546,16 @@ public class LabSweepEventController : MonoBehaviour
         }
 
         return enemyController != null && enemyController.IsMapEventSuppressed();
+    }
+
+    private bool IsMapEventsUnlocked()
+    {
+        if (gameManager == null)
+        {
+            gameManager = FindAnyObjectByType<GameManager>();
+        }
+
+        return gameManager != null && gameManager.AreMapEventsUnlocked;
     }
 
     private int RollSterilizationPassCount()

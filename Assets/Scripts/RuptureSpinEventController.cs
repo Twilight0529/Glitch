@@ -76,7 +76,9 @@ public class RuptureSpinEventController : MonoBehaviour
     private float safeNegativeAngleDeg;
     private bool initialized;
     private bool eventActive;
+    private bool mapEventsWereUnlocked;
     private EnemyController enemyController;
+    private GameManager gameManager;
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
@@ -107,6 +109,24 @@ public class RuptureSpinEventController : MonoBehaviour
         if (!initialized || centerTransform == null)
         {
             return;
+        }
+
+        if (!IsMapEventsUnlocked())
+        {
+            mapEventsWereUnlocked = false;
+            if (eventActive)
+            {
+                EndEvent(restoreControllers: true);
+                ScheduleNextEvent();
+            }
+
+            return;
+        }
+
+        if (!mapEventsWereUnlocked)
+        {
+            mapEventsWereUnlocked = true;
+            nextEventTimer = Mathf.Min(nextEventTimer, 0.75f);
         }
 
         if (IsMapEventSuppressed())
@@ -707,5 +727,15 @@ public class RuptureSpinEventController : MonoBehaviour
         }
 
         return enemyController != null && enemyController.IsMapEventSuppressed();
+    }
+
+    private bool IsMapEventsUnlocked()
+    {
+        if (gameManager == null)
+        {
+            gameManager = FindAnyObjectByType<GameManager>();
+        }
+
+        return gameManager != null && gameManager.AreMapEventsUnlocked;
     }
 }
