@@ -44,6 +44,24 @@ public class StorageSurgeEventController : MonoBehaviour
     [SerializeField] private float laneFlipChance = 0.35f;
     [SerializeField] private float boundsPadding = 0.08f;
 
+    [Header("Storage Distinctive Event - Cargo Lockdown")]
+    [SerializeField] private bool enableCargoLockdown = true;
+    [SerializeField] private Vector2 lockdownStartRange = new Vector2(0.22f, 0.46f);
+    [SerializeField] private Vector2 lockdownDurationRange = new Vector2(0.22f, 0.34f);
+    [SerializeField, Range(0.05f, 0.35f)] private float lockdownTelegraphLead = 0.14f;
+    [SerializeField] private int lockdownLaneCountMin = 1;
+    [SerializeField] private int lockdownLaneCountMax = 2;
+    [SerializeField] private Vector2 lockdownLaneWidthRange = new Vector2(1.55f, 2.45f);
+    [SerializeField] private float lockdownLaneSpacing = 0.9f;
+    [SerializeField, Range(0.2f, 1f)] private float lockdownPlayerSlowMultiplier = 0.56f;
+    [SerializeField] private float lockdownPlayerSlowDuration = 0.2f;
+    [SerializeField] private float lockdownEnemyBoostMultiplier = 1.24f;
+    [SerializeField] private float lockdownEnemyBoostDuration = 0.85f;
+    [SerializeField] private float lockdownEnemyBoostCooldown = 0.28f;
+    [SerializeField] private Color lockdownTelegraphColor = new Color(1f, 0.82f, 0.45f, 0.38f);
+    [SerializeField] private Color lockdownActiveColor = new Color(1f, 0.44f, 0.44f, 0.62f);
+    [SerializeField] private float lockdownPulseSpeed = 5.2f;
+
     [Header("Visual Telegraph")]
     [SerializeField, Range(0f, 1f)] private float activeColorPulseStrength = 0.62f;
     [SerializeField, Range(0f, 1f)] private float activeColorLightenAmount = 0.36f;
@@ -70,9 +88,17 @@ public class StorageSurgeEventController : MonoBehaviour
     private float baseRotation;
     private Vector2 surgeAxis;
     private Vector2 lateralAxis;
+    private float lockdownStartT;
+    private float lockdownEndT;
+    private float lockdownEnemyBoostCooldownTimer;
     private bool initialized;
     private bool eventActive;
     private EnemyController enemyController;
+    private PlayerController playerController;
+    private GameObject lockdownVisualRoot;
+    private readonly List<SpriteRenderer> lockdownLaneRenderers = new List<SpriteRenderer>();
+    private readonly List<float> lockdownLaneCenters = new List<float>();
+    private readonly List<float> lockdownLaneHalfWidths = new List<float>();
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
@@ -90,6 +116,7 @@ public class StorageSurgeEventController : MonoBehaviour
     private void OnDisable()
     {
         EndEvent(restoreControllers: true, snapBackToStart: true);
+        DestroyCargoLockdownVisuals();
     }
 
     private void Update()
@@ -207,6 +234,10 @@ public class StorageSurgeEventController : MonoBehaviour
         eventDuration *= Mathf.Max(0.1f, cadenceDurationMultiplier);
         baseDisplacement = Random.Range(Mathf.Min(displacementRange.x, displacementRange.y), Mathf.Max(displacementRange.x, displacementRange.y));
         baseRotation = Random.Range(Mathf.Min(rotationRange.x, rotationRange.y), Mathf.Max(rotationRange.x, rotationRange.y));
+        lockdownEnemyBoostCooldownTimer = 0f;
+        BuildCargoLockdownLayout();
+        EnsureCargoLockdownVisuals();
+        HideCargoLockdownVisuals();
 
         float laneStep = Mathf.Max(1f, laneHeight);
         bool flipAllLanes = Random.value < Mathf.Clamp01(laneFlipChance);
@@ -321,6 +352,8 @@ public class StorageSurgeEventController : MonoBehaviour
             float rot = snapshot.startRotationZ + displacement * baseRotation * 0.48f;
             RotateTransform(binding, rot);
         }
+
+        TickCargoLockdown(eventProgress, dt);
         ApplyActiveColorPulse(eventProgress);
 
         if (eventProgress >= 1f)
@@ -370,6 +403,8 @@ public class StorageSurgeEventController : MonoBehaviour
         snapshots.Clear();
         eventActive = false;
         eventTimer = 0f;
+        lockdownEnemyBoostCooldownTimer = 0f;
+        HideCargoLockdownVisuals();
     }
 
     private void ApplyActiveColorPulse(float progress)
@@ -433,6 +468,270 @@ public class StorageSurgeEventController : MonoBehaviour
             lighter.a = baseColor.a;
             renderer.color = Color.Lerp(baseColor, lighter, Mathf.Clamp01(blend));
         }
+    }
+
+    private void BuildCargoLockdownLayout()
+    {
+        lockdownLaneCenters.Clear();
+        lockdownLaneHalfWidths.Clear();
+
+        if (!enableCargoLockdown)
+        {
+            return;
+        }
+
+        float startMin = Mathf.Clamp01(Mathf.Min(lockdownStartRange.x, lockdownStartRange.y));
+        float startMax = Mathf.Clamp01(Mathf.Max(lockdownStartRange.x, lockdownStartRange.y));
+        lockdownStartT = Random.Range(startMin, startMax);
+
+        float durationMinT = Mathf.Clamp01(Mathf.Min(lockdownDurationRange.x, lockdownDurationRange.y));
+        float durationMaxT = Mathf.Clamp01(Mathf.Max(lockdownDurationRange.x, lockdownDurationRange.y));
+        float durationT = Random.Range(durationMinT, durationMaxT);
+        lockdownEndT = Mathf.Clamp(lockdownStartT + durationT, lockdownStartT + 0.06f, 0.96f);
+
+        float axisMin = Mathf.Abs(surgeAxis.x) > 0.5f ? interiorBottom : interiorLeft;
+        float axisMax = Mathf.Abs(surgeAxis.x) > 0.5f ? interiorTop : interiorRight;
+        float axisSpan = Mathf.Max(0.75f, axisMax - axisMin);
+
+        int minCount = Mathf.Max(1, Mathf.Min(lockdownLaneCountMin, lockdownLaneCountMax));
+        int maxCount = Mathf.Max(minCount, Mathf.Max(lockdownLaneCountMin, lockdownLaneCountMax));
+        int laneCount = Random.Range(minCount, maxCount + 1);
+
+        float halfWidthFloor = Mathf.Max(0.22f, Mathf.Min(lockdownLaneWidthRange.x, lockdownLaneWidthRange.y) * 0.5f);
+        float halfWidthCeil = Mathf.Max(halfWidthFloor, Mathf.Max(lockdownLaneWidthRange.x, lockdownLaneWidthRange.y) * 0.5f);
+
+        int attempts = Mathf.Max(8, laneCount * 24);
+        for (int i = 0; i < attempts && lockdownLaneCenters.Count < laneCount; i++)
+        {
+            float halfWidth = Random.Range(halfWidthFloor, halfWidthCeil);
+            float center = Random.Range(axisMin + halfWidth, axisMax - halfWidth);
+            bool overlaps = false;
+            for (int j = 0; j < lockdownLaneCenters.Count; j++)
+            {
+                float requiredGap = lockdownLaneHalfWidths[j] + halfWidth + Mathf.Max(0f, lockdownLaneSpacing);
+                if (Mathf.Abs(center - lockdownLaneCenters[j]) < requiredGap)
+                {
+                    overlaps = true;
+                    break;
+                }
+            }
+
+            if (overlaps)
+            {
+                continue;
+            }
+
+            lockdownLaneCenters.Add(center);
+            lockdownLaneHalfWidths.Add(halfWidth);
+        }
+
+        if (lockdownLaneCenters.Count == 0)
+        {
+            lockdownLaneCenters.Add((axisMin + axisMax) * 0.5f);
+            lockdownLaneHalfWidths.Add(Mathf.Min(halfWidthCeil, axisSpan * 0.22f));
+            return;
+        }
+
+        if (lockdownLaneCenters.Count < laneCount)
+        {
+            lockdownLaneCenters.Sort();
+            int missing = laneCount - lockdownLaneCenters.Count;
+            for (int i = 0; i < missing; i++)
+            {
+                float t = (i + 1f) / (missing + 1f);
+                float center = Mathf.Lerp(axisMin + halfWidthFloor, axisMax - halfWidthFloor, t);
+                lockdownLaneCenters.Add(center);
+                lockdownLaneHalfWidths.Add(halfWidthFloor);
+            }
+        }
+    }
+
+    private void TickCargoLockdown(float eventProgress, float dt)
+    {
+        if (!enableCargoLockdown || lockdownLaneCenters.Count == 0)
+        {
+            HideCargoLockdownVisuals();
+            return;
+        }
+
+        EnsureCargoLockdownVisuals();
+        if (lockdownVisualRoot == null || lockdownLaneRenderers.Count == 0)
+        {
+            return;
+        }
+
+        if (lockdownEnemyBoostCooldownTimer > 0f)
+        {
+            lockdownEnemyBoostCooldownTimer -= dt;
+        }
+
+        float telegraphStartT = Mathf.Clamp01(lockdownStartT - Mathf.Clamp01(lockdownTelegraphLead));
+        bool inTelegraph = eventProgress >= telegraphStartT && eventProgress < lockdownStartT;
+        bool inActive = eventProgress >= lockdownStartT && eventProgress <= lockdownEndT;
+
+        if (!inTelegraph && !inActive)
+        {
+            HideCargoLockdownVisuals();
+            return;
+        }
+
+        UpdateCargoLockdownVisuals(inTelegraph, inActive);
+
+        if (!inActive)
+        {
+            return;
+        }
+
+        if (playerController == null)
+        {
+            playerController = FindAnyObjectByType<PlayerController>();
+        }
+
+        if (enemyController == null)
+        {
+            enemyController = FindAnyObjectByType<EnemyController>();
+        }
+
+        if (playerController == null)
+        {
+            return;
+        }
+
+        Vector2 playerPos = playerController.GetPosition();
+        float playerAxisCoord = Mathf.Abs(surgeAxis.x) > 0.5f ? playerPos.y : playerPos.x;
+        for (int i = 0; i < lockdownLaneCenters.Count; i++)
+        {
+            if (Mathf.Abs(playerAxisCoord - lockdownLaneCenters[i]) > lockdownLaneHalfWidths[i])
+            {
+                continue;
+            }
+
+            playerController.ApplyMovementSlow(lockdownPlayerSlowMultiplier, lockdownPlayerSlowDuration);
+            if (enemyController != null && lockdownEnemyBoostCooldownTimer <= 0f)
+            {
+                enemyController.ApplyExternalSpeedModifier(lockdownEnemyBoostMultiplier, lockdownEnemyBoostDuration);
+                lockdownEnemyBoostCooldownTimer = Mathf.Max(0.05f, lockdownEnemyBoostCooldown);
+            }
+
+            break;
+        }
+    }
+
+    private void EnsureCargoLockdownVisuals()
+    {
+        if (lockdownVisualRoot == null)
+        {
+            lockdownVisualRoot = new GameObject("StorageCargoLockdown");
+            lockdownVisualRoot.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
+            lockdownVisualRoot.transform.localScale = Vector3.one;
+            lockdownVisualRoot.SetActive(false);
+        }
+
+        while (lockdownLaneRenderers.Count > lockdownLaneCenters.Count)
+        {
+            int last = lockdownLaneRenderers.Count - 1;
+            SpriteRenderer renderer = lockdownLaneRenderers[last];
+            lockdownLaneRenderers.RemoveAt(last);
+            if (renderer != null)
+            {
+                if (Application.isPlaying)
+                {
+                    Destroy(renderer.gameObject);
+                }
+                else
+                {
+                    DestroyImmediate(renderer.gameObject);
+                }
+            }
+        }
+
+        while (lockdownLaneRenderers.Count < lockdownLaneCenters.Count)
+        {
+            GameObject lane = new GameObject($"LockdownLane_{lockdownLaneRenderers.Count}");
+            lane.transform.SetParent(lockdownVisualRoot.transform, false);
+            SpriteRenderer sr = lane.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.sortingOrder = 8;
+            lockdownLaneRenderers.Add(sr);
+        }
+    }
+
+    private void UpdateCargoLockdownVisuals(bool inTelegraph, bool inActive)
+    {
+        if (lockdownVisualRoot == null)
+        {
+            return;
+        }
+
+        if (!lockdownVisualRoot.activeSelf)
+        {
+            lockdownVisualRoot.SetActive(true);
+        }
+
+        float fullWidth = Mathf.Max(0.4f, interiorRight - interiorLeft);
+        float fullHeight = Mathf.Max(0.4f, interiorTop - interiorBottom);
+        float centerX = (interiorLeft + interiorRight) * 0.5f;
+        float centerY = (interiorBottom + interiorTop) * 0.5f;
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Max(0.1f, lockdownPulseSpeed));
+
+        for (int i = 0; i < lockdownLaneRenderers.Count; i++)
+        {
+            SpriteRenderer sr = lockdownLaneRenderers[i];
+            if (sr == null || i >= lockdownLaneCenters.Count || i >= lockdownLaneHalfWidths.Count)
+            {
+                continue;
+            }
+
+            float laneCenter = lockdownLaneCenters[i];
+            float laneHalfWidth = lockdownLaneHalfWidths[i];
+            if (Mathf.Abs(surgeAxis.x) > 0.5f)
+            {
+                sr.transform.position = new Vector3(centerX, laneCenter, 0f);
+                sr.size = new Vector2(fullWidth, Mathf.Max(0.2f, laneHalfWidth * 2f));
+            }
+            else
+            {
+                sr.transform.position = new Vector3(laneCenter, centerY, 0f);
+                sr.size = new Vector2(Mathf.Max(0.2f, laneHalfWidth * 2f), fullHeight);
+            }
+
+            Color baseColor = inActive ? lockdownActiveColor : lockdownTelegraphColor;
+            float alpha = inActive
+                ? Mathf.Lerp(0.35f, 0.78f, pulse)
+                : Mathf.Lerp(0.16f, 0.5f, pulse);
+            baseColor.a = alpha;
+            sr.color = baseColor;
+        }
+    }
+
+    private void HideCargoLockdownVisuals()
+    {
+        if (lockdownVisualRoot != null && lockdownVisualRoot.activeSelf)
+        {
+            lockdownVisualRoot.SetActive(false);
+        }
+    }
+
+    private void DestroyCargoLockdownVisuals()
+    {
+        if (lockdownVisualRoot != null)
+        {
+            if (Application.isPlaying)
+            {
+                Destroy(lockdownVisualRoot);
+            }
+            else
+            {
+                DestroyImmediate(lockdownVisualRoot);
+            }
+
+            lockdownVisualRoot = null;
+        }
+
+        lockdownLaneRenderers.Clear();
+        lockdownLaneCenters.Clear();
+        lockdownLaneHalfWidths.Clear();
     }
 
     private static Vector2 PickPrimaryAxis()
