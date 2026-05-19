@@ -224,7 +224,7 @@ public class StorageSurgeEventController : MonoBehaviour
 
     private void BeginEvent()
     {
-        if (obstacles.Count == 0 || centerTransform == null)
+        if (centerTransform == null)
         {
             ScheduleNextEvent();
             return;
@@ -242,31 +242,6 @@ public class StorageSurgeEventController : MonoBehaviour
         EnsureConveyorVisuals();
         HideConveyorVisuals();
 
-        float laneStep = Mathf.Max(1f, laneHeight);
-        bool flipAllLanes = Random.value < Mathf.Clamp01(laneFlipChance);
-
-        float minProj = float.PositiveInfinity;
-        float maxProj = float.NegativeInfinity;
-        for (int i = 0; i < obstacles.Count; i++)
-        {
-            Transform tr = obstacles[i].transform;
-            if (tr == null)
-            {
-                continue;
-            }
-
-            float proj = Vector2.Dot((Vector2)tr.position, surgeAxis);
-            if (proj < minProj)
-            {
-                minProj = proj;
-            }
-
-            if (proj > maxProj)
-            {
-                maxProj = proj;
-            }
-        }
-
         for (int i = 0; i < obstacles.Count; i++)
         {
             ObstacleBinding binding = obstacles[i];
@@ -275,34 +250,16 @@ public class StorageSurgeEventController : MonoBehaviour
                 continue;
             }
 
-            bool dynamicWasEnabled = false;
-            if (binding.dynamicController != null)
-            {
-                dynamicWasEnabled = binding.dynamicController.enabled;
-                binding.dynamicController.enabled = false;
-            }
-
-            float proj = Vector2.Dot((Vector2)binding.transform.position, surgeAxis);
-            float normalized = Mathf.InverseLerp(minProj, maxProj, proj);
-            float delay = normalized * Mathf.Max(0f, waveStaggerSeconds);
-            float laneCoord = Vector2.Dot((Vector2)binding.transform.position, lateralAxis);
-            int laneIndex = Mathf.FloorToInt(laneCoord / laneStep);
-            float laneSign = (laneIndex & 1) == 0 ? 1f : -1f;
-            if (flipAllLanes)
-            {
-                laneSign *= -1f;
-            }
-
             snapshots.Add(new ObstacleSnapshot
             {
                 binding = binding,
                 startPosition = binding.transform.position,
                 startRotationZ = binding.transform.eulerAngles.z,
-                dynamicWasEnabled = dynamicWasEnabled,
-                displacementScale = Random.Range(0.78f, 1.18f),
-                phaseDelay = delay,
-                laneSign = laneSign,
-                lateralOffset = Random.Range(-Mathf.Abs(lateralOffsetMax), Mathf.Abs(lateralOffsetMax)),
+                dynamicWasEnabled = binding.dynamicController != null && binding.dynamicController.enabled,
+                displacementScale = 0f,
+                phaseDelay = 0f,
+                laneSign = 0f,
+                lateralOffset = 0f,
                 renderers = binding.transform.GetComponentsInChildren<SpriteRenderer>(includeInactive: true),
                 baseColors = null
             });
@@ -311,13 +268,6 @@ public class StorageSurgeEventController : MonoBehaviour
             ObstacleSnapshot created = snapshots[last];
             created.baseColors = CaptureBaseColors(created.renderers);
             snapshots[last] = created;
-        }
-
-        if (snapshots.Count == 0)
-        {
-            EndEvent(restoreControllers: true, snapBackToStart: true);
-            ScheduleNextEvent();
-            return;
         }
 
         eventTimer = 0f;
@@ -329,32 +279,6 @@ public class StorageSurgeEventController : MonoBehaviour
         float dt = Time.deltaTime;
         eventTimer += dt;
         float eventProgress = Mathf.Clamp01(eventTimer / Mathf.Max(0.0001f, eventDuration));
-
-        float activeWindow = Mathf.Max(0.3f, eventDuration - waveStaggerSeconds);
-        for (int i = 0; i < snapshots.Count; i++)
-        {
-            ObstacleSnapshot snapshot = snapshots[i];
-            ObstacleBinding binding = snapshot.binding;
-            if (binding.transform == null)
-            {
-                continue;
-            }
-
-            float localT = Mathf.Clamp01((eventTimer - snapshot.phaseDelay) / activeWindow);
-            float primary = Mathf.Sin(localT * Mathf.PI);
-            float recoil = Mathf.Sin(localT * Mathf.PI * 2f) * Mathf.Exp(-3.6f * localT) * recoilStrength;
-            float envelope = Mathf.Sin(eventProgress * Mathf.PI);
-            float displacement = (primary + recoil) * envelope * baseDisplacement * snapshot.displacementScale * snapshot.laneSign;
-
-            float lateralWave = Mathf.Sin((localT * Mathf.PI * 2f) + (snapshot.phaseDelay * 3f)) * 0.5f;
-            float lateralDisplacement = lateralWave * snapshot.lateralOffset * envelope;
-            Vector2 target = snapshot.startPosition + (surgeAxis * displacement) + (lateralAxis * lateralDisplacement);
-            target = ClampToInterior(target, binding.obstacleRadius);
-            MoveTransform(binding, target);
-
-            float rot = snapshot.startRotationZ + displacement * baseRotation * 0.48f;
-            RotateTransform(binding, rot);
-        }
 
         TickConveyorOverload(eventProgress, dt);
         ApplyActiveColorPulse(eventProgress);
@@ -374,34 +298,6 @@ public class StorageSurgeEventController : MonoBehaviour
         }
 
         RestoreAllColors();
-
-        if (snapBackToStart)
-        {
-            for (int i = 0; i < snapshots.Count; i++)
-            {
-                ObstacleSnapshot snapshot = snapshots[i];
-                ObstacleBinding binding = snapshot.binding;
-                if (binding.transform == null)
-                {
-                    continue;
-                }
-
-                MoveTransform(binding, snapshot.startPosition);
-                RotateTransform(binding, snapshot.startRotationZ);
-            }
-        }
-
-        if (restoreControllers)
-        {
-            for (int i = 0; i < snapshots.Count; i++)
-            {
-                ObstacleSnapshot snapshot = snapshots[i];
-                if (snapshot.binding.dynamicController != null)
-                {
-                    snapshot.binding.dynamicController.enabled = snapshot.dynamicWasEnabled;
-                }
-            }
-        }
 
         snapshots.Clear();
         eventActive = false;

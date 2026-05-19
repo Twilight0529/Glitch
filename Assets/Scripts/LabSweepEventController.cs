@@ -228,7 +228,7 @@ public class LabSweepEventController : MonoBehaviour
 
     private void BeginEvent()
     {
-        if (obstacles.Count == 0 || centerTransform == null)
+        if (centerTransform == null)
         {
             ScheduleNextEvent();
             return;
@@ -247,8 +247,6 @@ public class LabSweepEventController : MonoBehaviour
         BuildSterilizationPassLayout();
         HideSterilizationVisuals();
 
-        Vector2 center = centerTransform.position;
-        float laneStep = Mathf.Max(0.8f, laneHeight);
         for (int i = 0; i < obstacles.Count; i++)
         {
             ObstacleBinding binding = obstacles[i];
@@ -257,28 +255,16 @@ public class LabSweepEventController : MonoBehaviour
                 continue;
             }
 
-            bool dynamicWasEnabled = false;
-            if (binding.dynamicController != null)
-            {
-                dynamicWasEnabled = binding.dynamicController.enabled;
-                binding.dynamicController.enabled = false;
-            }
-
             Vector2 start = binding.transform.position;
-            float axisCoord = moveAlongX ? start.y - center.y : start.x - center.x;
-            int laneIndex = Mathf.FloorToInt(axisCoord / laneStep);
-            float laneSign = (laneIndex & 1) == 0 ? 1f : -1f;
-            float offsetMag = Random.Range(Mathf.Min(laneOffsetRange.x, laneOffsetRange.y), Mathf.Max(laneOffsetRange.x, laneOffsetRange.y));
-            float rotMag = Random.Range(Mathf.Min(rotationOffsetRange.x, rotationOffsetRange.y), Mathf.Max(rotationOffsetRange.x, rotationOffsetRange.y));
 
             snapshots.Add(new ObstacleSnapshot
             {
                 binding = binding,
                 startPosition = start,
                 startRotationZ = binding.transform.eulerAngles.z,
-                dynamicWasEnabled = dynamicWasEnabled,
-                laneOffset = laneSign * offsetMag,
-                rotationOffset = laneSign * rotMag,
+                dynamicWasEnabled = binding.dynamicController != null && binding.dynamicController.enabled,
+                laneOffset = 0f,
+                rotationOffset = 0f,
                 renderers = binding.transform.GetComponentsInChildren<SpriteRenderer>(includeInactive: true),
                 baseColors = null
             });
@@ -287,13 +273,6 @@ public class LabSweepEventController : MonoBehaviour
             ObstacleSnapshot created = snapshots[last];
             created.baseColors = CaptureBaseColors(created.renderers);
             snapshots[last] = created;
-        }
-
-        if (snapshots.Count == 0)
-        {
-            EndEvent(restoreControllers: true, snapBackToStart: true);
-            ScheduleNextEvent();
-            return;
         }
 
         eventTimer = 0f;
@@ -305,29 +284,6 @@ public class LabSweepEventController : MonoBehaviour
         float dt = Time.deltaTime;
         eventTimer += dt;
         float progress = Mathf.Clamp01(eventTimer / Mathf.Max(0.0001f, eventDuration));
-
-        float swing = Mathf.Sin(progress * Mathf.PI * eventCycles);
-        float envelope = Mathf.Sin(progress * Mathf.PI);
-        envelope = Mathf.Lerp(1f, envelope, Mathf.Clamp01(envelopeFactor));
-        float phaseValue = swing * envelope;
-
-        Vector2 axis = moveAlongX ? Vector2.right : Vector2.up;
-        for (int i = 0; i < snapshots.Count; i++)
-        {
-            ObstacleSnapshot snapshot = snapshots[i];
-            ObstacleBinding binding = snapshot.binding;
-            if (binding.transform == null)
-            {
-                continue;
-            }
-
-            Vector2 target = snapshot.startPosition + axis * (snapshot.laneOffset * phaseValue);
-            target = ClampToInterior(target, binding.obstacleRadius);
-            MoveTransform(binding, target);
-
-            float rot = snapshot.startRotationZ + snapshot.rotationOffset * phaseValue;
-            RotateTransform(binding, rot);
-        }
 
         TickSterilizationSweep(progress, dt);
         ApplyActiveColorPulse(progress);
@@ -347,34 +303,6 @@ public class LabSweepEventController : MonoBehaviour
         }
 
         RestoreAllColors();
-
-        if (snapBackToStart)
-        {
-            for (int i = 0; i < snapshots.Count; i++)
-            {
-                ObstacleSnapshot snapshot = snapshots[i];
-                ObstacleBinding binding = snapshot.binding;
-                if (binding.transform == null)
-                {
-                    continue;
-                }
-
-                MoveTransform(binding, snapshot.startPosition);
-                RotateTransform(binding, snapshot.startRotationZ);
-            }
-        }
-
-        if (restoreControllers)
-        {
-            for (int i = 0; i < snapshots.Count; i++)
-            {
-                ObstacleSnapshot snapshot = snapshots[i];
-                if (snapshot.binding.dynamicController != null)
-                {
-                    snapshot.binding.dynamicController.enabled = snapshot.dynamicWasEnabled;
-                }
-            }
-        }
 
         snapshots.Clear();
         eventActive = false;
