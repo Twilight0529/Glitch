@@ -194,6 +194,8 @@ public class EnemyController : MonoBehaviour
     [Header("Path Hysteresis")]
     [SerializeField] private float blockedRepathHoldSeconds = 0.28f;
     [SerializeField] private float blockedRepathDistanceMultiplier = 1.8f;
+    [SerializeField] private float blockedPathCommitSeconds = 0.85f;
+    [SerializeField] private float blockedPathCommitDistanceMultiplier = 3f;
 
     private Rigidbody2D rb;
     private Collider2D ownCollider;
@@ -260,6 +262,7 @@ public class EnemyController : MonoBehaviour
     private Vector2 pendingBlockedRepathGoal;
     private float pendingBlockedRepathTimer;
     private bool hasPendingBlockedRepathGoal;
+    private float blockedPathCommitTimer;
 
     private float agentRadius;
     private static PhysicsMaterial2D noFrictionMaterial;
@@ -421,6 +424,11 @@ public class EnemyController : MonoBehaviour
         if (!useDestroyerSteering)
         {
             repathTimer += Time.deltaTime;
+            if (blockedPathCommitTimer > 0f)
+            {
+                blockedPathCommitTimer -= Time.deltaTime;
+            }
+
             bool targetMoved = Vector2.Distance(strategicTarget, lastPathGoal) >= targetRepathThreshold;
             bool hasDirectToStrategic = HasDirectPath(rb.position, strategicTarget);
             bool obstacleBlocked = !hasDirectToStrategic && pathWorld.Count > 0;
@@ -441,6 +449,8 @@ public class EnemyController : MonoBehaviour
                     float forceDistance = Mathf.Max(targetRepathThreshold, targetRepathThreshold * blockedRepathDistanceMultiplier);
                     float targetShift = Vector2.Distance(strategicTarget, lastPathGoal);
                     float resetThreshold = Mathf.Max(0.06f, targetRepathThreshold * 0.35f);
+                    bool inCommitWindow = blockedPathCommitTimer > 0f;
+                    float commitBreakDistance = Mathf.Max(forceDistance, targetRepathThreshold * blockedPathCommitDistanceMultiplier);
 
                     if (!hasPendingBlockedRepathGoal || Vector2.Distance(strategicTarget, pendingBlockedRepathGoal) > resetThreshold)
                     {
@@ -455,7 +465,8 @@ public class EnemyController : MonoBehaviour
 
                     bool stable = pendingBlockedRepathTimer >= Mathf.Max(0.05f, blockedRepathHoldSeconds);
                     bool farEnough = targetShift >= forceDistance;
-                    if (stable || farEnough)
+                    bool breakCommit = inCommitWindow && targetShift >= commitBreakDistance;
+                    if ((!inCommitWindow && (stable || farEnough)) || breakCommit)
                     {
                         shouldRepath = true;
                     }
@@ -469,7 +480,12 @@ public class EnemyController : MonoBehaviour
             if (shouldRepath)
             {
                 RebuildPathTo(strategicTarget);
+                bool shouldCommit = obstacleBlocked;
                 ResetBlockedRepathHysteresis();
+                if (shouldCommit)
+                {
+                    blockedPathCommitTimer = Mathf.Max(0.05f, blockedPathCommitSeconds);
+                }
             }
         }
 
@@ -1869,6 +1885,7 @@ public class EnemyController : MonoBehaviour
         hasPendingBlockedRepathGoal = false;
         pendingBlockedRepathTimer = 0f;
         pendingBlockedRepathGoal = Vector2.zero;
+        blockedPathCommitTimer = 0f;
     }
 
     private Vector2 SelectSteeringTarget(Vector2 strategicTarget)
