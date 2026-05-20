@@ -196,6 +196,8 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float blockedRepathDistanceMultiplier = 1.8f;
     [SerializeField] private float blockedPathCommitSeconds = 0.85f;
     [SerializeField] private float blockedPathCommitDistanceMultiplier = 3f;
+    [SerializeField] private int blockedOscillationThreshold = 3;
+    [SerializeField] private float blockedOscillationResetSeconds = 1.2f;
 
     private Rigidbody2D rb;
     private Collider2D ownCollider;
@@ -263,6 +265,8 @@ public class EnemyController : MonoBehaviour
     private float pendingBlockedRepathTimer;
     private bool hasPendingBlockedRepathGoal;
     private float blockedPathCommitTimer;
+    private int blockedOscillationCounter;
+    private float blockedOscillationTimer;
 
     private float agentRadius;
     private static PhysicsMaterial2D noFrictionMaterial;
@@ -428,6 +432,14 @@ public class EnemyController : MonoBehaviour
             {
                 blockedPathCommitTimer -= Time.deltaTime;
             }
+            if (blockedOscillationTimer > 0f)
+            {
+                blockedOscillationTimer -= Time.deltaTime;
+                if (blockedOscillationTimer <= 0f)
+                {
+                    blockedOscillationCounter = 0;
+                }
+            }
 
             bool targetMoved = Vector2.Distance(strategicTarget, lastPathGoal) >= targetRepathThreshold;
             bool hasDirectToStrategic = HasDirectPath(rb.position, strategicTarget);
@@ -470,11 +482,27 @@ public class EnemyController : MonoBehaviour
                     {
                         shouldRepath = true;
                     }
+                    else
+                    {
+                        blockedOscillationCounter++;
+                        blockedOscillationTimer = Mathf.Max(0.2f, blockedOscillationResetSeconds);
+                    }
                 }
             }
             else if (!obstacleBlocked)
             {
                 ResetBlockedRepathHysteresis();
+            }
+
+            if (!shouldRepath &&
+                obstacleBlocked &&
+                currentState != AnomalyState.Destroyer &&
+                blockedOscillationCounter >= Mathf.Max(2, blockedOscillationThreshold))
+            {
+                EnterEmergencyDestroyerFromStuck();
+                blockedOscillationCounter = 0;
+                blockedOscillationTimer = 0f;
+                return;
             }
 
             if (shouldRepath)
@@ -1886,6 +1914,8 @@ public class EnemyController : MonoBehaviour
         pendingBlockedRepathTimer = 0f;
         pendingBlockedRepathGoal = Vector2.zero;
         blockedPathCommitTimer = 0f;
+        blockedOscillationCounter = 0;
+        blockedOscillationTimer = 0f;
     }
 
     private Vector2 SelectSteeringTarget(Vector2 strategicTarget)
