@@ -183,6 +183,13 @@ public class EnemyController : MonoBehaviour
     [Header("Anti-Stuck")]
     [SerializeField] private float stuckCheckInterval = 0.30f;
     [SerializeField] private float stuckDistanceThreshold = 0.09f;
+    [SerializeField] private int stuckChecksBeforeRecovery = 2;
+    [SerializeField] private int stuckChecksBeforeEmergencyDestroyer = 5;
+    [SerializeField] private float stuckTargetMinDistance = 1.4f;
+    [SerializeField] private float stuckObstacleProbeRadius = 1.1f;
+    [SerializeField] private float stuckEscapeDistance = 2.9f;
+    [SerializeField] private float stuckEscapeVelocityBoost = 1.35f;
+    [SerializeField] private float emergencyDestroyerDuration = 2f;
 
     private Rigidbody2D rb;
     private Collider2D ownCollider;
@@ -244,6 +251,8 @@ public class EnemyController : MonoBehaviour
 
     private float stuckTimer;
     private Vector2 stuckCheckPosition;
+    private int stuckConsecutiveChecks;
+    private bool emergencyDestroyerActive;
 
     private float agentRadius;
     private static PhysicsMaterial2D noFrictionMaterial;
@@ -576,6 +585,18 @@ public class EnemyController : MonoBehaviour
     private void HandleStateSwitch()
     {
         stateTimer += Time.deltaTime;
+
+        if (emergencyDestroyerActive)
+        {
+            if (stateTimer >= currentStateDuration)
+            {
+                emergencyDestroyerActive = false;
+                SelectNextState(forceDifferent: true);
+            }
+
+            return;
+        }
+
         if (stateTimer >= currentStateDuration)
         {
             SelectNextState(forceDifferent: true);
@@ -584,6 +605,8 @@ public class EnemyController : MonoBehaviour
 
     private void SelectNextState(bool forceDifferent)
     {
+        emergencyDestroyerActive = false;
+        stuckConsecutiveChecks = 0;
         AnomalyState previousState = currentState;
         AnomalyState nextState = PickWeightedState(forceDifferent);
         currentState = nextState;
@@ -759,6 +782,10 @@ public class EnemyController : MonoBehaviour
             int minBreaks = Mathf.Max(0, Mathf.Min(destroyerMinBreaks, destroyerMaxBreaks));
             int maxBreaks = Mathf.Max(minBreaks, Mathf.Max(destroyerMinBreaks, destroyerMaxBreaks));
             destroyerBreakLimit = Random.Range(minBreaks, maxBreaks + 1);
+            if (emergencyDestroyerActive)
+            {
+                destroyerBreakLimit = Mathf.Clamp(destroyerBreakLimit, 1, 2);
+            }
             destroyerBreakCount = 0;
         }
         else
@@ -1885,14 +1912,100 @@ public class EnemyController : MonoBehaviour
         float moved = Vector2.Distance(rb.position, stuckCheckPosition);
         stuckCheckPosition = rb.position;
 
-        if (rb.linearVelocity.sqrMagnitude < 0.2f || moved >= stuckDistanceThreshold)
+        float targetDistance = Vector2.Distance(rb.position, strategicTarget);
+        bool movingEnough = rb.linearVelocity.sqrMagnitude >= 0.04f;
+        bool lowProgress = moved < stuckDistanceThreshold;
+        bool needsChase = targetDistance >= Mathf.Max(0.6f, stuckTargetMinDistance);
+        bool nearObstacle = IsNearBlockingObstacle(Mathf.Max(0.3f, stuckObstacleProbeRadius));
+
+        if (!movingEnough || !lowProgress || !needsChase || !nearObstacle)
+        {
+            stuckConsecutiveChecks = 0;
+            return;
+        }
+
+        stuckConsecutiveChecks++;
+
+        if (currentState != AnomalyState.Destroyer && stuckConsecutiveChecks >= Mathf.Max(2, stuckChecksBeforeEmergencyDestroyer))
+        {
+            EnterEmergencyDestroyerFromStuck();
+            return;
+        }
+
+        if (stuckConsecutiveChecks >= Mathf.Max(1, stuckChecksBeforeRecovery))
+        {
+            TryStuckRecovery(strategicTarget);
+        }
+    }
+
+    private bool IsNearBlockingObstacle(float probeRadius)
+    {
+        Collider2D[] hits = Physics2D.OverlapCircleAll(rb.position, Mathf.Max(0.05f, probeRadius), obstacleMask);
+        for (int i = 0; i < hits.Length; i++)
+        {
+            if (IsBlockingCollider(hits[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void TryStuckRecovery(Vector2 strategicTarget)
+    {
+        flankSide *= -1f;
+        if (currentState == AnomalyState.WeaveHunter)
+        {
+            weaveHunterSideSign *= -1f;
+        }
+
+        Vector2 desired = strategicTarget - rb.position;
+        if (desired.sqrMagnitude < 0.0001f)
+        {
+            desired = lastMoveDirection.sqrMagnitude > 0.0001f ? lastMoveDirection : Vector2.right;
+        }
+
+        Vector2 repulsed = ApplyObstacleRepulsion(desired.normalized);
+        Vector2 jitter = Random.insideUnitCircle * 0.45f;
+        Vector2 escapeDir = (repulsed + jitter);
+        if (escapeDir.sqrMagnitude < 0.0001f)
+        {
+            escapeDir = desired.normalized;
+        }
+        escapeDir.Normalize();
+
+        Vector2 escapeTarget = ClampToArena(rb.position + escapeDir * Mathf.Max(0.8f, stuckEscapeDistance));
+        BuildNavigationGrid();
+        RebuildPathTo(escapeTarget);
+
+        float burstSpeed = Mathf.Max(baseMoveSpeed * Mathf.Max(1f, stuckEscapeVelocityBoost), baseMoveSpeed + 0.4f);
+        rb.linearVelocity = escapeDir * burstSpeed;
+        lastMoveDirection = escapeDir;
+    }
+
+    private void EnterEmergencyDestroyerFromStuck()
+    {
+        if (currentState == AnomalyState.Destroyer)
         {
             return;
         }
 
-        flankSide *= -1f;
+        AnomalyState previousState = currentState;
+        currentState = AnomalyState.Destroyer;
+        currentPattern = ResolvePatternForState(currentState);
+        stateTimer = 0f;
+        currentStateDuration = Mathf.Max(0.4f, emergencyDestroyerDuration);
+        emergencyDestroyerActive = true;
+
+        HandleStateTransition(previousState, currentState);
+        TriggerStatePulse();
+        OnStateEntered();
+
         BuildNavigationGrid();
-        RebuildPathTo(strategicTarget);
+        pathWorld.Clear();
+        pathIndex = 0;
+        stuckConsecutiveChecks = 0;
     }
 
     private Vector2Int WorldToCell(Vector2 world)
