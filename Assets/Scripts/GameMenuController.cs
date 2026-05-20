@@ -36,6 +36,8 @@ public class GameMenuController : MonoBehaviour
     private GUIStyle subtitleStyle;
     private GUIStyle bodyStyle;
     private GUIStyle buttonStyle;
+    private Font importantFont;
+    private Font secondaryFont;
 
     private void Awake()
     {
@@ -44,6 +46,8 @@ public class GameMenuController : MonoBehaviour
             gameManager = FindAnyObjectByType<GameManager>();
         }
 
+        importantFont = GlobalFontSettings.GetImportantFont();
+        secondaryFont = GlobalFontSettings.GetSecondaryFont();
         SetState(OverlayState.Playing);
     }
 
@@ -164,6 +168,7 @@ public class GameMenuController : MonoBehaviour
 
         titleStyle = new GUIStyle(GUI.skin.label)
         {
+            font = importantFont,
             fontSize = 34,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
@@ -174,6 +179,7 @@ public class GameMenuController : MonoBehaviour
 
         subtitleStyle = new GUIStyle(GUI.skin.label)
         {
+            font = secondaryFont,
             fontSize = 16,
             fontStyle = FontStyle.Italic,
             alignment = TextAnchor.MiddleCenter
@@ -182,6 +188,7 @@ public class GameMenuController : MonoBehaviour
 
         bodyStyle = new GUIStyle(GUI.skin.label)
         {
+            font = secondaryFont,
             fontSize = 15,
             alignment = TextAnchor.MiddleLeft
         };
@@ -189,6 +196,7 @@ public class GameMenuController : MonoBehaviour
 
         buttonStyle = new GUIStyle(GUI.skin.button)
         {
+            font = importantFont,
             fontSize = 17,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter

@@ -17,8 +17,6 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private string gameTitle = "GLITCH";
     [SerializeField] private string gameSubtitle = "Containment Breach";
     [SerializeField] private string gameplaySceneName = "Game";
-    [SerializeField] private Font titleFontOverride;
-    [SerializeField] private Font uiFontOverride;
 
     [Header("Options (Generic)")]
     [SerializeField] private float masterVolume = 0.8f;
@@ -520,31 +518,8 @@ public class MainMenuController : MonoBehaviour
 
     private void ResolveFonts()
     {
-        Font fallback = TryGetBuiltinFont("LegacyRuntime.ttf");
-        if (fallback == null)
-        {
-            fallback = TryGetBuiltinFont("Arial.ttf");
-        }
-
-        if (fallback == null && GUI.skin != null && GUI.skin.label != null)
-        {
-            fallback = GUI.skin.label.font;
-        }
-
-        titleFont = titleFontOverride != null ? titleFontOverride : fallback;
-        uiFont = uiFontOverride != null ? uiFontOverride : fallback;
-    }
-
-    private static Font TryGetBuiltinFont(string path)
-    {
-        try
-        {
-            return Resources.GetBuiltinResource<Font>(path);
-        }
-        catch
-        {
-            return null;
-        }
+        titleFont = GlobalFontSettings.GetImportantFont();
+        uiFont = GlobalFontSettings.GetSecondaryFont();
     }
 
     private static void DrawSolidRect(Rect rect, Color color)

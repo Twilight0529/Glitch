@@ -943,7 +943,7 @@ public class EnemyController : MonoBehaviour
     {
         if (!statePulseFxEnabled)
         {
-            return;
+            return; 
         }
 
         statePulseTimer = Mathf.Max(0.04f, statePulseDuration);

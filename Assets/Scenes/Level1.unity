@@ -9691,6 +9691,9 @@ MonoBehaviour:
   glitchJitterStrength: 6.5
   glitchSplitStrength: 2.2
   glitchBarOpacity: 0.14
+  hudGlitchWeight: 0.85
+  textGlitchWeight: 0.35
+  panelJitterStrength: 1.1
 --- !u!1 &258470715
 GameObject:
   m_ObjectHideFlags: 0
@@ -33850,6 +33853,81 @@ MonoBehaviour:
   erraticDirectionRefresh: 0.35
   erraticOffsetRadius: 2.7
   erraticBurstMultiplier: 1.2
+  enableAdvancedStates: 1
+  stateDurationMultiplierRange: {x: 0.85, y: 1.25}
+  majorStateDurationRange: {x: 9, y: 15}
+  speedStateMultiplier: 1.55
+  logStateChanges: 0
+  buildUpMinorStatesMin: 2
+  buildUpMinorStatesMax: 4
+  sustainPeakMajorStatesMin: 1
+  sustainPeakMajorStatesMax: 2
+  peakFadeMinorStates: 1
+  relaxMinorStatesMin: 1
+  relaxMinorStatesMax: 2
+  peakFadeDurationMultiplierRange: {x: 0.7, y: 0.95}
+  relaxDurationMultiplierRange: {x: 0.85, y: 1.05}
+  chaosDriveEnabled: 1
+  chaosTempoMultiplier: 1.35
+  chaosMinorDurationMultiplier: 0.72
+  chaosExpansionIntervalMultiplier: 0.8
+  chaosExpansionProjectileMultiplier: 1.3
+  chaosRepathIntervalMultiplier: 0.8
+  statePulseFxEnabled: 1
+  statePulseDuration: 0.24
+  statePulseLighten: 0.42
+  statePulseScaleBoost: 1.08
+  expansionShootProjectileCount: 10
+  expansionShootInterval: 2
+  expansionShootProjectileSpeed: 9.5
+  expansionShootProjectileLifetime: 3.2
+  expansionShootSpawnRadius: 0.7
+  expansionShootProjectileColor: {r: 1, g: 0.48, b: 0.63, a: 1}
+  expansionShootProjectileSize: {x: 0.24, y: 0.24}
+  expansionShootTelegraphLeadTime: 0.6
+  expansionShootTelegraphColor: {r: 1, g: 0.5, b: 0.68, a: 0.8}
+  expansionShootTelegraphPulseSpeed: 8.5
+  expansionShootTelegraphRingRadius: 0.9
+  expansionShootTelegraphTickSize: {x: 0.22, y: 0.06}
+  splitCloneSpeedMultiplier: 0.95
+  splitCloneVelocityResponsiveness: 20
+  splitCloneSideOffset: 1.1
+  splitCloneSpawnOffset: 0.8
+  splitMergeLeadTime: 0.7
+  splitMergeSpeed: 7.5
+  splitMergeOwnerSpeedMultiplier: 1.05
+  splitMergeTimeout: 2.4
+  splitCloneColor: {r: 1, g: 0.3, b: 0.42, a: 0.92}
+  splitMergeTelegraphColor: {r: 1, g: 0.73, b: 0.82, a: 0.92}
+  splitMergeTelegraphPulseSpeed: 7.8
+  splitMergeTelegraphRingRadius: 0.34
+  splitMergeTelegraphSegments: 8
+  splitMergeTelegraphSegmentSize: {x: 0.18, y: 0.04}
+  destroyerMinBreaks: 3
+  destroyerMaxBreaks: 5
+  destroyerTouchCooldown: 0.06
+  destroyerRepulsionFactor: 0.12
+  destroyerFractureDuration: 0.12
+  destroyerFractureFlashColor: {r: 1, g: 0.82, b: 0.86, a: 1}
+  destroyerFractureEndScale: 0.2
+  destroyerFractureSpinDegrees: 25
+  destroyerRespawnDelay: 8
+  destroyerRespawnWarningLeadTime: 2
+  destroyerRespawnWarningPulseSpeed: 7.5
+  destroyerRespawnWarningColor: {r: 1, g: 0.72, b: 0.84, a: 0.85}
+  weaveHunterSpeedMultiplier: 1.2
+  weaveHunterSideOffset: 2
+  weaveHunterSwitchInterval: 0.23
+  weaveHunterPlayerVelocityBias: 0.75
+  directChaseWeight: 1
+  predictiveInterceptWeight: 1
+  cutoffFlankWeight: 1
+  erraticBurstWeight: 1
+  splitWeight: 0.7
+  expansionShootWeight: 0.8
+  speedSurgeWeight: 0.9
+  weaveHunterWeight: 0.65
+  destroyerWeight: 0.75
   obstacleMask:
     serializedVersion: 2
     m_Bits: 4294967295
@@ -42208,6 +42286,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1183304027}
   - component: {fileID: 1183304026}
+  - component: {fileID: 1183304028}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -42229,8 +42308,25 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GameManager
   autoReloadSceneOnGameOver: 0
   reloadDelay: 1.2
+  startupDelaySeconds: 1
+  countdownSeconds: 3
+  goFlashSeconds: 0.4
   behaviorChangeInterval: 5
   difficultyRampPerSecond: 0.03
+  chaosTempoEnabled: 1
+  chaosBehaviorIntervalMultiplier: 0.72
+  bossSpecialStatesUnlockTime: 30
+  mapEventsUnlockTime: 60
+  containmentPulseUnlockTime: 90
+  countdownPulseSpeed: 2.1
+  countdownBackdropOpacity: 0.33
+  countdownGlitchOpacity: 0.18
+  countdownPrimary: {r: 0.98, g: 0.63, b: 0.73, a: 1}
+  countdownAccent: {r: 0.33, g: 0.93, b: 1, a: 1}
+  statePulseOverlayDuration: 0.24
+  statePulseOverlayOpacity: 0.22
+  statePulseOverlayColorA: {r: 1, g: 0.35, b: 0.52, a: 1}
+  statePulseOverlayColorB: {r: 0.3, g: 0.95, b: 1, a: 1}
 --- !u!4 &1183304027
 Transform:
   m_ObjectHideFlags: 0
@@ -42246,6 +42342,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 2048093581}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1183304028
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1183304025}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 43bbf8ec5170e2247998222d56368832, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GlobalFontSettings
+  importantFont: {fileID: 12800000, guid: d1c3af6db7bf49a40a71f86e15eef580, type: 3}
+  secondaryFont: {fileID: 12800000, guid: 738ad71b37eac1d438238be4c4057c22, type: 3}
+  persistAcrossScenes: 1
 --- !u!1 &1183992384
 GameObject:
   m_ObjectHideFlags: 0
@@ -61243,6 +61354,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
   moveSpeed: 5.5
+  maxBoostMultiplier: 1.9
+  minSlowMultiplier: 0.3
+  shieldColor: {r: 0.95, g: 0.64, b: 0.88, a: 0.85}
+  shieldPulseSpeed: 7.2
+  shieldRadius: 0.72
 --- !u!58 &1747962577
 CircleCollider2D:
   m_ObjectHideFlags: 0
@@ -73445,12 +73561,24 @@ MonoBehaviour:
   intervalMax: 14
   durationMin: 3
   durationMax: 5
+  cadenceIntervalMultiplier: 0.68
+  cadenceDurationMultiplier: 1.18
   maxSweepAngle: 70
   minSweepAngle: 3
   safeAngleFactor: 0.92
   angleSampleStep: 0.75
   spinMultiplierRange: {x: 0.8, y: 1.25}
+  angularSpeedRange: {x: 8, y: 16}
+  directionChangeIntervalRange: {x: 0.9, y: 4.5}
+  angularAcceleration: 22
+  angularDeceleration: 30
+  boundaryTurnRatio: 0.82
   boundsPadding: 0.08
+  activeColorPulseStrength: 0.65
+  activeColorLightenAmount: 0.38
+  activeColorPulseSpeed: 2.4
+  debugTriggerEnabled: 1
+  debugTriggerKey: 32
 --- !u!114 &2048093580
 MonoBehaviour:
   m_ObjectHideFlags: 0

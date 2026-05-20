@@ -81,6 +81,8 @@ public class GameManager : MonoBehaviour
     private GUIStyle bossStateValueStyle;
     private GUIStyle bossPacingValueStyle;
     private GUIStyle eventWarningStyle;
+    private Font importantFont;
+    private Font secondaryFont;
     private string lastBossStateRaw;
     private string lastPacingPhaseRaw;
     private float statePulseOverlayTimer;
@@ -92,6 +94,7 @@ public class GameManager : MonoBehaviour
 
     private void Start()
     {
+        ResolveFonts();
         RefreshLevelType();
         BeginStartupSequence();
     }
@@ -315,6 +318,7 @@ public class GameManager : MonoBehaviour
 
         countdownStyle = new GUIStyle(GUI.skin.label)
         {
+            font = importantFont,
             fontSize = 72,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter
@@ -323,6 +327,7 @@ public class GameManager : MonoBehaviour
 
         countdownSubStyle = new GUIStyle(GUI.skin.label)
         {
+            font = secondaryFont,
             fontSize = 24,
             fontStyle = FontStyle.Italic,
             alignment = TextAnchor.MiddleCenter
@@ -592,6 +597,7 @@ public class GameManager : MonoBehaviour
 
         bossStateStyle = new GUIStyle(GUI.skin.label)
         {
+            font = importantFont,
             fontSize = 14,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter
@@ -600,6 +606,7 @@ public class GameManager : MonoBehaviour
 
         bossStateValueStyle = new GUIStyle(GUI.skin.label)
         {
+            font = importantFont,
             fontSize = 17,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter
@@ -608,6 +615,7 @@ public class GameManager : MonoBehaviour
 
         bossPacingValueStyle = new GUIStyle(GUI.skin.label)
         {
+            font = secondaryFont,
             fontSize = 13,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter
@@ -624,6 +632,7 @@ public class GameManager : MonoBehaviour
 
         eventWarningStyle = new GUIStyle(GUI.skin.label)
         {
+            font = importantFont,
             fontSize = 30,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter
@@ -640,5 +649,11 @@ public class GameManager : MonoBehaviour
 
         GameObject go = new GameObject("GameMenuController");
         go.AddComponent<GameMenuController>();
+    }
+
+    private void ResolveFonts()
+    {
+        importantFont = GlobalFontSettings.GetImportantFont();
+        secondaryFont = GlobalFontSettings.GetSecondaryFont();
     }
 }
