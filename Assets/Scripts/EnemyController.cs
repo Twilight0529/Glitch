@@ -191,6 +191,10 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float stuckEscapeVelocityBoost = 1.35f;
     [SerializeField] private float emergencyDestroyerDuration = 2f;
 
+    [Header("Path Hysteresis")]
+    [SerializeField] private float blockedRepathHoldSeconds = 0.28f;
+    [SerializeField] private float blockedRepathDistanceMultiplier = 1.8f;
+
     private Rigidbody2D rb;
     private Collider2D ownCollider;
     private SpriteRenderer ownRenderer;
@@ -253,6 +257,9 @@ public class EnemyController : MonoBehaviour
     private Vector2 stuckCheckPosition;
     private int stuckConsecutiveChecks;
     private bool emergencyDestroyerActive;
+    private Vector2 pendingBlockedRepathGoal;
+    private float pendingBlockedRepathTimer;
+    private bool hasPendingBlockedRepathGoal;
 
     private float agentRadius;
     private static PhysicsMaterial2D noFrictionMaterial;
@@ -415,12 +422,54 @@ public class EnemyController : MonoBehaviour
         {
             repathTimer += Time.deltaTime;
             bool targetMoved = Vector2.Distance(strategicTarget, lastPathGoal) >= targetRepathThreshold;
+            bool hasDirectToStrategic = HasDirectPath(rb.position, strategicTarget);
+            bool obstacleBlocked = !hasDirectToStrategic && pathWorld.Count > 0;
             float effectiveRepathInterval = Mathf.Max(
                 0.05f,
                 repathInterval * (chaosDriveEnabled ? chaosRepathIntervalMultiplier : 1f));
-            if (repathTimer >= effectiveRepathInterval || targetMoved || pathWorld.Count == 0)
+
+            bool shouldRepath = pathWorld.Count == 0 || repathTimer >= effectiveRepathInterval;
+            if (!shouldRepath && targetMoved)
+            {
+                if (!obstacleBlocked)
+                {
+                    shouldRepath = true;
+                    ResetBlockedRepathHysteresis();
+                }
+                else
+                {
+                    float forceDistance = Mathf.Max(targetRepathThreshold, targetRepathThreshold * blockedRepathDistanceMultiplier);
+                    float targetShift = Vector2.Distance(strategicTarget, lastPathGoal);
+                    float resetThreshold = Mathf.Max(0.06f, targetRepathThreshold * 0.35f);
+
+                    if (!hasPendingBlockedRepathGoal || Vector2.Distance(strategicTarget, pendingBlockedRepathGoal) > resetThreshold)
+                    {
+                        pendingBlockedRepathGoal = strategicTarget;
+                        pendingBlockedRepathTimer = 0f;
+                        hasPendingBlockedRepathGoal = true;
+                    }
+                    else
+                    {
+                        pendingBlockedRepathTimer += Time.deltaTime;
+                    }
+
+                    bool stable = pendingBlockedRepathTimer >= Mathf.Max(0.05f, blockedRepathHoldSeconds);
+                    bool farEnough = targetShift >= forceDistance;
+                    if (stable || farEnough)
+                    {
+                        shouldRepath = true;
+                    }
+                }
+            }
+            else if (!obstacleBlocked)
+            {
+                ResetBlockedRepathHysteresis();
+            }
+
+            if (shouldRepath)
             {
                 RebuildPathTo(strategicTarget);
+                ResetBlockedRepathHysteresis();
             }
         }
 
@@ -607,6 +656,7 @@ public class EnemyController : MonoBehaviour
     {
         emergencyDestroyerActive = false;
         stuckConsecutiveChecks = 0;
+        ResetBlockedRepathHysteresis();
         AnomalyState previousState = currentState;
         AnomalyState nextState = PickWeightedState(forceDifferent);
         currentState = nextState;
@@ -1814,6 +1864,13 @@ public class EnemyController : MonoBehaviour
         AdvancePathWaypoint();
     }
 
+    private void ResetBlockedRepathHysteresis()
+    {
+        hasPendingBlockedRepathGoal = false;
+        pendingBlockedRepathTimer = 0f;
+        pendingBlockedRepathGoal = Vector2.zero;
+    }
+
     private Vector2 SelectSteeringTarget(Vector2 strategicTarget)
     {
         AdvancePathWaypoint();
@@ -2011,6 +2068,7 @@ public class EnemyController : MonoBehaviour
         BuildNavigationGrid();
         pathWorld.Clear();
         pathIndex = 0;
+        ResetBlockedRepathHysteresis();
         stuckConsecutiveChecks = 0;
     }
 
