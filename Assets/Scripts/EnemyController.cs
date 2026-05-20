@@ -1913,14 +1913,20 @@ public class EnemyController : MonoBehaviour
         stuckCheckPosition = rb.position;
 
         float targetDistance = Vector2.Distance(rb.position, strategicTarget);
-        bool movingEnough = rb.linearVelocity.sqrMagnitude >= 0.04f;
-        bool lowProgress = moved < stuckDistanceThreshold;
-        bool needsChase = targetDistance >= Mathf.Max(0.6f, stuckTargetMinDistance);
+        float progressThreshold = Mathf.Max(0.14f, stuckDistanceThreshold);
+        bool lowProgress = moved < progressThreshold;
+        bool needsChase = targetDistance >= Mathf.Max(0.45f, stuckTargetMinDistance * 0.55f);
         bool nearObstacle = IsNearBlockingObstacle(Mathf.Max(0.3f, stuckObstacleProbeRadius));
 
-        if (!movingEnough || !lowProgress || !needsChase || !nearObstacle)
+        if (!nearObstacle || !needsChase)
         {
             stuckConsecutiveChecks = 0;
+            return;
+        }
+
+        if (!lowProgress)
+        {
+            stuckConsecutiveChecks = Mathf.Max(0, stuckConsecutiveChecks - 1);
             return;
         }
 
@@ -1988,7 +1994,7 @@ public class EnemyController : MonoBehaviour
     {
         if (currentState == AnomalyState.Destroyer)
         {
-            return;
+            return; 
         }
 
         AnomalyState previousState = currentState;
