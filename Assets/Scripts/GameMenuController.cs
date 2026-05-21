@@ -180,14 +180,12 @@ public class GameMenuController : MonoBehaviour
 
     private void RestartLevel()
     {
-        EnsureDefeatScoreRegistered();
         Time.timeScale = 1f;
         SceneTransitionController.ReloadActiveScene();
     }
 
     private void ReturnToMainMenu()
     {
-        EnsureDefeatScoreRegistered();
         Time.timeScale = 1f;
         if (!string.IsNullOrWhiteSpace(mainMenuSceneName) && Application.CanStreamedLevelBeLoaded(mainMenuSceneName))
         {
@@ -427,16 +425,6 @@ public class GameMenuController : MonoBehaviour
 
         string lastName = RankingStorage.GetLastPlayerName();
         rankingNameInput = string.IsNullOrWhiteSpace(lastName) ? "Player" : lastName;
-    }
-
-    private void EnsureDefeatScoreRegistered()
-    {
-        if (state != OverlayState.Defeat || gameManager == null || rankingSubmitted)
-        {
-            return;
-        }
-
-        TryRegisterCurrentScore();
     }
 
     private void TryRegisterCurrentScore()
