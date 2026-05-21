@@ -44,6 +44,11 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Color statePulseOverlayColorA = new Color(1f, 0.35f, 0.52f, 1f);
     [SerializeField] private Color statePulseOverlayColorB = new Color(0.30f, 0.95f, 1f, 1f);
 
+    [Header("HUD Atmosphere")]
+    [SerializeField] private bool enableAmbientHudFrame = true;
+    [SerializeField, Range(0.04f, 0.35f)] private float sideHudOpacity = 0.12f;
+    [SerializeField, Range(0.02f, 0.22f)] private float sideHudAccentOpacity = 0.09f;
+
     public bool IsGameOver { get; private set; }
     public bool IsRunActive => runPhase == RunPhase.Active && !IsGameOver;
     public float SurvivalTime { get; private set; }
@@ -508,6 +513,10 @@ public class GameManager : MonoBehaviour
         const float lineHeight = 22f;
         float x = (Screen.width - width) * 0.5f;
         float y = 10f;
+        Rect panel = new Rect(x - 12f, y + 2f, width + 24f, 46f);
+        DrawSolidRect(panel, new Color(0.05f, 0.04f, 0.08f, 0.62f));
+        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 1f), new Color(0.93f, 0.76f, 0.88f, 0.44f));
+        DrawSolidRect(new Rect(panel.x, panel.yMax - 1f, panel.width, 1f), new Color(0.45f, 0.62f, 0.92f, 0.30f));
 
         GUI.Label(new Rect(x, y, width, lineHeight), "Anomaly State", bossStateStyle);
         GUI.Label(new Rect(x, y + 20f, width, lineHeight), stateValue, bossStateValueStyle);
@@ -601,10 +610,12 @@ public class GameManager : MonoBehaviour
     private void DrawRuntimeHud()
     {
         EnsureBossStateStyles();
+        DrawHudAmbientFrame();
 
         Rect leftPanel = new Rect(12f, 10f, 250f, 84f);
         DrawSolidRect(leftPanel, new Color(0.03f, 0.05f, 0.10f, 0.58f));
         DrawSolidRect(new Rect(leftPanel.x, leftPanel.y, leftPanel.width, 2f), new Color(0.38f, 0.58f, 0.84f, 0.6f));
+        DrawSolidRect(new Rect(leftPanel.x, leftPanel.yMax - 2f, leftPanel.width, 2f), new Color(0.18f, 0.32f, 0.50f, 0.42f));
 
         GUI.Label(new Rect(leftPanel.x + 12f, leftPanel.y + 8f, 220f, 18f), "TIME", hudLabelStyle);
         GUI.Label(new Rect(leftPanel.x + 12f, leftPanel.y + 24f, 220f, 28f), $"{SurvivalTime:F1}s", hudValueStyle);
@@ -621,6 +632,92 @@ public class GameManager : MonoBehaviour
         if (!string.Equals(eventLabel, "Nominal"))
         {
             DrawHudChip(new Rect(rightX, 38f, chipW, chipH), eventLabel, new Color(0.31f, 0.17f, 0.22f, 0.68f));
+        }
+    }
+
+    private void DrawHudAmbientFrame()
+    {
+        if (!enableAmbientHudFrame)
+        {
+            return;
+        }
+
+        Color baseTint;
+        Color accentTint;
+        GetHudThemeColors(out baseTint, out accentTint);
+
+        float t = Time.unscaledTime;
+        float sideWidth = Mathf.Clamp(Screen.width * 0.052f, 36f, 86f);
+        Rect left = new Rect(0f, 0f, sideWidth, Screen.height);
+        Rect right = new Rect(Screen.width - sideWidth, 0f, sideWidth, Screen.height);
+        DrawSolidRect(left, new Color(baseTint.r, baseTint.g, baseTint.b, sideHudOpacity));
+        DrawSolidRect(right, new Color(baseTint.r, baseTint.g, baseTint.b, sideHudOpacity));
+
+        float innerGlowWidth = Mathf.Max(2f, sideWidth * 0.12f);
+        DrawSolidRect(
+            new Rect(sideWidth - innerGlowWidth, 0f, innerGlowWidth, Screen.height),
+            new Color(accentTint.r, accentTint.g, accentTint.b, sideHudAccentOpacity));
+        DrawSolidRect(
+            new Rect(Screen.width - sideWidth, 0f, innerGlowWidth, Screen.height),
+            new Color(accentTint.r, accentTint.g, accentTint.b, sideHudAccentOpacity));
+
+        float step = Mathf.Max(34f, Screen.height / 17f);
+        for (float y = -step; y <= Screen.height + step; y += step)
+        {
+            float wobble = Mathf.Sin((y * 0.03f) + (t * 2.4f)) * 4f;
+            float yAnim = y + Mathf.Sin((t * 1.8f) + y * 0.02f) * 6f;
+            float lineWidth = Mathf.Lerp(8f, sideWidth * 0.55f, Mathf.PerlinNoise(y * 0.013f, t * 0.45f));
+            float lineAlpha = 0.08f + 0.09f * (0.5f + 0.5f * Mathf.Sin((t * 4.2f) + y * 0.06f));
+
+            DrawSolidRect(
+                new Rect(7f + wobble, yAnim, lineWidth, 2f),
+                new Color(accentTint.r, accentTint.g, accentTint.b, lineAlpha));
+            DrawSolidRect(
+                new Rect(Screen.width - 7f - lineWidth - wobble, yAnim, lineWidth, 2f),
+                new Color(accentTint.r, accentTint.g, accentTint.b, lineAlpha));
+        }
+
+        float sweepHeight = Mathf.Lerp(Screen.height * 0.12f, Screen.height * 0.18f, 0.5f + 0.5f * Mathf.Sin(t * 0.7f));
+        float sweepY = Mathf.Repeat(t * (Screen.height * 0.24f), Screen.height + sweepHeight) - sweepHeight;
+        DrawSolidRect(
+            new Rect(0f, sweepY, sideWidth, sweepHeight),
+            new Color(accentTint.r, accentTint.g, accentTint.b, sideHudAccentOpacity * 0.56f));
+        DrawSolidRect(
+            new Rect(Screen.width - sideWidth, Screen.height - sweepY - sweepHeight, sideWidth, sweepHeight),
+            new Color(accentTint.r, accentTint.g, accentTint.b, sideHudAccentOpacity * 0.56f));
+
+        float bracketW = 28f;
+        float bracketH = 3f;
+        float inset = sideWidth + 6f;
+        float topY = 8f;
+        float bottomY = Screen.height - 12f;
+        Color bracket = new Color(accentTint.r, accentTint.g, accentTint.b, 0.26f);
+        DrawSolidRect(new Rect(inset, topY, bracketW, bracketH), bracket);
+        DrawSolidRect(new Rect(Screen.width - inset - bracketW, topY, bracketW, bracketH), bracket);
+        DrawSolidRect(new Rect(inset, bottomY, bracketW, bracketH), bracket);
+        DrawSolidRect(new Rect(Screen.width - inset - bracketW, bottomY, bracketW, bracketH), bracket);
+    }
+
+    private void GetHudThemeColors(out Color baseTint, out Color accentTint)
+    {
+        switch (levelType)
+        {
+            case "Lab":
+                baseTint = new Color(0.08f, 0.13f, 0.22f, 1f);
+                accentTint = new Color(0.42f, 0.73f, 1f, 1f);
+                break;
+            case "Storage":
+                baseTint = new Color(0.17f, 0.12f, 0.07f, 1f);
+                accentTint = new Color(0.98f, 0.71f, 0.34f, 1f);
+                break;
+            case "Rupture":
+                baseTint = new Color(0.16f, 0.08f, 0.18f, 1f);
+                accentTint = new Color(1f, 0.43f, 0.75f, 1f);
+                break;
+            default:
+                baseTint = new Color(0.10f, 0.12f, 0.18f, 1f);
+                accentTint = new Color(0.68f, 0.78f, 0.96f, 1f);
+                break;
         }
     }
 
