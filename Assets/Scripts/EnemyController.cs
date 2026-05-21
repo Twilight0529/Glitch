@@ -2191,7 +2191,7 @@ public class EnemyController : MonoBehaviour
         {
             for (int y = 0; y < gridHeight; y++)
             {
-                gCost[x, y] = float.PositiveInfinity;
+                gCost[x, y] = float.PositiveInfinity; 
                 fCost[x, y] = float.PositiveInfinity;
             }
         }

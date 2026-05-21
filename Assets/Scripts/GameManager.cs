@@ -23,6 +23,9 @@ public class GameManager : MonoBehaviour
     [SerializeField] private bool chaosTempoEnabled = true;
     [SerializeField, Range(0.45f, 1f)] private float chaosBehaviorIntervalMultiplier = 0.72f;
 
+    [Header("Scoring")]
+    [SerializeField] private float pointsPerSecond = 100f;
+
     [Header("Progression Gates")]
     [SerializeField] private float bossSpecialStatesUnlockTime = 30f;
     [SerializeField] private float mapEventsUnlockTime = 60f;
@@ -45,6 +48,7 @@ public class GameManager : MonoBehaviour
     public bool IsRunActive => runPhase == RunPhase.Active && !IsGameOver;
     public float SurvivalTime { get; private set; }
     public float DifficultyMultiplier => 1f + (SurvivalTime * difficultyRampPerSecond);
+    public int CurrentScore => Mathf.Max(0, Mathf.FloorToInt(SurvivalTime * Mathf.Max(1f, pointsPerSecond) * DifficultyMultiplier));
     public string CurrentLevelTypeLabel => levelType;
     public bool AreBossSpecialStatesUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, bossSpecialStatesUnlockTime);
     public bool AreMapEventsUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, mapEventsUnlockTime);
@@ -77,14 +81,15 @@ public class GameManager : MonoBehaviour
     private string levelType = "Unknown";
     private GUIStyle countdownStyle;
     private GUIStyle countdownSubStyle;
+    private GUIStyle hudLabelStyle;
+    private GUIStyle hudValueStyle;
+    private GUIStyle hudChipStyle;
     private GUIStyle bossStateStyle;
     private GUIStyle bossStateValueStyle;
-    private GUIStyle bossPacingValueStyle;
     private GUIStyle eventWarningStyle;
     private Font importantFont;
     private Font secondaryFont;
     private string lastBossStateRaw;
-    private string lastPacingPhaseRaw;
     private float statePulseOverlayTimer;
 
     private void Awake()
@@ -182,21 +187,12 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        const int margin = 12;
-
-        GUI.Label(new Rect(margin, margin, 350f, 25f), $"Survival Time: {SurvivalTime:F1}s");
-        GUI.Label(new Rect(margin, margin + 22f, 350f, 25f), $"Threat Level: x{DifficultyMultiplier:F2}");
-        GUI.Label(new Rect(margin, margin + 44f, 350f, 25f), $"Pattern Shift: {CurrentBehaviorChangeInterval:F1}s");
-        GUI.Label(new Rect(margin, margin + 66f, 350f, 25f), $"Level Type: {levelType}");
-        GUI.Label(new Rect(margin, margin + 88f, 380f, 25f), $"Player Effect: {GetPlayerEffectLabel()}");
-        GUI.Label(new Rect(margin, margin + 110f, 480f, 25f), $"Map Event: {GetMapEventLabel()}");
-        DrawBossStateHud();
-        DrawStatePulseOverlay();
-        DrawChaosWarningOverlay();
-
-        if (IsGameOver)
+        if (runPhase == RunPhase.Active)
         {
-            GUI.Label(new Rect(margin, margin + 132f, 500f, 25f), "GAME OVER - The anomaly reached you.");
+            DrawRuntimeHud();
+            DrawBossStateHud();
+            DrawStatePulseOverlay();
+            DrawChaosWarningOverlay();
         }
 
         if (runPhase == RunPhase.StartupDelay || runPhase == RunPhase.Countdown || runPhase == RunPhase.GoFlash)
@@ -216,7 +212,6 @@ public class GameManager : MonoBehaviour
         reloadTimer = 0f;
         statePulseOverlayTimer = 0f;
         lastBossStateRaw = null;
-        lastPacingPhaseRaw = null;
         Time.timeScale = 0f;
     }
 
@@ -406,16 +401,6 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    private string GetPlayerEffectLabel()
-    {
-        if (playerController == null)
-        {
-            return "None";
-        }
-
-        return playerController.ActivePowerupLabel;
-    }
-
     private string GetMapEventLabel()
     {
         if (chaosDirector == null)
@@ -476,13 +461,10 @@ public class GameManager : MonoBehaviour
         }
 
         string stateRaw = enemyController.CurrentStateLabel;
-        string phaseRaw = enemyController.CurrentPacingPhaseLabel;
-
-        if (!string.Equals(lastBossStateRaw, stateRaw) || !string.Equals(lastPacingPhaseRaw, phaseRaw))
+        if (!string.Equals(lastBossStateRaw, stateRaw))
         {
             statePulseOverlayTimer = Mathf.Max(statePulseOverlayTimer, Mathf.Max(0.05f, statePulseOverlayDuration));
             lastBossStateRaw = stateRaw;
-            lastPacingPhaseRaw = phaseRaw;
         }
     }
 
@@ -517,21 +499,18 @@ public class GameManager : MonoBehaviour
         EnsureBossStateStyles();
 
         string stateValue = "Unknown";
-        string pacingValue = "Unknown";
         if (enemyController != null)
         {
             stateValue = ToBossStateLabel(enemyController.CurrentStateLabel);
-            pacingValue = ToPacingPhaseLabel(enemyController.CurrentPacingPhaseLabel);
         }
 
-        const float width = 440f;
+        const float width = 420f;
         const float lineHeight = 22f;
         float x = (Screen.width - width) * 0.5f;
         float y = 10f;
 
         GUI.Label(new Rect(x, y, width, lineHeight), "Anomaly State", bossStateStyle);
-        GUI.Label(new Rect(x, y + 18f, width, lineHeight), stateValue, bossStateValueStyle);
-        GUI.Label(new Rect(x, y + 38f, width, lineHeight), $"Pacing: {pacingValue}", bossPacingValueStyle);
+        GUI.Label(new Rect(x, y + 20f, width, lineHeight), stateValue, bossStateValueStyle);
     }
 
     private static string ToBossStateLabel(string raw)
@@ -566,34 +545,39 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    private static string ToPacingPhaseLabel(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return "Unknown";
-        }
-
-        switch (raw)
-        {
-            case "BuildUp":
-                return "Build Up";
-            case "SustainPeak":
-                return "Sustain Peak";
-            case "PeakFade":
-                return "Peak Fade";
-            case "Relax":
-                return "Relax";
-            default:
-                return raw;
-        }
-    }
-
     private void EnsureBossStateStyles()
     {
-        if (bossStateStyle != null && bossStateValueStyle != null && bossPacingValueStyle != null)
+        if (bossStateStyle != null && bossStateValueStyle != null && hudLabelStyle != null && hudValueStyle != null && hudChipStyle != null)
         {
             return;
         }
+
+        hudLabelStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = secondaryFont,
+            fontSize = 13,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.UpperLeft
+        };
+        hudLabelStyle.normal.textColor = new Color(0.82f, 0.90f, 1f, 0.86f);
+
+        hudValueStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = importantFont,
+            fontSize = 24,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.UpperLeft
+        };
+        hudValueStyle.normal.textColor = new Color(0.96f, 0.98f, 1f, 0.98f);
+
+        hudChipStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = secondaryFont,
+            fontSize = 13,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter
+        };
+        hudChipStyle.normal.textColor = new Color(0.90f, 0.95f, 1f, 0.96f);
 
         bossStateStyle = new GUIStyle(GUI.skin.label)
         {
@@ -612,15 +596,39 @@ public class GameManager : MonoBehaviour
             alignment = TextAnchor.MiddleCenter
         };
         bossStateValueStyle.normal.textColor = new Color(1f, 0.76f, 0.82f, 0.98f);
+    }
 
-        bossPacingValueStyle = new GUIStyle(GUI.skin.label)
+    private void DrawRuntimeHud()
+    {
+        EnsureBossStateStyles();
+
+        Rect leftPanel = new Rect(12f, 10f, 250f, 84f);
+        DrawSolidRect(leftPanel, new Color(0.03f, 0.05f, 0.10f, 0.58f));
+        DrawSolidRect(new Rect(leftPanel.x, leftPanel.y, leftPanel.width, 2f), new Color(0.38f, 0.58f, 0.84f, 0.6f));
+
+        GUI.Label(new Rect(leftPanel.x + 12f, leftPanel.y + 8f, 220f, 18f), "TIME", hudLabelStyle);
+        GUI.Label(new Rect(leftPanel.x + 12f, leftPanel.y + 24f, 220f, 28f), $"{SurvivalTime:F1}s", hudValueStyle);
+
+        GUI.Label(new Rect(leftPanel.x + 130f, leftPanel.y + 8f, 110f, 18f), "POINTS", hudLabelStyle);
+        GUI.Label(new Rect(leftPanel.x + 130f, leftPanel.y + 24f, 110f, 28f), CurrentScore.ToString(), hudValueStyle);
+
+        float chipW = 170f;
+        float chipH = 24f;
+        float rightX = Screen.width - chipW - 12f;
+        DrawHudChip(new Rect(rightX, 10f, chipW, chipH), $"Level: {levelType}", new Color(0.14f, 0.21f, 0.33f, 0.62f));
+
+        string eventLabel = GetMapEventLabel();
+        if (!string.Equals(eventLabel, "Nominal"))
         {
-            font = secondaryFont,
-            fontSize = 13,
-            fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter
-        };
-        bossPacingValueStyle.normal.textColor = new Color(0.78f, 0.90f, 1f, 0.95f);
+            DrawHudChip(new Rect(rightX, 38f, chipW, chipH), eventLabel, new Color(0.31f, 0.17f, 0.22f, 0.68f));
+        }
+    }
+
+    private void DrawHudChip(Rect rect, string text, Color fill)
+    {
+        DrawSolidRect(rect, fill);
+        DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 1f), new Color(0.85f, 0.92f, 1f, 0.35f));
+        GUI.Label(rect, text, hudChipStyle);
     }
 
     private void EnsureWarningStyle()
