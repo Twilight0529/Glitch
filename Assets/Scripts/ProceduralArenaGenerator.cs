@@ -55,6 +55,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     [Header("Theme")]
     [SerializeField] private bool randomizeThemeEachRun = true;
+    [SerializeField] private bool avoidConsecutiveThemeRepeat = true;
     [SerializeField] private ArenaTheme fixedTheme = ArenaTheme.ContainmentLab;
 
     [Header("Rupture Pattern")]
@@ -95,6 +96,8 @@ public class ProceduralArenaGenerator : MonoBehaviour
     private System.Random rng;
     private ArenaTheme activeTheme;
     private ThemePalette palette;
+    private static bool hasLastGeneratedTheme;
+    private static ArenaTheme lastGeneratedTheme;
 
     private readonly List<Rect> blockedAreas = new List<Rect>();
     private readonly List<Rect> placedObstacleRects = new List<Rect>();
@@ -132,6 +135,8 @@ public class ProceduralArenaGenerator : MonoBehaviour
     {
         InitializeRandom();
         activeTheme = SelectTheme();
+        hasLastGeneratedTheme = true;
+        lastGeneratedTheme = activeTheme;
         palette = GetPalette(activeTheme);
 
         ClearGeneratedGeometry();
@@ -207,8 +212,34 @@ public class ProceduralArenaGenerator : MonoBehaviour
             return fixedTheme;
         }
 
-        int count = Enum.GetValues(typeof(ArenaTheme)).Length;
-        return (ArenaTheme)rng.Next(0, count);
+        Array values = Enum.GetValues(typeof(ArenaTheme));
+        int count = values.Length;
+        if (count <= 1)
+        {
+            return (ArenaTheme)values.GetValue(0);
+        }
+
+        if (!avoidConsecutiveThemeRepeat || !hasLastGeneratedTheme)
+        {
+            return (ArenaTheme)values.GetValue(rng.Next(0, count));
+        }
+
+        ArenaTheme selected = lastGeneratedTheme;
+        int safety = 0;
+        while (selected == lastGeneratedTheme && safety < 16)
+        {
+            selected = (ArenaTheme)values.GetValue(rng.Next(0, count));
+            safety++;
+        }
+
+        if (selected == lastGeneratedTheme)
+        {
+            int lastIndex = Array.IndexOf(values, lastGeneratedTheme);
+            int fallbackIndex = (lastIndex + 1) % count;
+            selected = (ArenaTheme)values.GetValue(fallbackIndex);
+        }
+
+        return selected;
     }
 
     private static ThemePalette GetPalette(ArenaTheme theme)
