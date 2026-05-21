@@ -29,6 +29,8 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private float introFadeOutDuration = 1.30f;
     [SerializeField] private float exitFadeInDuration = 1.05f;
     [SerializeField] private Color transitionBlack = Color.black;
+    [Header("Menu Visuals")]
+    [SerializeField] private float menuMotionIntensity = 1f;
 
     private bool showOptions;
     private bool queuedGameplayLoad;
@@ -43,6 +45,7 @@ public class MainMenuController : MonoBehaviour
     private GUIStyle rankingTitleStyle;
     private GUIStyle rankingRowStyle;
     private GUIStyle rankingScoreStyle;
+    private GUIStyle menuButtonLabelStyle;
     private int cachedScreenWidth;
     private int cachedScreenHeight;
     private float cachedUiScale = -1f;
@@ -50,6 +53,7 @@ public class MainMenuController : MonoBehaviour
     private float transitionTimer;
     private MenuTransitionState transitionState;
     private bool introReady;
+    private readonly Dictionary<string, float> buttonHoverStates = new Dictionary<string, float>();
 
     private void Awake()
     {
@@ -108,41 +112,46 @@ public class MainMenuController : MonoBehaviour
         GetMainMenuLayout(out Rect panel, out Rect rankingRect, out bool sideBySide);
         panel.y += bob;
         rankingRect.y += bob * 0.55f;
+        DrawSignalBeams(Time.unscaledTime);
         DrawMenuAtmosphere(panel, rankingRect, sideBySide);
+        DrawPanelOrbiters(panel, rankingRect);
 
         DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.90f), new Color(0.47f, 0.56f, 0.72f, 0.58f));
+        DrawPanelFx(panel, new Color(0.62f, 0.76f, 1f, 1f), 0.14f);
 
-        Rect area = new Rect(panel.x + 18f, panel.y + 14f, panel.width - 36f, panel.height - 24f);
-        GUILayout.BeginArea(area);
-        GUILayout.Label(gameTitle, titleStyle);
-        GUILayout.Space(2f);
-        GUILayout.Label(gameSubtitle, subtitleStyle);
-        GUILayout.Space(20f);
+        Rect titleRect = new Rect(panel.x + 18f, panel.y + 14f, panel.width - 36f, 62f);
+        Rect subtitleRect = new Rect(panel.x + 18f, panel.y + 76f, panel.width - 36f, 26f);
+        DrawGlitchTitle(titleRect, gameTitle, titleStyle, 1f);
+        DrawGlitchTitle(subtitleRect, gameSubtitle, subtitleStyle, 0.55f);
+        DrawSolidRect(new Rect(panel.x + 36f, panel.y + 110f, panel.width - 72f, 1f), new Color(0.80f, 0.90f, 1f, 0.18f));
+        float markerX = panel.x + 42f + Mathf.Repeat(Time.unscaledTime * 90f, Mathf.Max(1f, panel.width - 88f));
+        DrawSolidRect(new Rect(markerX, panel.y + 109f, 26f, 3f), new Color(0.90f, 0.97f, 1f, 0.35f));
 
-        if (DrawMenuButton("Jugar", 44f))
+        float buttonY = panel.y + 132f;
+        Rect playRect = new Rect(panel.x + 18f, buttonY, panel.width - 36f, 44f);
+        Rect optionsRect = new Rect(panel.x + 18f, buttonY + 54f, panel.width - 36f, 38f);
+        Rect exitRect = new Rect(panel.x + 18f, buttonY + 102f, panel.width - 36f, 38f);
+
+        if (DrawAnimatedMenuButton(playRect, "Jugar", true))
         {
             StartGameplay();
         }
-
-        GUILayout.Space(10f);
-        if (DrawMenuButton("Opciones", 38f))
+        if (DrawAnimatedMenuButton(optionsRect, "Opciones"))
         {
             showOptions = true;
         }
-
-        GUILayout.Space(10f);
-        if (DrawMenuButton("Salir", 38f))
+        if (DrawAnimatedMenuButton(exitRect, "Salir"))
         {
             ExitGame();
         }
 
-        GUILayout.EndArea();
         DrawRankingPanel(rankingRect, sideBySide);
     }
 
     private void DrawRankingPanel(Rect panel, bool sideBySide)
     {
         DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.90f), new Color(0.47f, 0.56f, 0.72f, 0.50f));
+        DrawPanelFx(panel, new Color(0.64f, 0.74f, 1f, 1f), 0.09f);
         Rect area = new Rect(panel.x + 14f, panel.y + 10f, panel.width - 28f, panel.height - 16f);
         GUILayout.BeginArea(area);
         GUILayout.Label("Ranking Global", rankingTitleStyle);
@@ -179,6 +188,12 @@ public class MainMenuController : MonoBehaviour
                 new Rect(row.x + row.width * 0.68f, row.y, row.width * 0.30f, row.height),
                 entry.score.ToString(),
                 rankingScoreStyle);
+
+            if (i == 0)
+            {
+                float sparkle = 0.35f + 0.65f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * 3.2f));
+                DrawSolidRect(new Rect(row.x + row.width - 14f, row.y + 9f, 4f, 4f), new Color(1f, 0.88f, 0.55f, 0.32f * sparkle));
+            }
         }
 
         GUILayout.EndArea();
@@ -432,6 +447,9 @@ public class MainMenuController : MonoBehaviour
             float h = Mathf.Lerp(2f, 5f, Mathf.PerlinNoise(seed * 5.2f, time * 0.25f));
             DrawSolidRect(new Rect(x, y, w, h), new Color(0.84f, 0.91f, 1f, 0.08f));
         }
+
+        float band = Mathf.Repeat(time * 85f, Screen.height + 220f) - 110f;
+        DrawSolidRect(new Rect(0f, band, Screen.width, 42f), new Color(0.66f, 0.78f, 0.97f, 0.025f));
     }
 
     private static void DrawMenuAtmosphere(Rect mainPanel, Rect rankingPanel, bool sideBySide)
@@ -457,6 +475,66 @@ public class MainMenuController : MonoBehaviour
             float y = (mainCenter.y + rankCenter.y) * 0.5f;
             DrawSolidRect(new Rect(x0, y - 1f, Mathf.Max(4f, x1 - x0), 2f), new Color(0.88f, 0.95f, 1f, 0.14f));
         }
+    }
+
+    private void DrawSignalBeams(float time)
+    {
+        float pulse = 0.5f + 0.5f * Mathf.Sin(time * 2f);
+        float alpha = (0.05f + pulse * 0.04f) * Mathf.Clamp(menuMotionIntensity, 0.4f, 2f);
+        float yA = Screen.height * 0.24f + Mathf.Sin(time * 0.9f) * 22f;
+        float yB = Screen.height * 0.74f + Mathf.Sin(time * 1.15f + 1.4f) * 18f;
+        DrawSolidRect(new Rect(0f, yA, Screen.width, 2f), new Color(0.72f, 0.86f, 1f, alpha));
+        DrawSolidRect(new Rect(0f, yB, Screen.width, 1f), new Color(0.98f, 0.52f, 0.72f, alpha * 0.65f));
+
+        float xA = Screen.width * 0.33f + Mathf.Sin(time * 0.75f + 2f) * 16f;
+        float xB = Screen.width * 0.66f + Mathf.Sin(time * 0.95f + 0.8f) * 14f;
+        DrawSolidRect(new Rect(xA, 0f, 1f, Screen.height), new Color(0.62f, 0.74f, 0.96f, alpha * 0.42f));
+        DrawSolidRect(new Rect(xB, 0f, 1f, Screen.height), new Color(0.95f, 0.57f, 0.82f, alpha * 0.32f));
+    }
+
+    private static void DrawPanelOrbiters(Rect mainPanel, Rect rankingPanel)
+    {
+        float t = Time.unscaledTime;
+        DrawRectOrbit(mainPanel, t * 0.55f, new Color(0.84f, 0.94f, 1f, 0.22f));
+        DrawRectOrbit(rankingPanel, -t * 0.48f, new Color(0.98f, 0.74f, 0.92f, 0.16f));
+    }
+
+    private static void DrawRectOrbit(Rect rect, float phase, Color color)
+    {
+        float perimeter = Mathf.Max(1f, rect.width * 2f + rect.height * 2f);
+        float p = Mathf.Repeat(phase * 72f, perimeter);
+        Vector2 pos = GetPointOnRectPerimeter(rect, p);
+        DrawSolidRect(new Rect(pos.x - 2f, pos.y - 2f, 4f, 4f), color);
+        Vector2 pos2 = GetPointOnRectPerimeter(rect, Mathf.Repeat(p + perimeter * 0.5f, perimeter));
+        DrawSolidRect(new Rect(pos2.x - 1f, pos2.y - 1f, 2f, 2f), new Color(color.r, color.g, color.b, color.a * 0.7f));
+    }
+
+    private static Vector2 GetPointOnRectPerimeter(Rect rect, float dist)
+    {
+        float top = rect.width;
+        float right = rect.height;
+        float bottom = rect.width;
+        float left = rect.height;
+
+        if (dist < top)
+        {
+            return new Vector2(rect.x + dist, rect.y);
+        }
+
+        dist -= top;
+        if (dist < right)
+        {
+            return new Vector2(rect.xMax, rect.y + dist);
+        }
+
+        dist -= right;
+        if (dist < bottom)
+        {
+            return new Vector2(rect.xMax - dist, rect.yMax);
+        }
+
+        dist -= bottom;
+        return new Vector2(rect.x, rect.yMax - Mathf.Min(left, dist));
     }
 
     private void DrawBand(Rect band, Color baseColor, string label, int motifType, float time)
@@ -594,6 +672,108 @@ public class MainMenuController : MonoBehaviour
         return clicked;
     }
 
+    private bool DrawAnimatedMenuButton(Rect rect, string label, bool primary = false)
+    {
+        bool canInteract = transitionState == MenuTransitionState.Idle;
+        bool hovered = rect.Contains(Event.current.mousePosition);
+        float hoverLerp = GetButtonHoverState(label, hovered);
+        float t = Time.unscaledTime;
+        float pulse = 0.6f + 0.4f * Mathf.Sin(t * (primary ? 3.6f : 2.8f));
+        float wobble = hovered ? Mathf.Sin(t * 7.2f) * 0.7f : 0f;
+        rect.y += wobble;
+
+        Color baseFill = primary
+            ? new Color(0.10f, 0.18f, 0.28f, 0.94f)
+            : new Color(0.08f, 0.11f, 0.18f, 0.90f);
+        Color fill = Color.Lerp(baseFill, new Color(0.18f, 0.30f, 0.48f, 0.96f), hoverLerp * 0.65f);
+        Color border = Color.Lerp(
+            new Color(0.62f, 0.76f, 1f, 0.36f),
+            new Color(0.88f, 0.96f, 1f, 0.78f),
+            hoverLerp);
+
+        DrawSolidRect(rect, fill);
+        DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 1.5f), border);
+        DrawSolidRect(new Rect(rect.x, rect.yMax - 1.5f, rect.width, 1.5f), new Color(border.r, border.g, border.b, border.a * 0.65f));
+        DrawSolidRect(new Rect(rect.x, rect.y, 1.5f, rect.height), new Color(border.r, border.g, border.b, border.a * 0.8f));
+        DrawSolidRect(new Rect(rect.xMax - 1.5f, rect.y, 1.5f, rect.height), new Color(border.r, border.g, border.b, border.a * 0.8f));
+        DrawSolidRect(new Rect(rect.x + 6f, rect.y + 6f, 3f, rect.height - 12f), new Color(0.84f, 0.95f, 1f, 0.24f + hoverLerp * 0.28f));
+
+        float shineW = Mathf.Lerp(rect.width * 0.16f, rect.width * 0.28f, hoverLerp);
+        float shineX = Mathf.Repeat(t * 120f + rect.width * (primary ? 0.12f : 0.38f), rect.width + shineW) - shineW;
+        DrawSolidRect(
+            new Rect(rect.x + shineX, rect.y + 1f, shineW, rect.height - 2f),
+            new Color(0.84f, 0.94f, 1f, (0.05f + 0.06f * pulse) * (0.45f + hoverLerp * 0.8f)));
+
+        if (hovered)
+        {
+            DrawSolidRect(new Rect(rect.x - 2f, rect.y - 2f, rect.width + 4f, 2f), new Color(0.85f, 0.96f, 1f, 0.32f));
+            DrawSolidRect(new Rect(rect.x - 2f, rect.yMax, rect.width + 4f, 2f), new Color(0.85f, 0.96f, 1f, 0.24f));
+            float waveX = rect.x + 14f + Mathf.Repeat(t * 46f, Mathf.Max(1f, rect.width - 40f));
+            DrawSolidRect(new Rect(waveX, rect.y + rect.height * 0.5f - 1f, 18f, 2f), new Color(1f, 1f, 1f, 0.26f));
+        }
+
+        Color old = GUI.color;
+        GUI.color = canInteract ? Color.white : new Color(1f, 1f, 1f, 0.45f);
+        GUI.Label(rect, label, menuButtonLabelStyle);
+        GUI.color = old;
+
+        if (!canInteract)
+        {
+            return false;
+        }
+
+        return GUI.Button(rect, GUIContent.none, GUIStyle.none);
+    }
+
+    private float GetButtonHoverState(string key, bool hovered)
+    {
+        float current = buttonHoverStates.TryGetValue(key, out float value) ? value : 0f;
+        float target = hovered ? 1f : 0f;
+        float speed = 8f * Mathf.Clamp(menuMotionIntensity, 0.4f, 2.2f);
+        current = Mathf.MoveTowards(current, target, Time.unscaledDeltaTime * speed);
+        buttonHoverStates[key] = current;
+        return current;
+    }
+
+    private static void DrawPanelFx(Rect rect, Color accent, float baseAlpha)
+    {
+        float t = Time.unscaledTime;
+        float pulse = 0.5f + 0.5f * Mathf.Sin(t * 2.4f);
+        float alpha = Mathf.Clamp01(baseAlpha + pulse * 0.08f);
+        Color glow = new Color(accent.r, accent.g, accent.b, alpha);
+
+        DrawSolidRect(new Rect(rect.x - 1f, rect.y - 1f, rect.width + 2f, 1f), glow);
+        DrawSolidRect(new Rect(rect.x - 1f, rect.yMax, rect.width + 2f, 1f), new Color(glow.r, glow.g, glow.b, glow.a * 0.85f));
+
+        float corner = 20f;
+        DrawSolidRect(new Rect(rect.x + 6f, rect.y + 6f, corner, 2f), new Color(glow.r, glow.g, glow.b, glow.a * 0.8f));
+        DrawSolidRect(new Rect(rect.x + 6f, rect.y + 6f, 2f, corner), new Color(glow.r, glow.g, glow.b, glow.a * 0.8f));
+        DrawSolidRect(new Rect(rect.xMax - 6f - corner, rect.y + 6f, corner, 2f), new Color(glow.r, glow.g, glow.b, glow.a * 0.8f));
+        DrawSolidRect(new Rect(rect.xMax - 8f, rect.y + 6f, 2f, corner), new Color(glow.r, glow.g, glow.b, glow.a * 0.8f));
+        DrawSolidRect(new Rect(rect.x + 6f, rect.yMax - 8f, corner, 2f), new Color(glow.r, glow.g, glow.b, glow.a * 0.7f));
+        DrawSolidRect(new Rect(rect.x + 6f, rect.yMax - 6f - corner, 2f, corner), new Color(glow.r, glow.g, glow.b, glow.a * 0.7f));
+        DrawSolidRect(new Rect(rect.xMax - 6f - corner, rect.yMax - 8f, corner, 2f), new Color(glow.r, glow.g, glow.b, glow.a * 0.7f));
+        DrawSolidRect(new Rect(rect.xMax - 8f, rect.yMax - 6f - corner, 2f, corner), new Color(glow.r, glow.g, glow.b, glow.a * 0.7f));
+
+        float sweepY = rect.y + Mathf.Repeat(t * 42f, Mathf.Max(1f, rect.height));
+        DrawSolidRect(new Rect(rect.x + 2f, sweepY, rect.width - 4f, 1f), new Color(accent.r, accent.g, accent.b, 0.10f));
+    }
+
+    private static void DrawGlitchTitle(Rect rect, string text, GUIStyle style, float intensity)
+    {
+        float t = Time.unscaledTime;
+        float split = (0.7f + 0.6f * Mathf.Sin(t * 5.4f + rect.y * 0.012f)) * Mathf.Clamp01(intensity);
+        Color old = GUI.color;
+
+        GUI.color = new Color(1f, 0.46f, 0.54f, 0.22f * intensity);
+        GUI.Label(new Rect(rect.x - split, rect.y, rect.width, rect.height), text, style);
+        GUI.color = new Color(0.35f, 0.95f, 1f, 0.22f * intensity);
+        GUI.Label(new Rect(rect.x + split, rect.y, rect.width, rect.height), text, style);
+
+        GUI.color = old;
+        GUI.Label(rect, text, style);
+    }
+
     private void DrawPanel(Rect rect, Color fill, Color border)
     {
         DrawSolidRect(rect, fill);
@@ -700,6 +880,16 @@ public class MainMenuController : MonoBehaviour
         buttonStyle.normal.textColor = new Color(0.90f, 0.95f, 1f, 0.96f);
         buttonStyle.hover.textColor = new Color(1f, 1f, 1f, 1f);
         buttonStyle.active.textColor = new Color(0.98f, 0.88f, 0.72f, 1f);
+
+        menuButtonLabelStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = titleFont,
+            fontSize = Mathf.RoundToInt(16f * uiScale),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter
+        };
+        menuButtonLabelStyle.normal.textColor = new Color(0.92f, 0.96f, 1f, 0.98f);
+        menuButtonLabelStyle.hover.textColor = new Color(1f, 1f, 1f, 1f);
     }
 
     private void ResolveFonts()
