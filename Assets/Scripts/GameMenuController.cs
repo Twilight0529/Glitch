@@ -29,6 +29,9 @@ public class GameMenuController : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float textGlitchWeight = 0.35f;
     [SerializeField] private float panelJitterStrength = 1.1f;
 
+    [Header("Ranking")]
+    [SerializeField] private int rankingNameMaxLength = 16;
+
     public static bool ShouldHideGameplayHud { get; private set; }
 
     private OverlayState state;
@@ -36,8 +39,14 @@ public class GameMenuController : MonoBehaviour
     private GUIStyle subtitleStyle;
     private GUIStyle bodyStyle;
     private GUIStyle buttonStyle;
+    private GUIStyle textFieldStyle;
+    private GUIStyle rankingStatusStyle;
     private Font importantFont;
     private Font secondaryFont;
+    private string rankingNameInput = "Player";
+    private bool rankingSubmitted;
+    private int rankingSubmittedScore;
+    private float rankingSubmittedTime;
 
     private void Awake()
     {
@@ -90,6 +99,11 @@ public class GameMenuController : MonoBehaviour
 
         if (state == OverlayState.Defeat)
         {
+            if (GetSubmitPressedThisFrame())
+            {
+                TryRegisterCurrentScore();
+            }
+
             return;
         }
 
@@ -123,9 +137,31 @@ public class GameMenuController : MonoBehaviour
 #endif
     }
 
+    private static bool GetSubmitPressedThisFrame()
+    {
+#if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame))
+        {
+            return true;
+        }
+#endif
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter);
+#else
+        return false;
+#endif
+    }
+
     private void SetState(OverlayState nextState)
     {
         state = nextState;
+        if (state == OverlayState.Defeat)
+        {
+            PrepareDefeatRegistration();
+        }
+
         bool gameplayActive = state == OverlayState.Playing;
 
         bool runCanAdvance = gameManager == null || gameManager.IsRunActive;
@@ -136,12 +172,14 @@ public class GameMenuController : MonoBehaviour
 
     private void RestartLevel()
     {
+        EnsureDefeatScoreRegistered();
         Time.timeScale = 1f;
         SceneTransitionController.ReloadActiveScene();
     }
 
     private void ReturnToMainMenu()
     {
+        EnsureDefeatScoreRegistered();
         Time.timeScale = 1f;
         if (!string.IsNullOrWhiteSpace(mainMenuSceneName) && Application.CanStreamedLevelBeLoaded(mainMenuSceneName))
         {
@@ -207,6 +245,22 @@ public class GameMenuController : MonoBehaviour
         };
         bodyStyle.normal.textColor = new Color(0.90f, 0.93f, 1f, 0.95f);
 
+        textFieldStyle = new GUIStyle(GUI.skin.textField)
+        {
+            font = secondaryFont,
+            fontSize = 16,
+            alignment = TextAnchor.MiddleLeft
+        };
+
+        rankingStatusStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = secondaryFont,
+            fontSize = 13,
+            fontStyle = FontStyle.Italic,
+            alignment = TextAnchor.MiddleLeft
+        };
+        rankingStatusStyle.normal.textColor = new Color(0.94f, 0.86f, 0.98f, 0.95f);
+
         buttonStyle = new GUIStyle(GUI.skin.button)
         {
             font = importantFont,
@@ -262,7 +316,7 @@ public class GameMenuController : MonoBehaviour
         DrawScreenFade(0.70f);
         DrawDefeatBackdrop(pulse, hudGlitch, t);
 
-        Rect panel = CenterRect(470f, 360f);
+        Rect panel = CenterRect(500f, 440f);
         float cappedJitter = Mathf.Min(glitchJitterStrength, 2.0f) * panelJitterStrength;
         float jitterX = (Mathf.PerlinNoise(t * 13.5f, 0.37f) - 0.5f) * 2f * cappedJitter * textGlitch;
         float jitterY = (Mathf.PerlinNoise(0.77f, t * 9.2f) - 0.5f) * 2f * (cappedJitter * 0.28f) * textGlitch;
@@ -285,12 +339,40 @@ public class GameMenuController : MonoBehaviour
         string level = gameManager != null ? gameManager.CurrentLevelTypeLabel : "Unknown";
         float time = gameManager != null ? gameManager.SurvivalTime : 0f;
         float threat = gameManager != null ? gameManager.DifficultyMultiplier : 1f;
+        int score = gameManager != null ? gameManager.CurrentScore : 0;
 
         GUILayout.Label($"Tiempo sobrevivido: {time:F1}s", bodyStyle);
+        GUILayout.Label($"Puntuacion final: {score}", bodyStyle);
         GUILayout.Label($"Nivel de amenaza final: x{threat:F2}", bodyStyle);
         GUILayout.Label($"Zona de contencion: {level}", bodyStyle);
 
-        GUILayout.Space(24f);
+        GUILayout.Space(14f);
+        GUILayout.Label("Ingresa tu nombre para el ranking:", bodyStyle);
+        rankingNameInput = GUILayout.TextField(
+            rankingNameInput ?? string.Empty,
+            Mathf.Max(1, rankingNameMaxLength),
+            textFieldStyle,
+            GUILayout.Height(30f));
+
+        GUILayout.Space(8f);
+        bool canRegister = !rankingSubmitted && !string.IsNullOrWhiteSpace(rankingNameInput);
+        bool prevEnabled = GUI.enabled;
+        GUI.enabled = canRegister;
+        if (GUILayout.Button("Registrar Puntaje", buttonStyle, GUILayout.Height(36f)))
+        {
+            TryRegisterCurrentScore();
+        }
+        GUI.enabled = prevEnabled;
+
+        if (rankingSubmitted)
+        {
+            GUILayout.Space(4f);
+            GUILayout.Label(
+                $"Registrado: {rankingNameInput} | {rankingSubmittedScore} pts ({rankingSubmittedTime:F1}s)",
+                rankingStatusStyle);
+        }
+
+        GUILayout.Space(16f);
 
         if (GUILayout.Button("Reiniciar", buttonStyle, GUILayout.Height(40f)))
         {
@@ -304,6 +386,41 @@ public class GameMenuController : MonoBehaviour
         }
 
         GUILayout.EndArea();
+    }
+
+    private void PrepareDefeatRegistration()
+    {
+        rankingSubmitted = false;
+        rankingSubmittedScore = 0;
+        rankingSubmittedTime = 0f;
+
+        string lastName = RankingStorage.GetLastPlayerName();
+        rankingNameInput = string.IsNullOrWhiteSpace(lastName) ? "Player" : lastName;
+    }
+
+    private void EnsureDefeatScoreRegistered()
+    {
+        if (state != OverlayState.Defeat || gameManager == null || rankingSubmitted)
+        {
+            return;
+        }
+
+        TryRegisterCurrentScore();
+    }
+
+    private void TryRegisterCurrentScore()
+    {
+        if (gameManager == null || rankingSubmitted)
+        {
+            return;
+        }
+
+        string candidate = string.IsNullOrWhiteSpace(rankingNameInput) ? "Player" : rankingNameInput.Trim();
+        RankingStorage.AddEntry(candidate, gameManager.CurrentScore, gameManager.CurrentLevelTypeLabel, gameManager.SurvivalTime);
+        rankingNameInput = RankingStorage.GetLastPlayerName();
+        rankingSubmitted = true;
+        rankingSubmittedScore = gameManager.CurrentScore;
+        rankingSubmittedTime = gameManager.SurvivalTime;
     }
 
     private void DrawDefeatBackdrop(float pulse, float glitch, float time)

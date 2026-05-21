@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -39,6 +40,9 @@ public class MainMenuController : MonoBehaviour
     private GUIStyle buttonStyle;
     private GUIStyle panelTitleStyle;
     private GUIStyle paragraphStyle;
+    private GUIStyle rankingTitleStyle;
+    private GUIStyle rankingRowStyle;
+    private GUIStyle rankingScoreStyle;
     private int cachedScreenWidth;
     private int cachedScreenHeight;
     private float cachedUiScale = -1f;
@@ -127,6 +131,52 @@ public class MainMenuController : MonoBehaviour
         if (DrawMenuButton("Salir", 38f))
         {
             ExitGame();
+        }
+
+        GUILayout.EndArea();
+        DrawRankingPanel(panel);
+    }
+
+    private void DrawRankingPanel(Rect anchorPanel)
+    {
+        Rect panel = new Rect(anchorPanel.x - 18f, anchorPanel.yMax + 14f, anchorPanel.width + 36f, 248f);
+        if (panel.yMax > Screen.height - 10f)
+        {
+            panel.y = Mathf.Max(8f, Screen.height - panel.height - 10f);
+        }
+
+        DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.88f), new Color(0.47f, 0.56f, 0.72f, 0.45f));
+        Rect area = new Rect(panel.x + 14f, panel.y + 10f, panel.width - 28f, panel.height - 16f);
+        GUILayout.BeginArea(area);
+        GUILayout.Label("Ranking Global", rankingTitleStyle);
+        GUILayout.Space(8f);
+
+        IReadOnlyList<RankingEntry> entries = RankingStorage.GetTopEntries();
+        if (entries == null || entries.Count == 0)
+        {
+            GUILayout.Label("Sin registros aun. Juega una ronda y deja tu marca.", paragraphStyle);
+            GUILayout.EndArea();
+            return;
+        }
+
+        int rows = Mathf.Min(8, entries.Count);
+        for (int i = 0; i < rows; i++)
+        {
+            RankingEntry entry = entries[i];
+            Rect row = GUILayoutUtility.GetRect(area.width, 24f);
+            if (i % 2 == 0)
+            {
+                DrawSolidRect(new Rect(row.x, row.y + 2f, row.width, row.height - 4f), new Color(1f, 1f, 1f, 0.03f));
+            }
+
+            GUI.Label(
+                new Rect(row.x + 6f, row.y, row.width * 0.66f, row.height),
+                $"{i + 1}. {entry.playerName}",
+                rankingRowStyle);
+            GUI.Label(
+                new Rect(row.x + row.width * 0.68f, row.y, row.width * 0.30f, row.height),
+                entry.score.ToString(),
+                rankingScoreStyle);
         }
 
         GUILayout.EndArea();
@@ -519,6 +569,32 @@ public class MainMenuController : MonoBehaviour
             alignment = TextAnchor.MiddleLeft
         };
         paragraphStyle.normal.textColor = new Color(0.86f, 0.90f, 0.96f, 0.95f);
+
+        rankingTitleStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = titleFont,
+            fontSize = Mathf.RoundToInt(24f * uiScale),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter
+        };
+        rankingTitleStyle.normal.textColor = new Color(0.94f, 0.97f, 1f, 0.98f);
+
+        rankingRowStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = uiFont,
+            fontSize = Mathf.RoundToInt(15f * uiScale),
+            alignment = TextAnchor.MiddleLeft
+        };
+        rankingRowStyle.normal.textColor = new Color(0.90f, 0.94f, 1f, 0.95f);
+
+        rankingScoreStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = titleFont,
+            fontSize = Mathf.RoundToInt(17f * uiScale),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleRight
+        };
+        rankingScoreStyle.normal.textColor = new Color(1f, 0.84f, 0.56f, 0.98f);
 
         bandLabelStyle = new GUIStyle(GUI.skin.label)
         {
