@@ -105,9 +105,12 @@ public class MainMenuController : MonoBehaviour
     {
         DrawScreenFade(0.38f);
         float bob = Mathf.Sin(Time.unscaledTime * 1.35f) * 6f;
-        Rect panel = CenterRect(390f, 360f);
+        GetMainMenuLayout(out Rect panel, out Rect rankingRect, out bool sideBySide);
         panel.y += bob;
-        DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.88f), new Color(0.47f, 0.56f, 0.72f, 0.55f));
+        rankingRect.y += bob * 0.55f;
+        DrawMenuAtmosphere(panel, rankingRect, sideBySide);
+
+        DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.90f), new Color(0.47f, 0.56f, 0.72f, 0.58f));
 
         Rect area = new Rect(panel.x + 18f, panel.y + 14f, panel.width - 36f, panel.height - 24f);
         GUILayout.BeginArea(area);
@@ -134,18 +137,12 @@ public class MainMenuController : MonoBehaviour
         }
 
         GUILayout.EndArea();
-        DrawRankingPanel(panel);
+        DrawRankingPanel(rankingRect, sideBySide);
     }
 
-    private void DrawRankingPanel(Rect anchorPanel)
+    private void DrawRankingPanel(Rect panel, bool sideBySide)
     {
-        Rect panel = new Rect(anchorPanel.x - 18f, anchorPanel.yMax + 14f, anchorPanel.width + 36f, 248f);
-        if (panel.yMax > Screen.height - 10f)
-        {
-            panel.y = Mathf.Max(8f, Screen.height - panel.height - 10f);
-        }
-
-        DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.88f), new Color(0.47f, 0.56f, 0.72f, 0.45f));
+        DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.90f), new Color(0.47f, 0.56f, 0.72f, 0.50f));
         Rect area = new Rect(panel.x + 14f, panel.y + 10f, panel.width - 28f, panel.height - 16f);
         GUILayout.BeginArea(area);
         GUILayout.Label("Ranking Global", rankingTitleStyle);
@@ -159,7 +156,7 @@ public class MainMenuController : MonoBehaviour
             return;
         }
 
-        int rows = Mathf.Min(8, entries.Count);
+        int rows = Mathf.Min(sideBySide ? 10 : 8, entries.Count);
         for (int i = 0; i < rows; i++)
         {
             RankingEntry entry = entries[i];
@@ -167,6 +164,11 @@ public class MainMenuController : MonoBehaviour
             if (i % 2 == 0)
             {
                 DrawSolidRect(new Rect(row.x, row.y + 2f, row.width, row.height - 4f), new Color(1f, 1f, 1f, 0.03f));
+            }
+
+            if (i == 0)
+            {
+                DrawSolidRect(new Rect(row.x, row.y + 3f, row.width, row.height - 6f), new Color(1f, 0.84f, 0.45f, 0.08f));
             }
 
             GUI.Label(
@@ -180,6 +182,38 @@ public class MainMenuController : MonoBehaviour
         }
 
         GUILayout.EndArea();
+    }
+
+    private void GetMainMenuLayout(out Rect mainPanel, out Rect rankingPanel, out bool sideBySide)
+    {
+        float mainW = 390f;
+        float mainH = 360f;
+        float rankW = 400f;
+        float rankH = 320f;
+        float gap = 22f;
+        float margin = 26f;
+
+        sideBySide = Screen.width >= (mainW + rankW + gap + margin * 2f) && Screen.height >= Mathf.Max(mainH, rankH) + 70f;
+
+        if (sideBySide)
+        {
+            float totalW = mainW + gap + rankW;
+            float left = (Screen.width - totalW) * 0.5f;
+            float yMain = (Screen.height - mainH) * 0.5f;
+            float yRank = (Screen.height - rankH) * 0.5f;
+            mainPanel = new Rect(left, yMain, mainW, mainH);
+            rankingPanel = new Rect(left + mainW + gap, yRank, rankW, rankH);
+            return;
+        }
+
+        mainPanel = CenterRect(mainW, mainH);
+        float rankWidth = mainW + 36f;
+        float rankY = mainPanel.yMax + 14f;
+        rankingPanel = new Rect(mainPanel.x - 18f, rankY, rankWidth, 248f);
+        if (rankingPanel.yMax > Screen.height - 10f)
+        {
+            rankingPanel.y = Mathf.Max(8f, Screen.height - rankingPanel.height - 10f);
+        }
     }
 
     private void DrawOptionsMenu()
@@ -375,6 +409,54 @@ public class MainMenuController : MonoBehaviour
 
         DrawSolidRect(new Rect(bandWidth - 1f, 0f, 2f, Screen.height), new Color(1f, 1f, 1f, 0.14f));
         DrawSolidRect(new Rect(bandWidth * 2f - 1f, 0f, 2f, Screen.height), new Color(1f, 1f, 1f, 0.14f));
+        DrawGlobalAmbientOverlay(t);
+    }
+
+    private static void DrawGlobalAmbientOverlay(float time)
+    {
+        DrawSolidRect(new Rect(0f, 0f, Screen.width, Screen.height), new Color(0.02f, 0.03f, 0.06f, 0.14f));
+
+        float stripeStep = Mathf.Max(26f, Screen.height / 24f);
+        for (float y = 0f; y < Screen.height + stripeStep; y += stripeStep)
+        {
+            float alpha = 0.01f + 0.015f * (0.5f + 0.5f * Mathf.Sin((y * 0.045f) + (time * 1.8f)));
+            DrawSolidRect(new Rect(0f, y, Screen.width, 1f), new Color(1f, 1f, 1f, alpha));
+        }
+
+        for (int i = 0; i < 18; i++)
+        {
+            float seed = i * 0.173f;
+            float x = Mathf.PerlinNoise(seed, time * 0.22f + 2.1f) * Screen.width;
+            float y = Mathf.PerlinNoise(seed * 2.3f, time * 0.18f + 7.7f) * Screen.height;
+            float w = Mathf.Lerp(2f, 5f, Mathf.PerlinNoise(seed * 4.1f, time * 0.3f));
+            float h = Mathf.Lerp(2f, 5f, Mathf.PerlinNoise(seed * 5.2f, time * 0.25f));
+            DrawSolidRect(new Rect(x, y, w, h), new Color(0.84f, 0.91f, 1f, 0.08f));
+        }
+    }
+
+    private static void DrawMenuAtmosphere(Rect mainPanel, Rect rankingPanel, bool sideBySide)
+    {
+        float t = Time.unscaledTime;
+        Vector2 mainCenter = new Vector2(mainPanel.x + mainPanel.width * 0.5f, mainPanel.y + mainPanel.height * 0.5f);
+        Vector2 rankCenter = new Vector2(rankingPanel.x + rankingPanel.width * 0.5f, rankingPanel.y + rankingPanel.height * 0.5f);
+
+        float pulseA = 0.5f + 0.5f * Mathf.Sin(t * 1.3f);
+        float pulseB = 0.5f + 0.5f * Mathf.Sin(t * 1.1f + 1.6f);
+
+        DrawFilledCircle(mainCenter, 118f + pulseA * 12f, new Color(0.20f, 0.36f, 0.62f, 0.10f));
+        DrawFilledCircle(rankCenter, 102f + pulseB * 10f, new Color(0.38f, 0.24f, 0.68f, 0.09f));
+
+        Color ring = new Color(0.75f, 0.85f, 1f, 0.12f + pulseA * 0.06f);
+        DrawEllipseRing(mainCenter, mainPanel.width * 0.56f, mainPanel.height * 0.48f, ring);
+        DrawEllipseRing(rankCenter, rankingPanel.width * 0.52f, rankingPanel.height * 0.45f, ring);
+
+        if (sideBySide)
+        {
+            float x0 = mainPanel.xMax + 8f;
+            float x1 = rankingPanel.x - 8f;
+            float y = (mainCenter.y + rankCenter.y) * 0.5f;
+            DrawSolidRect(new Rect(x0, y - 1f, Mathf.Max(4f, x1 - x0), 2f), new Color(0.88f, 0.95f, 1f, 0.14f));
+        }
     }
 
     private void DrawBand(Rect band, Color baseColor, string label, int motifType, float time)
@@ -540,7 +622,9 @@ public class MainMenuController : MonoBehaviour
             font = titleFont,
             fontSize = Mathf.RoundToInt(48f * uiScale),
             fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter
+            alignment = TextAnchor.MiddleCenter,
+            clipping = TextClipping.Overflow,
+            wordWrap = false
         };
         titleStyle.normal.textColor = new Color(0.94f, 0.97f, 1f, 1f);
 
@@ -610,8 +694,12 @@ public class MainMenuController : MonoBehaviour
             font = uiFont,
             fontSize = Mathf.RoundToInt(18f * uiScale),
             fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter
+            alignment = TextAnchor.MiddleCenter,
+            padding = new RectOffset(12, 12, 8, 8)
         };
+        buttonStyle.normal.textColor = new Color(0.90f, 0.95f, 1f, 0.96f);
+        buttonStyle.hover.textColor = new Color(1f, 1f, 1f, 1f);
+        buttonStyle.active.textColor = new Color(0.98f, 0.88f, 0.72f, 1f);
     }
 
     private void ResolveFonts()
