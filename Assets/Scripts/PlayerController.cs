@@ -16,6 +16,14 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float shieldPulseSpeed = 7.2f;
     [SerializeField] private float shieldRadius = 0.72f;
 
+    [Header("Movement Trail")]
+    [SerializeField] private bool enableMovementTrail = true;
+    [SerializeField] private Color trailColor = new Color(0.42f, 0.92f, 1f, 0.85f);
+    [SerializeField] private float trailParticleLifetime = 0.36f;
+    [SerializeField] private float trailStartSize = 0.17f;
+    [SerializeField] private float trailEmissionAtMaxSpeed = 42f;
+    [SerializeField] private float trailMinVelocityToEmit = 1.1f;
+
     private Rigidbody2D rb;
     private Vector2 moveInput;
     private float speedBoostTimer;
@@ -25,6 +33,7 @@ public class PlayerController : MonoBehaviour
     private float shieldTimer;
     private SpriteRenderer shieldRenderer;
     private GameObject shieldVisual;
+    private ParticleSystem movementTrail;
 
     public Vector2 CurrentVelocity => rb != null ? rb.linearVelocity : Vector2.zero;
     public bool HasShield => shieldTimer > 0f;
@@ -79,6 +88,7 @@ public class PlayerController : MonoBehaviour
         rb.gravityScale = 0f;
         rb.freezeRotation = true;
         EnsureShieldVisual();
+        EnsureMovementTrail();
     }
 
     private void Update()
@@ -108,6 +118,7 @@ public class PlayerController : MonoBehaviour
         }
 
         rb.linearVelocity = moveInput * effectiveSpeed;
+        UpdateMovementTrail(Mathf.Max(0.01f, effectiveSpeed));
     }
 
     private static Vector2 ReadMoveInput()
@@ -245,5 +256,96 @@ public class PlayerController : MonoBehaviour
         c.a = Mathf.Lerp(0.24f, 0.64f, pulse);
         shieldRenderer.color = c;
         shieldVisual.transform.localScale = Vector3.one * Mathf.Lerp(0.96f, 1.05f, pulse);
+    }
+
+    private void EnsureMovementTrail()
+    {
+        if (movementTrail != null || !enableMovementTrail)
+        {
+            return;
+        }
+
+        GameObject trailGo = new GameObject("MovementTrail");
+        trailGo.transform.SetParent(transform, false);
+        trailGo.transform.localPosition = Vector3.zero;
+        trailGo.transform.localScale = Vector3.one;
+
+        movementTrail = trailGo.AddComponent<ParticleSystem>();
+        ParticleSystem.MainModule main = movementTrail.main;
+        main.duration = 1f;
+        main.loop = true;
+        main.startLifetime = Mathf.Max(0.08f, trailParticleLifetime);
+        main.startSize = Mathf.Max(0.03f, trailStartSize);
+        main.startSpeed = 0.02f;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.playOnAwake = true;
+        main.maxParticles = 120;
+        main.scalingMode = ParticleSystemScalingMode.Local;
+        main.startColor = trailColor;
+
+        ParticleSystem.EmissionModule emission = movementTrail.emission;
+        emission.rateOverTime = 0f;
+
+        ParticleSystem.ShapeModule shape = movementTrail.shape;
+        shape.enabled = true;
+        shape.shapeType = ParticleSystemShapeType.Circle;
+        shape.radius = 0.12f;
+        shape.radiusThickness = 1f;
+
+        ParticleSystem.ColorOverLifetimeModule colorLifetime = movementTrail.colorOverLifetime;
+        colorLifetime.enabled = true;
+        Gradient colorGradient = new Gradient();
+        colorGradient.SetKeys(
+            new[]
+            {
+                new GradientColorKey(trailColor, 0f),
+                new GradientColorKey(new Color(trailColor.r * 0.85f, trailColor.g * 0.95f, trailColor.b, 1f), 1f)
+            },
+            new[]
+            {
+                new GradientAlphaKey(0.65f, 0f),
+                new GradientAlphaKey(0.25f, 0.6f),
+                new GradientAlphaKey(0f, 1f)
+            });
+        colorLifetime.color = new ParticleSystem.MinMaxGradient(colorGradient);
+
+        ParticleSystem.SizeOverLifetimeModule sizeLifetime = movementTrail.sizeOverLifetime;
+        sizeLifetime.enabled = true;
+        AnimationCurve sizeCurve = new AnimationCurve(
+            new Keyframe(0f, 1f),
+            new Keyframe(0.55f, 0.7f),
+            new Keyframe(1f, 0.2f));
+        sizeLifetime.size = new ParticleSystem.MinMaxCurve(1f, sizeCurve);
+
+        ParticleSystemRenderer trailRenderer = movementTrail.GetComponent<ParticleSystemRenderer>();
+        trailRenderer.material = new Material(Shader.Find("Sprites/Default"));
+        trailRenderer.sortingOrder = 8;
+        trailRenderer.renderMode = ParticleSystemRenderMode.Billboard;
+        trailRenderer.alignment = ParticleSystemRenderSpace.View;
+
+        movementTrail.Play();
+    }
+
+    private void UpdateMovementTrail(float effectiveSpeed)
+    {
+        if (!enableMovementTrail || movementTrail == null)
+        {
+            return;
+        }
+
+        float velocityMagnitude = rb != null ? rb.linearVelocity.magnitude : 0f;
+        if (velocityMagnitude <= trailMinVelocityToEmit)
+        {
+            ParticleSystem.EmissionModule idleEmission = movementTrail.emission;
+            idleEmission.rateOverTime = 0f;
+            return;
+        }
+
+        float normalized = Mathf.Clamp01(velocityMagnitude / Mathf.Max(0.01f, effectiveSpeed));
+        float pulse = 0.85f + 0.15f * Mathf.Sin(Time.time * 18f);
+        float rate = Mathf.Lerp(8f, Mathf.Max(10f, trailEmissionAtMaxSpeed), normalized) * pulse;
+
+        ParticleSystem.EmissionModule emission = movementTrail.emission;
+        emission.rateOverTime = rate;
     }
 }
