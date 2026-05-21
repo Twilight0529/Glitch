@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class ArenaChaosDirector : MonoBehaviour
@@ -11,6 +12,17 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private float speedBoostDuration = 3.2f;
     [SerializeField] private float shieldDuration = 5.5f;
     [SerializeField, Range(0f, 1f)] private float shieldPickupChance = 0.35f;
+
+    [Header("Score Pickups")]
+    [SerializeField] private bool enableScorePickups = true;
+    [SerializeField] private Vector2 scorePickupIntervalRange = new Vector2(0.9f, 1.8f);
+    [SerializeField] private float scorePickupLifetime = 9f;
+    [SerializeField] private int scorePickupMinValue = 40;
+    [SerializeField] private int scorePickupMaxValue = 110;
+    [SerializeField] private int scorePickupMaxAlive = 8;
+    [SerializeField] private int scorePickupBurstMin = 1;
+    [SerializeField] private int scorePickupBurstMax = 2;
+    [SerializeField] private float scorePickupProbeRadius = 0.34f;
 
     [Header("Mini Events")]
     [SerializeField] private bool enablePulseEvents = true;
@@ -47,8 +59,10 @@ public class ArenaChaosDirector : MonoBehaviour
     private GameManager gameManager;
 
     private float powerupTimer;
+    private float scorePickupTimer;
     private float pulseEventTimer;
     private ArenaPowerupPickup activePickup;
+    private readonly List<ArenaScorePickup> activeScorePickups = new List<ArenaScorePickup>();
 
     private string activeEventLabel = string.Empty;
     private float eventLabelTimer;
@@ -71,6 +85,7 @@ public class ArenaChaosDirector : MonoBehaviour
         ClearRuntimeObjects();
         pulseWasUnlocked = false;
         SchedulePowerup();
+        ScheduleScorePickup();
         SchedulePulseEvent();
     }
 
@@ -85,6 +100,7 @@ public class ArenaChaosDirector : MonoBehaviour
         EnsureRuntimeRoot();
         pulseWasUnlocked = false;
         SchedulePowerup();
+        ScheduleScorePickup();
         SchedulePulseEvent();
     }
 
@@ -120,6 +136,16 @@ public class ArenaChaosDirector : MonoBehaviour
             }
         }
 
+        if (enableScorePickups)
+        {
+            scorePickupTimer -= Time.deltaTime;
+            if (scorePickupTimer <= 0f)
+            {
+                TrySpawnScorePickups();
+                ScheduleScorePickup();
+            }
+        }
+
         bool pulseUnlocked = ShouldRunPulseEvents();
         if (pulseUnlocked && !pulseWasUnlocked)
         {
@@ -152,6 +178,26 @@ public class ArenaChaosDirector : MonoBehaviour
         {
             activePickup = null;
         }
+    }
+
+    public void NotifyScorePickupConsumed(ArenaScorePickup pickup)
+    {
+        if (pickup == null)
+        {
+            return;
+        }
+
+        activeScorePickups.Remove(pickup);
+    }
+
+    public void NotifyScorePickupDestroyed(ArenaScorePickup pickup)
+    {
+        if (pickup == null)
+        {
+            return;
+        }
+
+        activeScorePickups.Remove(pickup);
     }
 
     private void RefreshReferences()
@@ -210,6 +256,7 @@ public class ArenaChaosDirector : MonoBehaviour
         }
 
         activePickup = null;
+        activeScorePickups.Clear();
         activeWarningLabel = string.Empty;
         warningTimer = 0f;
         warningDuration = 0f;
@@ -227,6 +274,13 @@ public class ArenaChaosDirector : MonoBehaviour
         float min = Mathf.Min(pulseEventIntervalRange.x, pulseEventIntervalRange.y);
         float max = Mathf.Max(pulseEventIntervalRange.x, pulseEventIntervalRange.y);
         pulseEventTimer = Random.Range(min, max);
+    }
+
+    private void ScheduleScorePickup()
+    {
+        float min = Mathf.Min(scorePickupIntervalRange.x, scorePickupIntervalRange.y);
+        float max = Mathf.Max(scorePickupIntervalRange.x, scorePickupIntervalRange.y);
+        scorePickupTimer = Random.Range(min, max);
     }
 
     private void TrySpawnPowerup()
@@ -261,6 +315,56 @@ public class ArenaChaosDirector : MonoBehaviour
         activePickup = pickup;
 
         RaiseEvent(kind == ArenaPowerupPickup.PickupKind.Shield ? "Shield Materialized" : "Speed Core Materialized");
+    }
+
+    private void TrySpawnScorePickups()
+    {
+        if (gameManager == null || !gameManager.IsRunActive || gameManager.IsGameOver)
+        {
+            return;
+        }
+
+        activeScorePickups.RemoveAll(p => p == null);
+        int capacity = Mathf.Max(1, scorePickupMaxAlive) - activeScorePickups.Count;
+        if (capacity <= 0)
+        {
+            return;
+        }
+
+        int burstMin = Mathf.Max(1, Mathf.Min(scorePickupBurstMin, scorePickupBurstMax));
+        int burstMax = Mathf.Max(burstMin, Mathf.Max(scorePickupBurstMin, scorePickupBurstMax));
+        int burst = Mathf.Min(capacity, Random.Range(burstMin, burstMax + 1));
+
+        for (int i = 0; i < burst; i++)
+        {
+            if (!TryFindSpawnPoint(scorePickupProbeRadius, out Vector2 position))
+            {
+                continue;
+            }
+
+            int valueMin = Mathf.Min(scorePickupMinValue, scorePickupMaxValue);
+            int valueMax = Mathf.Max(scorePickupMinValue, scorePickupMaxValue);
+            int points = Random.Range(valueMin, valueMax + 1);
+
+            GameObject go = new GameObject("ScoreDot");
+            go.transform.SetParent(runtimeRoot, false);
+            go.transform.position = new Vector3(position.x, position.y, 0f);
+            go.transform.localScale = Vector3.one;
+
+            SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = CircleSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.size = Vector2.one * 0.34f;
+            sr.sortingOrder = 12;
+
+            CircleCollider2D col = go.AddComponent<CircleCollider2D>();
+            col.isTrigger = true;
+            col.radius = 0.2f;
+
+            ArenaScorePickup pickup = go.AddComponent<ArenaScorePickup>();
+            pickup.Configure(this, gameManager, points, scorePickupLifetime);
+            activeScorePickups.Add(pickup);
+        }
     }
 
     private IEnumerator SpawnPulseEventRoutine()

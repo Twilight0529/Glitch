@@ -53,7 +53,7 @@ public class GameManager : MonoBehaviour
     public bool IsRunActive => runPhase == RunPhase.Active && !IsGameOver;
     public float SurvivalTime { get; private set; }
     public float DifficultyMultiplier => 1f + (SurvivalTime * difficultyRampPerSecond);
-    public int CurrentScore => Mathf.Max(0, Mathf.FloorToInt(SurvivalTime * Mathf.Max(1f, pointsPerSecond) * DifficultyMultiplier));
+    public int CurrentScore => Mathf.Max(0, Mathf.FloorToInt(SurvivalTime * Mathf.Max(1f, pointsPerSecond) * DifficultyMultiplier) + bonusScore);
     public string CurrentLevelTypeLabel => levelType;
     public bool AreBossSpecialStatesUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, bossSpecialStatesUnlockTime);
     public bool AreMapEventsUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, mapEventsUnlockTime);
@@ -96,6 +96,7 @@ public class GameManager : MonoBehaviour
     private Font secondaryFont;
     private string lastBossStateRaw;
     private float statePulseOverlayTimer;
+    private int bonusScore;
 
     private void Awake()
     {
@@ -170,6 +171,16 @@ public class GameManager : MonoBehaviour
         Debug.Log($"GAME OVER | Time Survived: {SurvivalTime:F2}s");
     }
 
+    public void AddScore(int amount)
+    {
+        if (amount <= 0)
+        {
+            return;
+        }
+
+        bonusScore += amount;
+    }
+
     private void HandleOptionalReload()
     {
         if (!autoReloadSceneOnGameOver)
@@ -214,6 +225,7 @@ public class GameManager : MonoBehaviour
         countdownElapsed = 0f;
         goFlashTimer = 0f;
         SurvivalTime = 0f;
+        bonusScore = 0;
         reloadTimer = 0f;
         statePulseOverlayTimer = 0f;
         lastBossStateRaw = null;
