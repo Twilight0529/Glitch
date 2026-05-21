@@ -76,9 +76,9 @@ public class GameMenuController : MonoBehaviour
             return;
         }
 
-        // During startup delay/countdown/GO flash, GameManager owns time scale.
+        // During startup delay/countdown/GO flash (but not game over), GameManager owns time scale.
         // We ignore pause input and force gameplay overlay state to avoid desync.
-        if (gameManager != null && !gameManager.IsRunActive)
+        if (gameManager != null && !gameManager.IsRunActive && !gameManager.IsGameOver)
         {
             if (state != OverlayState.Playing)
             {
