@@ -48,6 +48,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private bool enableAmbientHudFrame = true;
     [SerializeField, Range(0.04f, 0.35f)] private float sideHudOpacity = 0.12f;
     [SerializeField, Range(0.02f, 0.22f)] private float sideHudAccentOpacity = 0.09f;
+    [SerializeField, Range(0.85f, 1.55f)] private float fallbackHudScale = 1.1f;
 
     public bool IsGameOver { get; private set; }
     public bool IsRunActive => runPhase == RunPhase.Active && !IsGameOver;
@@ -97,6 +98,8 @@ public class GameManager : MonoBehaviour
     private string lastBossStateRaw;
     private float statePulseOverlayTimer;
     private int bonusScore;
+    private float hudScale = 1f;
+    private float cachedHudScaleForStyles = -1f;
 
     private void Awake()
     {
@@ -106,6 +109,7 @@ public class GameManager : MonoBehaviour
     private void Start()
     {
         ResolveFonts();
+        RefreshHudScaleSetting();
         RefreshLevelType();
         BeginStartupSequence();
     }
@@ -521,17 +525,18 @@ public class GameManager : MonoBehaviour
             stateValue = ToBossStateLabel(enemyController.CurrentStateLabel);
         }
 
-        const float width = 420f;
-        const float lineHeight = 22f;
+        float s = hudScale;
+        float width = 460f * s;
+        float lineHeight = 22f * s;
         float x = (Screen.width - width) * 0.5f;
-        float y = 10f;
-        Rect panel = new Rect(x - 12f, y + 2f, width + 24f, 46f);
+        float y = 10f * s;
+        Rect panel = new Rect(x - (12f * s), y + (2f * s), width + (24f * s), 52f * s);
         DrawSolidRect(panel, new Color(0.05f, 0.04f, 0.08f, 0.62f));
         DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 1f), new Color(0.93f, 0.76f, 0.88f, 0.44f));
         DrawSolidRect(new Rect(panel.x, panel.yMax - 1f, panel.width, 1f), new Color(0.45f, 0.62f, 0.92f, 0.30f));
 
         GUI.Label(new Rect(x, y, width, lineHeight), "Anomaly State", bossStateStyle);
-        GUI.Label(new Rect(x, y + 20f, width, lineHeight), stateValue, bossStateValueStyle);
+        GUI.Label(new Rect(x, y + (22f * s), width, lineHeight), stateValue, bossStateValueStyle);
     }
 
     private static string ToBossStateLabel(string raw)
@@ -568,53 +573,75 @@ public class GameManager : MonoBehaviour
 
     private void EnsureBossStateStyles()
     {
-        if (bossStateStyle != null && bossStateValueStyle != null && hudLabelStyle != null && hudValueStyle != null && hudChipStyle != null)
+        if (bossStateStyle != null &&
+            bossStateValueStyle != null &&
+            hudLabelStyle != null &&
+            hudValueStyle != null &&
+            hudChipStyle != null &&
+            Mathf.Abs(cachedHudScaleForStyles - hudScale) < 0.001f)
         {
             return;
         }
 
+        cachedHudScaleForStyles = hudScale;
+        int labelSize = Mathf.RoundToInt(14f * hudScale);
+        int valueSize = Mathf.RoundToInt(28f * hudScale);
+        int chipSize = Mathf.RoundToInt(14f * hudScale);
+        int bossLabelSize = Mathf.RoundToInt(15f * hudScale);
+        int bossValueSize = Mathf.RoundToInt(18f * hudScale);
+
         hudLabelStyle = new GUIStyle(GUI.skin.label)
         {
             font = secondaryFont,
-            fontSize = 13,
+            fontSize = labelSize,
             fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.UpperLeft
+            alignment = TextAnchor.UpperLeft,
+            clipping = TextClipping.Overflow,
+            wordWrap = false
         };
         hudLabelStyle.normal.textColor = new Color(0.82f, 0.90f, 1f, 0.86f);
 
         hudValueStyle = new GUIStyle(GUI.skin.label)
         {
             font = importantFont,
-            fontSize = 24,
+            fontSize = valueSize,
             fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.UpperLeft
+            alignment = TextAnchor.UpperLeft,
+            clipping = TextClipping.Overflow,
+            wordWrap = false
         };
         hudValueStyle.normal.textColor = new Color(0.96f, 0.98f, 1f, 0.98f);
 
         hudChipStyle = new GUIStyle(GUI.skin.label)
         {
             font = secondaryFont,
-            fontSize = 13,
+            fontSize = chipSize,
             fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter
+            alignment = TextAnchor.MiddleCenter,
+            clipping = TextClipping.Clip,
+            wordWrap = false
         };
         hudChipStyle.normal.textColor = new Color(0.90f, 0.95f, 1f, 0.96f);
 
         bossStateStyle = new GUIStyle(GUI.skin.label)
         {
             font = importantFont,
-            fontSize = 14,
+            fontSize = bossLabelSize,
             fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter
+            alignment = TextAnchor.MiddleCenter,
+            clipping = TextClipping.Overflow,
+            wordWrap = false
         };
         bossStateStyle.normal.textColor = new Color(0.92f, 0.87f, 0.95f, 0.90f);
 
         bossStateValueStyle = new GUIStyle(GUI.skin.label)
         {
             font = importantFont,
-            fontSize = 17,
+            fontSize = bossValueSize,
             fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter
+            alignment = TextAnchor.MiddleCenter,
+            clipping = TextClipping.Overflow,
+            wordWrap = false
         };
         bossStateValueStyle.normal.textColor = new Color(1f, 0.76f, 0.82f, 0.98f);
     }
@@ -624,27 +651,52 @@ public class GameManager : MonoBehaviour
         EnsureBossStateStyles();
         DrawHudAmbientFrame();
 
-        Rect leftPanel = new Rect(12f, 10f, 250f, 84f);
+        float s = hudScale;
+        Rect leftPanel = new Rect(12f * s, 10f * s, 320f * s, 114f * s);
         DrawSolidRect(leftPanel, new Color(0.03f, 0.05f, 0.10f, 0.58f));
         DrawSolidRect(new Rect(leftPanel.x, leftPanel.y, leftPanel.width, 2f), new Color(0.38f, 0.58f, 0.84f, 0.6f));
         DrawSolidRect(new Rect(leftPanel.x, leftPanel.yMax - 2f, leftPanel.width, 2f), new Color(0.18f, 0.32f, 0.50f, 0.42f));
 
-        GUI.Label(new Rect(leftPanel.x + 12f, leftPanel.y + 8f, 220f, 18f), "TIME", hudLabelStyle);
-        GUI.Label(new Rect(leftPanel.x + 12f, leftPanel.y + 24f, 220f, 28f), $"{SurvivalTime:F1}s", hudValueStyle);
+        float pad = 14f * s;
+        float headerY = leftPanel.y + (10f * s);
+        float valueY = leftPanel.y + (36f * s);
+        float colGap = 18f * s;
+        float colW = (leftPanel.width - (pad * 2f) - colGap) * 0.5f;
+        float valueH = 40f * s;
+        float labelH = 22f * s;
 
-        GUI.Label(new Rect(leftPanel.x + 130f, leftPanel.y + 8f, 110f, 18f), "POINTS", hudLabelStyle);
-        GUI.Label(new Rect(leftPanel.x + 130f, leftPanel.y + 24f, 110f, 28f), CurrentScore.ToString(), hudValueStyle);
+        GUI.Label(new Rect(leftPanel.x + pad, headerY, colW, labelH), "TIME", hudLabelStyle);
+        GUI.Label(new Rect(leftPanel.x + pad, valueY, colW, valueH), $"{SurvivalTime:F1}s", hudValueStyle);
 
-        float chipW = 170f;
-        float chipH = 24f;
-        float rightX = Screen.width - chipW - 12f;
-        DrawHudChip(new Rect(rightX, 10f, chipW, chipH), $"Level: {levelType}", new Color(0.14f, 0.21f, 0.33f, 0.62f));
+        float rightColX = leftPanel.x + pad + colW + colGap;
+        GUI.Label(new Rect(rightColX, headerY, colW, labelH), "POINTS", hudLabelStyle);
+        GUI.Label(new Rect(rightColX, valueY, colW, valueH), CurrentScore.ToString(), hudValueStyle);
+
+        float chipH = 34f * s;
+        float rightMargin = 12f * s;
+        string levelText = $"Level: {levelType}";
+        float levelW = CalcChipWidth(levelText, 190f * s, 420f * s, 22f * s);
+        float rightX = Screen.width - levelW - rightMargin;
+        DrawHudChip(new Rect(rightX, 10f * s, levelW, chipH), levelText, new Color(0.14f, 0.21f, 0.33f, 0.72f));
 
         string eventLabel = GetMapEventLabel();
         if (!string.Equals(eventLabel, "Nominal"))
         {
-            DrawHudChip(new Rect(rightX, 38f, chipW, chipH), eventLabel, new Color(0.31f, 0.17f, 0.22f, 0.68f));
+            float eventW = CalcChipWidth(eventLabel, 220f * s, 520f * s, 22f * s);
+            float eventX = Screen.width - eventW - rightMargin;
+            DrawHudChip(new Rect(eventX, (10f * s) + chipH + (6f * s), eventW, chipH), eventLabel, new Color(0.31f, 0.17f, 0.22f, 0.74f));
         }
+    }
+
+    private float CalcChipWidth(string text, float minWidth, float maxWidth, float horizontalPadding)
+    {
+        if (string.IsNullOrWhiteSpace(text) || hudChipStyle == null)
+        {
+            return minWidth;
+        }
+
+        float content = hudChipStyle.CalcSize(new GUIContent(text)).x + Mathf.Max(8f, horizontalPadding * 2f);
+        return Mathf.Clamp(content, minWidth, maxWidth);
     }
 
     private void DrawHudAmbientFrame()
@@ -737,6 +789,7 @@ public class GameManager : MonoBehaviour
     {
         DrawSolidRect(rect, fill);
         DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 1f), new Color(0.85f, 0.92f, 1f, 0.35f));
+        DrawSolidRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), new Color(0.85f, 0.92f, 1f, 0.25f));
         GUI.Label(rect, text, hudChipStyle);
     }
 
@@ -772,5 +825,16 @@ public class GameManager : MonoBehaviour
     {
         importantFont = GlobalFontSettings.GetImportantFont();
         secondaryFont = GlobalFontSettings.GetSecondaryFont();
+    }
+
+    private void RefreshHudScaleSetting()
+    {
+        float loaded = UserSettings.GetHudScale();
+        if (loaded <= 0f)
+        {
+            loaded = fallbackHudScale;
+        }
+
+        hudScale = Mathf.Clamp(loaded, 0.85f, 1.55f);
     }
 }

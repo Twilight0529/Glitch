@@ -21,6 +21,7 @@ public class MainMenuController : MonoBehaviour
     [Header("Options (Generic)")]
     [SerializeField] private float masterVolume = 0.8f;
     [SerializeField] private float uiScale = 1f;
+    [SerializeField] private float hudScale = 1.1f;
 
     [Header("Scene Fade")]
     [SerializeField] private float introBlackHoldDuration = 0.20f;
@@ -50,6 +51,7 @@ public class MainMenuController : MonoBehaviour
     {
         Time.timeScale = 1f;
         Cursor.visible = true;
+        LoadSettings();
         ResolveFonts();
         NormalizeTransitionDurations();
         BeginIntroImmediateBlack();
@@ -134,7 +136,7 @@ public class MainMenuController : MonoBehaviour
     {
         DrawScreenFade(0.46f);
         float bob = Mathf.Sin(Time.unscaledTime * 1.2f + 1.2f) * 5f;
-        Rect panel = CenterRect(420f, 380f);
+        Rect panel = CenterRect(440f, 420f);
         panel.y += bob;
         DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.90f), new Color(0.47f, 0.56f, 0.72f, 0.55f));
 
@@ -146,11 +148,31 @@ public class MainMenuController : MonoBehaviour
         GUILayout.Space(12f);
 
         GUILayout.Label($"Volumen Maestro: {masterVolume:F2}", paragraphStyle);
-        masterVolume = GUILayout.HorizontalSlider(masterVolume, 0f, 1f);
+        float newMaster = GUILayout.HorizontalSlider(masterVolume, 0f, 1f);
+        if (!Mathf.Approximately(newMaster, masterVolume))
+        {
+            masterVolume = newMaster;
+            AudioListener.volume = masterVolume;
+            UserSettings.SetMasterVolume(masterVolume);
+        }
 
         GUILayout.Space(10f);
         GUILayout.Label($"Escala UI: {uiScale:F2}", paragraphStyle);
-        uiScale = GUILayout.HorizontalSlider(uiScale, 0.8f, 1.2f);
+        float newUiScale = GUILayout.HorizontalSlider(uiScale, UserSettings.MinMenuUiScale, UserSettings.MaxMenuUiScale);
+        if (!Mathf.Approximately(newUiScale, uiScale))
+        {
+            uiScale = newUiScale;
+            UserSettings.SetMenuUiScale(uiScale);
+        }
+
+        GUILayout.Space(10f);
+        GUILayout.Label($"Escala HUD (Nivel): {hudScale:F2}", paragraphStyle);
+        float newHudScale = GUILayout.HorizontalSlider(hudScale, UserSettings.MinHudScale, UserSettings.MaxHudScale);
+        if (!Mathf.Approximately(newHudScale, hudScale))
+        {
+            hudScale = newHudScale;
+            UserSettings.SetHudScale(hudScale);
+        }
 
         GUILayout.FlexibleSpace();
         if (DrawMenuButton("Volver", 38f))
@@ -520,6 +542,14 @@ public class MainMenuController : MonoBehaviour
     {
         titleFont = GlobalFontSettings.GetImportantFont();
         uiFont = GlobalFontSettings.GetSecondaryFont();
+    }
+
+    private void LoadSettings()
+    {
+        masterVolume = UserSettings.GetMasterVolume();
+        uiScale = UserSettings.GetMenuUiScale();
+        hudScale = UserSettings.GetHudScale();
+        AudioListener.volume = masterVolume;
     }
 
     private static void DrawSolidRect(Rect rect, Color color)
