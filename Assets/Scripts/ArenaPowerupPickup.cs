@@ -13,6 +13,8 @@ public class ArenaPowerupPickup : MonoBehaviour
     [SerializeField] private float bobAmplitude = 0.14f;
     [SerializeField] private float bobSpeed = 3.2f;
     [SerializeField] private float spinSpeed = 75f;
+    [SerializeField] private float auraPulseSpeed = 4.8f;
+    [SerializeField] private float auraScale = 1.95f;
 
     private ArenaChaosDirector owner;
     private PickupKind kind;
@@ -23,6 +25,8 @@ public class ArenaPowerupPickup : MonoBehaviour
     private float shieldDuration;
     private Vector3 basePosition;
     private SpriteRenderer spriteRenderer;
+    private SpriteRenderer auraRenderer;
+    private GameObject auraObject;
 
     public PickupKind Kind => kind;
 
@@ -46,6 +50,7 @@ public class ArenaPowerupPickup : MonoBehaviour
     {
         spriteRenderer = GetComponent<SpriteRenderer>();
         basePosition = transform.position;
+        EnsureAuraVisual();
     }
 
     private void Start()
@@ -65,6 +70,7 @@ public class ArenaPowerupPickup : MonoBehaviour
         float bob = Mathf.Sin(Time.time * bobSpeed) * bobAmplitude;
         transform.position = new Vector3(basePosition.x, basePosition.y + bob, basePosition.z);
         transform.Rotate(0f, 0f, spinSpeed * Time.deltaTime, Space.Self);
+        UpdateAuraVisual();
     }
 
     private void ApplyVisualTheme()
@@ -115,5 +121,34 @@ public class ArenaPowerupPickup : MonoBehaviour
     {
         owner?.NotifyPickupDestroyed(this);
     }
-}
 
+    private void EnsureAuraVisual()
+    {
+        auraObject = new GameObject("PowerupAura");
+        auraObject.transform.SetParent(transform, false);
+        auraObject.transform.localPosition = Vector3.zero;
+        auraObject.transform.localScale = Vector3.one * Mathf.Max(1.1f, auraScale);
+        auraRenderer = auraObject.AddComponent<SpriteRenderer>();
+        auraRenderer.sprite = CircleSpriteProvider.Get();
+        auraRenderer.sortingOrder = 11;
+        auraRenderer.color = new Color(1f, 1f, 1f, 0.18f);
+    }
+
+    private void UpdateAuraVisual()
+    {
+        if (auraObject == null || auraRenderer == null)
+        {
+            return;
+        }
+
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * auraPulseSpeed);
+        Color tint = kind == PickupKind.Shield
+            ? new Color(1f, 0.68f, 0.88f, 1f)
+            : new Color(0.52f, 0.95f, 1f, 1f);
+
+        float lifeN = 1f - Mathf.Clamp01(lifeTimer / Mathf.Max(0.01f, lifetime));
+        float warn = lifeN < 0.25f ? 0.45f + 0.55f * Mathf.Sin(Time.time * 18f) : 1f;
+        auraRenderer.color = new Color(tint.r, tint.g, tint.b, (0.10f + pulse * 0.24f) * warn);
+        auraObject.transform.localScale = Vector3.one * auraScale * Mathf.Lerp(0.9f, 1.12f, pulse);
+    }
+}

@@ -1,7 +1,17 @@
-﻿using UnityEngine;
+using System.Collections.Generic;
+using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
+    private struct ScorePopup
+    {
+        public int amount;
+        public float age;
+        public float lifetime;
+        public float xJitter;
+        public Color color;
+    }
+
     private enum RunPhase
     {
         StartupDelay,
@@ -49,6 +59,14 @@ public class GameManager : MonoBehaviour
     [SerializeField, Range(0.04f, 0.35f)] private float sideHudOpacity = 0.12f;
     [SerializeField, Range(0.02f, 0.22f)] private float sideHudAccentOpacity = 0.09f;
     [SerializeField, Range(0.85f, 1.55f)] private float fallbackHudScale = 1.1f;
+
+    [Header("HUD Reactive FX")]
+    [SerializeField] private bool enableReactiveHudFx = true;
+    [SerializeField] private float threatDangerDistance = 2.2f;
+    [SerializeField] private float threatSafeDistance = 10.5f;
+    [SerializeField] private float threatSmoothing = 5f;
+    [SerializeField] private float scoreSmoothing = 10f;
+    [SerializeField] private float scorePopupLifetime = 0.95f;
 
     public bool IsGameOver { get; private set; }
     public bool IsRunActive => runPhase == RunPhase.Active && !IsGameOver;
@@ -100,6 +118,10 @@ public class GameManager : MonoBehaviour
     private int bonusScore;
     private float hudScale = 1f;
     private float cachedHudScaleForStyles = -1f;
+    private float displayedScore;
+    private float scorePulseTimer;
+    private float smoothedThreat;
+    private readonly List<ScorePopup> scorePopups = new List<ScorePopup>();
 
     private void Awake()
     {
@@ -116,6 +138,8 @@ public class GameManager : MonoBehaviour
 
     private void Update()
     {
+        UpdateHudReactiveState();
+
         if (arenaGenerator == null)
         {
             RefreshLevelType();
@@ -183,6 +207,21 @@ public class GameManager : MonoBehaviour
         }
 
         bonusScore += amount;
+        scorePulseTimer = Mathf.Max(scorePulseTimer, 0.34f);
+        if (scorePopups.Count < 10)
+        {
+            ScorePopup popup = new ScorePopup
+            {
+                amount = amount,
+                age = 0f,
+                lifetime = Mathf.Max(0.4f, scorePopupLifetime),
+                xJitter = Random.Range(-42f, 42f),
+                color = Random.value < 0.22f
+                    ? new Color(1f, 0.83f, 0.45f, 1f)
+                    : new Color(0.70f, 0.95f, 1f, 1f)
+            };
+            scorePopups.Add(popup);
+        }
     }
 
     private void HandleOptionalReload()
@@ -233,7 +272,55 @@ public class GameManager : MonoBehaviour
         reloadTimer = 0f;
         statePulseOverlayTimer = 0f;
         lastBossStateRaw = null;
+        scorePopups.Clear();
+        displayedScore = 0f;
+        smoothedThreat = 0f;
+        scorePulseTimer = 0f;
         Time.timeScale = 0f;
+    }
+
+    private void UpdateHudReactiveState()
+    {
+        float dt = Time.unscaledDeltaTime;
+
+        if (scorePulseTimer > 0f)
+        {
+            scorePulseTimer -= dt;
+        }
+
+        float targetScore = CurrentScore;
+        float scoreLerp = 1f - Mathf.Exp(-Mathf.Max(1f, scoreSmoothing) * dt);
+        displayedScore = Mathf.Lerp(displayedScore, targetScore, scoreLerp);
+        if (Mathf.Abs(displayedScore - targetScore) < 0.02f)
+        {
+            displayedScore = targetScore;
+        }
+
+        for (int i = scorePopups.Count - 1; i >= 0; i--)
+        {
+            ScorePopup popup = scorePopups[i];
+            popup.age += dt;
+            if (popup.age >= popup.lifetime)
+            {
+                scorePopups.RemoveAt(i);
+                continue;
+            }
+
+            scorePopups[i] = popup;
+        }
+
+        float targetThreat = 0f;
+        if (enableReactiveHudFx && playerController != null && enemyController != null)
+        {
+            float distance = Vector2.Distance(playerController.GetPosition(), enemyController.GetCurrentPosition());
+            float safe = Mathf.Max(threatDangerDistance + 0.1f, threatSafeDistance);
+            float danger = Mathf.Max(0.05f, threatDangerDistance);
+            targetThreat = 1f - Mathf.InverseLerp(safe, danger, distance);
+            targetThreat = Mathf.Clamp01(targetThreat);
+        }
+
+        float threatLerp = 1f - Mathf.Exp(-Mathf.Max(0.1f, threatSmoothing) * dt);
+        smoothedThreat = Mathf.Lerp(smoothedThreat, targetThreat, threatLerp);
     }
 
     private void UpdateStartupSequence()
@@ -670,7 +757,11 @@ public class GameManager : MonoBehaviour
 
         float rightColX = leftPanel.x + pad + colW + colGap;
         GUI.Label(new Rect(rightColX, headerY, colW, labelH), "POINTS", hudLabelStyle);
-        GUI.Label(new Rect(rightColX, valueY, colW, valueH), CurrentScore.ToString(), hudValueStyle);
+        int shownScore = Mathf.Max(0, Mathf.RoundToInt(displayedScore));
+        GUI.Label(new Rect(rightColX, valueY, colW, valueH), shownScore.ToString(), hudValueStyle);
+
+        DrawThreatMeter(leftPanel, s);
+        DrawScorePopups(rightColX + (colW * 0.45f), valueY - (6f * s), s);
 
         float chipH = 34f * s;
         float rightMargin = 12f * s;
@@ -686,6 +777,69 @@ public class GameManager : MonoBehaviour
             float eventX = Screen.width - eventW - rightMargin;
             DrawHudChip(new Rect(eventX, (10f * s) + chipH + (6f * s), eventW, chipH), eventLabel, new Color(0.31f, 0.17f, 0.22f, 0.74f));
         }
+
+        if (enableReactiveHudFx)
+        {
+            DrawThreatVignette();
+        }
+    }
+
+    private void DrawThreatMeter(Rect panel, float s)
+    {
+        float barH = 10f * s;
+        float barW = panel.width - (28f * s);
+        float barX = panel.x + (14f * s);
+        float barY = panel.yMax - (16f * s);
+        Rect background = new Rect(barX, barY, barW, barH);
+        DrawSolidRect(background, new Color(0.05f, 0.07f, 0.11f, 0.82f));
+
+        float pulse = 0.65f + 0.35f * Mathf.Sin(Time.unscaledTime * 8f);
+        Color barColor = Color.Lerp(new Color(0.34f, 0.83f, 1f, 0.86f), new Color(1f, 0.35f, 0.45f, 0.96f), smoothedThreat);
+        float threatFill = barW * Mathf.Clamp01(smoothedThreat);
+        DrawSolidRect(new Rect(barX, barY, threatFill, barH), new Color(barColor.r, barColor.g, barColor.b, 0.85f + pulse * 0.12f * smoothedThreat));
+        DrawSolidRect(new Rect(barX, barY, barW, 1f), new Color(0.85f, 0.92f, 1f, 0.18f));
+        DrawSolidRect(new Rect(barX, barY + barH - 1f, barW, 1f), new Color(0.85f, 0.92f, 1f, 0.14f));
+    }
+
+    private void DrawScorePopups(float anchorX, float anchorY, float s)
+    {
+        if (scorePopups.Count == 0)
+        {
+            return;
+        }
+
+        for (int i = 0; i < scorePopups.Count; i++)
+        {
+            ScorePopup popup = scorePopups[i];
+            float t = popup.age / Mathf.Max(0.001f, popup.lifetime);
+            float rise = Mathf.Lerp(0f, 28f * s, t);
+            float alpha = 1f - t;
+            float jitter = Mathf.Sin((popup.age * 12f) + i) * 1.8f * s;
+
+            Color old = GUI.color;
+            GUI.color = new Color(popup.color.r, popup.color.g, popup.color.b, alpha);
+            Rect r = new Rect(anchorX + popup.xJitter * 0.28f * s + jitter, anchorY - rise, 92f * s, 22f * s);
+            GUI.Label(r, $"+{popup.amount}", hudLabelStyle);
+            GUI.color = old;
+        }
+    }
+
+    private void DrawThreatVignette()
+    {
+        float intensity = Mathf.Clamp01(smoothedThreat);
+        if (intensity <= 0.02f)
+        {
+            return;
+        }
+
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (5f + intensity * 4f));
+        Color tint = new Color(1f, 0.28f, 0.38f, (0.04f + intensity * 0.14f) * (0.76f + pulse * 0.24f));
+        float edge = Mathf.Lerp(18f, 70f, intensity);
+
+        DrawSolidRect(new Rect(0f, 0f, Screen.width, edge), tint);
+        DrawSolidRect(new Rect(0f, Screen.height - edge, Screen.width, edge), tint);
+        DrawSolidRect(new Rect(0f, edge, edge, Screen.height - edge * 2f), tint);
+        DrawSolidRect(new Rect(Screen.width - edge, edge, edge, Screen.height - edge * 2f), tint);
     }
 
     private float CalcChipWidth(string text, float minWidth, float maxWidth, float horizontalPadding)
@@ -838,3 +992,7 @@ public class GameManager : MonoBehaviour
         hudScale = Mathf.Clamp(loaded, 0.85f, 1.55f);
     }
 }
+
+
+
+
