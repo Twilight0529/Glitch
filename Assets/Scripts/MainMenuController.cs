@@ -54,6 +54,10 @@ public class MainMenuController : MonoBehaviour
     private MenuTransitionState transitionState;
     private bool introReady;
     private readonly Dictionary<string, float> buttonHoverStates = new Dictionary<string, float>();
+    private bool clearRankingConfirmArmed;
+    private float clearRankingConfirmExpireAt;
+    private string rankingActionMessage = string.Empty;
+    private float rankingActionMessageExpireAt;
 
     private void Awake()
     {
@@ -150,6 +154,16 @@ public class MainMenuController : MonoBehaviour
 
     private void DrawRankingPanel(Rect panel, bool sideBySide)
     {
+        float now = Time.unscaledTime;
+        if (clearRankingConfirmArmed && now >= clearRankingConfirmExpireAt)
+        {
+            clearRankingConfirmArmed = false;
+        }
+        if (!string.IsNullOrEmpty(rankingActionMessage) && now >= rankingActionMessageExpireAt)
+        {
+            rankingActionMessage = string.Empty;
+        }
+
         DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.90f), new Color(0.47f, 0.56f, 0.72f, 0.50f));
         DrawPanelFx(panel, new Color(0.64f, 0.74f, 1f, 1f), 0.09f);
         Rect area = new Rect(panel.x + 14f, panel.y + 10f, panel.width - 28f, panel.height - 16f);
@@ -158,43 +172,73 @@ public class MainMenuController : MonoBehaviour
         GUILayout.Space(8f);
 
         IReadOnlyList<RankingEntry> entries = RankingStorage.GetTopEntries();
-        if (entries == null || entries.Count == 0)
+        bool hasEntries = entries != null && entries.Count > 0;
+        if (!hasEntries)
         {
             GUILayout.Label("Sin registros aun. Juega una ronda y deja tu marca.", paragraphStyle);
-            GUILayout.EndArea();
-            return;
         }
-
-        int rows = Mathf.Min(sideBySide ? 10 : 8, entries.Count);
-        for (int i = 0; i < rows; i++)
+        else
         {
-            RankingEntry entry = entries[i];
-            Rect row = GUILayoutUtility.GetRect(area.width, 24f);
-            if (i % 2 == 0)
+            int rows = Mathf.Min(sideBySide ? 8 : 6, entries.Count);
+            for (int i = 0; i < rows; i++)
             {
-                DrawSolidRect(new Rect(row.x, row.y + 2f, row.width, row.height - 4f), new Color(1f, 1f, 1f, 0.03f));
-            }
+                RankingEntry entry = entries[i];
+                Rect row = GUILayoutUtility.GetRect(area.width, 24f);
+                if (i % 2 == 0)
+                {
+                    DrawSolidRect(new Rect(row.x, row.y + 2f, row.width, row.height - 4f), new Color(1f, 1f, 1f, 0.03f));
+                }
 
-            if (i == 0)
-            {
-                DrawSolidRect(new Rect(row.x, row.y + 3f, row.width, row.height - 6f), new Color(1f, 0.84f, 0.45f, 0.08f));
-            }
+                if (i == 0)
+                {
+                    DrawSolidRect(new Rect(row.x, row.y + 3f, row.width, row.height - 6f), new Color(1f, 0.84f, 0.45f, 0.08f));
+                }
 
-            GUI.Label(
-                new Rect(row.x + 6f, row.y, row.width * 0.66f, row.height),
-                $"{i + 1}. {entry.playerName}",
-                rankingRowStyle);
-            GUI.Label(
-                new Rect(row.x + row.width * 0.68f, row.y, row.width * 0.30f, row.height),
-                entry.score.ToString(),
-                rankingScoreStyle);
+                GUI.Label(
+                    new Rect(row.x + 6f, row.y, row.width * 0.66f, row.height),
+                    $"{i + 1}. {entry.playerName}",
+                    rankingRowStyle);
+                GUI.Label(
+                    new Rect(row.x + row.width * 0.68f, row.y, row.width * 0.30f, row.height),
+                    entry.score.ToString(),
+                    rankingScoreStyle);
 
-            if (i == 0)
-            {
-                float sparkle = 0.35f + 0.65f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * 3.2f));
-                DrawSolidRect(new Rect(row.x + row.width - 14f, row.y + 9f, 4f, 4f), new Color(1f, 0.88f, 0.55f, 0.32f * sparkle));
+                if (i == 0)
+                {
+                    float sparkle = 0.35f + 0.65f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * 3.2f));
+                    DrawSolidRect(new Rect(row.x + row.width - 14f, row.y + 9f, 4f, 4f), new Color(1f, 0.88f, 0.55f, 0.32f * sparkle));
+                }
             }
         }
+
+        GUILayout.FlexibleSpace();
+        if (!string.IsNullOrEmpty(rankingActionMessage))
+        {
+            GUILayout.Label(rankingActionMessage, paragraphStyle);
+            GUILayout.Space(4f);
+        }
+
+        string clearLabel = clearRankingConfirmArmed ? "Confirmar limpieza" : "Limpiar ranking";
+        bool oldEnabled = GUI.enabled;
+        GUI.enabled = transitionState == MenuTransitionState.Idle;
+        if (GUILayout.Button(clearLabel, buttonStyle, GUILayout.Height(30f)))
+        {
+            if (clearRankingConfirmArmed)
+            {
+                RankingStorage.ClearEntries();
+                clearRankingConfirmArmed = false;
+                rankingActionMessage = "Ranking limpiado.";
+                rankingActionMessageExpireAt = Time.unscaledTime + 2.2f;
+            }
+            else
+            {
+                clearRankingConfirmArmed = true;
+                clearRankingConfirmExpireAt = Time.unscaledTime + 2.8f;
+                rankingActionMessage = "Pulsa nuevamente para confirmar.";
+                rankingActionMessageExpireAt = clearRankingConfirmExpireAt;
+            }
+        }
+        GUI.enabled = oldEnabled;
 
         GUILayout.EndArea();
     }

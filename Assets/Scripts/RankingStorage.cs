@@ -67,6 +67,12 @@ public static class RankingStorage
         PlayerPrefs.Save();
     }
 
+    public static void ClearEntries()
+    {
+        PlayerPrefs.DeleteKey(RankingKey);
+        PlayerPrefs.Save();
+    }
+
     private static RankingTable LoadTable()
     {
         string json = PlayerPrefs.GetString(RankingKey, string.Empty);
