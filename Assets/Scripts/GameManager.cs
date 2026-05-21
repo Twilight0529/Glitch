@@ -24,7 +24,7 @@ public class GameManager : MonoBehaviour
     [SerializeField, Range(0.45f, 1f)] private float chaosBehaviorIntervalMultiplier = 0.72f;
 
     [Header("Scoring")]
-    [SerializeField] private float pointsPerSecond = 100f;
+    [SerializeField] private float pointsPerSecond = 4f;
 
     [Header("Progression Gates")]
     [SerializeField] private float bossSpecialStatesUnlockTime = 30f;
@@ -53,7 +53,7 @@ public class GameManager : MonoBehaviour
     public bool IsRunActive => runPhase == RunPhase.Active && !IsGameOver;
     public float SurvivalTime { get; private set; }
     public float DifficultyMultiplier => 1f + (SurvivalTime * difficultyRampPerSecond);
-    public int CurrentScore => Mathf.Max(0, Mathf.FloorToInt(SurvivalTime * Mathf.Max(1f, pointsPerSecond) * DifficultyMultiplier) + bonusScore);
+    public int CurrentScore => Mathf.Max(0, Mathf.FloorToInt(SurvivalTime * Mathf.Max(0f, pointsPerSecond)) + bonusScore);
     public string CurrentLevelTypeLabel => levelType;
     public bool AreBossSpecialStatesUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, bossSpecialStatesUnlockTime);
     public bool AreMapEventsUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, mapEventsUnlockTime);

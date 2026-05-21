@@ -12,13 +12,13 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private float speedBoostDuration = 3.2f;
     [SerializeField] private float shieldDuration = 5.5f;
     [SerializeField, Range(0f, 1f)] private float shieldPickupChance = 0.35f;
+    [SerializeField] private int powerupScorePoints = 3;
 
     [Header("Score Pickups")]
     [SerializeField] private bool enableScorePickups = true;
     [SerializeField] private Vector2 scorePickupIntervalRange = new Vector2(0.9f, 1.8f);
     [SerializeField] private float scorePickupLifetime = 9f;
-    [SerializeField] private int scorePickupMinValue = 40;
-    [SerializeField] private int scorePickupMaxValue = 110;
+    [SerializeField] private int scorePickupPoints = 2;
     [SerializeField] private int scorePickupMaxAlive = 8;
     [SerializeField] private int scorePickupBurstMin = 1;
     [SerializeField] private int scorePickupBurstMax = 2;
@@ -169,6 +169,10 @@ public class ArenaChaosDirector : MonoBehaviour
         if (pickup != null && pickup == activePickup)
         {
             activePickup = null;
+            if (gameManager != null)
+            {
+                gameManager.AddScore(Mathf.Max(0, powerupScorePoints));
+            }
         }
     }
 
@@ -342,10 +346,6 @@ public class ArenaChaosDirector : MonoBehaviour
                 continue;
             }
 
-            int valueMin = Mathf.Min(scorePickupMinValue, scorePickupMaxValue);
-            int valueMax = Mathf.Max(scorePickupMinValue, scorePickupMaxValue);
-            int points = Random.Range(valueMin, valueMax + 1);
-
             GameObject go = new GameObject("ScoreDot");
             go.transform.SetParent(runtimeRoot, false);
             go.transform.position = new Vector3(position.x, position.y, 0f);
@@ -362,7 +362,7 @@ public class ArenaChaosDirector : MonoBehaviour
             col.radius = 0.2f;
 
             ArenaScorePickup pickup = go.AddComponent<ArenaScorePickup>();
-            pickup.Configure(this, gameManager, points, scorePickupLifetime);
+            pickup.Configure(this, gameManager, Mathf.Max(1, scorePickupPoints), scorePickupLifetime);
             activeScorePickups.Add(pickup);
         }
     }
