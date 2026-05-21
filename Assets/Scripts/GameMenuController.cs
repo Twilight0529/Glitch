@@ -76,6 +76,18 @@ public class GameMenuController : MonoBehaviour
             return;
         }
 
+        // During startup delay/countdown/GO flash, GameManager owns time scale.
+        // We ignore pause input and force gameplay overlay state to avoid desync.
+        if (gameManager != null && !gameManager.IsRunActive)
+        {
+            if (state != OverlayState.Playing)
+            {
+                SetState(OverlayState.Playing);
+            }
+
+            return;
+        }
+
         if (state == OverlayState.Defeat)
         {
             return;
@@ -116,7 +128,8 @@ public class GameMenuController : MonoBehaviour
         state = nextState;
         bool gameplayActive = state == OverlayState.Playing;
 
-        Time.timeScale = gameplayActive ? 1f : 0f;
+        bool runCanAdvance = gameManager == null || gameManager.IsRunActive;
+        Time.timeScale = gameplayActive && runCanAdvance ? 1f : 0f;
         ShouldHideGameplayHud = !gameplayActive;
         Cursor.visible = !gameplayActive;
     }
