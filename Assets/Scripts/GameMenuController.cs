@@ -28,6 +28,12 @@ public class GameMenuController : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float hudGlitchWeight = 0.85f;
     [SerializeField, Range(0f, 1f)] private float textGlitchWeight = 0.35f;
     [SerializeField] private float panelJitterStrength = 1.1f;
+    [SerializeField] private float defeatCinematicDuration = 1.05f;
+    [SerializeField] private float defeatInputUnlockDelay = 1.2f;
+    [SerializeField] private float defeatFlashDuration = 0.16f;
+    [SerializeField] private float defeatShockwaveDuration = 0.95f;
+    [SerializeField] private Color defeatFlashColor = new Color(1f, 0.72f, 0.78f, 1f);
+    [SerializeField] private Color defeatShockwaveColor = new Color(1f, 0.44f, 0.58f, 1f);
 
     [Header("Ranking")]
     [SerializeField] private int rankingNameMaxLength = 16;
@@ -47,6 +53,7 @@ public class GameMenuController : MonoBehaviour
     private bool rankingSubmitted;
     private int rankingSubmittedScore;
     private float rankingSubmittedTime;
+    private float defeatStartedAtUnscaled;
 
     private void Awake()
     {
@@ -99,7 +106,7 @@ public class GameMenuController : MonoBehaviour
 
         if (state == OverlayState.Defeat)
         {
-            if (GetSubmitPressedThisFrame())
+            if (GetSubmitPressedThisFrame() && IsDefeatInputUnlocked())
             {
                 TryRegisterCurrentScore();
             }
@@ -160,6 +167,7 @@ public class GameMenuController : MonoBehaviour
         if (state == OverlayState.Defeat)
         {
             PrepareDefeatRegistration();
+            defeatStartedAtUnscaled = Time.unscaledTime;
         }
 
         bool gameplayActive = state == OverlayState.Playing;
@@ -309,14 +317,28 @@ public class GameMenuController : MonoBehaviour
     private void DrawDefeatMenu()
     {
         float t = Time.unscaledTime;
+        float defeatElapsed = Mathf.Max(0f, t - defeatStartedAtUnscaled);
+        float introDuration = Mathf.Max(0.01f, defeatCinematicDuration);
+        float introT = Mathf.Clamp01(defeatElapsed / introDuration);
+        float introEase = EaseOutCubic(introT);
+
         float pulse = 0.5f + 0.5f * Mathf.Sin(t * defeatPulseSpeed);
         float glitch = Mathf.Clamp01(0.20f + pulse * 0.50f);
         float hudGlitch = glitch * Mathf.Clamp01(hudGlitchWeight);
         float textGlitch = glitch * Mathf.Clamp01(textGlitchWeight);
-        DrawScreenFade(0.70f);
+        DrawScreenFade(Mathf.Lerp(0.88f, 0.70f, introEase));
+        DrawDefeatCinematicIntro(defeatElapsed, introT);
         DrawDefeatBackdrop(pulse, hudGlitch, t);
 
         Rect panel = CenterRect(500f, 470f);
+        float panelScale = Mathf.Lerp(0.90f, 1f, introEase);
+        if (introT < 1f)
+        {
+            float overshoot = Mathf.Sin(introT * Mathf.PI) * 0.03f;
+            panelScale += overshoot;
+        }
+        panel = ScaleRectFromCenter(panel, panelScale);
+
         float cappedJitter = Mathf.Min(glitchJitterStrength, 2.0f) * panelJitterStrength;
         float jitterX = (Mathf.PerlinNoise(t * 13.5f, 0.37f) - 0.5f) * 2f * cappedJitter * textGlitch;
         float jitterY = (Mathf.PerlinNoise(0.77f, t * 9.2f) - 0.5f) * 2f * (cappedJitter * 0.28f) * textGlitch;
@@ -348,15 +370,18 @@ public class GameMenuController : MonoBehaviour
 
         GUILayout.Space(14f);
         GUILayout.Label("Ingresa tu nombre para el ranking:", bodyStyle);
+        bool canInteract = defeatElapsed >= Mathf.Max(0f, defeatInputUnlockDelay);
+        bool prevEnabled = GUI.enabled;
+        GUI.enabled = canInteract;
         rankingNameInput = GUILayout.TextField(
             rankingNameInput ?? string.Empty,
             Mathf.Max(1, rankingNameMaxLength),
             textFieldStyle,
             GUILayout.Height(30f));
+        GUI.enabled = prevEnabled;
 
         GUILayout.Space(8f);
-        bool canRegister = !rankingSubmitted && !string.IsNullOrWhiteSpace(rankingNameInput);
-        bool prevEnabled = GUI.enabled;
+        bool canRegister = canInteract && !rankingSubmitted && !string.IsNullOrWhiteSpace(rankingNameInput);
         GUI.enabled = canRegister;
         if (GUILayout.Button("Registrar Puntaje", buttonStyle, GUILayout.Height(36f)))
         {
@@ -372,6 +397,7 @@ public class GameMenuController : MonoBehaviour
 
         GUILayout.Space(10f);
 
+        GUI.enabled = canInteract;
         if (GUILayout.Button("Reiniciar", buttonStyle, GUILayout.Height(40f)))
         {
             RestartLevel();
@@ -382,8 +408,15 @@ public class GameMenuController : MonoBehaviour
         {
             ReturnToMainMenu();
         }
+        GUI.enabled = prevEnabled;
 
         GUILayout.EndArea();
+
+        if (!canInteract)
+        {
+            float remaining = Mathf.Max(0f, defeatInputUnlockDelay - defeatElapsed);
+            DrawDefeatHoldPrompt(remaining);
+        }
     }
 
     private void PrepareDefeatRegistration()
@@ -421,6 +454,16 @@ public class GameMenuController : MonoBehaviour
         rankingSubmittedTime = gameManager.SurvivalTime;
     }
 
+    private bool IsDefeatInputUnlocked()
+    {
+        if (state != OverlayState.Defeat)
+        {
+            return true;
+        }
+
+        return (Time.unscaledTime - defeatStartedAtUnscaled) >= Mathf.Max(0f, defeatInputUnlockDelay);
+    }
+
     private void DrawDefeatBackdrop(float pulse, float glitch, float time)
     {
         Color ring = new Color(0.98f, 0.45f, 0.60f, 0.18f + pulse * 0.10f);
@@ -447,6 +490,74 @@ public class GameMenuController : MonoBehaviour
         }
 
         DrawHudGlitchOverlay(glitch, time);
+    }
+
+    private void DrawDefeatCinematicIntro(float defeatElapsed, float introT)
+    {
+        Vector2 center = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+
+        float flashDuration = Mathf.Max(0.01f, defeatFlashDuration);
+        if (defeatElapsed <= flashDuration)
+        {
+            float f = 1f - Mathf.Clamp01(defeatElapsed / flashDuration);
+            float alpha = f * f;
+            DrawSolidRect(
+                new Rect(0f, 0f, Screen.width, Screen.height),
+                new Color(defeatFlashColor.r, defeatFlashColor.g, defeatFlashColor.b, alpha * 0.75f));
+        }
+
+        float shockDuration = Mathf.Max(0.01f, defeatShockwaveDuration);
+        float shockT = Mathf.Clamp01(defeatElapsed / shockDuration);
+        float shockEase = EaseOutCubic(shockT);
+        float ringCount = 4f;
+        for (int i = 0; i < ringCount; i++)
+        {
+            float offset = i * 0.12f;
+            float p = Mathf.Clamp01(shockEase - offset);
+            if (p <= 0f)
+            {
+                continue;
+            }
+
+            float radiusX = Mathf.Lerp(24f, Screen.width * 0.62f, p);
+            float radiusY = Mathf.Lerp(14f, Screen.height * 0.54f, p);
+            float a = (1f - p) * (0.34f - i * 0.05f);
+            Color c = new Color(defeatShockwaveColor.r, defeatShockwaveColor.g, defeatShockwaveColor.b, Mathf.Max(0f, a));
+            DrawEllipseRing(center, radiusX, radiusY, c);
+        }
+
+        float barAlpha = (1f - introT) * 0.30f;
+        if (barAlpha > 0.001f)
+        {
+            float step = Mathf.Max(18f, Screen.height / 22f);
+            for (float y = 0f; y < Screen.height + step; y += step)
+            {
+                float drift = Mathf.Sin((y * 0.04f) + Time.unscaledTime * 13f) * 26f;
+                float width = Screen.width * Mathf.Lerp(0.38f, 0.95f, Mathf.PerlinNoise(y * 0.013f, Time.unscaledTime * 1.9f));
+                float x = (Screen.width - width) * 0.5f + drift;
+                DrawSolidRect(new Rect(x, y, width, 2f), new Color(1f, 0.44f, 0.56f, barAlpha));
+            }
+        }
+
+        float vignetteA = Mathf.Lerp(0.34f, 0.12f, introT);
+        float edge = Mathf.Lerp(120f, 34f, introT);
+        Color vignette = new Color(0f, 0f, 0f, vignetteA);
+        DrawSolidRect(new Rect(0f, 0f, Screen.width, edge), vignette);
+        DrawSolidRect(new Rect(0f, Screen.height - edge, Screen.width, edge), vignette);
+        DrawSolidRect(new Rect(0f, edge, edge, Screen.height - edge * 2f), vignette);
+        DrawSolidRect(new Rect(Screen.width - edge, edge, edge, Screen.height - edge * 2f), vignette);
+    }
+
+    private void DrawDefeatHoldPrompt(float remaining)
+    {
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 10f);
+        float alpha = Mathf.Lerp(0.18f, 0.42f, pulse);
+        string msg = remaining > 0.06f ? "Restableciendo protocolo..." : " ";
+        Rect r = new Rect((Screen.width - 520f) * 0.5f, Screen.height * 0.82f, 520f, 34f);
+        Color old = GUI.color;
+        GUI.color = new Color(1f, 0.70f, 0.78f, alpha);
+        GUI.Label(r, msg, subtitleStyle);
+        GUI.color = old;
     }
 
     private void DrawGlitchLabel(Rect rect, string text, GUIStyle style, float glitch)
@@ -562,5 +673,24 @@ public class GameMenuController : MonoBehaviour
         GUI.color = color; 
         GUI.DrawTexture(rect, Texture2D.whiteTexture);
         GUI.color = old;  
-    } 
+    }
+
+    private static float EaseOutCubic(float t)
+    {
+        t = Mathf.Clamp01(t);
+        float inv = 1f - t;
+        return 1f - (inv * inv * inv);
+    }
+
+    private static Rect ScaleRectFromCenter(Rect source, float scale)
+    {
+        float clamped = Mathf.Max(0.01f, scale);
+        float w = source.width * clamped;
+        float h = source.height * clamped;
+        return new Rect(
+            source.center.x - w * 0.5f,
+            source.center.y - h * 0.5f,
+            w,
+            h);
+    }
 }
