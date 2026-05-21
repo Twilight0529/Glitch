@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using System.Collections;
 
@@ -90,6 +90,11 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float statePulseDuration = 0.24f;
     [SerializeField, Range(0f, 1f)] private float statePulseLighten = 0.42f;
     [SerializeField] private float statePulseScaleBoost = 1.08f;
+    [SerializeField] private bool stateTransitionBurstEnabled = true;
+    [SerializeField] private float stateTransitionBurstDuration = 0.34f;
+    [SerializeField] private float stateTransitionBurstRadius = 1.35f;
+    [SerializeField] private int stateTransitionBurstRayCount = 10;
+    [SerializeField] private float stateTransitionBurstCooldown = 0.12f;
 
     [Header("Expansion Shoot")]
     [SerializeField] private int expansionShootProjectileCount = 10;
@@ -236,6 +241,7 @@ public class EnemyController : MonoBehaviour
     private int pacingMinorStatesRemaining;
     private int pacingMajorStatesRemaining;
     private float statePulseTimer;
+    private float stateTransitionBurstCooldownTimer;
     private float externalSpeedTimer;
     private float externalSpeedMultiplier = 1f;
     private Vector3 baseScale = Vector3.one;
@@ -404,6 +410,10 @@ public class EnemyController : MonoBehaviour
         UpdateStateAbilities();
         UpdateStatePulseVisual();
         UpdateExternalSpeedEffects();
+        if (stateTransitionBurstCooldownTimer > 0f)
+        {
+            stateTransitionBurstCooldownTimer -= Time.deltaTime;
+        }
 
         if (splitMergeInProgress && splitClone != null)
         {
@@ -716,6 +726,7 @@ public class EnemyController : MonoBehaviour
 
         HandleStateTransition(previousState, currentState);
         TriggerStatePulse();
+        SpawnStateTransitionBurst(currentState, previousState != currentState);
         OnStateEntered();
         RegisterStateForPacing(currentState);
     }
@@ -1068,6 +1079,76 @@ public class EnemyController : MonoBehaviour
         }
 
         statePulseTimer = Mathf.Max(0.04f, statePulseDuration);
+    }
+
+    private void SpawnStateTransitionBurst(AnomalyState newState, bool stateChanged)
+    {
+        if (!stateTransitionBurstEnabled || !stateChanged)
+        {
+            return;
+        }
+
+        if (stateTransitionBurstCooldownTimer > 0f)
+        {
+            return;
+        }
+
+        stateTransitionBurstCooldownTimer = Mathf.Max(0.02f, stateTransitionBurstCooldown);
+        Color burstColor = GetStateColor(newState);
+        int rays = Mathf.Max(4, stateTransitionBurstRayCount);
+        float duration = Mathf.Max(0.08f, stateTransitionBurstDuration);
+        float radius = Mathf.Max(0.25f, stateTransitionBurstRadius);
+        Vector3 pos = transform.position;
+
+        GameObject ring = new GameObject("AnomalyStateBurstRing");
+        ring.transform.position = pos;
+        SpriteRenderer ringRenderer = ring.AddComponent<SpriteRenderer>();
+        ringRenderer.sprite = CircleSpriteProvider.Get();
+        ringRenderer.sortingOrder = 15;
+        ringRenderer.color = new Color(burstColor.r, burstColor.g, burstColor.b, 0.82f);
+        ring.transform.localScale = Vector3.one * 0.25f;
+        ring.AddComponent<AnomalyStateBurstFx>().Configure(ringRenderer, radius, duration, burstColor);
+        Destroy(ring, duration + 0.12f);
+
+        for (int i = 0; i < rays; i++)
+        {
+            float angle = ((Mathf.PI * 2f) * i) / rays + Random.Range(-0.08f, 0.08f);
+            Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            GameObject ray = new GameObject($"AnomalyStateRay_{i}");
+            ray.transform.position = pos;
+            SpriteRenderer sr = ray.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.sortingOrder = 15;
+            sr.color = burstColor;
+            ray.transform.localScale = new Vector3(0.24f, 0.07f, 1f);
+            ray.AddComponent<AnomalyStateRayFx>().Configure(sr, dir, radius, duration);
+            Destroy(ray, duration + 0.12f);
+        }
+    }
+
+    private static Color GetStateColor(AnomalyState state)
+    {
+        switch (state)
+        {
+            case AnomalyState.Split:
+                return new Color(1f, 0.48f, 0.66f, 1f);
+            case AnomalyState.ExpansionShoot:
+                return new Color(1f, 0.38f, 0.52f, 1f);
+            case AnomalyState.SpeedSurge:
+                return new Color(1f, 0.76f, 0.46f, 1f);
+            case AnomalyState.Destroyer:
+                return new Color(1f, 0.50f, 0.42f, 1f);
+            case AnomalyState.WeaveHunter:
+                return new Color(0.48f, 0.94f, 1f, 1f);
+            case AnomalyState.ErraticBurst:
+                return new Color(0.74f, 0.76f, 1f, 1f);
+            case AnomalyState.CutoffFlank:
+                return new Color(0.65f, 0.88f, 1f, 1f);
+            case AnomalyState.PredictiveIntercept:
+                return new Color(0.85f, 0.68f, 1f, 1f);
+            default:
+                return new Color(0.86f, 0.92f, 1f, 1f);
+        }
     }
 
     private void UpdateStatePulseVisual()
@@ -2681,7 +2762,7 @@ public class EnemyController : MonoBehaviour
                 return;
             }
 
-            gameManager?.TriggerGameOver();
+            gameManager?.RequestPlayerDefeat(hitPlayer);
         }
     }
 
@@ -2712,7 +2793,7 @@ public class EnemyController : MonoBehaviour
                 return;
             }
 
-            gameManager?.TriggerGameOver();
+            gameManager?.RequestPlayerDefeat(hitPlayer);
         }
     }
 
@@ -2724,5 +2805,69 @@ public class EnemyController : MonoBehaviour
         }
 
         TryDestroyObstacle(other);
+    }
+}
+
+public class AnomalyStateBurstFx : MonoBehaviour
+{
+    private SpriteRenderer spriteRenderer;
+    private float maxRadius = 1.2f;
+    private float life = 0.3f;
+    private Color baseColor = Color.white;
+    private float age;
+
+    public void Configure(SpriteRenderer rendererRef, float radius, float duration, Color tint)
+    {
+        spriteRenderer = rendererRef;
+        maxRadius = Mathf.Max(0.15f, radius);
+        life = Mathf.Max(0.08f, duration);
+        baseColor = tint;
+    }
+
+    private void Update()
+    {
+        age += Time.deltaTime;
+        float t = Mathf.Clamp01(age / life);
+        float eased = 1f - Mathf.Pow(1f - t, 2f);
+        transform.localScale = Vector3.one * Mathf.Lerp(0.24f, maxRadius, eased);
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.color = new Color(baseColor.r, baseColor.g, baseColor.b, Mathf.Lerp(0.85f, 0f, t));
+        }
+    }
+}
+
+public class AnomalyStateRayFx : MonoBehaviour
+{
+    private SpriteRenderer spriteRenderer;
+    private Vector2 direction = Vector2.right;
+    private float radius = 1.2f;
+    private float life = 0.3f;
+    private float age;
+    private Vector3 origin;
+
+    public void Configure(SpriteRenderer rendererRef, Vector2 dir, float distance, float duration)
+    {
+        spriteRenderer = rendererRef;
+        direction = dir.sqrMagnitude > 0.001f ? dir.normalized : Vector2.right;
+        radius = Mathf.Max(0.15f, distance);
+        life = Mathf.Max(0.08f, duration);
+        origin = transform.position;
+    }
+
+    private void Update()
+    {
+        age += Time.deltaTime;
+        float t = Mathf.Clamp01(age / life);
+        float eased = 1f - Mathf.Pow(1f - t, 2f);
+        transform.position = origin + (Vector3)(direction * radius * eased);
+        transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg);
+        transform.localScale = new Vector3(Mathf.Lerp(0.24f, 0.04f, t), Mathf.Lerp(0.07f, 0.02f, t), 1f);
+        if (spriteRenderer != null)
+        {
+            Color c = spriteRenderer.color;
+            c.a = Mathf.Lerp(0.95f, 0f, t);
+            spriteRenderer.color = c;
+        }
     }
 }

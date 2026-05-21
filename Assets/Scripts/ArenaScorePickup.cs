@@ -11,6 +11,9 @@ public class ArenaScorePickup : MonoBehaviour
     [SerializeField] private float baseScale = 1f;
     [SerializeField] private float auraScale = 1.25f;
     [SerializeField] private float auraPulseSpeed = 3.4f;
+    [SerializeField] private int collectSparkCount = 6;
+    [SerializeField] private float collectSparkDistance = 0.95f;
+    [SerializeField] private float collectSparkLifetime = 0.24f;
 
     private ArenaChaosDirector owner;
     private GameManager gameManager;
@@ -133,6 +136,22 @@ public class ArenaScorePickup : MonoBehaviour
         fx.transform.localScale = Vector3.one * 0.34f;
         Destroy(fx, 0.28f);
         fx.AddComponent<ScoreCollectFlash>().Configure(fxRenderer);
+
+        int sparks = Mathf.Max(3, collectSparkCount);
+        for (int i = 0; i < sparks; i++)
+        {
+            float angle = ((Mathf.PI * 2f) * i) / sparks + Random.Range(-0.16f, 0.16f);
+            Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            GameObject spark = new GameObject($"ScoreCollectSpark_{i}");
+            spark.transform.position = transform.position;
+            SpriteRenderer sr = spark.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.color = new Color(0.92f, 0.98f, 1f, 1f);
+            sr.sortingOrder = 13;
+            spark.transform.localScale = new Vector3(0.12f, 0.05f, 1f);
+            spark.AddComponent<ScoreCollectSparkFx>().Configure(sr, dir, Mathf.Max(0.15f, collectSparkDistance), Mathf.Max(0.08f, collectSparkLifetime));
+            Destroy(spark, Mathf.Max(0.12f, collectSparkLifetime + 0.08f));
+        }
     }
 }
 
@@ -151,9 +170,45 @@ public class ScoreCollectFlash : MonoBehaviour
         age += Time.deltaTime;
         float t = Mathf.Clamp01(age / 0.28f);
         transform.localScale = Vector3.one * Mathf.Lerp(0.35f, 1.35f, t);
+        transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(0f, 35f, t));
         if (spriteRenderer != null)
         {
             spriteRenderer.color = new Color(1f, 1f, 1f, 1f - t);
+        }
+    }
+}
+
+public class ScoreCollectSparkFx : MonoBehaviour
+{
+    private SpriteRenderer spriteRenderer;
+    private Vector2 direction = Vector2.right;
+    private float distance = 1f;
+    private float life = 0.22f;
+    private float age;
+    private Vector3 origin;
+
+    public void Configure(SpriteRenderer rendererRef, Vector2 travelDir, float travelDistance, float lifetime)
+    {
+        spriteRenderer = rendererRef;
+        direction = travelDir.sqrMagnitude > 0.001f ? travelDir.normalized : Vector2.right;
+        distance = Mathf.Max(0.1f, travelDistance);
+        life = Mathf.Max(0.08f, lifetime);
+        origin = transform.position;
+    }
+
+    private void Update()
+    {
+        age += Time.deltaTime;
+        float t = Mathf.Clamp01(age / life);
+        float eased = 1f - Mathf.Pow(1f - t, 2f);
+        transform.position = origin + (Vector3)(direction * distance * eased);
+        transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg);
+        transform.localScale = new Vector3(Mathf.Lerp(0.12f, 0.02f, t), Mathf.Lerp(0.05f, 0.02f, t), 1f);
+        if (spriteRenderer != null)
+        {
+            Color c = spriteRenderer.color;
+            c.a = Mathf.Lerp(1f, 0f, t);
+            spriteRenderer.color = c;
         }
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -47,6 +48,10 @@ public class GameManager : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float countdownGlitchOpacity = 0.18f;
     [SerializeField] private Color countdownPrimary = new Color(0.98f, 0.63f, 0.73f, 1f);
     [SerializeField] private Color countdownAccent = new Color(0.33f, 0.93f, 1f, 1f);
+    [SerializeField] private int countdownOrbitTickCount = 18;
+    [SerializeField] private float countdownOrbitSpinSpeed = 0.95f;
+    [SerializeField, Range(0f, 1f)] private float countdownImpactFlashOpacity = 0.28f;
+    [SerializeField] private float countdownImpactSweepSpeed = 640f;
 
     [Header("Tempo Feedback")]
     [SerializeField] private float statePulseOverlayDuration = 0.24f;
@@ -69,7 +74,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float scorePopupLifetime = 0.95f;
 
     public bool IsGameOver { get; private set; }
-    public bool IsRunActive => runPhase == RunPhase.Active && !IsGameOver;
+    public bool IsRunActive => runPhase == RunPhase.Active && !IsGameOver && !playerDefeatSequenceRunning;
     public float SurvivalTime { get; private set; }
     public float DifficultyMultiplier => 1f + (SurvivalTime * difficultyRampPerSecond);
     public int CurrentScore => Mathf.Max(0, Mathf.FloorToInt(SurvivalTime * Mathf.Max(0f, pointsPerSecond)) + bonusScore);
@@ -122,6 +127,8 @@ public class GameManager : MonoBehaviour
     private float scorePulseTimer;
     private float smoothedThreat;
     private readonly List<ScorePopup> scorePopups = new List<ScorePopup>();
+    private bool playerDefeatSequenceRunning;
+    private Coroutine playerDefeatSequenceRoutine;
 
     private void Awake()
     {
@@ -184,6 +191,11 @@ public class GameManager : MonoBehaviour
             return;
         }
 
+        if (playerDefeatSequenceRunning)
+        {
+            return;
+        }
+
         SurvivalTime += Time.deltaTime;
     }
 
@@ -197,6 +209,22 @@ public class GameManager : MonoBehaviour
         IsGameOver = true;
         runPhase = RunPhase.Active;
         Debug.Log($"GAME OVER | Time Survived: {SurvivalTime:F2}s");
+    }
+
+    public void RequestPlayerDefeat(PlayerController defeatedPlayer)
+    {
+        if (IsGameOver || playerDefeatSequenceRunning)
+        {
+            return;
+        }
+
+        if (playerDefeatSequenceRoutine != null)
+        {
+            StopCoroutine(playerDefeatSequenceRoutine);
+            playerDefeatSequenceRoutine = null;
+        }
+
+        playerDefeatSequenceRoutine = StartCoroutine(PlayerDefeatSequenceRoutine(defeatedPlayer));
     }
 
     public void AddScore(int amount)
@@ -276,7 +304,39 @@ public class GameManager : MonoBehaviour
         displayedScore = 0f;
         smoothedThreat = 0f;
         scorePulseTimer = 0f;
+        playerDefeatSequenceRunning = false;
+        playerDefeatSequenceRoutine = null;
         Time.timeScale = 0f;
+    }
+
+    private IEnumerator PlayerDefeatSequenceRoutine(PlayerController defeatedPlayer)
+    {
+        playerDefeatSequenceRunning = true;
+
+        float waitSeconds = 0.55f;
+        if (defeatedPlayer != null)
+        {
+            bool started = defeatedPlayer.StartDeathExplosion();
+            if (started)
+            {
+                waitSeconds = Mathf.Max(0.08f, defeatedPlayer.DeathExplosionDuration);
+            }
+        }
+
+        float timer = 0f;
+        while (timer < waitSeconds && !IsGameOver)
+        {
+            timer += Time.unscaledDeltaTime;
+            yield return null;
+        }
+
+        playerDefeatSequenceRunning = false;
+        playerDefeatSequenceRoutine = null;
+
+        if (!IsGameOver)
+        {
+            TriggerGameOver();
+        }
     }
 
     private void UpdateHudReactiveState()
@@ -400,14 +460,20 @@ public class GameManager : MonoBehaviour
         float centerY = Screen.height * 0.5f;
         Rect mainRect = new Rect(centerX - 140f, centerY - 90f, 280f, 96f);
         Rect subRect = new Rect(centerX - 220f, centerY + 12f, 440f, 36f);
+        float phaseN = GetCountdownPhaseNormalized();
 
         GUIStyle dynamicMain = new GUIStyle(countdownStyle);
-        dynamicMain.fontSize = Mathf.RoundToInt(Mathf.Lerp(66f, 78f, pulse));
+        float countdownBeat = runPhase == RunPhase.Countdown
+            ? Mathf.SmoothStep(1f, 0f, phaseN)
+            : Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(goFlashTimer / Mathf.Max(0.05f, goFlashSeconds)));
+        dynamicMain.fontSize = Mathf.RoundToInt(Mathf.Lerp(66f, 82f, pulse * 0.55f + countdownBeat * 0.45f));
         dynamicMain.normal.textColor = Color.Lerp(
             new Color(countdownPrimary.r, countdownPrimary.g, countdownPrimary.b, 0.92f),
             new Color(countdownAccent.r, countdownAccent.g, countdownAccent.b, 0.98f),
             pulse * 0.26f);
 
+        DrawCountdownOrbitTicks(centerX, centerY, pulse, phaseN, runPhase == RunPhase.GoFlash);
+        DrawCountdownImpactSweep(pulse, phaseN);
         DrawSplitLabel(mainRect, main, dynamicMain, 0.85f + pulse * 0.55f);
         GUI.Label(subRect, sub, countdownSubStyle);
     }
@@ -457,6 +523,53 @@ public class GameManager : MonoBehaviour
             float x = (Screen.width - width) * 0.5f + xOffset;
             DrawSolidRect(new Rect(x, y, width, 2f), new Color(countdownPrimary.r, 0.32f, 0.45f, glitchA));
         }
+
+        float beat = runPhase == RunPhase.Countdown ? Mathf.SmoothStep(1f, 0f, GetCountdownPhaseNormalized()) : 1f;
+        float flashAlpha = Mathf.Clamp01(countdownImpactFlashOpacity) * beat;
+        DrawSolidRect(new Rect(0f, 0f, Screen.width, Screen.height), new Color(countdownAccent.r, countdownAccent.g, countdownAccent.b, flashAlpha * 0.15f));
+    }
+
+    private float GetCountdownPhaseNormalized()
+    {
+        if (runPhase != RunPhase.Countdown)
+        {
+            return 0f;
+        }
+
+        float fractional = countdownElapsed - Mathf.Floor(countdownElapsed);
+        return Mathf.Clamp01(fractional);
+    }
+
+    private void DrawCountdownOrbitTicks(float centerX, float centerY, float pulse, float phaseN, bool goPhase)
+    {
+        int tickCount = Mathf.Max(6, countdownOrbitTickCount);
+        float time = Time.unscaledTime;
+        float spin = time * countdownOrbitSpinSpeed * (goPhase ? 2.8f : 1f);
+        float radiusX = Mathf.Lerp(Screen.width * 0.08f, Screen.width * 0.18f, goPhase ? 1f : 0.3f + pulse * 0.25f);
+        float radiusY = Mathf.Lerp(Screen.height * 0.08f, Screen.height * 0.15f, goPhase ? 1f : 0.32f + pulse * 0.22f);
+        float alphaBoost = goPhase ? 1f : Mathf.SmoothStep(1f, 0.45f, phaseN);
+
+        for (int i = 0; i < tickCount; i++)
+        {
+            float a = ((Mathf.PI * 2f) * i / tickCount) + spin;
+            float x = centerX + Mathf.Cos(a) * radiusX;
+            float y = centerY + Mathf.Sin(a) * radiusY;
+            float localPulse = 0.35f + 0.65f * (0.5f + 0.5f * Mathf.Sin(time * 7.5f + i * 0.8f));
+            Color c = Color.Lerp(countdownPrimary, countdownAccent, i / (float)tickCount);
+            c.a = (0.12f + localPulse * 0.16f) * alphaBoost;
+            DrawSolidRect(new Rect(x - 2f, y - 2f, 4f, 4f), c);
+        }
+    }
+
+    private void DrawCountdownImpactSweep(float pulse, float phaseN)
+    {
+        float time = Time.unscaledTime;
+        float speed = Mathf.Max(120f, countdownImpactSweepSpeed);
+        float x = Mathf.Repeat(time * speed, Screen.width + 240f) - 120f;
+        float y = Screen.height * (0.40f + Mathf.Sin(time * 1.7f) * 0.04f);
+        float h = Mathf.Lerp(2f, 6f, pulse);
+        float beat = runPhase == RunPhase.GoFlash ? 1f : Mathf.SmoothStep(1f, 0.30f, phaseN);
+        DrawSolidRect(new Rect(x - 160f, y, 320f, h), new Color(0.9f, 0.97f, 1f, 0.08f * beat));
     }
 
     private static void DrawSplitLabel(Rect rect, string text, GUIStyle style, float split)

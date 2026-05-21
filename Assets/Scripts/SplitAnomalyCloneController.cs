@@ -209,7 +209,7 @@ public class SplitAnomalyCloneController : MonoBehaviour
                 return;
             }
 
-            gameManager?.TriggerGameOver();
+            gameManager?.RequestPlayerDefeat(hitPlayer);
         }
     }
 
@@ -228,7 +228,7 @@ public class SplitAnomalyCloneController : MonoBehaviour
                 return;
             }
 
-            gameManager?.TriggerGameOver();
+            gameManager?.RequestPlayerDefeat(hitPlayer);
         }
     }
 }

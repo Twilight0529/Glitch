@@ -700,9 +700,15 @@ public class MainMenuController : MonoBehaviour
 
         float shineW = Mathf.Lerp(rect.width * 0.16f, rect.width * 0.28f, hoverLerp);
         float shineX = Mathf.Repeat(t * 120f + rect.width * (primary ? 0.12f : 0.38f), rect.width + shineW) - shineW;
-        DrawSolidRect(
-            new Rect(rect.x + shineX, rect.y + 1f, shineW, rect.height - 2f),
-            new Color(0.84f, 0.94f, 1f, (0.05f + 0.06f * pulse) * (0.45f + hoverLerp * 0.8f)));
+        Rect shineRect = new Rect(rect.x + shineX, rect.y + 1f, shineW, rect.height - 2f);
+        Rect innerBounds = new Rect(rect.x + 1f, rect.y + 1f, rect.width - 2f, rect.height - 2f);
+        Rect clippedShine = IntersectRect(shineRect, innerBounds);
+        if (clippedShine.width > 0f && clippedShine.height > 0f)
+        {
+            DrawSolidRect(
+                clippedShine,
+                new Color(0.84f, 0.94f, 1f, (0.05f + 0.06f * pulse) * (0.45f + hoverLerp * 0.8f)));
+        }
 
         if (hovered)
         {
@@ -904,6 +910,20 @@ public class MainMenuController : MonoBehaviour
         uiScale = UserSettings.GetMenuUiScale();
         hudScale = UserSettings.GetHudScale();
         AudioListener.volume = masterVolume;
+    }
+
+    private static Rect IntersectRect(Rect a, Rect b)
+    {
+        float xMin = Mathf.Max(a.xMin, b.xMin);
+        float yMin = Mathf.Max(a.yMin, b.yMin);
+        float xMax = Mathf.Min(a.xMax, b.xMax);
+        float yMax = Mathf.Min(a.yMax, b.yMax);
+        if (xMax <= xMin || yMax <= yMin)
+        {
+            return new Rect(0f, 0f, 0f, 0f);
+        }
+
+        return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
     }
 
     private static void DrawSolidRect(Rect rect, Color color)

@@ -69,7 +69,7 @@ public class AnomalyProjectile : MonoBehaviour
 
             if (gameManager != null && gameManager.IsRunActive && !gameManager.IsGameOver)
             {
-                gameManager.TriggerGameOver();
+                gameManager.RequestPlayerDefeat(player);
             }
 
             Destroy(gameObject);
