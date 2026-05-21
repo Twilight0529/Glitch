@@ -316,7 +316,7 @@ public class GameMenuController : MonoBehaviour
         DrawScreenFade(0.70f);
         DrawDefeatBackdrop(pulse, hudGlitch, t);
 
-        Rect panel = CenterRect(500f, 440f);
+        Rect panel = CenterRect(500f, 470f);
         float cappedJitter = Mathf.Min(glitchJitterStrength, 2.0f) * panelJitterStrength;
         float jitterX = (Mathf.PerlinNoise(t * 13.5f, 0.37f) - 0.5f) * 2f * cappedJitter * textGlitch;
         float jitterY = (Mathf.PerlinNoise(0.77f, t * 9.2f) - 0.5f) * 2f * (cappedJitter * 0.28f) * textGlitch;
@@ -364,15 +364,13 @@ public class GameMenuController : MonoBehaviour
         }
         GUI.enabled = prevEnabled;
 
-        if (rankingSubmitted)
-        {
-            GUILayout.Space(4f);
-            GUILayout.Label(
-                $"Registrado: {rankingNameInput} | {rankingSubmittedScore} pts ({rankingSubmittedTime:F1}s)",
-                rankingStatusStyle);
-        }
+        GUILayout.Space(4f);
+        string rankingStatusText = rankingSubmitted
+            ? $"Registrado: {rankingNameInput} | {rankingSubmittedScore} pts ({rankingSubmittedTime:F1}s)"
+            : " ";
+        GUILayout.Label(rankingStatusText, rankingStatusStyle, GUILayout.Height(22f));
 
-        GUILayout.Space(16f);
+        GUILayout.Space(10f);
 
         if (GUILayout.Button("Reiniciar", buttonStyle, GUILayout.Height(40f)))
         {
