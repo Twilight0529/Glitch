@@ -169,22 +169,22 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private LayerMask obstacleMask = ~0;
     [SerializeField] private Vector2 fallbackArenaSize = new Vector2(32f, 18f);
     [SerializeField] private float nodeSize = 0.6f;
-    [SerializeField] private float nodeProbePadding = 0.10f;
+    [SerializeField] private float nodeProbePadding = 0.18f;
     [SerializeField] private float repathInterval = 0.16f;
     [SerializeField] private float waypointReachDistance = 0.25f;
     [SerializeField] private float targetRepathThreshold = 0.45f;
-    [SerializeField] private int pathLookahead = 6;
+    [SerializeField] private int pathLookahead = 4;
     [SerializeField] private float gridRefreshInterval = 0.8f;
 
     [Header("Obstacle Preference")]
-    [SerializeField] private float obstaclePenaltyDistance = 2.4f;
-    [SerializeField] private float obstaclePenaltyWeight = 5f;
+    [SerializeField] private float obstaclePenaltyDistance = 3f;
+    [SerializeField] private float obstaclePenaltyWeight = 8f;
 
     [Header("Local Avoidance")]
-    [SerializeField] private float repulsionProbeDistance = 1.25f;
-    [SerializeField] private float repulsionWeight = 1.8f;
-    [SerializeField] private int repulsionRayCount = 9;
-    [SerializeField] private float repulsionSpreadAngle = 120f;
+    [SerializeField] private float repulsionProbeDistance = 1.75f;
+    [SerializeField] private float repulsionWeight = 1.15f;
+    [SerializeField] private int repulsionRayCount = 11;
+    [SerializeField] private float repulsionSpreadAngle = 150f;
 
     [Header("Anti-Stuck")]
     [SerializeField] private float stuckCheckInterval = 0.30f;
@@ -192,7 +192,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private int stuckChecksBeforeRecovery = 2;
     [SerializeField] private int stuckChecksBeforeEmergencyDestroyer = 5;
     [SerializeField] private float stuckTargetMinDistance = 1.4f;
-    [SerializeField] private float stuckObstacleProbeRadius = 1.1f;
+    [SerializeField] private float stuckObstacleProbeRadius = 1.45f;
     [SerializeField] private float stuckEscapeDistance = 2.9f;
     [SerializeField] private float stuckEscapeVelocityBoost = 1.35f;
     [SerializeField] private float emergencyDestroyerDuration = 2f;
@@ -200,7 +200,7 @@ public class EnemyController : MonoBehaviour
     [Header("Path Hysteresis")]
     [SerializeField] private float blockedRepathHoldSeconds = 0.28f;
     [SerializeField] private float blockedRepathDistanceMultiplier = 1.8f;
-    [SerializeField] private float blockedPathCommitSeconds = 0.85f;
+    [SerializeField] private float blockedPathCommitSeconds = 1.15f;
     [SerializeField] private float blockedPathCommitDistanceMultiplier = 3f;
     [SerializeField] private int blockedOscillationThreshold = 3;
     [SerializeField] private float blockedOscillationResetSeconds = 1.2f;
@@ -456,11 +456,20 @@ public class EnemyController : MonoBehaviour
             bool targetMoved = Vector2.Distance(strategicTarget, lastPathGoal) >= targetRepathThreshold;
             bool hasDirectToStrategic = HasDirectPath(rb.position, strategicTarget);
             bool obstacleBlocked = !hasDirectToStrategic && pathWorld.Count > 0;
+            bool pathAheadBlocked = IsCurrentPathSegmentBlocked();
             float effectiveRepathInterval = Mathf.Max(
                 0.05f,
                 repathInterval * (chaosDriveEnabled ? chaosRepathIntervalMultiplier : 1f));
 
-            bool shouldRepath = pathWorld.Count == 0 || repathTimer >= effectiveRepathInterval;
+            bool intervalRepathDue = repathTimer >= effectiveRepathInterval;
+            bool shouldRepath = pathWorld.Count == 0 || pathAheadBlocked;
+            if (!shouldRepath && intervalRepathDue)
+            {
+                // Si ya eligio un rodeo con linea bloqueada, no recalcula por intervalo hasta cumplir el compromiso.
+                // Esto evita el loop izquierda/derecha cuando el jugador usa un obstaculo como cobertura.
+                shouldRepath = !obstacleBlocked || blockedPathCommitTimer <= 0f;
+            }
+
             if (!shouldRepath && targetMoved)
             {
                 if (!obstacleBlocked)
@@ -522,7 +531,7 @@ public class EnemyController : MonoBehaviour
             if (shouldRepath)
             {
                 RebuildPathTo(strategicTarget);
-                bool shouldCommit = obstacleBlocked;
+                bool shouldCommit = obstacleBlocked && !pathAheadBlocked;
                 ResetBlockedRepathHysteresis();
                 if (shouldCommit)
                 {
@@ -2027,6 +2036,16 @@ public class EnemyController : MonoBehaviour
         }
 
         return pathWorld[chosenIndex];
+    }
+
+    private bool IsCurrentPathSegmentBlocked()
+    {
+        if (pathWorld.Count == 0 || pathIndex >= pathWorld.Count)
+        {
+            return false;
+        }
+
+        return !HasDirectPath(rb.position, pathWorld[pathIndex]);
     }
 
     private void AdvancePathWaypoint()
