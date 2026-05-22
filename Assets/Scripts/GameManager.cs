@@ -4,6 +4,7 @@ using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
+    // Estado central de la partida: cuenta regresiva, tiempo, puntaje, interfaz y derrota.
     private struct ScorePopup
     {
         public int amount;
@@ -385,8 +386,8 @@ public class GameManager : MonoBehaviour
 
     private void UpdateStartupSequence()
     {
-        // Do not consume startup/countdown time while scene fade is covering the screen.
-        // This guarantees the visible "3" lasts a full second on screen.
+        // No consume tiempo de inicio/cuenta regresiva mientras el fundido tapa la pantalla.
+        // Esto garantiza que el "3" visible dure un segundo completo.
         if (SceneTransitionController.IsFading)
         {
             return;
@@ -1105,7 +1106,3 @@ public class GameManager : MonoBehaviour
         hudScale = Mathf.Clamp(loaded, 0.85f, 1.55f);
     }
 }
-
-
-
-

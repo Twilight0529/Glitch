@@ -4,6 +4,7 @@ using UnityEngine.InputSystem;
 
 public class RuptureSpinEventController : MonoBehaviour
 {
+    // Evento de Rupture: rota el campo de obstaculos alrededor del centro sin cruzar los limites.
     private struct ObstacleBinding
     {
         public Transform transform;
@@ -235,6 +236,7 @@ public class RuptureSpinEventController : MonoBehaviour
         BuildInteriorBounds();
         snapshots.Clear();
 
+        // Guarda offsets desde el centro para rotar todo el campo de obstaculos como una estructura.
         Vector2 center = centerTransform.position;
         for (int i = 0; i < obstacles.Count; i++)
         {
@@ -272,6 +274,7 @@ public class RuptureSpinEventController : MonoBehaviour
             return;
         }
 
+        // Limita los angulos antes de mover para evitar que los obstaculos crucen paredes.
         safePositiveAngleDeg = Mathf.Min(maxSweepAngle, ComputeSafeSweepAngle(1f) * safeAngleFactor);
         safeNegativeAngleDeg = Mathf.Min(maxSweepAngle, ComputeSafeSweepAngle(-1f) * safeAngleFactor);
         if (safePositiveAngleDeg < minSweepAngle && safeNegativeAngleDeg < minSweepAngle)
@@ -313,6 +316,8 @@ public class RuptureSpinEventController : MonoBehaviour
         float gateOut = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((1f - progress) / 0.22f));
         float envelope = gateIn * gateOut;
         float targetSpeed = targetAngularSpeedDeg * envelope;
+
+        // Aceleracion/desaceleracion hacen que la rotacion sea legible y no cambie de golpe.
         float response = Mathf.Abs(targetSpeed) > Mathf.Abs(currentAngularSpeedDeg) ? angularAcceleration : angularDeceleration;
         currentAngularSpeedDeg = Mathf.MoveTowards(currentAngularSpeedDeg, targetSpeed, response * dt);
 

@@ -2,6 +2,7 @@ using UnityEngine;
 
 public static class UserSettings
 {
+    // Guarda y lee preferencias del jugador usando PlayerPrefs.
     public const string MasterVolumeKey = "glitch_master_volume";
     public const string MenuUiScaleKey = "glitch_menu_ui_scale";
     public const string HudScaleKey = "glitch_hud_scale";

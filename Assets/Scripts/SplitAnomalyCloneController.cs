@@ -4,6 +4,7 @@ using UnityEngine;
 [RequireComponent(typeof(Collider2D))]
 public class SplitAnomalyCloneController : MonoBehaviour
 {
+    // Clon temporal de la anomalia: persigue/flanquea al jugador y luego se fusiona con su anomalia original.
     private PlayerController player;
     private GameManager gameManager;
     private EnemyController owner;

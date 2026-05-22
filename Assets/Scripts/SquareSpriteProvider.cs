@@ -2,6 +2,7 @@
 
 public static class SquareSpriteProvider
 {
+    // Genera y reutiliza un sprite cuadrado blanco para bloques, rayos y particulas simples.
     private static Sprite cached;
 
     public static Sprite Get()

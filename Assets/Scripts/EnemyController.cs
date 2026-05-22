@@ -6,6 +6,7 @@ using System.Collections;
 [RequireComponent(typeof(Collider2D))]
 public class EnemyController : MonoBehaviour
 {
+    // IA principal de la anomalia: selecciona estados, persigue al jugador y maneja habilidades.
     public enum AnomalyState
     {
         DirectChase,
@@ -423,6 +424,7 @@ public class EnemyController : MonoBehaviour
         }
         HideSplitMergeTelegraphVisual();
 
+        // Reconstruye la grilla periodicamente porque eventos y el estado destructor pueden mover o quitar bloqueos.
         gridRefreshTimer += Time.deltaTime;
         if (gridRefreshTimer >= gridRefreshInterval)
         {
@@ -468,6 +470,8 @@ public class EnemyController : MonoBehaviour
                 }
                 else
                 {
+                    // Si el jugador se mueve detras de cobertura, espera antes de aceptar una nueva ruta bloqueada.
+                    // Asi se evitan cambios bruscos cuando el objetivo tiembla alrededor de esquinas.
                     float forceDistance = Mathf.Max(targetRepathThreshold, targetRepathThreshold * blockedRepathDistanceMultiplier);
                     float targetShift = Vector2.Distance(strategicTarget, lastPathGoal);
                     float resetThreshold = Mathf.Max(0.06f, targetRepathThreshold * 0.35f);
@@ -574,6 +578,7 @@ public class EnemyController : MonoBehaviour
             speed *= Mathf.Max(0.1f, weaveHunterSpeedMultiplier);
         }
 
+        // El impulso de caos sube la presion base sin cambiar el estado de comportamiento elegido.
         if (chaosDriveEnabled)
         {
             speed *= Mathf.Lerp(1f, chaosTempoMultiplier, 0.42f);

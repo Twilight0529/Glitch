@@ -5,6 +5,7 @@ using UnityEngine.InputSystem;
 
 public class GameMenuController : MonoBehaviour
 {
+    // Capa de menu en partida: pausa, pantalla de derrota, registro de ranking y navegacion de escena.
     private enum OverlayState
     {
         Playing,
@@ -92,8 +93,8 @@ public class GameMenuController : MonoBehaviour
             return;
         }
 
-        // During startup delay/countdown/GO flash (but not game over), GameManager owns time scale.
-        // We ignore pause input and force gameplay overlay state to avoid desync.
+        // Durante demora/cuenta regresiva/inicio, GameManager controla la escala de tiempo.
+        // Ignora pausa y fuerza estado de juego para evitar desincronizacion.
         if (gameManager != null && !gameManager.IsRunActive && !gameManager.IsGameOver)
         {
             if (state != OverlayState.Playing)
@@ -599,7 +600,7 @@ public class GameMenuController : MonoBehaviour
             return;
         }
 
-        // Soft moving interference blocks: affects the scene/HUD feel without breaking menu readability.
+        // Bloques suaves de interferencia: dan clima sin dificultar la lectura del menu.
         int blocks = Mathf.RoundToInt(Mathf.Lerp(6f, 16f, glitch));
         for (int i = 0; i < blocks; i++)
         {
@@ -614,7 +615,7 @@ public class GameMenuController : MonoBehaviour
             DrawSolidRect(new Rect(px - w * 0.5f, py - h * 0.5f, w, h), c);
         }
 
-        // Thin scanline glitches, mostly horizontal.
+        // Lineas finas tipo barrido, principalmente horizontales.
         int lines = Mathf.RoundToInt(Mathf.Lerp(4f, 12f, glitch));
         for (int i = 0; i < lines; i++)
         {

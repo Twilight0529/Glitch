@@ -14,6 +14,7 @@ public struct RankingEntry
 
 public static class RankingStorage
 {
+    // Guarda el ranking local como datos JSON dentro de PlayerPrefs.
     [Serializable]
     private class RankingTable
     {

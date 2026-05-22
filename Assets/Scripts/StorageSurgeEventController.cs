@@ -4,6 +4,7 @@ using UnityEngine.InputSystem;
 
 public class StorageSurgeEventController : MonoBehaviour
 {
+    // Evento de Storage: reacomoda carga y activa carriles transportadores que empujan actores.
     private struct ObstacleBinding
     {
         public Transform transform;
@@ -254,6 +255,8 @@ public class StorageSurgeEventController : MonoBehaviour
         snapshots.Clear();
         surgeAxis = PickPrimaryAxis();
         lateralAxis = new Vector2(-surgeAxis.y, surgeAxis.x);
+
+        // El reacomodo de carga elige un eje principal; la sobrecarga de transportadores reutiliza ese ritmo.
         eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
         eventDuration *= Mathf.Max(0.1f, cadenceDurationMultiplier);
         baseDisplacement = Random.Range(Mathf.Min(displacementRange.x, displacementRange.y), Mathf.Max(displacementRange.x, displacementRange.y));
@@ -300,6 +303,7 @@ public class StorageSurgeEventController : MonoBehaviour
         eventTimer += dt;
         float eventProgress = Mathf.Clamp01(eventTimer / Mathf.Max(0.0001f, eventDuration));
 
+        // Visuales del transportador, empuje de actores y pulso de obstaculos usan el mismo progreso del evento.
         TickConveyorOverload(eventProgress, dt);
         ApplyActiveColorPulse(eventProgress);
 

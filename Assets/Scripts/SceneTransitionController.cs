@@ -5,6 +5,7 @@ using UnityEngine.UI;
 
 public class SceneTransitionController : MonoBehaviour
 {
+    // Instancia unica persistente que oscurece la pantalla al cargar o recargar escenas.
     [Header("Fade")]
     [SerializeField] private float fadeOutDuration = 1.15f;
     [SerializeField] private float fadeInDuration = 1.15f;
@@ -60,7 +61,7 @@ public class SceneTransitionController : MonoBehaviour
 
         GameObject go = new GameObject("SceneTransitionController");
         instance = go.AddComponent<SceneTransitionController>();
-        // Start black so the first loaded scene can reveal with fade-out.
+        // Arranca en negro para que la primera escena aparezca con fundido de salida.
         instance.overlayAlpha = 1f;
         DontDestroyOnLoad(go);
     }
@@ -86,7 +87,7 @@ public class SceneTransitionController : MonoBehaviour
 
     private void Start()
     {
-        // Safety net for the very first scene in case sceneLoaded timing is skipped.
+        // Respaldo para la primera escena si se saltea el aviso de escena cargada.
         if (transitionRoutine == null && entryFadeRoutine == null && overlayAlpha > 0.001f)
         {
             StartEntryFade(forceBlack: false);
@@ -100,7 +101,7 @@ public class SceneTransitionController : MonoBehaviour
 
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        // If scene was loaded externally (not via this controller), force an entry reveal.
+        // Si la escena se cargo por fuera de este controlador, fuerza el fundido de entrada.
         if (transitionRoutine == null)
         {
             StartEntryFade(forceBlack: true);
@@ -135,7 +136,7 @@ public class SceneTransitionController : MonoBehaviour
             yield return new WaitForSecondsRealtime(loadedSceneHoldDuration);
         }
 
-        // Let the new scene render for a frame before revealing it.
+        // Deja que la escena nueva renderice un fotograma antes de mostrarla.
         yield return null;
         StartEntryFade(forceBlack: false);
         while (entryFadeRoutine != null)

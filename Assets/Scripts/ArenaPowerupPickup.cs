@@ -4,6 +4,7 @@ using UnityEngine;
 [RequireComponent(typeof(SpriteRenderer))]
 public class ArenaPowerupPickup : MonoBehaviour
 {
+    // Objeto recolectable temporal: aplica velocidad o escudo al jugador y notifica al director de arena.
     public enum PickupKind
     {
         SpeedBurst,

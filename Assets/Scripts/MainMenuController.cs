@@ -4,6 +4,7 @@ using UnityEngine.SceneManagement;
 
 public class MainMenuController : MonoBehaviour
 {
+    // Menu principal: muestra opciones, ranking, fondo animado y transicion hacia el juego.
     private enum MenuTransitionState
     {
         IntroHold,
@@ -71,7 +72,7 @@ public class MainMenuController : MonoBehaviour
 
     private void Start()
     {
-        // Wait one frame so the scene has fully initialized before revealing.
+        // Espera un frame para que la escena termine de inicializarse antes de revelarla.
         introReady = false;
     }
 

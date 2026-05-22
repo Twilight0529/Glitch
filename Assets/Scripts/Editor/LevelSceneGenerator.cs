@@ -6,6 +6,7 @@ using UnityEngine.SceneManagement;
 
 public static class LevelSceneGenerator
 {
+    // Herramienta de editor para crear escenas base con controladores, actores, camara y arena.
     private const string RootName = "__GeneratedArena";
     private const string MainMenuRootName = "__GeneratedMainMenu";
     private const float TargetArenaWidth = 32f;

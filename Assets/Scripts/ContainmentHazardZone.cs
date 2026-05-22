@@ -4,6 +4,7 @@ using UnityEngine;
 [RequireComponent(typeof(SpriteRenderer))]
 public class ContainmentHazardZone : MonoBehaviour
 {
+    // Zona de peligro con dos fases: aviso visual y activacion que ralentiza al jugador.
     [SerializeField] private float pulseSpeed = 5.2f;
     [SerializeField] private float activeLineSpeed = 10f;
 

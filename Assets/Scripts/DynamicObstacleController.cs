@@ -3,6 +3,7 @@
 [RequireComponent(typeof(Collider2D))]
 public class DynamicObstacleController : MonoBehaviour
 {
+    // Controla obstaculos moviles generados por la arena: desplazamiento, pulso u orbita.
     private enum MotionMode
     {
         Slide,

@@ -5,6 +5,7 @@ using UnityEngine;
 
 public class ProceduralArenaGenerator : MonoBehaviour
 {
+    // Genera la arena completa: tema, paredes, obstaculos, detalles y eventos asociados.
     public enum ArenaTheme
     {
         ContainmentLab,
@@ -176,6 +177,8 @@ public class ProceduralArenaGenerator : MonoBehaviour
         CreateThemedObstacles(obstaclesRoot);
         CreateThemedDynamicObstacles(dynamicRoot);
         CreateThemedDetails(detailsRoot);
+
+        // Los controladores de tema se agregan despues de crear la geometria para guardar referencias seguras.
         ConfigureThemeMapEvents(obstaclesRoot, dynamicRoot);
         ConfigureChaosSystems();
     }
@@ -224,6 +227,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
             return (ArenaTheme)values.GetValue(rng.Next(0, count));
         }
 
+        // Evita repetir tema consecutivo para que cada partida se sienta mas variada.
         ArenaTheme selected = lastGeneratedTheme;
         int safety = 0;
         while (selected == lastGeneratedTheme && safety < 16)
@@ -368,6 +372,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
         Transform obstaclesRoot,
         Transform dynamicRoot)
     {
+        // La reflexion permite que cada evento tematico sea opcional y evita referencias rigidas entre temas.
         Type controllerType = FindTypeInLoadedAssemblies(controllerTypeName);
         if (controllerType == null)
         {
@@ -454,7 +459,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     private void BuildRuptureAnchors()
     {
-        // Rupture is a single bullseye: one center, concentric rings.
+        // Rupture usa un patron de blanco: un centro y anillos concentricos.
         ruptureAnchors.Add(Vector2.zero);
         BuildRuptureSlots();
     }
@@ -622,7 +627,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
             ruptureAnchorBurstCounter = 0;
         }
 
-        // Fallback if something unexpected happens.
+        // Respaldo si ocurre algo inesperado durante la generacion.
         Vector2 fallback = GetRandomRupturePosition();
 
         float margin = edgeClearance + 0.6f;
@@ -868,7 +873,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
         int serial = 0;
         List<Vector2> placedCenters = new List<Vector2>();
 
-        // Mandatory center piece for Rupture: always keep a circle at (0,0).
+        // Pieza central obligatoria para Rupture: siempre conserva un circulo en (0,0).
         if (CreateMandatoryRuptureCore(parent))
         {
             placed++;
@@ -876,7 +881,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
             placedCenters.Add(Vector2.zero);
         }
 
-        // Pass 1: cover ring slots (and near-ring jitter) to avoid large empty patches.
+        // Pasada 1: cubre slots de anillos para evitar zonas demasiado vacias.
         List<Vector2> candidates = BuildRuptureCoverageCandidates();
         for (int i = 0; i < candidates.Count && placed < target; i++)
         {
@@ -893,7 +898,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
             if (ringT < 0.30f)
             {
-                // Core: compact blockers.
+                // Nucleo: bloqueos compactos.
                 success = roll < 0.55f
                     ? TryPlacePillarObstacle($"Obstacle_RuptureCorePillar_{serial}", center, Range(0.45f, 0.76f), parent)
                     : TryPlaceDiamondObstacle($"Obstacle_RuptureCoreDiamond_{serial}", center, Range(0.85f, 1.25f), parent);
@@ -1029,8 +1034,8 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     private void CreateThemedDynamicObstacles(Transform parent)
     {
-        // Dynamic obstacles are intentionally disabled.
-        // Map events now drive movement for Rupture without pink moving blockers.
+        // Los obstaculos dinamicos estan desactivados intencionalmente.
+        // Ahora los eventos de mapa dan movimiento a Rupture sin bloqueos moviles rosas.
         return;
     }
 
@@ -1321,7 +1326,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
         GameObject go = CreateBlock(name, center, size, color, parent);
         go.transform.rotation = Quaternion.Euler(0f, 0f, 45f);
 
-        // Keep collider identical to rendered square, then rotate both together (visual/hitbox match).
+        // Mantiene el colisionador igual al cuadrado renderizado y luego rota ambos juntos.
         BoxCollider2D collider = go.AddComponent<BoxCollider2D>();
         collider.size = size;
         collider.offset = Vector2.zero;

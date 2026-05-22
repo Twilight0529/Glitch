@@ -3,6 +3,7 @@ using UnityEngine;
 [RequireComponent(typeof(Collider2D))]
 public class AnomalyProjectile : MonoBehaviour
 {
+    // Proyectil de la anomalia: avanza en linea recta y derrota al jugador si no tiene escudo.
     [SerializeField] private float speed = 8.5f;
     [SerializeField] private float lifetime = 3.5f;
     [SerializeField] private LayerMask obstacleMask = ~0;
@@ -38,7 +39,7 @@ public class AnomalyProjectile : MonoBehaviour
             return;
         }
 
-        // Fail-safe against missing trigger callbacks on some collider setups.
+        // Respaldo por si algun colisionador no dispara OnTriggerEnter2D correctamente.
         Collider2D hit = Physics2D.OverlapCircle(transform.position, 0.08f, obstacleMask);
         if (hit != null && hit.GetComponent<PlayerController>() == null && hit.GetComponent<EnemyController>() == null && !hit.isTrigger)
         {

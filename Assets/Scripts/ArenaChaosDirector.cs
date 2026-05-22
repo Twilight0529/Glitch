@@ -4,6 +4,7 @@ using UnityEngine;
 
 public class ArenaChaosDirector : MonoBehaviour
 {
+    // Coordina sistemas secundarios de la arena: mejoras, objetos de puntaje y eventos de peligro.
     [Header("Powerups")]
     [SerializeField] private bool enablePowerups = true;
     [SerializeField] private Vector2 powerupIntervalRange = new Vector2(8f, 13f);
@@ -373,6 +374,7 @@ public class ArenaChaosDirector : MonoBehaviour
         int maxCount = Mathf.Max(minCount, Mathf.Max(pulseHazardsMin, pulseHazardsMax));
         int count = Random.Range(minCount, maxCount + 1);
 
+        // Primero avisa y despues crea peligros cerca del foco de pelea para que el evento sea esquivable.
         RaiseWarning("Containment Pulse Incoming", pulsePreWarningSeconds);
         if (pulsePreWarningSeconds > 0f)
         {
@@ -390,6 +392,7 @@ public class ArenaChaosDirector : MonoBehaviour
         float clusterRadius = Mathf.Max(0.75f, pulseClusterRadius);
         float basePhase = Random.Range(0f, 360f);
 
+        // Distribuye los peligros como un anillo irregular para que el jugador pueda leer un patron.
         for (int i = 0; i < count; i++)
         {
             float ringAngle = basePhase + ((360f / Mathf.Max(1, count)) * i);

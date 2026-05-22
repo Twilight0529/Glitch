@@ -1,8 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// Global two-font registry for UI: one primary (important) and one secondary.
-/// Add this component to a scene object and assign fonts from Inspector.
+/// Registro global de dos fuentes para interfaz: una principal y una secundaria.
+/// Agregar este componente a un objeto de escena y asignar fuentes desde el Inspector.
 /// </summary>
 [DefaultExecutionOrder(-1000)]
 public class GlobalFontSettings : MonoBehaviour
@@ -97,4 +97,3 @@ public class GlobalFontSettings : MonoBehaviour
         }
     }
 }
-

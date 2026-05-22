@@ -8,6 +8,7 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(Collider2D))]
 public class PlayerController : MonoBehaviour
 {
+    // Controla movimiento, mejoras defensivas/ofensivas y la secuencia visual de muerte.
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 11f;
     [SerializeField] private float maxBoostMultiplier = 1.9f;
@@ -136,17 +137,7 @@ public class PlayerController : MonoBehaviour
         UpdatePowerupTimers();
         UpdateShieldVisual();
 
-        Vector2 rawInput = ReadMoveInput();
-        float horizontal = rawInput.x;
-        float vertical = rawInput.y;
-
-        // 4-directions priority: keeps movement cardinal and readable under pressure.
-        if (Mathf.Abs(horizontal) > 0f)
-        {
-            vertical = 0f;
-        }
-
-        moveInput = new Vector2(horizontal, vertical).normalized;
+        moveInput = ReadMoveInput().normalized;
         float effectiveSpeed = moveSpeed;
         if (speedBoostTimer > 0f)
         {

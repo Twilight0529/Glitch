@@ -2,6 +2,7 @@ using UnityEngine;
 
 public static class CircleSpriteProvider
 {
+    // Genera y reutiliza un sprite circular simple para efectos creados durante la ejecucion.
     private static Sprite cached;
 
     public static Sprite Get()

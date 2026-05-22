@@ -4,6 +4,7 @@ using UnityEngine.InputSystem;
 
 public class LabSweepEventController : MonoBehaviour
 {
+    // Evento del laboratorio: mueve obstaculos y crea barridos de esterilizacion con zonas seguras.
     private struct ObstacleBinding
     {
         public Transform transform;
@@ -257,6 +258,8 @@ public class LabSweepEventController : MonoBehaviour
         BuildInteriorBounds();
         snapshots.Clear();
         moveAlongX = Random.value < 0.5f;
+
+        // El sweep mueve obstaculos y peligro de esterilizacion en ejes opuestos para que se lea mejor.
         eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
         eventDuration *= Mathf.Max(0.1f, cadenceDurationMultiplier);
         eventCycles = Random.Range(Mathf.Min(minCycles, maxCycles), Mathf.Max(minCycles, maxCycles) + 1);
@@ -305,6 +308,7 @@ public class LabSweepEventController : MonoBehaviour
         eventTimer += dt;
         float progress = Mathf.Clamp01(eventTimer / Mathf.Max(0.0001f, eventDuration));
 
+        // La logica del peligro y el pulso de color usan el mismo progreso normalizado del evento.
         TickSterilizationSweep(progress, dt);
         ApplyActiveColorPulse(progress);
 

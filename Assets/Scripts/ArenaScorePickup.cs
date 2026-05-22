@@ -4,6 +4,7 @@ using UnityEngine;
 [RequireComponent(typeof(SpriteRenderer))]
 public class ArenaScorePickup : MonoBehaviour
 {
+    // Objeto recolectable de puntaje: aparece por tiempo limitado y suma puntos al tocarlo.
     [SerializeField] private bool enableAura = false;
     [SerializeField] private float bobAmplitude = 0.08f;
     [SerializeField] private float bobSpeed = 4.5f;
