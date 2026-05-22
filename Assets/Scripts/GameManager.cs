@@ -376,7 +376,7 @@ public class GameManager : MonoBehaviour
             float distance = Vector2.Distance(playerController.GetPosition(), enemyController.GetCurrentPosition());
             float safe = Mathf.Max(threatDangerDistance + 0.1f, threatSafeDistance);
             float danger = Mathf.Max(0.05f, threatDangerDistance);
-            targetThreat = 1f - Mathf.InverseLerp(safe, danger, distance);
+            targetThreat = Mathf.InverseLerp(safe, danger, distance);
             targetThreat = Mathf.Clamp01(targetThreat);
         }
 
@@ -977,53 +977,59 @@ public class GameManager : MonoBehaviour
         Color baseTint;
         Color accentTint;
         GetHudThemeColors(out baseTint, out accentTint);
+        float threat = enableReactiveHudFx ? Mathf.Clamp01(smoothedThreat) : 0f;
+        Color dangerTint = new Color(1f, 0.28f, 0.38f, 1f);
+        Color reactiveBase = Color.Lerp(baseTint, dangerTint, threat * 0.72f);
+        Color reactiveAccent = Color.Lerp(accentTint, dangerTint, threat * 0.86f);
+        float reactiveSideOpacity = sideHudOpacity * Mathf.Lerp(0.72f, 1.45f, threat);
+        float reactiveAccentOpacity = sideHudAccentOpacity * Mathf.Lerp(0.7f, 1.8f, threat);
 
         float t = Time.unscaledTime;
         float sideWidth = Mathf.Clamp(Screen.width * 0.052f, 36f, 86f);
         Rect left = new Rect(0f, 0f, sideWidth, Screen.height);
         Rect right = new Rect(Screen.width - sideWidth, 0f, sideWidth, Screen.height);
-        DrawSolidRect(left, new Color(baseTint.r, baseTint.g, baseTint.b, sideHudOpacity));
-        DrawSolidRect(right, new Color(baseTint.r, baseTint.g, baseTint.b, sideHudOpacity));
+        DrawSolidRect(left, new Color(reactiveBase.r, reactiveBase.g, reactiveBase.b, reactiveSideOpacity));
+        DrawSolidRect(right, new Color(reactiveBase.r, reactiveBase.g, reactiveBase.b, reactiveSideOpacity));
 
         float innerGlowWidth = Mathf.Max(2f, sideWidth * 0.12f);
         DrawSolidRect(
             new Rect(sideWidth - innerGlowWidth, 0f, innerGlowWidth, Screen.height),
-            new Color(accentTint.r, accentTint.g, accentTint.b, sideHudAccentOpacity));
+            new Color(reactiveAccent.r, reactiveAccent.g, reactiveAccent.b, reactiveAccentOpacity));
         DrawSolidRect(
             new Rect(Screen.width - sideWidth, 0f, innerGlowWidth, Screen.height),
-            new Color(accentTint.r, accentTint.g, accentTint.b, sideHudAccentOpacity));
+            new Color(reactiveAccent.r, reactiveAccent.g, reactiveAccent.b, reactiveAccentOpacity));
 
         float step = Mathf.Max(34f, Screen.height / 17f);
         for (float y = -step; y <= Screen.height + step; y += step)
         {
-            float wobble = Mathf.Sin((y * 0.03f) + (t * 2.4f)) * 4f;
-            float yAnim = y + Mathf.Sin((t * 1.8f) + y * 0.02f) * 6f;
+            float wobble = Mathf.Sin((y * 0.03f) + (t * Mathf.Lerp(2.4f, 5.4f, threat))) * Mathf.Lerp(4f, 9f, threat);
+            float yAnim = y + Mathf.Sin((t * Mathf.Lerp(1.8f, 4.3f, threat)) + y * 0.02f) * Mathf.Lerp(6f, 13f, threat);
             float lineWidth = Mathf.Lerp(8f, sideWidth * 0.55f, Mathf.PerlinNoise(y * 0.013f, t * 0.45f));
-            float lineAlpha = 0.08f + 0.09f * (0.5f + 0.5f * Mathf.Sin((t * 4.2f) + y * 0.06f));
+            float lineAlpha = (0.08f + 0.09f * (0.5f + 0.5f * Mathf.Sin((t * 4.2f) + y * 0.06f))) * Mathf.Lerp(0.78f, 1.85f, threat);
 
             DrawSolidRect(
                 new Rect(7f + wobble, yAnim, lineWidth, 2f),
-                new Color(accentTint.r, accentTint.g, accentTint.b, lineAlpha));
+                new Color(reactiveAccent.r, reactiveAccent.g, reactiveAccent.b, lineAlpha));
             DrawSolidRect(
                 new Rect(Screen.width - 7f - lineWidth - wobble, yAnim, lineWidth, 2f),
-                new Color(accentTint.r, accentTint.g, accentTint.b, lineAlpha));
+                new Color(reactiveAccent.r, reactiveAccent.g, reactiveAccent.b, lineAlpha));
         }
 
-        float sweepHeight = Mathf.Lerp(Screen.height * 0.12f, Screen.height * 0.18f, 0.5f + 0.5f * Mathf.Sin(t * 0.7f));
-        float sweepY = Mathf.Repeat(t * (Screen.height * 0.24f), Screen.height + sweepHeight) - sweepHeight;
+        float sweepHeight = Mathf.Lerp(Screen.height * 0.12f, Screen.height * Mathf.Lerp(0.18f, 0.26f, threat), 0.5f + 0.5f * Mathf.Sin(t * Mathf.Lerp(0.7f, 1.6f, threat)));
+        float sweepY = Mathf.Repeat(t * (Screen.height * Mathf.Lerp(0.24f, 0.52f, threat)), Screen.height + sweepHeight) - sweepHeight;
         DrawSolidRect(
             new Rect(0f, sweepY, sideWidth, sweepHeight),
-            new Color(accentTint.r, accentTint.g, accentTint.b, sideHudAccentOpacity * 0.56f));
+            new Color(reactiveAccent.r, reactiveAccent.g, reactiveAccent.b, reactiveAccentOpacity * 0.56f));
         DrawSolidRect(
             new Rect(Screen.width - sideWidth, Screen.height - sweepY - sweepHeight, sideWidth, sweepHeight),
-            new Color(accentTint.r, accentTint.g, accentTint.b, sideHudAccentOpacity * 0.56f));
+            new Color(reactiveAccent.r, reactiveAccent.g, reactiveAccent.b, reactiveAccentOpacity * 0.56f));
 
         float bracketW = 28f;
         float bracketH = 3f;
         float inset = sideWidth + 6f;
         float topY = 8f;
         float bottomY = Screen.height - 12f;
-        Color bracket = new Color(accentTint.r, accentTint.g, accentTint.b, 0.26f);
+        Color bracket = new Color(reactiveAccent.r, reactiveAccent.g, reactiveAccent.b, Mathf.Lerp(0.20f, 0.42f, threat));
         DrawSolidRect(new Rect(inset, topY, bracketW, bracketH), bracket);
         DrawSolidRect(new Rect(Screen.width - inset - bracketW, topY, bracketW, bracketH), bracket);
         DrawSolidRect(new Rect(inset, bottomY, bracketW, bracketH), bracket);
