@@ -64,7 +64,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private bool enableAdvancedStates = true;
     [SerializeField] private Vector2 stateDurationMultiplierRange = new Vector2(0.85f, 1.25f);
     [SerializeField] private Vector2 majorStateDurationRange = new Vector2(9f, 15f);
-    [SerializeField] private float speedStateMultiplier = 1.55f;
+    [SerializeField] private float speedStateMultiplier = 1.35f;
     [SerializeField] private bool logStateChanges = false;
 
     [Header("Pacing Director")]
