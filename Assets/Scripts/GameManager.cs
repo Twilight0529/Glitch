@@ -59,6 +59,7 @@ public class GameManager : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float statePulseOverlayOpacity = 0.22f;
     [SerializeField] private Color statePulseOverlayColorA = new Color(1f, 0.35f, 0.52f, 1f);
     [SerializeField] private Color statePulseOverlayColorB = new Color(0.30f, 0.95f, 1f, 1f);
+    [SerializeField] private float bossStateBannerDuration = 1.25f;
 
     [Header("HUD Atmosphere")]
     [SerializeField] private bool enableAmbientHudFrame = true;
@@ -116,11 +117,15 @@ public class GameManager : MonoBehaviour
     private GUIStyle hudChipStyle;
     private GUIStyle bossStateStyle;
     private GUIStyle bossStateValueStyle;
+    private GUIStyle bossStateBannerLabelStyle;
+    private GUIStyle bossStateBannerValueStyle;
     private GUIStyle eventWarningStyle;
     private Font importantFont;
     private Font secondaryFont;
     private string lastBossStateRaw;
     private float statePulseOverlayTimer;
+    private float bossStateBannerTimer;
+    private string bossStateBannerRaw;
     private int bonusScore;
     private float hudScale = 1f;
     private float cachedHudScaleForStyles = -1f;
@@ -178,6 +183,10 @@ public class GameManager : MonoBehaviour
         if (statePulseOverlayTimer > 0f)
         {
             statePulseOverlayTimer -= Time.deltaTime;
+        }
+        if (bossStateBannerTimer > 0f)
+        {
+            bossStateBannerTimer -= Time.deltaTime;
         }
 
         if (IsGameOver)
@@ -280,6 +289,7 @@ public class GameManager : MonoBehaviour
             DrawRuntimeHud();
             DrawBossStateHud();
             DrawStatePulseOverlay();
+            DrawBossStateBanner();
             DrawChaosWarningOverlay();
         }
 
@@ -300,6 +310,8 @@ public class GameManager : MonoBehaviour
         bonusScore = 0;
         reloadTimer = 0f;
         statePulseOverlayTimer = 0f;
+        bossStateBannerTimer = 0f;
+        bossStateBannerRaw = null;
         lastBossStateRaw = null;
         scorePopups.Clear();
         displayedScore = 0f;
@@ -685,7 +697,18 @@ public class GameManager : MonoBehaviour
         string stateRaw = enemyController.CurrentStateLabel;
         if (!string.Equals(lastBossStateRaw, stateRaw))
         {
-            statePulseOverlayTimer = Mathf.Max(statePulseOverlayTimer, Mathf.Max(0.05f, statePulseOverlayDuration));
+            if (IsBossSpecialState(stateRaw))
+            {
+                statePulseOverlayTimer = Mathf.Max(statePulseOverlayTimer, Mathf.Max(0.05f, statePulseOverlayDuration));
+                bossStateBannerTimer = Mathf.Max(bossStateBannerTimer, Mathf.Max(0.1f, bossStateBannerDuration));
+                bossStateBannerRaw = stateRaw;
+            }
+            else
+            {
+                bossStateBannerTimer = 0f;
+                bossStateBannerRaw = null;
+            }
+
             lastBossStateRaw = stateRaw;
         }
     }
@@ -720,24 +743,92 @@ public class GameManager : MonoBehaviour
     {
         EnsureBossStateStyles();
 
+        string stateRaw = enemyController != null ? enemyController.CurrentStateLabel : string.Empty;
         string stateValue = "Unknown";
-        if (enemyController != null)
+        if (!string.IsNullOrWhiteSpace(stateRaw))
         {
-            stateValue = ToBossStateLabel(enemyController.CurrentStateLabel);
+            stateValue = ToBossStateLabel(stateRaw);
+        }
+        if (!IsBossSpecialState(stateRaw))
+        {
+            return;
         }
 
         float s = hudScale;
-        float width = 460f * s;
-        float lineHeight = 22f * s;
+        float width = Mathf.Min(Screen.width * 0.44f, 560f * s);
+        float lineHeight = 25f * s;
         float x = (Screen.width - width) * 0.5f;
-        float y = 10f * s;
-        Rect panel = new Rect(x - (12f * s), y + (2f * s), width + (24f * s), 52f * s);
-        DrawSolidRect(panel, new Color(0.05f, 0.04f, 0.08f, 0.62f));
-        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 1f), new Color(0.93f, 0.76f, 0.88f, 0.44f));
-        DrawSolidRect(new Rect(panel.x, panel.yMax - 1f, panel.width, 1f), new Color(0.45f, 0.62f, 0.92f, 0.30f));
+        float y = 8f * s;
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 7.5f);
+        Color stateColor = GetBossStateColor(stateRaw);
+        Color panelFill = Color.Lerp(new Color(0.03f, 0.04f, 0.08f, 0.84f), new Color(stateColor.r, stateColor.g, stateColor.b, 0.76f), 0.18f + pulse * 0.08f);
+        Rect panel = new Rect(x - (16f * s), y, width + (32f * s), 66f * s);
 
-        GUI.Label(new Rect(x, y, width, lineHeight), "Anomaly State", bossStateStyle);
-        GUI.Label(new Rect(x, y + (22f * s), width, lineHeight), stateValue, bossStateValueStyle);
+        DrawSolidRect(panel, panelFill);
+        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 2f * s), new Color(stateColor.r, stateColor.g, stateColor.b, 0.78f));
+        DrawSolidRect(new Rect(panel.x, panel.yMax - (2f * s), panel.width, 2f * s), new Color(0.45f, 0.72f, 1f, 0.36f));
+
+        float markerW = Mathf.Lerp(42f * s, 90f * s, pulse);
+        DrawSolidRect(new Rect(panel.x + (8f * s), panel.y + (7f * s), markerW, 3f * s), new Color(stateColor.r, stateColor.g, stateColor.b, 0.64f));
+        DrawSolidRect(new Rect(panel.xMax - markerW - (8f * s), panel.yMax - (10f * s), markerW, 3f * s), new Color(stateColor.r, stateColor.g, stateColor.b, 0.48f));
+
+        Color oldValue = bossStateValueStyle.normal.textColor;
+        bossStateValueStyle.normal.textColor = Color.Lerp(Color.white, stateColor, 0.42f);
+        GUI.Label(new Rect(x, y + (6f * s), width, lineHeight), "ANOMALIA", bossStateStyle);
+        GUI.Label(new Rect(x, y + (30f * s), width, lineHeight + (6f * s)), stateValue.ToUpperInvariant(), bossStateValueStyle);
+        bossStateValueStyle.normal.textColor = oldValue;
+    }
+
+    private void DrawBossStateBanner()
+    {
+        if (bossStateBannerTimer <= 0f || string.IsNullOrWhiteSpace(bossStateBannerRaw))
+        {
+            return;
+        }
+
+        EnsureBossStateStyles();
+
+        float duration = Mathf.Max(0.1f, bossStateBannerDuration);
+        float normalized = Mathf.Clamp01(bossStateBannerTimer / duration);
+        float appear = Mathf.Sin((1f - normalized) * Mathf.PI);
+        float hold = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(normalized * 4f));
+        float alpha = Mathf.Clamp01(Mathf.Max(appear, hold * normalized));
+        if (alpha <= 0.01f)
+        {
+            return;
+        }
+
+        float s = hudScale;
+        string label = ToBossStateLabel(bossStateBannerRaw).ToUpperInvariant();
+        Color stateColor = GetBossStateColor(bossStateBannerRaw);
+        float width = Mathf.Min(Screen.width * 0.72f, 760f * s);
+        float height = 112f * s;
+        float x = (Screen.width - width) * 0.5f;
+        float y = Mathf.Max(86f * s, Screen.height * 0.16f);
+        float jitter = Mathf.Sin(Time.unscaledTime * 34f) * 2.4f * s * alpha;
+        Rect panel = new Rect(x + jitter, y, width, height);
+
+        DrawSolidRect(panel, new Color(0.02f, 0.03f, 0.07f, 0.82f * alpha));
+        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 3f * s), new Color(stateColor.r, stateColor.g, stateColor.b, 0.92f * alpha));
+        DrawSolidRect(new Rect(panel.x, panel.yMax - (3f * s), panel.width, 3f * s), new Color(0.80f, 0.94f, 1f, 0.42f * alpha));
+
+        float sweepW = Mathf.Lerp(80f * s, width * 0.7f, 1f - normalized);
+        DrawSolidRect(new Rect(panel.x + (16f * s), panel.y + (16f * s), sweepW, 4f * s), new Color(stateColor.r, stateColor.g, stateColor.b, 0.58f * alpha));
+        DrawSolidRect(new Rect(panel.xMax - sweepW - (16f * s), panel.yMax - (20f * s), sweepW, 4f * s), new Color(stateColor.r, stateColor.g, stateColor.b, 0.42f * alpha));
+
+        Color oldGui = GUI.color;
+        Color oldLabel = bossStateBannerLabelStyle.normal.textColor;
+        Color oldValue = bossStateBannerValueStyle.normal.textColor;
+        GUI.color = new Color(1f, 1f, 1f, alpha);
+        bossStateBannerLabelStyle.normal.textColor = new Color(0.88f, 0.94f, 1f, 0.86f * alpha);
+        bossStateBannerValueStyle.normal.textColor = Color.Lerp(Color.white, stateColor, 0.36f);
+
+        GUI.Label(new Rect(panel.x, panel.y + (16f * s), panel.width, 26f * s), "CAMBIO DE ESTADO", bossStateBannerLabelStyle);
+        GUI.Label(new Rect(panel.x, panel.y + (42f * s), panel.width, 58f * s), label, bossStateBannerValueStyle);
+
+        bossStateBannerLabelStyle.normal.textColor = oldLabel;
+        bossStateBannerValueStyle.normal.textColor = oldValue;
+        GUI.color = oldGui;
     }
 
     private static string ToBossStateLabel(string raw)
@@ -772,10 +863,54 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    private static bool IsBossSpecialState(string raw)
+    {
+        switch (raw)
+        {
+            case "Split":
+            case "ExpansionShoot":
+            case "SpeedSurge":
+            case "WeaveHunter":
+            case "Destroyer":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static Color GetBossStateColor(string raw)
+    {
+        switch (raw)
+        {
+            case "DirectChase":
+                return new Color(1f, 0.48f, 0.66f, 1f);
+            case "PredictiveIntercept":
+                return new Color(0.48f, 0.94f, 1f, 1f);
+            case "CutoffFlank":
+                return new Color(1f, 0.76f, 0.46f, 1f);
+            case "ErraticBurst":
+                return new Color(1f, 0.38f, 0.52f, 1f);
+            case "Split":
+                return new Color(0.74f, 0.76f, 1f, 1f);
+            case "ExpansionShoot":
+                return new Color(1f, 0.50f, 0.72f, 1f);
+            case "SpeedSurge":
+                return new Color(0.98f, 0.94f, 0.58f, 1f);
+            case "WeaveHunter":
+                return new Color(0.85f, 0.68f, 1f, 1f);
+            case "Destroyer":
+                return new Color(1f, 0.86f, 0.88f, 1f);
+            default:
+                return new Color(1f, 0.76f, 0.82f, 1f);
+        }
+    }
+
     private void EnsureBossStateStyles()
     {
         if (bossStateStyle != null &&
             bossStateValueStyle != null &&
+            bossStateBannerLabelStyle != null &&
+            bossStateBannerValueStyle != null &&
             hudLabelStyle != null &&
             hudValueStyle != null &&
             hudChipStyle != null &&
@@ -788,8 +923,10 @@ public class GameManager : MonoBehaviour
         int labelSize = Mathf.RoundToInt(14f * hudScale);
         int valueSize = Mathf.RoundToInt(28f * hudScale);
         int chipSize = Mathf.RoundToInt(14f * hudScale);
-        int bossLabelSize = Mathf.RoundToInt(15f * hudScale);
-        int bossValueSize = Mathf.RoundToInt(18f * hudScale);
+        int bossLabelSize = Mathf.RoundToInt(16f * hudScale);
+        int bossValueSize = Mathf.RoundToInt(24f * hudScale);
+        int bannerLabelSize = Mathf.RoundToInt(18f * hudScale);
+        int bannerValueSize = Mathf.RoundToInt(42f * hudScale);
 
         hudLabelStyle = new GUIStyle(GUI.skin.label)
         {
@@ -845,6 +982,28 @@ public class GameManager : MonoBehaviour
             wordWrap = false
         };
         bossStateValueStyle.normal.textColor = new Color(1f, 0.76f, 0.82f, 0.98f);
+
+        bossStateBannerLabelStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = secondaryFont,
+            fontSize = bannerLabelSize,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            clipping = TextClipping.Overflow,
+            wordWrap = false
+        };
+        bossStateBannerLabelStyle.normal.textColor = new Color(0.88f, 0.94f, 1f, 0.86f);
+
+        bossStateBannerValueStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = importantFont,
+            fontSize = bannerValueSize,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            clipping = TextClipping.Overflow,
+            wordWrap = false
+        };
+        bossStateBannerValueStyle.normal.textColor = Color.white;
     }
 
     private void DrawRuntimeHud()
