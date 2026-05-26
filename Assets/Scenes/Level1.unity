@@ -9694,6 +9694,13 @@ MonoBehaviour:
   hudGlitchWeight: 0.85
   textGlitchWeight: 0.35
   panelJitterStrength: 1.1
+  defeatCinematicDuration: 1.05
+  defeatInputUnlockDelay: 1.2
+  defeatFlashDuration: 0.16
+  defeatShockwaveDuration: 0.95
+  defeatFlashColor: {r: 1, g: 0.72, b: 0.78, a: 1}
+  defeatShockwaveColor: {r: 1, g: 0.44, b: 0.58, a: 1}
+  rankingNameMaxLength: 16
 --- !u!1 &258470715
 GameObject:
   m_ObjectHideFlags: 0
@@ -33856,7 +33863,7 @@ MonoBehaviour:
   enableAdvancedStates: 1
   stateDurationMultiplierRange: {x: 0.85, y: 1.25}
   majorStateDurationRange: {x: 9, y: 15}
-  speedStateMultiplier: 1.55
+  speedStateMultiplier: 1.26
   logStateChanges: 0
   buildUpMinorStatesMin: 2
   buildUpMinorStatesMax: 4
@@ -33877,6 +33884,11 @@ MonoBehaviour:
   statePulseDuration: 0.24
   statePulseLighten: 0.42
   statePulseScaleBoost: 1.08
+  stateTransitionBurstEnabled: 1
+  stateTransitionBurstDuration: 0.34
+  stateTransitionBurstRadius: 1.35
+  stateTransitionBurstRayCount: 10
+  stateTransitionBurstCooldown: 0.12
   expansionShootProjectileCount: 10
   expansionShootInterval: 2
   expansionShootProjectileSpeed: 9.5
@@ -33947,6 +33959,19 @@ MonoBehaviour:
   repulsionSpreadAngle: 120
   stuckCheckInterval: 0.3
   stuckDistanceThreshold: 0.09
+  stuckChecksBeforeRecovery: 2
+  stuckChecksBeforeEmergencyDestroyer: 5
+  stuckTargetMinDistance: 1.4
+  stuckObstacleProbeRadius: 1.45
+  stuckEscapeDistance: 2.9
+  stuckEscapeVelocityBoost: 1.35
+  emergencyDestroyerDuration: 2
+  blockedRepathHoldSeconds: 0.28
+  blockedRepathDistanceMultiplier: 1.8
+  blockedPathCommitSeconds: 1.15
+  blockedPathCommitDistanceMultiplier: 3
+  blockedOscillationThreshold: 3
+  blockedOscillationResetSeconds: 1.2
 --- !u!58 &961830799
 CircleCollider2D:
   m_ObjectHideFlags: 0
@@ -42315,6 +42340,7 @@ MonoBehaviour:
   difficultyRampPerSecond: 0.03
   chaosTempoEnabled: 1
   chaosBehaviorIntervalMultiplier: 0.72
+  pointsPerSecond: 4
   bossSpecialStatesUnlockTime: 30
   mapEventsUnlockTime: 60
   containmentPulseUnlockTime: 90
@@ -42323,10 +42349,25 @@ MonoBehaviour:
   countdownGlitchOpacity: 0.18
   countdownPrimary: {r: 0.98, g: 0.63, b: 0.73, a: 1}
   countdownAccent: {r: 0.33, g: 0.93, b: 1, a: 1}
+  countdownOrbitTickCount: 18
+  countdownOrbitSpinSpeed: 0.95
+  countdownImpactFlashOpacity: 0.28
+  countdownImpactSweepSpeed: 640
   statePulseOverlayDuration: 0.24
   statePulseOverlayOpacity: 0.22
   statePulseOverlayColorA: {r: 1, g: 0.35, b: 0.52, a: 1}
   statePulseOverlayColorB: {r: 0.3, g: 0.95, b: 1, a: 1}
+  bossStateBannerDuration: 1.25
+  enableAmbientHudFrame: 1
+  sideHudOpacity: 0.12
+  sideHudAccentOpacity: 0.09
+  fallbackHudScale: 1.1
+  enableReactiveHudFx: 1
+  threatDangerDistance: 2.2
+  threatSafeDistance: 10.5
+  threatSmoothing: 5
+  scoreSmoothing: 10
+  scorePopupLifetime: 0.95
 --- !u!4 &1183304027
 Transform:
   m_ObjectHideFlags: 0
@@ -61359,6 +61400,26 @@ MonoBehaviour:
   shieldColor: {r: 0.95, g: 0.64, b: 0.88, a: 0.85}
   shieldPulseSpeed: 7.2
   shieldRadius: 0.72
+  enableMovementTrail: 1
+  trailColor: {r: 0.42, g: 0.92, b: 1, a: 0.85}
+  trailParticleLifetime: 0.36
+  trailStartSize: 0.17
+  trailEmissionAtMaxSpeed: 42
+  trailMinVelocityToEmit: 1.1
+  enableDeathExplosion: 1
+  deathChargeDuration: 0.26
+  deathFlashDuration: 0.08
+  deathAfterglowDuration: 0.34
+  deathScaleBoost: 1.7
+  deathChargeColor: {r: 1, g: 0.58, b: 0.7, a: 1}
+  deathFlashColor: {r: 1, g: 0.96, b: 1, a: 1}
+  deathShardColor: {r: 1, g: 0.62, b: 0.78, a: 1}
+  deathShardCount: 12
+  deathShardDistance: 2.1
+  deathShockwaveRadius: 2.9
+  shieldBreakBurstRadius: 1.25
+  shieldBreakBurstDuration: 0.22
+  shieldBreakBurstRayCount: 8
 --- !u!58 &1747962577
 CircleCollider2D:
   m_ObjectHideFlags: 0
@@ -73614,6 +73675,7 @@ MonoBehaviour:
   anomalyTransform: {fileID: 961830797}
   spawnSafeRadius: 2.2
   randomizeThemeEachRun: 1
+  avoidConsecutiveThemeRepeat: 1
   fixedTheme: 0
   minRuptureAnchors: 4
   maxRuptureAnchors: 7

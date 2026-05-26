@@ -1161,10 +1161,10 @@ public class GameManager : MonoBehaviour
         float step = Mathf.Max(34f, Screen.height / 17f);
         for (float y = -step; y <= Screen.height + step; y += step)
         {
-            float wobble = Mathf.Sin((y * 0.03f) + (t * Mathf.Lerp(2.4f, 5.4f, threat))) * Mathf.Lerp(4f, 9f, threat);
-            float yAnim = y + Mathf.Sin((t * Mathf.Lerp(1.8f, 4.3f, threat)) + y * 0.02f) * Mathf.Lerp(6f, 13f, threat);
+            float wobble = Mathf.Sin((y * 0.03f) + (t * Mathf.Lerp(1.1f, 2.0f, threat))) * Mathf.Lerp(2.5f, 4.8f, threat);
+            float yAnim = y + Mathf.Sin((t * Mathf.Lerp(0.8f, 1.45f, threat)) + y * 0.02f) * Mathf.Lerp(4f, 6.5f, threat);
             float lineWidth = Mathf.Lerp(8f, sideWidth * 0.55f, Mathf.PerlinNoise(y * 0.013f, t * 0.45f));
-            float lineAlpha = (0.08f + 0.09f * (0.5f + 0.5f * Mathf.Sin((t * 4.2f) + y * 0.06f))) * Mathf.Lerp(0.78f, 1.85f, threat);
+            float lineAlpha = (0.08f + 0.09f * (0.5f + 0.5f * Mathf.Sin((t * 2.2f) + y * 0.06f))) * Mathf.Lerp(0.72f, 1.45f, threat);
 
             DrawSolidRect(
                 new Rect(7f + wobble, yAnim, lineWidth, 2f),
@@ -1174,8 +1174,8 @@ public class GameManager : MonoBehaviour
                 new Color(reactiveAccent.r, reactiveAccent.g, reactiveAccent.b, lineAlpha));
         }
 
-        float sweepHeight = Mathf.Lerp(Screen.height * 0.12f, Screen.height * Mathf.Lerp(0.18f, 0.26f, threat), 0.5f + 0.5f * Mathf.Sin(t * Mathf.Lerp(0.7f, 1.6f, threat)));
-        float sweepY = Mathf.Repeat(t * (Screen.height * Mathf.Lerp(0.24f, 0.52f, threat)), Screen.height + sweepHeight) - sweepHeight;
+        float sweepHeight = Mathf.Lerp(Screen.height * 0.11f, Screen.height * Mathf.Lerp(0.16f, 0.20f, threat), 0.5f + 0.5f * Mathf.Sin(t * Mathf.Lerp(0.35f, 0.68f, threat)));
+        float sweepY = Mathf.Repeat(t * (Screen.height * Mathf.Lerp(0.10f, 0.18f, threat)), Screen.height + sweepHeight) - sweepHeight;
         DrawSolidRect(
             new Rect(0f, sweepY, sideWidth, sweepHeight),
             new Color(reactiveAccent.r, reactiveAccent.g, reactiveAccent.b, reactiveAccentOpacity * 0.56f));

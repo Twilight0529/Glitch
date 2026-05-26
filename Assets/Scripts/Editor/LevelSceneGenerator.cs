@@ -13,7 +13,6 @@ public static class LevelSceneGenerator
     private const float TargetArenaHeight = 18f;
     private const float CameraPadding = 1.4f;
 
-    [MenuItem("Glitch/Generate/Setup Current Level Scene")]
     public static void SetupCurrentLevelScene()
     {
         if (Application.isPlaying)
@@ -51,7 +50,6 @@ public static class LevelSceneGenerator
         Debug.Log("Level scene generated: GameManager, Player, Anomaly and procedural arena are ready.");
     }
 
-    [MenuItem("Glitch/Generate/Setup Main Menu Scene")]
     public static void SetupMainMenuScene()
     {
         if (Application.isPlaying)
