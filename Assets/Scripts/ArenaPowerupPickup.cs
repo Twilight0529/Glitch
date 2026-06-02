@@ -87,9 +87,15 @@ public class ArenaPowerupPickup : MonoBehaviour
         switch (kind)
         {
             case PickupKind.Shield:
+                spriteRenderer.sprite = CircleSpriteProvider.Get();
+                spriteRenderer.drawMode = SpriteDrawMode.Sliced;
+                spriteRenderer.size = Vector2.one * 0.62f;
                 spriteRenderer.color = new Color(1f, 0.66f, 0.86f, 0.95f);
                 break;
             default:
+                spriteRenderer.sprite = LightningSpriteProvider.Get();
+                spriteRenderer.drawMode = SpriteDrawMode.Simple;
+                spriteRenderer.size = Vector2.one * 0.62f;
                 spriteRenderer.color = new Color(0.46f, 0.96f, 1f, 0.95f);
                 break;
         }
