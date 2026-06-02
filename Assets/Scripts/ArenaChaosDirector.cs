@@ -307,8 +307,8 @@ public class ArenaChaosDirector : MonoBehaviour
 
         SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
         bool isSpeedPowerup = kind == ArenaPowerupPickup.PickupKind.SpeedBurst;
-        sr.sprite = isSpeedPowerup ? LightningSpriteProvider.Get() : CircleSpriteProvider.Get();
-        sr.drawMode = isSpeedPowerup ? SpriteDrawMode.Simple : SpriteDrawMode.Sliced;
+        sr.sprite = isSpeedPowerup ? LightningSpriteProvider.Get() : ShieldSpriteProvider.Get();
+        sr.drawMode = SpriteDrawMode.Simple;
         sr.size = Vector2.one * 0.62f;
         sr.sortingOrder = 12;
 
