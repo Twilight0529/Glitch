@@ -492,15 +492,15 @@ public class ArenaChaosDirector : MonoBehaviour
         objectiveEventActive = true;
         objectiveTimer = Mathf.Max(2f, objectiveNodeLifetime);
         objectiveNodesTotal = activeObjectiveNodes.Count;
-        RaiseWarning("Containment Sync Required", 1.4f);
-        RaiseEvent($"Sync Nodes 0/{activeObjectiveNodes.Count}");
+        RaiseWarning("Pisa los nodos celestes", 2.6f);
+        RaiseEvent($"Mantener nodos 0/{activeObjectiveNodes.Count}");
     }
 
     private void UpdateObjectiveEvent()
     {
         objectiveTimer -= Time.deltaTime;
         activeObjectiveNodes.RemoveAll(n => n == null);
-        activeEventLabel = $"Sync {objectiveNodesActivated}/{Mathf.Max(1, objectiveNodesTotal)} | {Mathf.CeilToInt(Mathf.Max(0f, objectiveTimer))}s";
+        activeEventLabel = $"Pisa nodos celestes {objectiveNodesActivated}/{Mathf.Max(1, objectiveNodesTotal)} | {Mathf.CeilToInt(Mathf.Max(0f, objectiveTimer))}s";
         eventLabelTimer = 0.25f;
 
         if (activeObjectiveNodes.Count <= 0)
