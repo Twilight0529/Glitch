@@ -18,11 +18,15 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private Color shieldColor = new Color(0.95f, 0.64f, 0.88f, 0.85f);
     [SerializeField] private float shieldPulseSpeed = 7.2f;
     [SerializeField] private float shieldRadius = 0.72f;
+    [SerializeField] private float maxShieldDurationMultiplier = 1.8f;
 
     [Header("Firewall Parry")]
     [SerializeField] private float parryActiveDuration = 0.16f;
     [SerializeField] private float parryCooldown = 0.85f;
     [SerializeField] private float parryRadius = 0.95f;
+    [SerializeField] private float maxParryActiveDuration = 0.32f;
+    [SerializeField] private float minParryCooldown = 0.42f;
+    [SerializeField] private float maxParryRadius = 1.55f;
     [SerializeField] private Color parryReadyColor = new Color(0.46f, 0.96f, 1f, 0.62f);
     [SerializeField] private Color parrySuccessColor = new Color(1f, 0.96f, 0.64f, 1f);
     [SerializeField] private float parryFxRadius = 1.65f;
@@ -31,6 +35,7 @@ public class PlayerController : MonoBehaviour
 
     [Header("Movement Trail")]
     [SerializeField] private bool enableMovementTrail = true;
+    [SerializeField] private float maxPermanentMoveSpeed = 15.5f;
     [SerializeField] private Color trailColor = new Color(0.42f, 0.92f, 1f, 0.85f);
     [SerializeField] private float trailParticleLifetime = 0.36f;
     [SerializeField] private float trailStartSize = 0.17f;
@@ -62,6 +67,7 @@ public class PlayerController : MonoBehaviour
     private float movementSlowTimer;
     private float movementSlowMultiplier = 1f;
     private float shieldTimer;
+    private float shieldDurationMultiplier = 1f;
     private SpriteRenderer shieldRenderer;
     private GameObject shieldVisual;
     private float parryTimer;
@@ -236,7 +242,7 @@ public class PlayerController : MonoBehaviour
 
     public void ApplyShield(float duration)
     {
-        shieldTimer = Mathf.Max(shieldTimer, Mathf.Max(0.1f, duration));
+        shieldTimer = Mathf.Max(shieldTimer, Mathf.Max(0.1f, duration * shieldDurationMultiplier));
     }
 
     public void ApplyMovementSlow(float multiplier, float duration)
@@ -262,6 +268,40 @@ public class PlayerController : MonoBehaviour
         shieldTimer = 0f;
         SpawnShieldBreakFx();
         return true;
+    }
+
+    public void AddPermanentMoveSpeed(float amount)
+    {
+        moveSpeed = Mathf.Min(Mathf.Max(0.1f, maxPermanentMoveSpeed), moveSpeed + Mathf.Max(0f, amount));
+    }
+
+    public void ExtendParryWindow(float extraSeconds)
+    {
+        parryActiveDuration = Mathf.Min(Mathf.Max(0.04f, maxParryActiveDuration), parryActiveDuration + Mathf.Max(0f, extraSeconds));
+    }
+
+    public void ReduceParryCooldown(float multiplier)
+    {
+        parryCooldown = Mathf.Max(Mathf.Max(0.05f, minParryCooldown), parryCooldown * Mathf.Clamp(multiplier, 0.2f, 1f));
+        parryCooldownTimer = Mathf.Min(parryCooldownTimer, parryCooldown);
+    }
+
+    public void ExpandParryRadius(float extraRadius)
+    {
+        parryRadius = Mathf.Min(Mathf.Max(0.2f, maxParryRadius), parryRadius + Mathf.Max(0f, extraRadius));
+        parryFxRadius = Mathf.Max(parryFxRadius, parryRadius + 0.55f);
+
+        if (parryRenderer != null)
+        {
+            parryRenderer.size = Vector2.one * Mathf.Max(0.25f, parryRadius * 2f);
+        }
+    }
+
+    public void ImproveShieldDuration(float multiplier)
+    {
+        shieldDurationMultiplier = Mathf.Min(
+            Mathf.Max(1f, maxShieldDurationMultiplier),
+            shieldDurationMultiplier * Mathf.Max(1f, multiplier));
     }
 
     public bool TryParryHit(Vector2 threatPosition, out Vector2 parryDirection)

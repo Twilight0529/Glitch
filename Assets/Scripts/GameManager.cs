@@ -22,6 +22,23 @@ public class GameManager : MonoBehaviour
         Active
     }
 
+    private enum PlayerUpgradeKind
+    {
+        MoveSpeed,
+        ParryWindow,
+        ParryCooldown,
+        ParryRadius,
+        ShieldDuration
+    }
+
+    private struct UpgradeChoice
+    {
+        public PlayerUpgradeKind kind;
+        public string title;
+        public string description;
+        public Color accent;
+    }
+
     [Header("Run State")]
     [SerializeField] private bool autoReloadSceneOnGameOver = false;
     [SerializeField] private float reloadDelay = 1.2f;
@@ -37,6 +54,13 @@ public class GameManager : MonoBehaviour
 
     [Header("Scoring")]
     [SerializeField] private float pointsPerSecond = 4f;
+
+    [Header("Run Upgrades")]
+    [SerializeField] private bool enableRunUpgrades = true;
+    [SerializeField] private float firstUpgradeTime = 35f;
+    [SerializeField] private float upgradeInterval = 42f;
+    [SerializeField] private int upgradeOptionsShown = 3;
+    [SerializeField] private int upgradeScoreBonus = 8;
 
     [Header("Progression Gates")]
     [SerializeField] private float bossSpecialStatesUnlockTime = 30f;
@@ -120,6 +144,10 @@ public class GameManager : MonoBehaviour
     private GUIStyle bossStateBannerLabelStyle;
     private GUIStyle bossStateBannerValueStyle;
     private GUIStyle eventWarningStyle;
+    private GUIStyle upgradeKickerStyle;
+    private GUIStyle upgradeTitleStyle;
+    private GUIStyle upgradeDescriptionStyle;
+    private GUIStyle upgradeButtonStyle;
     private Font importantFont;
     private Font secondaryFont;
     private string lastBossStateRaw;
@@ -129,10 +157,15 @@ public class GameManager : MonoBehaviour
     private int bonusScore;
     private float hudScale = 1f;
     private float cachedHudScaleForStyles = -1f;
+    private float cachedUpgradeHudScaleForStyles = -1f;
     private float displayedScore;
     private float scorePulseTimer;
     private float smoothedThreat;
     private readonly List<ScorePopup> scorePopups = new List<ScorePopup>();
+    private readonly List<UpgradeChoice> currentUpgradeChoices = new List<UpgradeChoice>();
+    private float nextUpgradeTime;
+    private bool upgradeSelectionOpen;
+    private int upgradePickCount;
     private bool playerDefeatSequenceRunning;
     private Coroutine playerDefeatSequenceRoutine;
 
@@ -207,6 +240,10 @@ public class GameManager : MonoBehaviour
         }
 
         SurvivalTime += Time.deltaTime;
+        if (ShouldOpenUpgradeSelection())
+        {
+            OpenUpgradeSelection();
+        }
     }
 
     public void TriggerGameOver()
@@ -291,6 +328,7 @@ public class GameManager : MonoBehaviour
             DrawStatePulseOverlay();
             DrawBossStateBanner();
             DrawChaosWarningOverlay();
+            DrawUpgradeSelectionOverlay();
         }
 
         if (runPhase == RunPhase.StartupDelay || runPhase == RunPhase.Countdown || runPhase == RunPhase.GoFlash)
@@ -314,9 +352,13 @@ public class GameManager : MonoBehaviour
         bossStateBannerRaw = null;
         lastBossStateRaw = null;
         scorePopups.Clear();
+        currentUpgradeChoices.Clear();
         displayedScore = 0f;
         smoothedThreat = 0f;
         scorePulseTimer = 0f;
+        nextUpgradeTime = Mathf.Max(1f, firstUpgradeTime);
+        upgradeSelectionOpen = false;
+        upgradePickCount = 0;
         playerDefeatSequenceRunning = false;
         playerDefeatSequenceRoutine = null;
         Time.timeScale = 0f;
@@ -831,6 +873,200 @@ public class GameManager : MonoBehaviour
         GUI.color = oldGui;
     }
 
+    private bool ShouldOpenUpgradeSelection()
+    {
+        return enableRunUpgrades &&
+               !upgradeSelectionOpen &&
+               IsRunActive &&
+               SurvivalTime >= nextUpgradeTime &&
+               playerController != null;
+    }
+
+    private void OpenUpgradeSelection()
+    {
+        currentUpgradeChoices.Clear();
+
+        List<PlayerUpgradeKind> pool = new List<PlayerUpgradeKind>
+        {
+            PlayerUpgradeKind.MoveSpeed,
+            PlayerUpgradeKind.ParryWindow,
+            PlayerUpgradeKind.ParryCooldown,
+            PlayerUpgradeKind.ParryRadius,
+            PlayerUpgradeKind.ShieldDuration
+        };
+
+        int desired = Mathf.Clamp(upgradeOptionsShown, 1, pool.Count);
+        while (currentUpgradeChoices.Count < desired && pool.Count > 0)
+        {
+            int index = Random.Range(0, pool.Count);
+            PlayerUpgradeKind kind = pool[index];
+            pool.RemoveAt(index);
+            currentUpgradeChoices.Add(BuildUpgradeChoice(kind));
+        }
+
+        upgradeSelectionOpen = currentUpgradeChoices.Count > 0;
+        if (upgradeSelectionOpen)
+        {
+            Time.timeScale = 0f;
+        }
+    }
+
+    private UpgradeChoice BuildUpgradeChoice(PlayerUpgradeKind kind)
+    {
+        switch (kind)
+        {
+            case PlayerUpgradeKind.MoveSpeed:
+                return new UpgradeChoice
+                {
+                    kind = kind,
+                    title = "Impulso Vectorial",
+                    description = "Aumenta la velocidad base del jugador.",
+                    accent = new Color(0.46f, 0.96f, 1f, 1f)
+                };
+            case PlayerUpgradeKind.ParryWindow:
+                return new UpgradeChoice
+                {
+                    kind = kind,
+                    title = "Ventana Extendida",
+                    description = "El Firewall Parry permanece activo un poco mas.",
+                    accent = new Color(1f, 0.90f, 0.54f, 1f)
+                };
+            case PlayerUpgradeKind.ParryCooldown:
+                return new UpgradeChoice
+                {
+                    kind = kind,
+                    title = "Recarga Fria",
+                    description = "Reduce el tiempo de espera del Firewall Parry.",
+                    accent = new Color(0.60f, 0.84f, 1f, 1f)
+                };
+            case PlayerUpgradeKind.ParryRadius:
+                return new UpgradeChoice
+                {
+                    kind = kind,
+                    title = "Pulso Expandido",
+                    description = "Aumenta el radio efectivo del Firewall Parry.",
+                    accent = new Color(0.76f, 0.64f, 1f, 1f)
+                };
+            default:
+                return new UpgradeChoice
+                {
+                    kind = kind,
+                    title = "Escudo Resonante",
+                    description = "Los escudos duran mas cuando los recolectas.",
+                    accent = new Color(1f, 0.66f, 0.86f, 1f)
+                };
+        }
+    }
+
+    private void ChooseUpgrade(int index)
+    {
+        if (!upgradeSelectionOpen || playerController == null || index < 0 || index >= currentUpgradeChoices.Count)
+        {
+            return;
+        }
+
+        UpgradeChoice choice = currentUpgradeChoices[index];
+        ApplyUpgrade(choice.kind);
+        AddScore(Mathf.Max(0, upgradeScoreBonus));
+
+        upgradePickCount++;
+        currentUpgradeChoices.Clear();
+        upgradeSelectionOpen = false;
+        nextUpgradeTime = SurvivalTime + Mathf.Max(8f, upgradeInterval);
+        Time.timeScale = 1f;
+    }
+
+    private void ApplyUpgrade(PlayerUpgradeKind kind)
+    {
+        if (playerController == null)
+        {
+            return;
+        }
+
+        switch (kind)
+        {
+            case PlayerUpgradeKind.MoveSpeed:
+                playerController.AddPermanentMoveSpeed(0.65f);
+                break;
+            case PlayerUpgradeKind.ParryWindow:
+                playerController.ExtendParryWindow(0.035f);
+                break;
+            case PlayerUpgradeKind.ParryCooldown:
+                playerController.ReduceParryCooldown(0.86f);
+                break;
+            case PlayerUpgradeKind.ParryRadius:
+                playerController.ExpandParryRadius(0.16f);
+                break;
+            case PlayerUpgradeKind.ShieldDuration:
+                playerController.ImproveShieldDuration(1.18f);
+                break;
+        }
+    }
+
+    private void DrawUpgradeSelectionOverlay()
+    {
+        if (!upgradeSelectionOpen || currentUpgradeChoices.Count == 0)
+        {
+            return;
+        }
+
+        EnsureUpgradeStyles();
+
+        float s = hudScale;
+        Color old = GUI.color;
+        DrawSolidRect(new Rect(0f, 0f, Screen.width, Screen.height), new Color(0.01f, 0.015f, 0.03f, 0.76f));
+
+        float panelW = Mathf.Min(Screen.width * 0.82f, 900f * s);
+        float panelH = Mathf.Min(Screen.height * 0.72f, 430f * s);
+        float panelX = (Screen.width - panelW) * 0.5f;
+        float panelY = (Screen.height - panelH) * 0.5f;
+        Rect panel = new Rect(panelX, panelY, panelW, panelH);
+
+        DrawSolidRect(panel, new Color(0.025f, 0.04f, 0.08f, 0.92f));
+        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 3f * s), new Color(0.46f, 0.96f, 1f, 0.74f));
+        DrawSolidRect(new Rect(panel.x, panel.yMax - (3f * s), panel.width, 3f * s), new Color(1f, 0.58f, 0.74f, 0.46f));
+
+        GUI.Label(new Rect(panel.x, panel.y + (26f * s), panel.width, 24f * s), $"UPGRADE {upgradePickCount + 1}", upgradeKickerStyle);
+        GUI.Label(new Rect(panel.x, panel.y + (54f * s), panel.width, 48f * s), "ELIGE UNA ALTERACION", upgradeTitleStyle);
+
+        float cardGap = 14f * s;
+        float cardsTop = panel.y + (132f * s);
+        float cardH = panel.height - (166f * s);
+        float cardW = (panel.width - (48f * s) - (cardGap * (currentUpgradeChoices.Count - 1))) / currentUpgradeChoices.Count;
+        float cardX = panel.x + (24f * s);
+
+        for (int i = 0; i < currentUpgradeChoices.Count; i++)
+        {
+            UpgradeChoice choice = currentUpgradeChoices[i];
+            Rect card = new Rect(cardX + ((cardW + cardGap) * i), cardsTop, cardW, cardH);
+            DrawUpgradeCard(card, choice, i, s);
+        }
+
+        GUI.color = old;
+    }
+
+    private void DrawUpgradeCard(Rect card, UpgradeChoice choice, int index, float s)
+    {
+        bool hovered = card.Contains(Event.current.mousePosition);
+        Color fill = hovered
+            ? new Color(choice.accent.r * 0.18f, choice.accent.g * 0.18f, choice.accent.b * 0.22f, 0.92f)
+            : new Color(0.04f, 0.06f, 0.11f, 0.90f);
+
+        DrawSolidRect(card, fill);
+        DrawSolidRect(new Rect(card.x, card.y, card.width, 2f * s), new Color(choice.accent.r, choice.accent.g, choice.accent.b, 0.78f));
+        DrawSolidRect(new Rect(card.x + (14f * s), card.y + (18f * s), 54f * s, 5f * s), new Color(choice.accent.r, choice.accent.g, choice.accent.b, 0.62f));
+
+        GUI.Label(new Rect(card.x + (16f * s), card.y + (40f * s), card.width - (32f * s), 58f * s), choice.title.ToUpperInvariant(), upgradeButtonStyle);
+        GUI.Label(new Rect(card.x + (16f * s), card.y + (106f * s), card.width - (32f * s), 82f * s), choice.description, upgradeDescriptionStyle);
+
+        Rect buttonRect = new Rect(card.x + (16f * s), card.yMax - (52f * s), card.width - (32f * s), 34f * s);
+        DrawSolidRect(buttonRect, new Color(choice.accent.r, choice.accent.g, choice.accent.b, hovered ? 0.46f : 0.28f));
+        if (GUI.Button(buttonRect, "INSTALAR", upgradeButtonStyle))
+        {
+            ChooseUpgrade(index);
+        }
+    }
+
     private static string ToBossStateLabel(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
@@ -1224,6 +1460,65 @@ public class GameManager : MonoBehaviour
         DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 1f), new Color(0.85f, 0.92f, 1f, 0.35f));
         DrawSolidRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), new Color(0.85f, 0.92f, 1f, 0.25f));
         GUI.Label(rect, text, hudChipStyle);
+    }
+
+    private void EnsureUpgradeStyles()
+    {
+        if (upgradeKickerStyle != null &&
+            upgradeTitleStyle != null &&
+            upgradeDescriptionStyle != null &&
+            upgradeButtonStyle != null &&
+            Mathf.Abs(cachedUpgradeHudScaleForStyles - hudScale) < 0.001f)
+        {
+            return;
+        }
+
+        EnsureBossStateStyles();
+        cachedUpgradeHudScaleForStyles = hudScale;
+
+        upgradeKickerStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = secondaryFont,
+            fontSize = Mathf.RoundToInt(15f * hudScale),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            clipping = TextClipping.Overflow
+        };
+        upgradeKickerStyle.normal.textColor = new Color(0.70f, 0.92f, 1f, 0.86f);
+
+        upgradeTitleStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = importantFont,
+            fontSize = Mathf.RoundToInt(34f * hudScale),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            clipping = TextClipping.Overflow
+        };
+        upgradeTitleStyle.normal.textColor = new Color(0.96f, 0.98f, 1f, 0.98f);
+
+        upgradeDescriptionStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = secondaryFont,
+            fontSize = Mathf.RoundToInt(15f * hudScale),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.UpperLeft,
+            clipping = TextClipping.Clip,
+            wordWrap = true
+        };
+        upgradeDescriptionStyle.normal.textColor = new Color(0.82f, 0.90f, 1f, 0.92f);
+
+        upgradeButtonStyle = new GUIStyle(GUI.skin.button)
+        {
+            font = importantFont,
+            fontSize = Mathf.RoundToInt(17f * hudScale),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            clipping = TextClipping.Clip,
+            wordWrap = true
+        };
+        upgradeButtonStyle.normal.textColor = new Color(0.95f, 0.98f, 1f, 0.96f);
+        upgradeButtonStyle.hover.textColor = Color.white;
+        upgradeButtonStyle.active.textColor = new Color(1f, 0.90f, 0.58f, 1f);
     }
 
     private void EnsureWarningStyle()
