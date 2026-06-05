@@ -254,6 +254,9 @@ public class EnemyController : MonoBehaviour
     private float externalSpeedMultiplier = 1f;
     private float parryStunTimer;
     private float parryKnockbackTimer;
+    private float breachLureTimer;
+    private Vector2 breachLureTarget;
+    private bool breachAbsorbed;
     private Vector3 baseScale = Vector3.one;
     private Color baseColor = Color.white;
 
@@ -408,6 +411,12 @@ public class EnemyController : MonoBehaviour
 
     private void Update()
     {
+        if (breachAbsorbed)
+        {
+            rb.linearVelocity = Vector2.zero;
+            return;
+        }
+
         if (gameManager == null || player == null || gameManager.IsGameOver || !gameManager.IsRunActive)
         {
             rb.linearVelocity = Vector2.zero;
@@ -1099,6 +1108,63 @@ public class EnemyController : MonoBehaviour
         TriggerStatePulse();
     }
 
+    public void GuideTowardBreach(Vector2 breachTarget, float duration)
+    {
+        breachLureTarget = breachTarget;
+        breachLureTimer = Mathf.Max(breachLureTimer, Mathf.Max(0.1f, duration));
+        CancelSplitMergeForBreach();
+    }
+
+    public void AbsorbIntoBreach(Vector2 breachPosition)
+    {
+        breachAbsorbed = true;
+        breachLureTimer = 0f;
+        rb.linearVelocity = Vector2.zero;
+        AbsorbSplitCloneIntoBreach(breachPosition);
+
+        if (ownCollider != null)
+        {
+            ownCollider.enabled = false;
+        }
+
+        if (ownRenderer != null)
+        {
+            ownRenderer.enabled = false;
+        }
+
+        transform.position = breachPosition;
+        HideExpansionShootTelegraphVisual();
+        HideSplitMergeTelegraphVisual();
+    }
+
+    public void ReappearFromBreach(Vector2 position)
+    {
+        transform.position = position;
+        rb.position = position;
+        rb.linearVelocity = Vector2.zero;
+        breachAbsorbed = false;
+        breachLureTimer = 0f;
+        breachLureTarget = position;
+        DestroySplitCloneImmediate();
+
+        if (ownCollider != null)
+        {
+            ownCollider.enabled = true;
+        }
+
+        if (ownRenderer != null)
+        {
+            ownRenderer.enabled = true;
+            ownRenderer.color = baseColor;
+        }
+
+        transform.localScale = baseScale;
+        TriggerStatePulse();
+        BuildNavigationGrid();
+        pathWorld.Clear();
+        pathIndex = 0;
+    }
+
     private void TriggerStatePulse()
     {
         if (!statePulseFxEnabled)
@@ -1241,6 +1307,15 @@ public class EnemyController : MonoBehaviour
 
     private void UpdateExternalSpeedEffects()
     {
+        if (breachLureTimer > 0f)
+        {
+            breachLureTimer -= Time.deltaTime;
+            if (breachLureTimer < 0f)
+            {
+                breachLureTimer = 0f;
+            }
+        }
+
         if (externalSpeedTimer <= 0f)
         {
             externalSpeedTimer = 0f; 
@@ -1383,6 +1458,12 @@ public class EnemyController : MonoBehaviour
 
     private void UpdateSplitAbility()
     {
+        if (breachLureTimer > 0f || breachAbsorbed)
+        {
+            CancelSplitMergeForBreach();
+            return;
+        }
+
         if (currentState == AnomalyState.Split && splitStateActive && !splitMergeInProgress)
         {
             float remaining = Mathf.Max(0f, currentStateDuration - stateTimer);
@@ -1502,6 +1583,11 @@ public class EnemyController : MonoBehaviour
         return splitMergeInProgress;
     }
 
+    public bool IsBreachLureActive()
+    {
+        return breachLureTimer > 0f || breachAbsorbed;
+    }
+
     public Vector2 GetCurrentPosition()
     {
         return rb != null ? rb.position : (Vector2)transform.position;
@@ -1509,6 +1595,11 @@ public class EnemyController : MonoBehaviour
 
     public Vector2 GetCurrentTargetForSplitClone()
     {
+        if (breachLureTimer > 0f)
+        {
+            return breachLureTarget;
+        }
+
         if (player == null)
         {
             return GetCurrentPosition();
@@ -1584,6 +1675,40 @@ public class EnemyController : MonoBehaviour
         }
 
         splitClone = null;
+        splitMergeInProgress = false;
+        splitMergeTimer = 0f;
+        HideSplitMergeTelegraphVisual();
+    }
+
+    private void AbsorbSplitCloneIntoBreach(Vector2 breachPosition)
+    {
+        if (splitClone == null)
+        {
+            splitMergeInProgress = false;
+            splitMergeTimer = 0f;
+            return;
+        }
+
+        splitClone.AbsorbIntoBreach(breachPosition);
+        splitClone = null;
+        splitMergeInProgress = false;
+        splitMergeTimer = 0f;
+        HideSplitMergeTelegraphVisual();
+    }
+
+    private void CancelSplitMergeForBreach()
+    {
+        if (splitClone != null)
+        {
+            splitStateActive = true;
+            splitClone.SetSplitState(active: true, merging: false);
+        }
+
+        if (!splitMergeInProgress)
+        {
+            return;
+        }
+
         splitMergeInProgress = false;
         splitMergeTimer = 0f;
         HideSplitMergeTelegraphVisual();
@@ -1975,6 +2100,10 @@ public class EnemyController : MonoBehaviour
     {
         Vector2 enemyPosition = rb.position;
         Vector2 playerPosition = player.GetPosition();
+        if (breachLureTimer > 0f)
+        {
+            return breachLureTarget;
+        }
 
         switch (currentPattern)
         {

@@ -16,6 +16,7 @@ public class ArenaBreachGate : MonoBehaviour
     private float lifetime = 12f;
     private float age;
     private bool consumed;
+    private bool enemyAbsorbed;
 
     public void Configure(ArenaChaosDirector director, float lifeSeconds, Color tint, Vector2 size)
     {
@@ -55,8 +56,24 @@ public class ArenaBreachGate : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
+        SplitAnomalyCloneController clone = other != null ? other.GetComponent<SplitAnomalyCloneController>() : null;
+        if (!consumed && clone != null)
+        {
+            clone.AbsorbIntoBreach(transform.position);
+            SpawnEnterFx();
+            return;
+        }
+
         if (consumed || other == null || other.GetComponent<PlayerController>() == null)
         {
+            EnemyController enemy = other != null ? other.GetComponent<EnemyController>() : null;
+            if (!enemyAbsorbed && enemy != null)
+            {
+                enemyAbsorbed = true;
+                enemy.AbsorbIntoBreach(transform.position);
+                SpawnEnterFx();
+            }
+
             return;
         }
 

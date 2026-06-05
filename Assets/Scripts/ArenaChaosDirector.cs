@@ -60,6 +60,10 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private float breachLifetime = 16f;
     [SerializeField] private Vector2 breachGateSize = new Vector2(2.6f, 1.1f);
     [SerializeField] private int breachScoreBonus = 24;
+    [SerializeField] private float breachTelegraphSeconds = 5.2f;
+    [SerializeField] private float breachSweepDuration = 13.5f;
+    [SerializeField] private float breachEnemyGuideDuration = 6f;
+    [SerializeField] private float breachTransitionDuration = 0.85f;
     [SerializeField] private Color breachColor = new Color(1f, 0.42f, 0.78f, 1f);
 
     [Header("Spawn Rules")]
@@ -86,6 +90,9 @@ public class ArenaChaosDirector : MonoBehaviour
     private float breachTimer;
     private ArenaPowerupPickup activePickup;
     private ArenaBreachGate activeBreachGate;
+    private ArenaBreachDirectionIndicatorFx activeBreachIndicatorFx;
+    private ArenaBreachSweepFx activeBreachSweepFx;
+    private ArenaBreachTransitionFx activeBreachTransitionFx;
     private readonly List<ArenaScorePickup> activeScorePickups = new List<ArenaScorePickup>();
     private readonly List<ArenaObjectiveNode> activeObjectiveNodes = new List<ArenaObjectiveNode>();
 
@@ -101,6 +108,11 @@ public class ArenaChaosDirector : MonoBehaviour
     private int objectiveNodesTotal;
     private bool breachWasUnlocked;
     private bool breachEventActive;
+    private bool breachSweepStarted;
+    private bool breachTransitionActive;
+    private float breachTelegraphTimer;
+    private Vector2 activeBreachPosition;
+    private Vector2 activeBreachSweepDirection;
 
     private Transform runtimeRoot;
 
@@ -206,7 +218,8 @@ public class ArenaChaosDirector : MonoBehaviour
         }
         breachWasUnlocked = breachUnlocked;
 
-        if (pulseUnlocked && (enemy == null || !enemy.IsMapEventSuppressed()))
+        bool breachBlockingMapEvents = breachEventActive || breachTransitionActive;
+        if (pulseUnlocked && !breachBlockingMapEvents && (enemy == null || !enemy.IsMapEventSuppressed()))
         {
             pulseEventTimer -= Time.deltaTime;
             if (pulseEventTimer <= 0f)
@@ -220,7 +233,7 @@ public class ArenaChaosDirector : MonoBehaviour
         {
             UpdateObjectiveEvent();
         }
-        else if (objectiveUnlocked && (enemy == null || !enemy.IsMapEventSuppressed()))
+        else if (objectiveUnlocked && !breachBlockingMapEvents && (enemy == null || !enemy.IsMapEventSuppressed()))
         {
             objectiveEventTimer -= Time.deltaTime;
             if (objectiveEventTimer <= 0f)
@@ -234,7 +247,7 @@ public class ArenaChaosDirector : MonoBehaviour
         {
             UpdateBreachEvent();
         }
-        else if (breachUnlocked && !objectiveEventActive && (enemy == null || !enemy.IsMapEventSuppressed()))
+        else if (breachUnlocked && !objectiveEventActive && !breachTransitionActive && (enemy == null || !enemy.IsMapEventSuppressed()))
         {
             breachEventTimer -= Time.deltaTime;
             if (breachEventTimer <= 0f)
@@ -309,7 +322,7 @@ public class ArenaChaosDirector : MonoBehaviour
             return;
         }
 
-        CompleteBreachEvent();
+        StartCoroutine(CompleteBreachEventRoutine(activeBreachGate.transform.position));
     }
 
     private void RefreshReferences()
@@ -369,6 +382,9 @@ public class ArenaChaosDirector : MonoBehaviour
 
         activePickup = null;
         activeBreachGate = null;
+        activeBreachIndicatorFx = null;
+        activeBreachSweepFx = null;
+        activeBreachTransitionFx = null;
         activeScorePickups.Clear();
         activeObjectiveNodes.Clear();
         activeWarningLabel = string.Empty;
@@ -379,7 +395,9 @@ public class ArenaChaosDirector : MonoBehaviour
         objectiveNodesActivated = 0;
         objectiveNodesTotal = 0;
         breachEventActive = false;
+        breachSweepStarted = false;
         breachTimer = 0f;
+        breachTelegraphTimer = 0f;
     }
 
     private void SchedulePowerup()
@@ -625,12 +643,12 @@ public class ArenaChaosDirector : MonoBehaviour
 
     private void TryStartBreachEvent()
     {
-        if (breachEventActive || activeBreachGate != null || arena == null || runtimeRoot == null)
+        if (breachEventActive || breachTransitionActive || objectiveEventActive || activeBreachGate != null || arena == null || runtimeRoot == null)
         {
             return;
         }
 
-        Vector2 position = GetBreachGatePosition(out float rotationZ);
+        Vector2 position = GetBreachGatePosition(out float rotationZ, out Vector2 sweepDirection);
         GameObject go = new GameObject("SectorBreachGate");
         go.transform.SetParent(runtimeRoot, false);
         go.transform.position = new Vector3(position.x, position.y, 0f);
@@ -651,20 +669,48 @@ public class ArenaChaosDirector : MonoBehaviour
 
         breachEventActive = true;
         breachTimer = Mathf.Max(2f, breachLifetime);
-        RaiseWarning("Entra en la brecha", 2.4f);
-        RaiseEvent($"Breach abierta | {Mathf.CeilToInt(breachTimer)}s");
+        breachSweepStarted = false;
+        breachTelegraphTimer = Mathf.Max(0.4f, breachTelegraphSeconds);
+        activeBreachPosition = position;
+        activeBreachSweepDirection = sweepDirection;
+        SpawnBreachDirectionIndicator(position);
+        if (enemy != null)
+        {
+            enemy.GuideTowardBreach(position, Mathf.Max(0.5f, breachEnemyGuideDuration));
+        }
+
+        RaiseWarning("Brecha detectada", 2.2f);
+        RaiseEvent($"Sigue las flechas | {Mathf.CeilToInt(breachTelegraphTimer)}s");
     }
 
     private void UpdateBreachEvent()
     {
-        breachTimer -= Time.deltaTime;
         if (activeBreachGate == null)
         {
             FailBreachEvent();
             return;
         }
 
-        activeEventLabel = $"Entra en la brecha | {Mathf.CeilToInt(Mathf.Max(0f, breachTimer))}s";
+        if (enemy != null)
+        {
+            enemy.GuideTowardBreach(activeBreachGate.transform.position, 0.35f);
+        }
+
+        if (!breachSweepStarted)
+        {
+            breachTelegraphTimer -= Time.deltaTime;
+            activeEventLabel = $"Corre hacia la brecha | {Mathf.CeilToInt(Mathf.Max(0f, breachTelegraphTimer))}s";
+            eventLabelTimer = 0.25f;
+            if (breachTelegraphTimer <= 0f)
+            {
+                StartBreachCollapse();
+            }
+
+            return;
+        }
+
+        breachTimer -= Time.deltaTime;
+        activeEventLabel = $"Escapa del glitch | {Mathf.CeilToInt(Mathf.Max(0f, breachTimer))}s";
         eventLabelTimer = 0.25f;
 
         if (breachTimer <= 0f)
@@ -673,19 +719,50 @@ public class ArenaChaosDirector : MonoBehaviour
         }
     }
 
-    private void CompleteBreachEvent()
+    private void StartBreachCollapse()
     {
-        if (!breachEventActive)
+        if (breachSweepStarted)
         {
             return;
         }
 
+        breachSweepStarted = true;
+        breachTimer = Mathf.Max(2f, breachLifetime);
+        if (activeBreachIndicatorFx != null)
+        {
+            activeBreachIndicatorFx.FadeOutAndDestroy();
+            activeBreachIndicatorFx = null;
+        }
+
+        SpawnBreachSweep(activeBreachPosition, activeBreachSweepDirection);
+        RaiseWarning("El sector se desintegra", 2f);
+    }
+
+    private IEnumerator CompleteBreachEventRoutine(Vector2 breachPosition)
+    {
+        if (!breachEventActive || breachTransitionActive)
+        {
+            yield break;
+        }
+
+        breachTransitionActive = true;
         breachEventActive = false;
         breachTimer = 0f;
         if (activeBreachGate != null)
         {
             Destroy(activeBreachGate.gameObject);
             activeBreachGate = null;
+        }
+        if (activeBreachIndicatorFx != null)
+        {
+            activeBreachIndicatorFx.FadeOutAndDestroy();
+            activeBreachIndicatorFx = null;
+        }
+        if (activeBreachSweepFx != null)
+        {
+            activeBreachSweepFx.DisableRestoreOnDestroy();
+            Destroy(activeBreachSweepFx.gameObject);
+            activeBreachSweepFx = null;
         }
 
         ClearObjectiveNodes();
@@ -696,7 +773,14 @@ public class ArenaChaosDirector : MonoBehaviour
 
         RaiseWarning("Sector reconfigurado", 1.8f);
         RaiseEvent("Breach Complete");
+        SpawnBreachTransitionFx();
+        HideActorsForBreachTransition(breachPosition);
+        yield return new WaitForSeconds(Mathf.Max(0.1f, breachTransitionDuration));
+
         arena.GenerateBreachShift();
+        RepositionActorsAfterBreach(breachPosition);
+        activeBreachTransitionFx = null;
+        breachTransitionActive = false;
     }
 
     private void FailBreachEvent()
@@ -713,13 +797,87 @@ public class ArenaChaosDirector : MonoBehaviour
             Destroy(activeBreachGate.gameObject);
             activeBreachGate = null;
         }
+        if (activeBreachIndicatorFx != null)
+        {
+            activeBreachIndicatorFx.FadeOutAndDestroy();
+            activeBreachIndicatorFx = null;
+        }
+        if (activeBreachSweepFx != null)
+        {
+            activeBreachSweepFx.DisableRestoreOnDestroy();
+            Destroy(activeBreachSweepFx.gameObject);
+            activeBreachSweepFx = null;
+        }
 
-        RaiseWarning("Breach colapsada", 1.2f);
+        if (enemy != null)
+        {
+            enemy.ReappearFromBreach(enemy.GetCurrentPosition());
+        }
+
+        RaiseWarning("Consumido por el glitch", 1.2f);
+        if (gameManager != null && player != null)
+        {
+            gameManager.RequestPlayerDefeat(player);
+        }
     }
 
-    private Vector2 GetBreachGatePosition(out float rotationZ)
+    private void HideActorsForBreachTransition(Vector2 breachPosition)
+    {
+        if (enemy != null)
+        {
+            enemy.AbsorbIntoBreach(breachPosition);
+        }
+    }
+
+    private void RepositionActorsAfterBreach(Vector2 oldBreachPosition)
+    {
+        if (arena == null)
+        {
+            return;
+        }
+
+        float halfW = arena.ArenaWidth * 0.5f;
+        float halfH = arena.ArenaHeight * 0.5f;
+        Vector2 center = transform.position;
+        Vector2 fromCenter = oldBreachPosition - center;
+        Vector2 entryDir = fromCenter.sqrMagnitude > 0.001f ? -fromCenter.normalized : Vector2.right;
+
+        Vector2 playerPos = center + entryDir * 2.4f;
+        playerPos.x = Mathf.Clamp(playerPos.x, center.x - halfW + 2.2f, center.x + halfW - 2.2f);
+        playerPos.y = Mathf.Clamp(playerPos.y, center.y - halfH + 2.2f, center.y + halfH - 2.2f);
+
+        if (player != null)
+        {
+            player.transform.position = playerPos;
+            Rigidbody2D playerRb = player.GetComponent<Rigidbody2D>();
+            if (playerRb != null)
+            {
+                playerRb.position = playerPos;
+                playerRb.linearVelocity = Vector2.zero;
+            }
+        }
+
+        if (enemy != null)
+        {
+            Vector2 enemyPos = playerPos - entryDir * 3.4f;
+            enemyPos.x = Mathf.Clamp(enemyPos.x, center.x - halfW + 2.2f, center.x + halfW - 2.2f);
+            enemyPos.y = Mathf.Clamp(enemyPos.y, center.y - halfH + 2.2f, center.y + halfH - 2.2f);
+            enemy.ReappearFromBreach(enemyPos);
+        }
+    }
+
+    private void SpawnBreachTransitionFx()
+    {
+        GameObject fx = new GameObject("BreachSectorTransitionFx");
+        fx.transform.SetParent(runtimeRoot, false);
+        activeBreachTransitionFx = fx.AddComponent<ArenaBreachTransitionFx>();
+        activeBreachTransitionFx.Configure(arena, Mathf.Max(0.1f, breachTransitionDuration), breachColor);
+    }
+
+    private Vector2 GetBreachGatePosition(out float rotationZ, out Vector2 sweepDirection)
     {
         rotationZ = 0f;
+        sweepDirection = Vector2.right;
         if (arena == null)
         {
             return transform.position;
@@ -727,30 +885,95 @@ public class ArenaChaosDirector : MonoBehaviour
 
         float halfW = arena.ArenaWidth * 0.5f;
         float halfH = arena.ArenaHeight * 0.5f;
-        float side = Random.Range(0, 4);
         float inset = Mathf.Max(1.5f, edgePadding + 1.2f);
         Vector2 center = transform.position;
+        Vector2 playerPosition = player != null ? player.GetPosition() : center;
 
-        if (side < 1f)
+        float leftX = center.x - halfW + inset;
+        float rightX = center.x + halfW - inset;
+        float topY = center.y + halfH - inset;
+        float bottomY = center.y - halfH + inset;
+
+        float leftDistance = Mathf.Abs(playerPosition.x - leftX);
+        float rightDistance = Mathf.Abs(playerPosition.x - rightX);
+        float topDistance = Mathf.Abs(playerPosition.y - topY);
+        float bottomDistance = Mathf.Abs(playerPosition.y - bottomY);
+
+        int side = 0;
+        float best = leftDistance;
+        if (rightDistance > best)
         {
-            rotationZ = 90f;
-            return center + new Vector2(-halfW + inset, Random.Range(-halfH * 0.55f, halfH * 0.55f));
+            best = rightDistance;
+            side = 1;
+        }
+        if (topDistance > best)
+        {
+            best = topDistance;
+            side = 2;
+        }
+        if (bottomDistance > best)
+        {
+            side = 3;
         }
 
-        if (side < 2f)
+        float clampedY = Mathf.Clamp(playerPosition.y, center.y - halfH * 0.55f, center.y + halfH * 0.55f);
+        float clampedX = Mathf.Clamp(playerPosition.x, center.x - halfW * 0.55f, center.x + halfW * 0.55f);
+
+        if (side == 0)
         {
             rotationZ = 90f;
-            return center + new Vector2(halfW - inset, Random.Range(-halfH * 0.55f, halfH * 0.55f));
+            sweepDirection = Vector2.left;
+            return new Vector2(leftX, clampedY);
         }
 
-        if (side < 3f)
+        if (side == 1)
+        {
+            rotationZ = 90f;
+            sweepDirection = Vector2.right;
+            return new Vector2(rightX, clampedY);
+        }
+
+        if (side == 2)
         {
             rotationZ = 0f;
-            return center + new Vector2(Random.Range(-halfW * 0.55f, halfW * 0.55f), halfH - inset);
+            sweepDirection = Vector2.up;
+            return new Vector2(clampedX, topY);
         }
 
         rotationZ = 0f;
-        return center + new Vector2(Random.Range(-halfW * 0.55f, halfW * 0.55f), -halfH + inset);
+        sweepDirection = Vector2.down;
+        return new Vector2(clampedX, bottomY);
+    }
+
+    private void SpawnBreachSweep(Vector2 breachPosition, Vector2 sweepDirection)
+    {
+        if (arena == null || runtimeRoot == null)
+        {
+            return;
+        }
+
+        GameObject sweep = new GameObject("BreachGlitchSweep");
+        sweep.transform.SetParent(runtimeRoot, false);
+        activeBreachSweepFx = sweep.AddComponent<ArenaBreachSweepFx>();
+        activeBreachSweepFx.Configure(
+            arena,
+            breachPosition,
+            sweepDirection,
+            Mathf.Max(0.25f, breachSweepDuration),
+            breachColor);
+    }
+
+    private void SpawnBreachDirectionIndicator(Vector2 breachPosition)
+    {
+        if (player == null || runtimeRoot == null)
+        {
+            return;
+        }
+
+        GameObject indicator = new GameObject("BreachDirectionIndicator");
+        indicator.transform.SetParent(runtimeRoot, false);
+        activeBreachIndicatorFx = indicator.AddComponent<ArenaBreachDirectionIndicatorFx>();
+        activeBreachIndicatorFx.Configure(player.transform, breachPosition, Mathf.Max(0.4f, breachTelegraphSeconds), breachColor);
     }
 
     private IEnumerator SpawnPulseEventRoutine()

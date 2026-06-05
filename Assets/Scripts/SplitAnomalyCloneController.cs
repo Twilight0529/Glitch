@@ -46,6 +46,35 @@ public class SplitAnomalyCloneController : MonoBehaviour
         splitMergeActive = merging;
     }
 
+    public void AbsorbIntoBreach(Vector2 breachPosition)
+    {
+        splitStateActive = false;
+        splitMergeActive = false;
+
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector2.zero;
+        }
+
+        if (ownCollider != null)
+        {
+            ownCollider.enabled = false;
+        }
+
+        transform.position = breachPosition;
+
+        SpriteRenderer[] renderers = GetComponentsInChildren<SpriteRenderer>();
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            if (renderers[i] != null)
+            {
+                renderers[i].enabled = false;
+            }
+        }
+
+        Destroy(gameObject);
+    }
+
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
