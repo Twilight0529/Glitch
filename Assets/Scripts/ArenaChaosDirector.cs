@@ -54,6 +54,14 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private int objectiveCompleteScore = 18;
     [SerializeField] private Color objectiveNodeColor = new Color(0.50f, 0.96f, 1f, 1f);
 
+    [Header("Breach Events")]
+    [SerializeField] private bool enableBreachEvents = true;
+    [SerializeField] private Vector2 breachEventIntervalRange = new Vector2(42f, 58f);
+    [SerializeField] private float breachLifetime = 16f;
+    [SerializeField] private Vector2 breachGateSize = new Vector2(2.6f, 1.1f);
+    [SerializeField] private int breachScoreBonus = 24;
+    [SerializeField] private Color breachColor = new Color(1f, 0.42f, 0.78f, 1f);
+
     [Header("Spawn Rules")]
     [SerializeField] private float edgePadding = 1.1f;
     [SerializeField] private float actorClearance = 2.2f;
@@ -74,7 +82,10 @@ public class ArenaChaosDirector : MonoBehaviour
     private float pulseEventTimer;
     private float objectiveEventTimer;
     private float objectiveTimer;
+    private float breachEventTimer;
+    private float breachTimer;
     private ArenaPowerupPickup activePickup;
+    private ArenaBreachGate activeBreachGate;
     private readonly List<ArenaScorePickup> activeScorePickups = new List<ArenaScorePickup>();
     private readonly List<ArenaObjectiveNode> activeObjectiveNodes = new List<ArenaObjectiveNode>();
 
@@ -88,6 +99,8 @@ public class ArenaChaosDirector : MonoBehaviour
     private bool objectiveEventActive;
     private int objectiveNodesActivated;
     private int objectiveNodesTotal;
+    private bool breachWasUnlocked;
+    private bool breachEventActive;
 
     private Transform runtimeRoot;
 
@@ -103,10 +116,12 @@ public class ArenaChaosDirector : MonoBehaviour
         ClearRuntimeObjects();
         pulseWasUnlocked = false;
         objectiveWasUnlocked = false;
+        breachWasUnlocked = false;
         SchedulePowerup();
         ScheduleScorePickup();
         SchedulePulseEvent();
         ScheduleObjectiveEvent();
+        ScheduleBreachEvent();
     }
 
     private void Start()
@@ -120,10 +135,12 @@ public class ArenaChaosDirector : MonoBehaviour
         EnsureRuntimeRoot();
         pulseWasUnlocked = false;
         objectiveWasUnlocked = false;
+        breachWasUnlocked = false;
         SchedulePowerup();
         ScheduleScorePickup();
         SchedulePulseEvent();
         ScheduleObjectiveEvent();
+        ScheduleBreachEvent();
     }
 
     private void Update()
@@ -182,6 +199,13 @@ public class ArenaChaosDirector : MonoBehaviour
         }
         objectiveWasUnlocked = objectiveUnlocked;
 
+        bool breachUnlocked = ShouldRunBreachEvents();
+        if (breachUnlocked && !breachWasUnlocked)
+        {
+            breachEventTimer = Mathf.Min(breachEventTimer, 3f);
+        }
+        breachWasUnlocked = breachUnlocked;
+
         if (pulseUnlocked && (enemy == null || !enemy.IsMapEventSuppressed()))
         {
             pulseEventTimer -= Time.deltaTime;
@@ -203,6 +227,20 @@ public class ArenaChaosDirector : MonoBehaviour
             {
                 TryStartObjectiveEvent();
                 ScheduleObjectiveEvent();
+            }
+        }
+
+        if (breachEventActive)
+        {
+            UpdateBreachEvent();
+        }
+        else if (breachUnlocked && !objectiveEventActive && (enemy == null || !enemy.IsMapEventSuppressed()))
+        {
+            breachEventTimer -= Time.deltaTime;
+            if (breachEventTimer <= 0f)
+            {
+                TryStartBreachEvent();
+                ScheduleBreachEvent();
             }
         }
     }
@@ -264,6 +302,16 @@ public class ArenaChaosDirector : MonoBehaviour
         }
     }
 
+    public void NotifyBreachEntered(ArenaBreachGate gate)
+    {
+        if (!breachEventActive || gate == null || gate != activeBreachGate)
+        {
+            return;
+        }
+
+        CompleteBreachEvent();
+    }
+
     private void RefreshReferences()
     {
         if (player == null)
@@ -320,6 +368,7 @@ public class ArenaChaosDirector : MonoBehaviour
         }
 
         activePickup = null;
+        activeBreachGate = null;
         activeScorePickups.Clear();
         activeObjectiveNodes.Clear();
         activeWarningLabel = string.Empty;
@@ -329,6 +378,8 @@ public class ArenaChaosDirector : MonoBehaviour
         objectiveTimer = 0f;
         objectiveNodesActivated = 0;
         objectiveNodesTotal = 0;
+        breachEventActive = false;
+        breachTimer = 0f;
     }
 
     private void SchedulePowerup()
@@ -350,6 +401,13 @@ public class ArenaChaosDirector : MonoBehaviour
         float min = Mathf.Min(objectiveEventIntervalRange.x, objectiveEventIntervalRange.y);
         float max = Mathf.Max(objectiveEventIntervalRange.x, objectiveEventIntervalRange.y);
         objectiveEventTimer = Random.Range(min, max);
+    }
+
+    private void ScheduleBreachEvent()
+    {
+        float min = Mathf.Min(breachEventIntervalRange.x, breachEventIntervalRange.y);
+        float max = Mathf.Max(breachEventIntervalRange.x, breachEventIntervalRange.y);
+        breachEventTimer = Random.Range(min, max);
     }
 
     private void ScheduleScorePickup()
@@ -563,6 +621,136 @@ public class ArenaChaosDirector : MonoBehaviour
         }
 
         activeObjectiveNodes.Clear();
+    }
+
+    private void TryStartBreachEvent()
+    {
+        if (breachEventActive || activeBreachGate != null || arena == null || runtimeRoot == null)
+        {
+            return;
+        }
+
+        Vector2 position = GetBreachGatePosition(out float rotationZ);
+        GameObject go = new GameObject("SectorBreachGate");
+        go.transform.SetParent(runtimeRoot, false);
+        go.transform.position = new Vector3(position.x, position.y, 0f);
+        go.transform.rotation = Quaternion.Euler(0f, 0f, rotationZ);
+
+        SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = SquareSpriteProvider.Get();
+        sr.drawMode = SpriteDrawMode.Sliced;
+        sr.size = breachGateSize;
+        sr.sortingOrder = 16;
+
+        BoxCollider2D col = go.AddComponent<BoxCollider2D>();
+        col.isTrigger = true;
+        col.size = breachGateSize;
+
+        activeBreachGate = go.AddComponent<ArenaBreachGate>();
+        activeBreachGate.Configure(this, Mathf.Max(2f, breachLifetime), breachColor, breachGateSize);
+
+        breachEventActive = true;
+        breachTimer = Mathf.Max(2f, breachLifetime);
+        RaiseWarning("Entra en la brecha", 2.4f);
+        RaiseEvent($"Breach abierta | {Mathf.CeilToInt(breachTimer)}s");
+    }
+
+    private void UpdateBreachEvent()
+    {
+        breachTimer -= Time.deltaTime;
+        if (activeBreachGate == null)
+        {
+            FailBreachEvent();
+            return;
+        }
+
+        activeEventLabel = $"Entra en la brecha | {Mathf.CeilToInt(Mathf.Max(0f, breachTimer))}s";
+        eventLabelTimer = 0.25f;
+
+        if (breachTimer <= 0f)
+        {
+            FailBreachEvent();
+        }
+    }
+
+    private void CompleteBreachEvent()
+    {
+        if (!breachEventActive)
+        {
+            return;
+        }
+
+        breachEventActive = false;
+        breachTimer = 0f;
+        if (activeBreachGate != null)
+        {
+            Destroy(activeBreachGate.gameObject);
+            activeBreachGate = null;
+        }
+
+        ClearObjectiveNodes();
+        if (gameManager != null)
+        {
+            gameManager.AddScore(Mathf.Max(0, breachScoreBonus));
+        }
+
+        RaiseWarning("Sector reconfigurado", 1.8f);
+        RaiseEvent("Breach Complete");
+        arena.GenerateBreachShift();
+    }
+
+    private void FailBreachEvent()
+    {
+        if (!breachEventActive)
+        {
+            return;
+        }
+
+        breachEventActive = false;
+        breachTimer = 0f;
+        if (activeBreachGate != null)
+        {
+            Destroy(activeBreachGate.gameObject);
+            activeBreachGate = null;
+        }
+
+        RaiseWarning("Breach colapsada", 1.2f);
+    }
+
+    private Vector2 GetBreachGatePosition(out float rotationZ)
+    {
+        rotationZ = 0f;
+        if (arena == null)
+        {
+            return transform.position;
+        }
+
+        float halfW = arena.ArenaWidth * 0.5f;
+        float halfH = arena.ArenaHeight * 0.5f;
+        float side = Random.Range(0, 4);
+        float inset = Mathf.Max(1.5f, edgePadding + 1.2f);
+        Vector2 center = transform.position;
+
+        if (side < 1f)
+        {
+            rotationZ = 90f;
+            return center + new Vector2(-halfW + inset, Random.Range(-halfH * 0.55f, halfH * 0.55f));
+        }
+
+        if (side < 2f)
+        {
+            rotationZ = 90f;
+            return center + new Vector2(halfW - inset, Random.Range(-halfH * 0.55f, halfH * 0.55f));
+        }
+
+        if (side < 3f)
+        {
+            rotationZ = 0f;
+            return center + new Vector2(Random.Range(-halfW * 0.55f, halfW * 0.55f), halfH - inset);
+        }
+
+        rotationZ = 0f;
+        return center + new Vector2(Random.Range(-halfW * 0.55f, halfW * 0.55f), -halfH + inset);
     }
 
     private IEnumerator SpawnPulseEventRoutine()
@@ -834,5 +1022,10 @@ public class ArenaChaosDirector : MonoBehaviour
     private bool ShouldRunObjectiveEvents()
     {
         return enableObjectiveEvents && gameManager != null && gameManager.AreMapEventsUnlocked;
+    }
+
+    private bool ShouldRunBreachEvents()
+    {
+        return enableBreachEvents && gameManager != null && gameManager.AreMapEventsUnlocked;
     }
 }

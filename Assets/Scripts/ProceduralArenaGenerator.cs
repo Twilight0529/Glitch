@@ -135,7 +135,18 @@ public class ProceduralArenaGenerator : MonoBehaviour
     public void GenerateNow()
     {
         InitializeRandom();
-        activeTheme = SelectTheme();
+        GenerateTheme(SelectTheme());
+    }
+
+    public void GenerateBreachShift()
+    {
+        InitializeRandom();
+        GenerateTheme(SelectDifferentTheme(activeTheme));
+    }
+
+    private void GenerateTheme(ArenaTheme theme)
+    {
+        activeTheme = theme;
         hasLastGeneratedTheme = true;
         lastGeneratedTheme = activeTheme;
         palette = GetPalette(activeTheme);
@@ -181,6 +192,33 @@ public class ProceduralArenaGenerator : MonoBehaviour
         // Los controladores de tema se agregan despues de crear la geometria para guardar referencias seguras.
         ConfigureThemeMapEvents(obstaclesRoot, dynamicRoot);
         ConfigureChaosSystems();
+    }
+
+    private ArenaTheme SelectDifferentTheme(ArenaTheme current)
+    {
+        Array values = Enum.GetValues(typeof(ArenaTheme));
+        int count = values.Length;
+        if (count <= 1)
+        {
+            return current;
+        }
+
+        ArenaTheme selected = current;
+        int safety = 0;
+        while (selected == current && safety < 16)
+        {
+            selected = (ArenaTheme)values.GetValue(rng.Next(0, count));
+            safety++;
+        }
+
+        if (selected == current)
+        {
+            int currentIndex = Array.IndexOf(values, current);
+            int fallbackIndex = (currentIndex + 1) % count;
+            selected = (ArenaTheme)values.GetValue(fallbackIndex);
+        }
+
+        return selected;
     }
 
     public void SetRuntimeReferences(Transform player, Transform anomaly)
