@@ -44,6 +44,16 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private float pulseEnemyBoostCooldown = 0.33f;
     [SerializeField] private Color pulseColor = new Color(1f, 0.38f, 0.53f, 0.92f);
 
+    [Header("Objective Events")]
+    [SerializeField] private bool enableObjectiveEvents = true;
+    [SerializeField] private Vector2 objectiveEventIntervalRange = new Vector2(24f, 34f);
+    [SerializeField] private int objectiveNodeCount = 3;
+    [SerializeField] private float objectiveNodeLifetime = 18f;
+    [SerializeField] private float objectiveNodeActivationSeconds = 1.15f;
+    [SerializeField] private float objectiveNodeProbeRadius = 0.7f;
+    [SerializeField] private int objectiveCompleteScore = 18;
+    [SerializeField] private Color objectiveNodeColor = new Color(0.50f, 0.96f, 1f, 1f);
+
     [Header("Spawn Rules")]
     [SerializeField] private float edgePadding = 1.1f;
     [SerializeField] private float actorClearance = 2.2f;
@@ -62,8 +72,11 @@ public class ArenaChaosDirector : MonoBehaviour
     private float powerupTimer;
     private float scorePickupTimer;
     private float pulseEventTimer;
+    private float objectiveEventTimer;
+    private float objectiveTimer;
     private ArenaPowerupPickup activePickup;
     private readonly List<ArenaScorePickup> activeScorePickups = new List<ArenaScorePickup>();
+    private readonly List<ArenaObjectiveNode> activeObjectiveNodes = new List<ArenaObjectiveNode>();
 
     private string activeEventLabel = string.Empty;
     private float eventLabelTimer;
@@ -71,6 +84,10 @@ public class ArenaChaosDirector : MonoBehaviour
     private float warningTimer;
     private float warningDuration;
     private bool pulseWasUnlocked;
+    private bool objectiveWasUnlocked;
+    private bool objectiveEventActive;
+    private int objectiveNodesActivated;
+    private int objectiveNodesTotal;
 
     private Transform runtimeRoot;
 
@@ -85,9 +102,11 @@ public class ArenaChaosDirector : MonoBehaviour
         EnsureRuntimeRoot();
         ClearRuntimeObjects();
         pulseWasUnlocked = false;
+        objectiveWasUnlocked = false;
         SchedulePowerup();
         ScheduleScorePickup();
         SchedulePulseEvent();
+        ScheduleObjectiveEvent();
     }
 
     private void Start()
@@ -100,9 +119,11 @@ public class ArenaChaosDirector : MonoBehaviour
         RefreshReferences();
         EnsureRuntimeRoot();
         pulseWasUnlocked = false;
+        objectiveWasUnlocked = false;
         SchedulePowerup();
         ScheduleScorePickup();
         SchedulePulseEvent();
+        ScheduleObjectiveEvent();
     }
 
     private void Update()
@@ -154,6 +175,13 @@ public class ArenaChaosDirector : MonoBehaviour
         }
         pulseWasUnlocked = pulseUnlocked;
 
+        bool objectiveUnlocked = ShouldRunObjectiveEvents();
+        if (objectiveUnlocked && !objectiveWasUnlocked)
+        {
+            objectiveEventTimer = Mathf.Min(objectiveEventTimer, 1.5f);
+        }
+        objectiveWasUnlocked = objectiveUnlocked;
+
         if (pulseUnlocked && (enemy == null || !enemy.IsMapEventSuppressed()))
         {
             pulseEventTimer -= Time.deltaTime;
@@ -161,6 +189,20 @@ public class ArenaChaosDirector : MonoBehaviour
             {
                 StartCoroutine(SpawnPulseEventRoutine());
                 SchedulePulseEvent();
+            }
+        }
+
+        if (objectiveEventActive)
+        {
+            UpdateObjectiveEvent();
+        }
+        else if (objectiveUnlocked && (enemy == null || !enemy.IsMapEventSuppressed()))
+        {
+            objectiveEventTimer -= Time.deltaTime;
+            if (objectiveEventTimer <= 0f)
+            {
+                TryStartObjectiveEvent();
+                ScheduleObjectiveEvent();
             }
         }
     }
@@ -203,6 +245,23 @@ public class ArenaChaosDirector : MonoBehaviour
         }
 
         activeScorePickups.Remove(pickup);
+    }
+
+    public void NotifyObjectiveNodeActivated(ArenaObjectiveNode node)
+    {
+        if (!objectiveEventActive || node == null)
+        {
+            return;
+        }
+
+        activeObjectiveNodes.Remove(node);
+        objectiveNodesActivated++;
+        RaiseEvent($"Node {objectiveNodesActivated}/{Mathf.Max(1, objectiveNodesTotal)} Synced");
+
+        if (activeObjectiveNodes.Count <= 0)
+        {
+            CompleteObjectiveEvent();
+        }
     }
 
     private void RefreshReferences()
@@ -262,9 +321,14 @@ public class ArenaChaosDirector : MonoBehaviour
 
         activePickup = null;
         activeScorePickups.Clear();
+        activeObjectiveNodes.Clear();
         activeWarningLabel = string.Empty;
         warningTimer = 0f;
         warningDuration = 0f;
+        objectiveEventActive = false;
+        objectiveTimer = 0f;
+        objectiveNodesActivated = 0;
+        objectiveNodesTotal = 0;
     }
 
     private void SchedulePowerup()
@@ -279,6 +343,13 @@ public class ArenaChaosDirector : MonoBehaviour
         float min = Mathf.Min(pulseEventIntervalRange.x, pulseEventIntervalRange.y);
         float max = Mathf.Max(pulseEventIntervalRange.x, pulseEventIntervalRange.y);
         pulseEventTimer = Random.Range(min, max);
+    }
+
+    private void ScheduleObjectiveEvent()
+    {
+        float min = Mathf.Min(objectiveEventIntervalRange.x, objectiveEventIntervalRange.y);
+        float max = Mathf.Max(objectiveEventIntervalRange.x, objectiveEventIntervalRange.y);
+        objectiveEventTimer = Random.Range(min, max);
     }
 
     private void ScheduleScorePickup()
@@ -367,6 +438,131 @@ public class ArenaChaosDirector : MonoBehaviour
             pickup.Configure(this, gameManager, Mathf.Max(1, scorePickupPoints), scorePickupLifetime);
             activeScorePickups.Add(pickup);
         }
+    }
+
+    private void TryStartObjectiveEvent()
+    {
+        if (objectiveEventActive || runtimeRoot == null)
+        {
+            return;
+        }
+
+        int desiredCount = Mathf.Max(1, objectiveNodeCount);
+        activeObjectiveNodes.Clear();
+        objectiveNodesActivated = 0;
+        objectiveNodesTotal = 0;
+
+        for (int i = 0; i < desiredCount; i++)
+        {
+            if (!TryFindSpawnPoint(Mathf.Max(0.35f, objectiveNodeProbeRadius), out Vector2 position))
+            {
+                continue;
+            }
+
+            GameObject go = new GameObject($"ObjectiveNode_{i}");
+            go.transform.SetParent(runtimeRoot, false);
+            go.transform.position = new Vector3(position.x, position.y, 0f);
+            go.transform.localScale = Vector3.one;
+
+            SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = CircleSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.size = Vector2.one * 0.82f;
+            sr.sortingOrder = 12;
+
+            CircleCollider2D col = go.AddComponent<CircleCollider2D>();
+            col.isTrigger = true;
+            col.radius = 0.55f;
+
+            ArenaObjectiveNode node = go.AddComponent<ArenaObjectiveNode>();
+            node.Configure(
+                this,
+                Mathf.Max(0.2f, objectiveNodeActivationSeconds),
+                Mathf.Max(2f, objectiveNodeLifetime),
+                objectiveNodeColor);
+            activeObjectiveNodes.Add(node);
+        }
+
+        if (activeObjectiveNodes.Count <= 0)
+        {
+            objectiveEventActive = false;
+            return;
+        }
+
+        objectiveEventActive = true;
+        objectiveTimer = Mathf.Max(2f, objectiveNodeLifetime);
+        objectiveNodesTotal = activeObjectiveNodes.Count;
+        RaiseWarning("Containment Sync Required", 1.4f);
+        RaiseEvent($"Sync Nodes 0/{activeObjectiveNodes.Count}");
+    }
+
+    private void UpdateObjectiveEvent()
+    {
+        objectiveTimer -= Time.deltaTime;
+        activeObjectiveNodes.RemoveAll(n => n == null);
+        activeEventLabel = $"Sync {objectiveNodesActivated}/{Mathf.Max(1, objectiveNodesTotal)} | {Mathf.CeilToInt(Mathf.Max(0f, objectiveTimer))}s";
+        eventLabelTimer = 0.25f;
+
+        if (activeObjectiveNodes.Count <= 0)
+        {
+            CompleteObjectiveEvent();
+            return;
+        }
+
+        if (objectiveTimer <= 0f)
+        {
+            FailObjectiveEvent();
+        }
+    }
+
+    private void CompleteObjectiveEvent()
+    {
+        if (!objectiveEventActive)
+        {
+            return;
+        }
+
+        objectiveEventActive = false;
+        objectiveTimer = 0f;
+        objectiveNodesTotal = 0;
+        ClearObjectiveNodes();
+        if (gameManager != null)
+        {
+            gameManager.AddScore(Mathf.Max(0, objectiveCompleteScore));
+        }
+
+        RaiseEvent("Containment Synced");
+    }
+
+    private void FailObjectiveEvent()
+    {
+        if (!objectiveEventActive)
+        {
+            return;
+        }
+
+        objectiveEventActive = false;
+        objectiveTimer = 0f;
+        objectiveNodesTotal = 0;
+        ClearObjectiveNodes();
+        RaiseWarning("Sync Failed", 1.2f);
+    }
+
+    private void ClearObjectiveNodes()
+    {
+        for (int i = activeObjectiveNodes.Count - 1; i >= 0; i--)
+        {
+            ArenaObjectiveNode node = activeObjectiveNodes[i];
+            if (node == null)
+            {
+                activeObjectiveNodes.RemoveAt(i);
+                continue;
+            }
+
+            Destroy(node.gameObject);
+        }
+
+        activeObjectiveNodes.Clear();
     }
 
     private IEnumerator SpawnPulseEventRoutine()
@@ -633,5 +829,10 @@ public class ArenaChaosDirector : MonoBehaviour
     private bool ShouldRunPulseEvents()
     {
         return enablePulseEvents && gameManager != null && gameManager.IsContainmentPulseUnlocked;
+    }
+
+    private bool ShouldRunObjectiveEvents()
+    {
+        return enableObjectiveEvents && gameManager != null && gameManager.AreMapEventsUnlocked;
     }
 }
