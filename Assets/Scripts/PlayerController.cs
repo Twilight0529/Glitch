@@ -19,6 +19,16 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float shieldPulseSpeed = 7.2f;
     [SerializeField] private float shieldRadius = 0.72f;
 
+    [Header("Firewall Parry")]
+    [SerializeField] private float parryActiveDuration = 0.16f;
+    [SerializeField] private float parryCooldown = 0.85f;
+    [SerializeField] private float parryRadius = 0.95f;
+    [SerializeField] private Color parryReadyColor = new Color(0.46f, 0.96f, 1f, 0.62f);
+    [SerializeField] private Color parrySuccessColor = new Color(1f, 0.96f, 0.64f, 1f);
+    [SerializeField] private float parryFxRadius = 1.65f;
+    [SerializeField] private float parryFxDuration = 0.2f;
+    [SerializeField] private int parryFxRayCount = 12;
+
     [Header("Movement Trail")]
     [SerializeField] private bool enableMovementTrail = true;
     [SerializeField] private Color trailColor = new Color(0.42f, 0.92f, 1f, 0.85f);
@@ -54,6 +64,10 @@ public class PlayerController : MonoBehaviour
     private float shieldTimer;
     private SpriteRenderer shieldRenderer;
     private GameObject shieldVisual;
+    private float parryTimer;
+    private float parryCooldownTimer;
+    private SpriteRenderer parryRenderer;
+    private GameObject parryVisual;
     private ParticleSystem movementTrail;
     private bool deathSequenceActive;
     private Color baseBodyColor = Color.white;
@@ -65,6 +79,7 @@ public class PlayerController : MonoBehaviour
     public bool HasShield => shieldTimer > 0f;
     public bool HasSpeedBoost => speedBoostTimer > 0f;
     public bool HasMovementSlow => movementSlowTimer > 0f;
+    public bool IsParryActive => parryTimer > 0f;
     public string ActivePowerupLabel
     {
         get
@@ -123,6 +138,7 @@ public class PlayerController : MonoBehaviour
         }
 
         EnsureShieldVisual();
+        EnsureParryVisual();
         EnsureMovementTrail();
     }
 
@@ -136,6 +152,15 @@ public class PlayerController : MonoBehaviour
 
         UpdatePowerupTimers();
         UpdateShieldVisual();
+        UpdateParryTimers();
+        UpdateParryVisual();
+
+        if (WasParryPressed() && parryCooldownTimer <= 0f)
+        {
+            StartParry();
+        }
+
+        ScanParryWindow();
 
         moveInput = ReadMoveInput().normalized;
         float effectiveSpeed = moveSpeed;
@@ -150,6 +175,28 @@ public class PlayerController : MonoBehaviour
 
         rb.linearVelocity = moveInput * effectiveSpeed;
         UpdateMovementTrail(Mathf.Max(0.01f, effectiveSpeed));
+    }
+
+    private static bool WasParryPressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        Mouse mouse = Mouse.current;
+        if (keyboard != null && (keyboard.spaceKey.wasPressedThisFrame || keyboard.eKey.wasPressedThisFrame))
+        {
+            return true;
+        }
+
+        if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+        {
+            return true;
+        }
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.E) || Input.GetMouseButtonDown(0);
+#else
+        return false;
+#endif
     }
 
     private static Vector2 ReadMoveInput()
@@ -169,7 +216,11 @@ public class PlayerController : MonoBehaviour
             return new Vector2(horizontal, vertical);
         }
 #endif
+#if ENABLE_LEGACY_INPUT_MANAGER
         return new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+#else
+        return Vector2.zero;
+#endif
     }
 
     public Vector2 GetPosition()
@@ -210,6 +261,24 @@ public class PlayerController : MonoBehaviour
 
         shieldTimer = 0f;
         SpawnShieldBreakFx();
+        return true;
+    }
+
+    public bool TryParryHit(Vector2 threatPosition, out Vector2 parryDirection)
+    {
+        parryDirection = ((Vector2)transform.position - threatPosition).sqrMagnitude > 0.0001f
+            ? ((Vector2)transform.position - threatPosition).normalized
+            : Vector2.right;
+
+        if (deathSequenceActive || parryTimer <= 0f)
+        {
+            return false;
+        }
+
+        parryDirection = -parryDirection;
+        parryTimer = 0f;
+        parryCooldownTimer = Mathf.Max(parryCooldownTimer, Mathf.Max(0.05f, parryCooldown * 0.55f));
+        SpawnParrySuccessFx(parryDirection);
         return true;
     }
 
@@ -257,6 +326,66 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    private void UpdateParryTimers()
+    {
+        if (parryTimer > 0f)
+        {
+            parryTimer -= Time.deltaTime;
+            if (parryTimer < 0f)
+            {
+                parryTimer = 0f;
+            }
+        }
+
+        if (parryCooldownTimer > 0f)
+        {
+            parryCooldownTimer -= Time.deltaTime;
+            if (parryCooldownTimer < 0f)
+            {
+                parryCooldownTimer = 0f;
+            }
+        }
+    }
+
+    private void StartParry()
+    {
+        parryTimer = Mathf.Max(0.04f, parryActiveDuration);
+        parryCooldownTimer = Mathf.Max(0.05f, parryCooldown);
+        SpawnParryStartFx();
+    }
+
+    private void ScanParryWindow()
+    {
+        if (parryTimer <= 0f)
+        {
+            return;
+        }
+
+        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, Mathf.Max(0.1f, parryRadius));
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider2D hit = hits[i];
+            if (hit == null || hit == bodyCollider)
+            {
+                continue;
+            }
+
+            AnomalyProjectile projectile = hit.GetComponent<AnomalyProjectile>();
+            if (projectile != null && TryParryHit(projectile.transform.position, out _))
+            {
+                projectile.TryReflectByParry(transform.position);
+                return;
+            }
+
+            EnemyController enemy = hit.GetComponent<EnemyController>();
+            if (enemy != null && TryParryHit(enemy.transform.position, out Vector2 parryDirection))
+            {
+                enemy.ApplyParryImpact(GetPosition(), parryDirection);
+                return;
+            }
+        }
+    }
+
     private void EnsureShieldVisual()
     {
         if (shieldVisual != null)
@@ -276,6 +405,27 @@ public class PlayerController : MonoBehaviour
         shieldRenderer.sortingOrder = 9;
         shieldRenderer.color = new Color(shieldColor.r, shieldColor.g, shieldColor.b, 0f);
         shieldVisual.SetActive(false);
+    }
+
+    private void EnsureParryVisual()
+    {
+        if (parryVisual != null)
+        {
+            return;
+        }
+
+        parryVisual = new GameObject("ParryWindowVisual");
+        parryVisual.transform.SetParent(transform, false);
+        parryVisual.transform.localPosition = Vector3.zero;
+        parryVisual.transform.localScale = Vector3.one;
+
+        parryRenderer = parryVisual.AddComponent<SpriteRenderer>();
+        parryRenderer.sprite = CircleSpriteProvider.Get();
+        parryRenderer.drawMode = SpriteDrawMode.Sliced;
+        parryRenderer.size = Vector2.one * Mathf.Max(0.25f, parryRadius * 2f);
+        parryRenderer.sortingOrder = 10;
+        parryRenderer.color = new Color(parryReadyColor.r, parryReadyColor.g, parryReadyColor.b, 0f);
+        parryVisual.SetActive(false);
     }
 
     private void UpdateShieldVisual()
@@ -305,6 +455,34 @@ public class PlayerController : MonoBehaviour
         c.a = Mathf.Lerp(0.24f, 0.64f, pulse);
         shieldRenderer.color = c;
         shieldVisual.transform.localScale = Vector3.one * Mathf.Lerp(0.96f, 1.05f, pulse);
+    }
+
+    private void UpdateParryVisual()
+    {
+        if (parryVisual == null || parryRenderer == null)
+        {
+            return;
+        }
+
+        if (parryTimer <= 0f)
+        {
+            if (parryVisual.activeSelf)
+            {
+                parryVisual.SetActive(false);
+            }
+
+            return;
+        }
+
+        if (!parryVisual.activeSelf)
+        {
+            parryVisual.SetActive(true);
+        }
+
+        float t = Mathf.Clamp01(parryTimer / Mathf.Max(0.01f, parryActiveDuration));
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 34f);
+        parryRenderer.color = new Color(parryReadyColor.r, parryReadyColor.g, parryReadyColor.b, Mathf.Lerp(0.08f, 0.58f, t) * (0.8f + pulse * 0.2f));
+        parryVisual.transform.localScale = Vector3.one * Mathf.Lerp(1.2f, 0.88f, t);
     }
 
     private void EnsureMovementTrail()
@@ -405,6 +583,8 @@ public class PlayerController : MonoBehaviour
         movementSlowTimer = 0f;
         movementSlowMultiplier = 1f;
         shieldTimer = 0f;
+        parryTimer = 0f;
+        parryCooldownTimer = 0f;
 
         if (rb != null)
         {
@@ -419,6 +599,11 @@ public class PlayerController : MonoBehaviour
         if (shieldVisual != null)
         {
             shieldVisual.SetActive(false);
+        }
+
+        if (parryVisual != null)
+        {
+            parryVisual.SetActive(false);
         }
 
         if (movementTrail != null)
@@ -657,6 +842,78 @@ public class PlayerController : MonoBehaviour
             ray.transform.localScale = new Vector3(0.2f, 0.07f, 1f);
             ray.AddComponent<PlayerShieldBreakRayFx>().Configure(sr, dir, shieldBreakBurstRadius, shieldBreakBurstDuration);
             Destroy(ray, Mathf.Max(0.12f, shieldBreakBurstDuration + 0.08f));
+        }
+    }
+
+    private void SpawnParryStartFx()
+    {
+        GameObject ring = new GameObject("ParryStartRingFx");
+        ring.transform.position = transform.position;
+        SpriteRenderer ringRenderer = ring.AddComponent<SpriteRenderer>();
+        ringRenderer.sprite = CircleSpriteProvider.Get();
+        ringRenderer.color = new Color(parryReadyColor.r, parryReadyColor.g, parryReadyColor.b, 0.48f);
+        ringRenderer.sortingOrder = 15;
+        ring.transform.localScale = Vector3.one * 0.28f;
+        ring.AddComponent<PlayerParryBurstFx>().Configure(ringRenderer, Mathf.Max(0.25f, parryRadius), Mathf.Max(0.06f, parryActiveDuration), parryReadyColor);
+        Destroy(ring, Mathf.Max(0.1f, parryActiveDuration + 0.06f));
+    }
+
+    private void SpawnParrySuccessFx(Vector2 direction)
+    {
+        Color burst = parrySuccessColor;
+        GameObject ring = new GameObject("ParrySuccessRingFx");
+        ring.transform.position = transform.position;
+        SpriteRenderer ringRenderer = ring.AddComponent<SpriteRenderer>();
+        ringRenderer.sprite = CircleSpriteProvider.Get();
+        ringRenderer.color = new Color(burst.r, burst.g, burst.b, 0.96f);
+        ringRenderer.sortingOrder = 17;
+        ring.transform.localScale = Vector3.one * 0.34f;
+        ring.AddComponent<PlayerParryBurstFx>().Configure(ringRenderer, Mathf.Max(0.3f, parryFxRadius), Mathf.Max(0.08f, parryFxDuration), burst);
+        Destroy(ring, Mathf.Max(0.12f, parryFxDuration + 0.08f));
+
+        int rays = Mathf.Max(4, parryFxRayCount);
+        for (int i = 0; i < rays; i++)
+        {
+            float spread = Random.Range(-38f, 38f);
+            Vector3 baseDir = direction.sqrMagnitude > 0.001f ? (Vector3)direction.normalized : Vector3.right;
+            Vector2 rayDir = Quaternion.Euler(0f, 0f, spread) * baseDir;
+            GameObject ray = new GameObject($"ParrySuccessRay_{i}");
+            ray.transform.position = transform.position;
+            SpriteRenderer sr = ray.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.color = burst;
+            sr.sortingOrder = 17;
+            ray.transform.localScale = new Vector3(0.26f, 0.08f, 1f);
+            ray.AddComponent<PlayerShieldBreakRayFx>().Configure(sr, rayDir, parryFxRadius, parryFxDuration);
+            Destroy(ray, Mathf.Max(0.12f, parryFxDuration + 0.08f));
+        }
+    }
+}
+
+public class PlayerParryBurstFx : MonoBehaviour
+{
+    private SpriteRenderer spriteRenderer;
+    private float radius = 1f;
+    private float life = 0.2f;
+    private Color baseColor = Color.white;
+    private float age;
+
+    public void Configure(SpriteRenderer rendererRef, float maxRadius, float duration, Color tint)
+    {
+        spriteRenderer = rendererRef;
+        radius = Mathf.Max(0.15f, maxRadius);
+        life = Mathf.Max(0.06f, duration);
+        baseColor = tint;
+    }
+
+    private void Update()
+    {
+        age += Time.deltaTime;
+        float t = Mathf.Clamp01(age / life);
+        transform.localScale = Vector3.one * Mathf.Lerp(0.24f, radius, t);
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.color = new Color(baseColor.r, baseColor.g, baseColor.b, Mathf.Lerp(0.85f, 0f, t));
         }
     }
 }

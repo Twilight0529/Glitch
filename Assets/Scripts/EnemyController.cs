@@ -205,6 +205,13 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private int blockedOscillationThreshold = 3;
     [SerializeField] private float blockedOscillationResetSeconds = 1.2f;
 
+    [Header("Player Parry Reaction")]
+    [SerializeField] private float parryStunDuration = 0.34f;
+    [SerializeField] private float parryKnockbackDuration = 0.16f;
+    [SerializeField] private float parryKnockbackSpeed = 12f;
+    [SerializeField] private float parryBurstRadius = 1.45f;
+    [SerializeField] private float parryBurstDuration = 0.22f;
+
     private Rigidbody2D rb;
     private Collider2D ownCollider;
     private SpriteRenderer ownRenderer;
@@ -245,6 +252,8 @@ public class EnemyController : MonoBehaviour
     private float stateTransitionBurstCooldownTimer;
     private float externalSpeedTimer;
     private float externalSpeedMultiplier = 1f;
+    private float parryStunTimer;
+    private float parryKnockbackTimer;
     private Vector3 baseScale = Vector3.one;
     private Color baseColor = Color.white;
 
@@ -414,6 +423,11 @@ public class EnemyController : MonoBehaviour
         if (stateTransitionBurstCooldownTimer > 0f)
         {
             stateTransitionBurstCooldownTimer -= Time.deltaTime;
+        }
+
+        if (TickParryStun())
+        {
+            return;
         }
 
         if (splitMergeInProgress && splitClone != null)
@@ -1140,6 +1154,40 @@ public class EnemyController : MonoBehaviour
         }
     }
 
+    private void SpawnParryImpactBurst()
+    {
+        Color burstColor = new Color(1f, 0.94f, 0.58f, 1f);
+        int rays = Mathf.Max(6, stateTransitionBurstRayCount);
+        float duration = Mathf.Max(0.08f, parryBurstDuration);
+        float radius = Mathf.Max(0.25f, parryBurstRadius);
+        Vector3 pos = transform.position;
+
+        GameObject ring = new GameObject("AnomalyParryImpactRing");
+        ring.transform.position = pos;
+        SpriteRenderer ringRenderer = ring.AddComponent<SpriteRenderer>();
+        ringRenderer.sprite = CircleSpriteProvider.Get();
+        ringRenderer.sortingOrder = 16;
+        ringRenderer.color = new Color(burstColor.r, burstColor.g, burstColor.b, 0.9f);
+        ring.transform.localScale = Vector3.one * 0.22f;
+        ring.AddComponent<AnomalyStateBurstFx>().Configure(ringRenderer, radius, duration, burstColor);
+        Destroy(ring, duration + 0.12f);
+
+        for (int i = 0; i < rays; i++)
+        {
+            float angle = ((Mathf.PI * 2f) * i) / rays + Random.Range(-0.12f, 0.12f);
+            Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            GameObject ray = new GameObject($"AnomalyParryImpactRay_{i}");
+            ray.transform.position = pos;
+            SpriteRenderer sr = ray.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.sortingOrder = 16;
+            sr.color = burstColor;
+            ray.transform.localScale = new Vector3(0.25f, 0.08f, 1f);
+            ray.AddComponent<AnomalyStateRayFx>().Configure(sr, dir, radius, duration);
+            Destroy(ray, duration + 0.12f);
+        }
+    }
+
     private static Color GetStateColor(AnomalyState state)
     {
         switch (state)
@@ -1480,6 +1528,42 @@ public class EnemyController : MonoBehaviour
     public bool CanDamagePlayer()
     {
         return gameManager != null && gameManager.IsRunActive && !gameManager.IsGameOver;
+    }
+
+    public void ApplyParryImpact(Vector2 impactPosition, Vector2 pushDirection)
+    {
+        Vector2 direction = pushDirection.sqrMagnitude > 0.0001f
+            ? pushDirection.normalized
+            : ((Vector2)transform.position - impactPosition).normalized;
+
+        if (direction.sqrMagnitude < 0.0001f)
+        {
+            direction = -lastMoveDirection;
+        }
+
+        parryStunTimer = Mathf.Max(parryStunTimer, Mathf.Max(0.04f, parryStunDuration));
+        parryKnockbackTimer = Mathf.Max(0.02f, parryKnockbackDuration);
+        rb.linearVelocity = direction * Mathf.Max(0.1f, parryKnockbackSpeed);
+        TriggerStatePulse();
+        SpawnParryImpactBurst();
+    }
+
+    private bool TickParryStun()
+    {
+        if (parryStunTimer <= 0f)
+        {
+            return false;
+        }
+
+        parryStunTimer -= Time.deltaTime;
+        parryKnockbackTimer -= Time.deltaTime;
+
+        if (parryKnockbackTimer <= 0f)
+        {
+            rb.linearVelocity = Vector2.MoveTowards(rb.linearVelocity, Vector2.zero, velocityResponsiveness * 1.8f * Time.deltaTime);
+        }
+
+        return true;
     }
 
     private void DestroySplitCloneImmediate()
@@ -2781,6 +2865,12 @@ public class EnemyController : MonoBehaviour
         PlayerController hitPlayer = collision.collider.GetComponent<PlayerController>();
         if (hitPlayer != null)
         {
+            if (hitPlayer.TryParryHit(rb.position, out Vector2 parryDirection))
+            {
+                ApplyParryImpact(hitPlayer.GetPosition(), parryDirection);
+                return;
+            }
+
             if (hitPlayer.TryAbsorbHit())
             {
                 return;
@@ -2812,6 +2902,12 @@ public class EnemyController : MonoBehaviour
         PlayerController hitPlayer = other.GetComponent<PlayerController>();
         if (hitPlayer != null)
         {
+            if (hitPlayer.TryParryHit(rb.position, out Vector2 parryDirection))
+            {
+                ApplyParryImpact(hitPlayer.GetPosition(), parryDirection);
+                return;
+            }
+
             if (hitPlayer.TryAbsorbHit())
             {
                 return;
