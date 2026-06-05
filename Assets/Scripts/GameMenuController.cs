@@ -87,6 +87,8 @@ public class GameMenuController : MonoBehaviour
             gameManager = FindAnyObjectByType<GameManager>();
         }
 
+        RefreshCursorVisibility();
+
         if (gameManager != null && gameManager.IsGameOver && state != OverlayState.Defeat)
         {
             SetState(OverlayState.Defeat);
@@ -176,7 +178,14 @@ public class GameMenuController : MonoBehaviour
         bool runCanAdvance = gameManager == null || gameManager.IsRunActive;
         Time.timeScale = gameplayActive && runCanAdvance ? 1f : 0f;
         ShouldHideGameplayHud = !gameplayActive;
-        Cursor.visible = !gameplayActive;
+        RefreshCursorVisibility();
+    }
+
+    private void RefreshCursorVisibility()
+    {
+        bool gameplayActive = state == OverlayState.Playing;
+        bool upgradeSelectionOpen = gameManager != null && gameManager.IsUpgradeSelectionOpen;
+        Cursor.visible = !gameplayActive || upgradeSelectionOpen;
     }
 
     private void RestartLevel()

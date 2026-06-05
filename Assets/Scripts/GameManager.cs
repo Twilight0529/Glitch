@@ -61,6 +61,9 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float upgradeInterval = 42f;
     [SerializeField] private int upgradeOptionsShown = 3;
     [SerializeField] private int upgradeScoreBonus = 8;
+    [SerializeField] private float upgradeChoiceLimitSeconds = 10f;
+    [SerializeField] private float upgradeEnterDuration = 0.32f;
+    [SerializeField] private float upgradeExitDuration = 0.46f;
 
     [Header("Progression Gates")]
     [SerializeField] private float bossSpecialStatesUnlockTime = 30f;
@@ -101,6 +104,7 @@ public class GameManager : MonoBehaviour
 
     public bool IsGameOver { get; private set; }
     public bool IsRunActive => runPhase == RunPhase.Active && !IsGameOver && !playerDefeatSequenceRunning;
+    public bool IsUpgradeSelectionOpen => upgradeSelectionOpen;
     public float SurvivalTime { get; private set; }
     public float DifficultyMultiplier => 1f + (SurvivalTime * difficultyRampPerSecond);
     public int CurrentScore => Mathf.Max(0, Mathf.FloorToInt(SurvivalTime * Mathf.Max(0f, pointsPerSecond)) + bonusScore);
@@ -148,6 +152,7 @@ public class GameManager : MonoBehaviour
     private GUIStyle upgradeTitleStyle;
     private GUIStyle upgradeDescriptionStyle;
     private GUIStyle upgradeButtonStyle;
+    private GUIStyle upgradeTimerStyle;
     private Font importantFont;
     private Font secondaryFont;
     private string lastBossStateRaw;
@@ -165,6 +170,12 @@ public class GameManager : MonoBehaviour
     private readonly List<UpgradeChoice> currentUpgradeChoices = new List<UpgradeChoice>();
     private float nextUpgradeTime;
     private bool upgradeSelectionOpen;
+    private bool upgradeSelectionClosing;
+    private float upgradeSelectionAge;
+    private float upgradeTimeRemaining;
+    private float upgradeExitTimer;
+    private int upgradeSelectedIndex = -1;
+    private Color upgradeSelectedAccent = Color.white;
     private int upgradePickCount;
     private bool playerDefeatSequenceRunning;
     private Coroutine playerDefeatSequenceRoutine;
@@ -222,6 +233,11 @@ public class GameManager : MonoBehaviour
             bossStateBannerTimer -= Time.deltaTime;
         }
 
+        if (upgradeSelectionOpen)
+        {
+            UpdateUpgradeSelectionState();
+        }
+
         if (IsGameOver)
         {
             HandleOptionalReload();
@@ -235,6 +251,11 @@ public class GameManager : MonoBehaviour
         }
 
         if (playerDefeatSequenceRunning)
+        {
+            return;
+        }
+
+        if (upgradeSelectionOpen)
         {
             return;
         }
@@ -358,6 +379,11 @@ public class GameManager : MonoBehaviour
         scorePulseTimer = 0f;
         nextUpgradeTime = Mathf.Max(1f, firstUpgradeTime);
         upgradeSelectionOpen = false;
+        upgradeSelectionClosing = false;
+        upgradeSelectionAge = 0f;
+        upgradeTimeRemaining = 0f;
+        upgradeExitTimer = 0f;
+        upgradeSelectedIndex = -1;
         upgradePickCount = 0;
         playerDefeatSequenceRunning = false;
         playerDefeatSequenceRoutine = null;
@@ -907,7 +933,36 @@ public class GameManager : MonoBehaviour
         upgradeSelectionOpen = currentUpgradeChoices.Count > 0;
         if (upgradeSelectionOpen)
         {
+            upgradeSelectionClosing = false;
+            upgradeSelectionAge = 0f;
+            upgradeTimeRemaining = Mathf.Max(1f, upgradeChoiceLimitSeconds);
+            upgradeExitTimer = 0f;
+            upgradeSelectedIndex = -1;
+            upgradeSelectedAccent = Color.white;
             Time.timeScale = 0f;
+        }
+    }
+
+    private void UpdateUpgradeSelectionState()
+    {
+        float dt = Time.unscaledDeltaTime;
+        upgradeSelectionAge += dt;
+
+        if (upgradeSelectionClosing)
+        {
+            upgradeExitTimer -= dt;
+            if (upgradeExitTimer <= 0f)
+            {
+                FinishUpgradeSelection();
+            }
+
+            return;
+        }
+
+        upgradeTimeRemaining -= dt;
+        if (upgradeTimeRemaining <= 0f && currentUpgradeChoices.Count > 0)
+        {
+            ChooseUpgrade(Random.Range(0, currentUpgradeChoices.Count));
         }
     }
 
@@ -960,7 +1015,11 @@ public class GameManager : MonoBehaviour
 
     private void ChooseUpgrade(int index)
     {
-        if (!upgradeSelectionOpen || playerController == null || index < 0 || index >= currentUpgradeChoices.Count)
+        if (!upgradeSelectionOpen ||
+            upgradeSelectionClosing ||
+            playerController == null ||
+            index < 0 ||
+            index >= currentUpgradeChoices.Count)
         {
             return;
         }
@@ -969,9 +1028,22 @@ public class GameManager : MonoBehaviour
         ApplyUpgrade(choice.kind);
         AddScore(Mathf.Max(0, upgradeScoreBonus));
 
+        upgradeSelectedIndex = index;
+        upgradeSelectedAccent = choice.accent;
+        upgradeSelectionClosing = true;
+        upgradeExitTimer = Mathf.Max(0.08f, upgradeExitDuration);
         upgradePickCount++;
+    }
+
+    private void FinishUpgradeSelection()
+    {
         currentUpgradeChoices.Clear();
         upgradeSelectionOpen = false;
+        upgradeSelectionClosing = false;
+        upgradeSelectionAge = 0f;
+        upgradeTimeRemaining = 0f;
+        upgradeExitTimer = 0f;
+        upgradeSelectedIndex = -1;
         nextUpgradeTime = SurvivalTime + Mathf.Max(8f, upgradeInterval);
         Time.timeScale = 1f;
     }
@@ -1014,20 +1086,34 @@ public class GameManager : MonoBehaviour
 
         float s = hudScale;
         Color old = GUI.color;
-        DrawSolidRect(new Rect(0f, 0f, Screen.width, Screen.height), new Color(0.01f, 0.015f, 0.03f, 0.76f));
+        float enter = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(upgradeSelectionAge / Mathf.Max(0.05f, upgradeEnterDuration)));
+        float exit = upgradeSelectionClosing
+            ? Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(1f - (upgradeExitTimer / Mathf.Max(0.05f, upgradeExitDuration))))
+            : 0f;
+        float alpha = Mathf.Clamp01(enter) * Mathf.Lerp(1f, 0.18f, exit);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 11f);
+        DrawSolidRect(new Rect(0f, 0f, Screen.width, Screen.height), new Color(0.01f, 0.015f, 0.03f, 0.76f * alpha));
 
         float panelW = Mathf.Min(Screen.width * 0.82f, 900f * s);
         float panelH = Mathf.Min(Screen.height * 0.72f, 430f * s);
         float panelX = (Screen.width - panelW) * 0.5f;
         float panelY = (Screen.height - panelH) * 0.5f;
+        panelY += Mathf.Lerp(36f * s, 0f, enter) - (exit * 28f * s);
         Rect panel = new Rect(panelX, panelY, panelW, panelH);
 
-        DrawSolidRect(panel, new Color(0.025f, 0.04f, 0.08f, 0.92f));
-        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 3f * s), new Color(0.46f, 0.96f, 1f, 0.74f));
-        DrawSolidRect(new Rect(panel.x, panel.yMax - (3f * s), panel.width, 3f * s), new Color(1f, 0.58f, 0.74f, 0.46f));
+        DrawUpgradeScanlines(alpha, enter, exit, s);
+        DrawSolidRect(panel, new Color(0.025f, 0.04f, 0.08f, 0.92f * alpha));
+        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 3f * s), new Color(0.46f, 0.96f, 1f, 0.74f * alpha));
+        DrawSolidRect(new Rect(panel.x, panel.yMax - (3f * s), panel.width, 3f * s), new Color(1f, 0.58f, 0.74f, 0.46f * alpha));
 
+        float sweepW = Mathf.Lerp(40f * s, panel.width * 0.52f, enter);
+        float sweepX = panel.x + Mathf.Repeat(Time.unscaledTime * 180f * s, Mathf.Max(1f, panel.width + sweepW)) - sweepW;
+        DrawSolidRect(new Rect(sweepX, panel.y + (10f * s), sweepW, 2f * s), new Color(0.46f, 0.96f, 1f, 0.22f * alpha));
+
+        GUI.color = new Color(1f, 1f, 1f, alpha);
         GUI.Label(new Rect(panel.x, panel.y + (26f * s), panel.width, 24f * s), $"UPGRADE {upgradePickCount + 1}", upgradeKickerStyle);
         GUI.Label(new Rect(panel.x, panel.y + (54f * s), panel.width, 48f * s), "ELIGE UNA ALTERACION", upgradeTitleStyle);
+        DrawUpgradeTimer(panel, s, alpha, pulse);
 
         float cardGap = 14f * s;
         float cardsTop = panel.y + (132f * s);
@@ -1039,32 +1125,106 @@ public class GameManager : MonoBehaviour
         {
             UpgradeChoice choice = currentUpgradeChoices[i];
             Rect card = new Rect(cardX + ((cardW + cardGap) * i), cardsTop, cardW, cardH);
-            DrawUpgradeCard(card, choice, i, s);
+            float cardEnter = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((upgradeSelectionAge - (0.06f * i)) / Mathf.Max(0.05f, upgradeEnterDuration)));
+            card.y += Mathf.Lerp(28f * s, 0f, cardEnter);
+            DrawUpgradeCard(card, choice, i, s, alpha, cardEnter, exit);
+        }
+
+        if (upgradeSelectionClosing && upgradeSelectedIndex >= 0)
+        {
+            DrawUpgradePickFx(panel, s, alpha);
         }
 
         GUI.color = old;
     }
 
-    private void DrawUpgradeCard(Rect card, UpgradeChoice choice, int index, float s)
+    private void DrawUpgradeCard(Rect card, UpgradeChoice choice, int index, float s, float alpha, float enter, float exit)
     {
-        bool hovered = card.Contains(Event.current.mousePosition);
+        bool selected = upgradeSelectionClosing && index == upgradeSelectedIndex;
+        bool suppressed = upgradeSelectionClosing && index != upgradeSelectedIndex;
+        bool hovered = !upgradeSelectionClosing && card.Contains(Event.current.mousePosition);
+        float selectedPulse = selected ? 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 22f) : 0f;
         Color fill = hovered
             ? new Color(choice.accent.r * 0.18f, choice.accent.g * 0.18f, choice.accent.b * 0.22f, 0.92f)
             : new Color(0.04f, 0.06f, 0.11f, 0.90f);
+        if (selected)
+        {
+            fill = Color.Lerp(fill, new Color(choice.accent.r * 0.32f, choice.accent.g * 0.28f, choice.accent.b * 0.22f, 0.96f), 0.75f);
+        }
 
-        DrawSolidRect(card, fill);
-        DrawSolidRect(new Rect(card.x, card.y, card.width, 2f * s), new Color(choice.accent.r, choice.accent.g, choice.accent.b, 0.78f));
-        DrawSolidRect(new Rect(card.x + (14f * s), card.y + (18f * s), 54f * s, 5f * s), new Color(choice.accent.r, choice.accent.g, choice.accent.b, 0.62f));
+        float cardAlpha = alpha * enter * (suppressed ? Mathf.Lerp(1f, 0.18f, exit) : 1f);
+        Rect animatedCard = selected
+            ? new Rect(card.x - (5f * s * selectedPulse), card.y - (5f * s * selectedPulse), card.width + (10f * s * selectedPulse), card.height + (10f * s * selectedPulse))
+            : card;
 
-        GUI.Label(new Rect(card.x + (16f * s), card.y + (40f * s), card.width - (32f * s), 58f * s), choice.title.ToUpperInvariant(), upgradeButtonStyle);
-        GUI.Label(new Rect(card.x + (16f * s), card.y + (106f * s), card.width - (32f * s), 82f * s), choice.description, upgradeDescriptionStyle);
+        DrawSolidRect(animatedCard, new Color(fill.r, fill.g, fill.b, fill.a * cardAlpha));
+        DrawSolidRect(new Rect(animatedCard.x, animatedCard.y, animatedCard.width, 2f * s), new Color(choice.accent.r, choice.accent.g, choice.accent.b, (0.78f + selectedPulse * 0.18f) * cardAlpha));
+        DrawSolidRect(new Rect(animatedCard.x + (14f * s), animatedCard.y + (18f * s), Mathf.Lerp(30f * s, 86f * s, selected ? selectedPulse : enter), 5f * s), new Color(choice.accent.r, choice.accent.g, choice.accent.b, 0.62f * cardAlpha));
 
-        Rect buttonRect = new Rect(card.x + (16f * s), card.yMax - (52f * s), card.width - (32f * s), 34f * s);
-        DrawSolidRect(buttonRect, new Color(choice.accent.r, choice.accent.g, choice.accent.b, hovered ? 0.46f : 0.28f));
-        if (GUI.Button(buttonRect, "INSTALAR", upgradeButtonStyle))
+        Color old = GUI.color;
+        GUI.color = new Color(1f, 1f, 1f, cardAlpha);
+        GUI.Label(new Rect(animatedCard.x + (16f * s), animatedCard.y + (40f * s), animatedCard.width - (32f * s), 58f * s), choice.title.ToUpperInvariant(), upgradeButtonStyle);
+        GUI.Label(new Rect(animatedCard.x + (16f * s), animatedCard.y + (106f * s), animatedCard.width - (32f * s), 82f * s), choice.description, upgradeDescriptionStyle);
+
+        Rect buttonRect = new Rect(animatedCard.x + (16f * s), animatedCard.yMax - (52f * s), animatedCard.width - (32f * s), 34f * s);
+        DrawSolidRect(buttonRect, new Color(choice.accent.r, choice.accent.g, choice.accent.b, (hovered ? 0.46f : 0.28f) * cardAlpha));
+        GUI.enabled = !upgradeSelectionClosing;
+        if (GUI.Button(buttonRect, selected ? "INSTALANDO" : "INSTALAR", upgradeButtonStyle))
         {
             ChooseUpgrade(index);
         }
+        GUI.enabled = true;
+        GUI.color = old;
+    }
+
+    private void DrawUpgradeTimer(Rect panel, float s, float alpha, float pulse)
+    {
+        float limit = Mathf.Max(1f, upgradeChoiceLimitSeconds);
+        float normalized = Mathf.Clamp01(upgradeTimeRemaining / limit);
+        Color timerColor = Color.Lerp(new Color(1f, 0.35f, 0.46f, 1f), new Color(0.46f, 0.96f, 1f, 1f), normalized);
+
+        Rect timerRect = new Rect(panel.x + (32f * s), panel.y + (108f * s), panel.width - (64f * s), 10f * s);
+        DrawSolidRect(timerRect, new Color(0.03f, 0.05f, 0.09f, 0.85f * alpha));
+        DrawSolidRect(new Rect(timerRect.x, timerRect.y, timerRect.width * normalized, timerRect.height), new Color(timerColor.r, timerColor.g, timerColor.b, (0.82f + pulse * 0.12f) * alpha));
+
+        GUI.color = new Color(1f, 1f, 1f, alpha);
+        GUI.Label(new Rect(panel.x, panel.y + (106f * s), panel.width, 24f * s), $"{Mathf.CeilToInt(Mathf.Max(0f, upgradeTimeRemaining))}s", upgradeTimerStyle);
+    }
+
+    private void DrawUpgradeScanlines(float alpha, float enter, float exit, float s)
+    {
+        float lineAlpha = 0.035f * alpha * Mathf.Lerp(0.4f, 1f, enter);
+        for (float y = Mathf.Repeat(Time.unscaledTime * 46f * s, 18f * s) - (18f * s); y < Screen.height; y += 18f * s)
+        {
+            DrawSolidRect(new Rect(0f, y, Screen.width, 1f * s), new Color(0.48f, 0.93f, 1f, lineAlpha));
+        }
+
+        if (exit <= 0f)
+        {
+            return;
+        }
+
+        float sweepY = Mathf.Lerp(0f, Screen.height, exit);
+        DrawSolidRect(new Rect(0f, sweepY - (8f * s), Screen.width, 16f * s), new Color(upgradeSelectedAccent.r, upgradeSelectedAccent.g, upgradeSelectedAccent.b, 0.22f * alpha));
+    }
+
+    private void DrawUpgradePickFx(Rect panel, float s, float alpha)
+    {
+        float progress = Mathf.Clamp01(1f - (upgradeExitTimer / Mathf.Max(0.05f, upgradeExitDuration)));
+        float flash = Mathf.Sin(progress * Mathf.PI);
+        Color c = upgradeSelectedAccent;
+        float ringW = Mathf.Lerp(80f * s, panel.width * 0.92f, progress);
+        float ringH = Mathf.Lerp(18f * s, panel.height * 0.92f, progress);
+        Rect ring = new Rect(
+            panel.center.x - (ringW * 0.5f),
+            panel.center.y - (ringH * 0.5f),
+            ringW,
+            ringH);
+
+        DrawSolidRect(new Rect(ring.x, ring.y, ring.width, 3f * s), new Color(c.r, c.g, c.b, 0.62f * flash * alpha));
+        DrawSolidRect(new Rect(ring.x, ring.yMax - (3f * s), ring.width, 3f * s), new Color(c.r, c.g, c.b, 0.48f * flash * alpha));
+        DrawSolidRect(new Rect(ring.x, ring.y, 3f * s, ring.height), new Color(c.r, c.g, c.b, 0.46f * flash * alpha));
+        DrawSolidRect(new Rect(ring.xMax - (3f * s), ring.y, 3f * s, ring.height), new Color(c.r, c.g, c.b, 0.46f * flash * alpha));
     }
 
     private static string ToBossStateLabel(string raw)
@@ -1468,6 +1628,7 @@ public class GameManager : MonoBehaviour
             upgradeTitleStyle != null &&
             upgradeDescriptionStyle != null &&
             upgradeButtonStyle != null &&
+            upgradeTimerStyle != null &&
             Mathf.Abs(cachedUpgradeHudScaleForStyles - hudScale) < 0.001f)
         {
             return;
@@ -1519,6 +1680,16 @@ public class GameManager : MonoBehaviour
         upgradeButtonStyle.normal.textColor = new Color(0.95f, 0.98f, 1f, 0.96f);
         upgradeButtonStyle.hover.textColor = Color.white;
         upgradeButtonStyle.active.textColor = new Color(1f, 0.90f, 0.58f, 1f);
+
+        upgradeTimerStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = importantFont,
+            fontSize = Mathf.RoundToInt(18f * hudScale),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            clipping = TextClipping.Overflow
+        };
+        upgradeTimerStyle.normal.textColor = new Color(0.94f, 0.98f, 1f, 0.96f);
     }
 
     private void EnsureWarningStyle()
