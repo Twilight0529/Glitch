@@ -61,6 +61,7 @@ public class ArenaBreachGate : MonoBehaviour
         {
             clone.AbsorbIntoBreach(transform.position);
             SpawnEnterFx();
+            GlitchAudioManager.PlayBreachEnter(transform.position);
             return;
         }
 
@@ -72,6 +73,7 @@ public class ArenaBreachGate : MonoBehaviour
                 enemyAbsorbed = true;
                 enemy.AbsorbIntoBreach(transform.position);
                 SpawnEnterFx();
+                GlitchAudioManager.PlayBreachEnter(transform.position);
             }
 
             return;
@@ -79,6 +81,7 @@ public class ArenaBreachGate : MonoBehaviour
 
         consumed = true;
         SpawnEnterFx();
+        GlitchAudioManager.PlayBreachEnter(transform.position);
         owner?.NotifyBreachEntered(this);
     }
 

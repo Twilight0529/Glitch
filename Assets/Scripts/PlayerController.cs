@@ -267,6 +267,7 @@ public class PlayerController : MonoBehaviour
 
         shieldTimer = 0f;
         SpawnShieldBreakFx();
+        GlitchAudioManager.PlayShieldBreak(transform.position);
         return true;
     }
 
@@ -319,6 +320,7 @@ public class PlayerController : MonoBehaviour
         parryTimer = 0f;
         parryCooldownTimer = Mathf.Max(parryCooldownTimer, Mathf.Max(0.05f, parryCooldown * 0.55f));
         SpawnParrySuccessFx(parryDirection);
+        GlitchAudioManager.PlayParrySuccess(transform.position);
         return true;
     }
 
@@ -330,6 +332,7 @@ public class PlayerController : MonoBehaviour
         }
 
         deathSequenceActive = true;
+        GlitchAudioManager.PlayPlayerDeath(transform.position);
         StartCoroutine(DeathExplosionRoutine());
         return true;
     }
@@ -392,6 +395,7 @@ public class PlayerController : MonoBehaviour
         parryTimer = Mathf.Max(0.04f, parryActiveDuration);
         parryCooldownTimer = Mathf.Max(0.05f, parryCooldown);
         SpawnParryStartFx();
+        GlitchAudioManager.PlayParryStart(transform.position);
     }
 
     private void ScanParryWindow()

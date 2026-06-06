@@ -764,6 +764,10 @@ public class EnemyController : MonoBehaviour
         HandleStateTransition(previousState, currentState);
         TriggerStatePulse();
         SpawnStateTransitionBurst(currentState, previousState != currentState);
+        if (CanDamagePlayer())
+        {
+            GlitchAudioManager.PlayEnemyState(currentState, transform.position);
+        }
         OnStateEntered();
         RegisterStateForPacing(currentState);
     }
@@ -1637,6 +1641,7 @@ public class EnemyController : MonoBehaviour
         rb.linearVelocity = direction * Mathf.Max(0.1f, parryKnockbackSpeed);
         TriggerStatePulse();
         SpawnParryImpactBurst();
+        GlitchAudioManager.PlayEnemyParried(transform.position);
     }
 
     private bool TickParryStun()

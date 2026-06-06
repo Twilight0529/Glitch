@@ -92,6 +92,7 @@ public class ArenaScorePickup : MonoBehaviour
             gameManager.AddScore(scoreValue);
         }
 
+        GlitchAudioManager.PlayScorePickup(transform.position);
         SpawnCollectFlash();
         owner?.NotifyScorePickupConsumed(this);
         Destroy(gameObject);

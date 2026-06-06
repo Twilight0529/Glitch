@@ -187,6 +187,7 @@ public class GameManager : MonoBehaviour
 
     private void Start()
     {
+        GlitchAudioManager.Ensure();
         ResolveFonts();
         RefreshHudScaleSetting();
         RefreshLevelType();
@@ -940,6 +941,7 @@ public class GameManager : MonoBehaviour
             upgradeSelectedIndex = -1;
             upgradeSelectedAccent = Color.white;
             Time.timeScale = 0f;
+            GlitchAudioManager.PlayUpgradeOpen();
         }
     }
 
@@ -1027,6 +1029,7 @@ public class GameManager : MonoBehaviour
         UpgradeChoice choice = currentUpgradeChoices[index];
         ApplyUpgrade(choice.kind);
         AddScore(Mathf.Max(0, upgradeScoreBonus));
+        GlitchAudioManager.PlayUpgradeSelect();
 
         upgradeSelectedIndex = index;
         upgradeSelectedAccent = choice.accent;

@@ -123,6 +123,7 @@ public class ArenaPowerupPickup : MonoBehaviour
             player.ApplySpeedBoost(speedMultiplier, speedDuration);
         }
 
+        GlitchAudioManager.PlayPowerupCollected(kind, transform.position);
         SpawnCollectBurstFx();
         owner?.NotifyPickupConsumed(this);
         Destroy(gameObject);

@@ -474,6 +474,7 @@ public class ArenaChaosDirector : MonoBehaviour
         pickup.Configure(this, kind, powerupLifetime, speedBoostMultiplier, speedBoostDuration, shieldDuration);
         activePickup = pickup;
 
+        GlitchAudioManager.PlayPowerupSpawn(position);
         RaiseEvent(kind == ArenaPowerupPickup.PickupKind.Shield ? "Shield Materialized" : "Speed Core Materialized");
     }
 
@@ -687,6 +688,7 @@ public class ArenaChaosDirector : MonoBehaviour
         }
 
         RaiseWarning("Brecha detectada", 2.2f);
+        GlitchAudioManager.PlayBreachWarning(position);
         RaiseEvent($"Sigue las flechas | {Mathf.CeilToInt(breachTelegraphTimer)}s");
     }
 
@@ -742,6 +744,7 @@ public class ArenaChaosDirector : MonoBehaviour
         }
 
         SpawnBreachSweep(activeBreachPosition, activeBreachSweepDirection);
+        GlitchAudioManager.PlayBreachSweep(activeBreachPosition);
         RaiseWarning("El sector se desintegra", 2f);
     }
 
@@ -781,6 +784,7 @@ public class ArenaChaosDirector : MonoBehaviour
         RaiseWarning("Sector reconfigurado", 1.8f);
         RaiseEvent("Breach Complete");
         SpawnBreachTransitionFx();
+        GlitchAudioManager.PlayBreachTransition(breachPosition);
         HideActorsForBreachTransition(breachPosition);
 
         float transitionSeconds = Mathf.Max(0.25f, breachTransitionDuration);
@@ -836,6 +840,7 @@ public class ArenaChaosDirector : MonoBehaviour
         }
 
         RaiseWarning("Consumido por el glitch", 1.2f);
+        GlitchAudioManager.PlayBreachFail(player != null ? player.transform.position : transform.position);
         if (gameManager != null && player != null)
         {
             gameManager.RequestPlayerDefeat(player);
@@ -930,7 +935,7 @@ public class ArenaChaosDirector : MonoBehaviour
         }
 
         enemy.ReappearFromBreach(pendingBreachEnemyPosition);
-        SpawnBreachArrivalFx(pendingBreachEnemyPosition, pendingBreachEnemyEntryDirection);
+        SpawnBreachArrivalFx(pendingBreachEnemyPosition, pendingBreachEnemyEntryDirection, true);
         RaiseWarning("Anomalia reinsertada", 1f);
     }
 
@@ -1050,8 +1055,17 @@ public class ArenaChaosDirector : MonoBehaviour
         activeBreachTransitionFx.Configure(arena, Mathf.Max(0.1f, breachTransitionDuration), breachColor);
     }
 
-    private void SpawnBreachArrivalFx(Vector2 position, Vector2 entryDirection)
+    private void SpawnBreachArrivalFx(Vector2 position, Vector2 entryDirection, bool enemyReentry = false)
     {
+        if (enemyReentry)
+        {
+            GlitchAudioManager.PlayBreachEnemyReentry(position);
+        }
+        else
+        {
+            GlitchAudioManager.PlayBreachArrival(position);
+        }
+
         if (runtimeRoot == null)
         {
             return;
