@@ -64,6 +64,8 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private float breachSweepDuration = 13.5f;
     [SerializeField] private float breachEnemyGuideDuration = 6f;
     [SerializeField] private float breachTransitionDuration = 1.25f;
+    [SerializeField] private float breachArrivalHoldSeconds = 2f;
+    [SerializeField] private float breachArrivalFxDuration = 2.25f;
     [SerializeField] private Color breachColor = new Color(1f, 0.42f, 0.78f, 1f);
 
     [Header("Spawn Rules")]
@@ -110,9 +112,12 @@ public class ArenaChaosDirector : MonoBehaviour
     private bool breachEventActive;
     private bool breachSweepStarted;
     private bool breachTransitionActive;
+    private bool pendingBreachEnemyReentry;
     private float breachTelegraphTimer;
     private Vector2 activeBreachPosition;
     private Vector2 activeBreachSweepDirection;
+    private Vector2 pendingBreachEnemyPosition;
+    private Vector2 pendingBreachEnemyEntryDirection;
 
     private Transform runtimeRoot;
 
@@ -396,6 +401,8 @@ public class ArenaChaosDirector : MonoBehaviour
         objectiveNodesTotal = 0;
         breachEventActive = false;
         breachSweepStarted = false;
+        breachTransitionActive = false;
+        pendingBreachEnemyReentry = false;
         breachTimer = 0f;
         breachTelegraphTimer = 0f;
     }
@@ -778,12 +785,20 @@ public class ArenaChaosDirector : MonoBehaviour
 
         float transitionSeconds = Mathf.Max(0.25f, breachTransitionDuration);
         float regenerateDelay = transitionSeconds * 0.52f;
+        float arrivalHoldSeconds = Mathf.Max(0f, breachArrivalHoldSeconds);
         yield return new WaitForSeconds(regenerateDelay);
 
         arena.GenerateBreachShift();
-        RepositionActorsAfterBreach(breachPosition);
+        RepositionActorsAfterBreach(breachPosition, arrivalHoldSeconds > 0.05f, out Vector2 arrivalPosition, out Vector2 arrivalDirection);
+        SpawnBreachArrivalFx(arrivalPosition, arrivalDirection);
         yield return new WaitForSeconds(Mathf.Max(0.02f, transitionSeconds - regenerateDelay));
 
+        if (arrivalHoldSeconds > 0f)
+        {
+            yield return StartCoroutine(BreachArrivalHoldRoutine(arrivalHoldSeconds));
+        }
+
+        ReleasePendingBreachEnemy();
         activeBreachTransitionFx = null;
         breachTransitionActive = false;
     }
@@ -796,6 +811,7 @@ public class ArenaChaosDirector : MonoBehaviour
         }
 
         breachEventActive = false;
+        pendingBreachEnemyReentry = false;
         breachTimer = 0f;
         if (activeBreachGate != null)
         {
@@ -834,8 +850,10 @@ public class ArenaChaosDirector : MonoBehaviour
         }
     }
 
-    private void RepositionActorsAfterBreach(Vector2 oldBreachPosition)
+    private void RepositionActorsAfterBreach(Vector2 oldBreachPosition, bool delayEnemyReentry, out Vector2 playerPos, out Vector2 entryDir)
     {
+        playerPos = transform.position;
+        entryDir = Vector2.right;
         if (arena == null)
         {
             return;
@@ -843,10 +861,10 @@ public class ArenaChaosDirector : MonoBehaviour
 
         Vector2 center = transform.position;
         Vector2 fromCenter = oldBreachPosition - center;
-        Vector2 entryDir = fromCenter.sqrMagnitude > 0.001f ? -fromCenter.normalized : Vector2.right;
+        entryDir = fromCenter.sqrMagnitude > 0.001f ? -fromCenter.normalized : Vector2.right;
 
         Vector2 preferredPlayerPos = ClampPointToArena(center + entryDir * 2.6f, 2.3f);
-        Vector2 playerPos = preferredPlayerPos;
+        playerPos = preferredPlayerPos;
         if (TryFindFreePointNear(preferredPlayerPos, 0.55f, 4.2f, out Vector2 safePlayerPos))
         {
             playerPos = safePlayerPos;
@@ -871,10 +889,49 @@ public class ArenaChaosDirector : MonoBehaviour
                 enemyPos = safeEnemyPos;
             }
 
-            enemy.ReappearFromBreach(enemyPos);
+            if (delayEnemyReentry)
+            {
+                pendingBreachEnemyPosition = enemyPos;
+                pendingBreachEnemyEntryDirection = -entryDir;
+                pendingBreachEnemyReentry = true;
+            }
+            else
+            {
+                enemy.ReappearFromBreach(enemyPos);
+                pendingBreachEnemyReentry = false;
+            }
+        }
+    }
+
+    private IEnumerator BreachArrivalHoldRoutine(float seconds)
+    {
+        RaiseWarning("Sector estabilizando", Mathf.Min(1.4f, seconds));
+        float remaining = Mathf.Max(0f, seconds);
+        while (remaining > 0f)
+        {
+            activeEventLabel = $"Sector estabilizando | {Mathf.CeilToInt(remaining)}s";
+            eventLabelTimer = 0.25f;
+            remaining -= Time.deltaTime;
+            yield return null;
+        }
+    }
+
+    private void ReleasePendingBreachEnemy()
+    {
+        if (!pendingBreachEnemyReentry)
+        {
+            return;
         }
 
-        SpawnBreachArrivalFx(playerPos, entryDir);
+        pendingBreachEnemyReentry = false;
+        if (enemy == null)
+        {
+            return;
+        }
+
+        enemy.ReappearFromBreach(pendingBreachEnemyPosition);
+        SpawnBreachArrivalFx(pendingBreachEnemyPosition, pendingBreachEnemyEntryDirection);
+        RaiseWarning("Anomalia reinsertada", 1f);
     }
 
     private Vector2 ClampPointToArena(Vector2 point, float inset)
@@ -1003,7 +1060,7 @@ public class ArenaChaosDirector : MonoBehaviour
         GameObject fx = new GameObject("BreachArrivalFx");
         fx.transform.SetParent(runtimeRoot, false);
         ArenaBreachArrivalFx arrivalFx = fx.AddComponent<ArenaBreachArrivalFx>();
-        arrivalFx.Configure(position, entryDirection, breachColor, Mathf.Max(0.75f, breachTransitionDuration * 0.82f));
+        arrivalFx.Configure(position, entryDirection, breachColor, Mathf.Max(0.75f, breachArrivalFxDuration));
     }
 
     private Vector2 GetBreachGatePosition(out float rotationZ, out Vector2 sweepDirection)

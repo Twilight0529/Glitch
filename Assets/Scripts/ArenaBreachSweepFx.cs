@@ -21,6 +21,8 @@ public class ArenaBreachSweepFx : MonoBehaviour
     private SpriteRenderer frontFillRenderer;
     private SpriteRenderer coreLineRenderer;
     private SpriteRenderer hotEdgeRenderer;
+    private readonly SpriteRenderer[] consumedGlitchStrips = new SpriteRenderer[24];
+    private readonly float[] consumedGlitchSeeds = new float[24];
     private readonly SpriteRenderer[] guideStrips = new SpriteRenderer[10];
     private readonly SpriteRenderer[] shockBands = new SpriteRenderer[8];
     private readonly SpriteRenderer[] fragments = new SpriteRenderer[56];
@@ -87,6 +89,7 @@ public class ArenaBreachSweepFx : MonoBehaviour
         }
 
         UpdateConsumedOverlay(consumedLength, sweepT, pulse);
+        UpdateConsumedGlitches(consumedLength, sweepT, pulse);
         UpdateCoreLine(guideAlpha, pulse);
         UpdateShockBands(consumedLength, guideAlpha, pulse);
         UpdateGuideStrips(guideAlpha, pulse);
@@ -183,6 +186,13 @@ public class ArenaBreachSweepFx : MonoBehaviour
     {
         consumedRenderer = CreateRendererChild("BreachConsumedBlackout", 5);
         consumedRenderer.color = new Color(0f, 0f, 0f, 0f);
+        for (int i = 0; i < consumedGlitchStrips.Length; i++)
+        {
+            SpriteRenderer strip = CreateRendererChild($"BreachConsumedGlitch_{i}", 6);
+            strip.color = Color.clear;
+            consumedGlitchStrips[i] = strip;
+            consumedGlitchSeeds[i] = Random.Range(0.1f, 100f);
+        }
 
         guideRenderer = gameObject.AddComponent<SpriteRenderer>();
         guideRenderer.sprite = SquareSpriteProvider.Get();
@@ -280,8 +290,57 @@ public class ArenaBreachSweepFx : MonoBehaviour
             : new Vector2(span, length);
 
         float alpha = Mathf.Lerp(0.10f, 0.74f, Mathf.Clamp01(sweepT * 1.25f));
-        alpha += Mathf.Lerp(0.02f, 0.08f, pulse);
+        float staticPulse = Mathf.PerlinNoise(Time.time * 2.1f, sweepT * 9.3f);
+        alpha += Mathf.Lerp(0.03f, 0.13f, pulse * staticPulse);
         consumedRenderer.color = new Color(0.005f, 0.005f, 0.012f, Mathf.Clamp01(alpha));
+    }
+
+    private void UpdateConsumedGlitches(float consumedLength, float sweepT, float pulse)
+    {
+        bool horizontal = Mathf.Abs(direction.x) > 0.5f;
+        float visibleLength = Mathf.Max(0f, consumedLength - 0.25f);
+        float span = GetLineSpan();
+        float activity = Mathf.Clamp01(sweepT * 1.8f);
+
+        for (int i = 0; i < consumedGlitchStrips.Length; i++)
+        {
+            SpriteRenderer sr = consumedGlitchStrips[i];
+            if (sr == null)
+            {
+                continue;
+            }
+
+            if (visibleLength <= 0.05f)
+            {
+                sr.color = Color.clear;
+                continue;
+            }
+
+            float seed = consumedGlitchSeeds[i];
+            float crawl = Mathf.Repeat(seed * 0.173f + Time.time * Mathf.Lerp(0.05f, 0.18f, Mathf.PerlinNoise(seed, 4.2f)), 1f);
+            float behind = Mathf.Lerp(0.22f, visibleLength, crawl);
+            float lateralNoise = Mathf.PerlinNoise(seed + 8.3f, Time.time * 0.34f);
+            float lateral = Mathf.Lerp(-span * 0.48f, span * 0.48f, lateralNoise);
+            float snap = Mathf.Floor(Mathf.PerlinNoise(seed + 12.1f, Time.time * 7.5f) * 6f) / 6f;
+            float jitter = (snap - 0.5f) * 0.35f;
+
+            sr.transform.localPosition = (Vector3)(-direction * behind + perpendicular * (lateral + jitter));
+
+            float length = Mathf.Lerp(0.45f, 2.6f, Mathf.PerlinNoise(seed, Time.time * 1.4f));
+            float thickness = Mathf.Lerp(0.035f, 0.18f, Mathf.PerlinNoise(seed + 2.8f, Time.time * 3.9f));
+            sr.size = horizontal
+                ? new Vector2(length, thickness)
+                : new Vector2(thickness, length);
+
+            float blink = Mathf.PerlinNoise(seed + 21.7f, Time.time * 9f);
+            float darkFlash = Mathf.PerlinNoise(seed + 44.2f, Time.time * 4.8f);
+            Color glitchColor = Color.Lerp(
+                new Color(0f, 0f, 0f, 0.42f),
+                new Color(tint.r, tint.g, tint.b, 0.5f),
+                Mathf.Lerp(0.18f, 0.74f, blink));
+            glitchColor.a *= activity * Mathf.Lerp(0.35f, 1f, pulse) * Mathf.Lerp(0.45f, 1f, darkFlash);
+            sr.color = glitchColor;
+        }
     }
 
     private void UpdateCoreLine(float guideAlpha, float pulse)
