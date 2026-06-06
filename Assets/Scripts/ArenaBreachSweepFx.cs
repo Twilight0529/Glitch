@@ -5,7 +5,7 @@ public class ArenaBreachSweepFx : MonoBehaviour
 {
     // Desintegra visualmente la arena por capas, desde el lado opuesto hasta la brecha.
     [SerializeField] private int stripCount = 7;
-    [SerializeField] private int fragmentCount = 28;
+    [SerializeField] private int fragmentCount = 52;
     [SerializeField] private float dissolveWindow = 0.34f;
 
     private sealed class RendererSlice
@@ -17,9 +17,13 @@ public class ArenaBreachSweepFx : MonoBehaviour
     }
 
     private SpriteRenderer guideRenderer;
+    private SpriteRenderer consumedRenderer;
+    private SpriteRenderer coreLineRenderer;
+    private SpriteRenderer hotEdgeRenderer;
     private readonly SpriteRenderer[] guideStrips = new SpriteRenderer[10];
-    private readonly SpriteRenderer[] fragments = new SpriteRenderer[32];
-    private readonly float[] fragmentSeeds = new float[32];
+    private readonly SpriteRenderer[] shockBands = new SpriteRenderer[8];
+    private readonly SpriteRenderer[] fragments = new SpriteRenderer[56];
+    private readonly float[] fragmentSeeds = new float[56];
     private RendererSlice[] slices;
     private Vector2 startPosition;
     private Vector2 endPosition;
@@ -28,6 +32,7 @@ public class ArenaBreachSweepFx : MonoBehaviour
     private Vector2 arenaSize = new Vector2(32f, 18f);
     private Color tint = Color.magenta;
     private float duration = 8f;
+    private float travelDistance;
     private float age;
     private bool restoreOnDestroy = true;
 
@@ -46,6 +51,7 @@ public class ArenaBreachSweepFx : MonoBehaviour
         float travel = Mathf.Abs(direction.x) > 0.5f ? arenaSize.x : arenaSize.y;
         startPosition = breachPosition - direction * travel;
         endPosition = breachPosition;
+        travelDistance = Mathf.Max(0.1f, Vector2.Distance(startPosition, endPosition));
 
         CaptureArenaSlices(arena);
         CreateGuideVisuals();
@@ -70,14 +76,18 @@ public class ArenaBreachSweepFx : MonoBehaviour
         float sweepT = Mathf.SmoothStep(0f, 1f, t);
         Vector2 guidePosition = Vector2.Lerp(startPosition, endPosition, sweepT);
         transform.position = guidePosition;
+        float consumedLength = travelDistance * sweepT;
 
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 10f);
-        float guideAlpha = Mathf.Sin(t * Mathf.PI) * 0.28f;
+        float guideAlpha = Mathf.Lerp(0.16f, 0.72f, pulse) * Mathf.Sin(t * Mathf.PI);
         if (guideRenderer != null)
         {
-            guideRenderer.color = new Color(tint.r, tint.g, tint.b, guideAlpha);
+            guideRenderer.color = new Color(tint.r, tint.g, tint.b, guideAlpha * 0.55f);
         }
 
+        UpdateConsumedOverlay(consumedLength, sweepT, pulse);
+        UpdateCoreLine(guideAlpha, pulse);
+        UpdateShockBands(consumedLength, guideAlpha, pulse);
         UpdateGuideStrips(guideAlpha, pulse);
         UpdateFragments(t, pulse);
         ApplySlowDisintegration(t, pulse);
@@ -170,6 +180,9 @@ public class ArenaBreachSweepFx : MonoBehaviour
 
     private void CreateGuideVisuals()
     {
+        consumedRenderer = CreateRendererChild("BreachConsumedBlackout", 5);
+        consumedRenderer.color = new Color(0f, 0f, 0f, 0f);
+
         guideRenderer = gameObject.AddComponent<SpriteRenderer>();
         guideRenderer.sprite = SquareSpriteProvider.Get();
         guideRenderer.drawMode = SpriteDrawMode.Sliced;
@@ -177,9 +190,20 @@ public class ArenaBreachSweepFx : MonoBehaviour
         guideRenderer.color = new Color(tint.r, tint.g, tint.b, 0f);
 
         bool horizontal = Mathf.Abs(direction.x) > 0.5f;
+        float lineSpan = GetLineSpan();
         guideRenderer.size = horizontal
-            ? new Vector2(0.55f, arenaSize.y + 3f)
-            : new Vector2(arenaSize.x + 3f, 0.55f);
+            ? new Vector2(1.35f, lineSpan)
+            : new Vector2(lineSpan, 1.35f);
+
+        coreLineRenderer = CreateRendererChild("BreachCoreLine", 22);
+        coreLineRenderer.size = horizontal
+            ? new Vector2(0.16f, lineSpan)
+            : new Vector2(lineSpan, 0.16f);
+
+        hotEdgeRenderer = CreateRendererChild("BreachHotEdge", 21);
+        hotEdgeRenderer.size = horizontal
+            ? new Vector2(0.42f, lineSpan)
+            : new Vector2(lineSpan, 0.42f);
 
         int count = Mathf.Min(guideStrips.Length, Mathf.Max(2, stripCount));
         for (int i = 0; i < count; i++)
@@ -191,6 +215,15 @@ public class ArenaBreachSweepFx : MonoBehaviour
             sr.drawMode = SpriteDrawMode.Sliced;
             sr.sortingOrder = 19;
             guideStrips[i] = sr;
+        }
+
+        for (int i = 0; i < shockBands.Length; i++)
+        {
+            SpriteRenderer sr = CreateRendererChild($"BreachAfterimageBand_{i}", 17);
+            sr.size = horizontal
+                ? new Vector2(Mathf.Lerp(0.05f, 0.18f, i / (float)shockBands.Length), lineSpan)
+                : new Vector2(lineSpan, Mathf.Lerp(0.05f, 0.18f, i / (float)shockBands.Length));
+            shockBands[i] = sr;
         }
 
         int glitchFragments = Mathf.Min(fragments.Length, Mathf.Max(8, fragmentCount));
@@ -205,6 +238,84 @@ public class ArenaBreachSweepFx : MonoBehaviour
             sr.color = new Color(tint.r, tint.g, tint.b, 0f);
             fragments[i] = sr;
             fragmentSeeds[i] = Random.Range(0.1f, 100f);
+        }
+    }
+
+    private SpriteRenderer CreateRendererChild(string objectName, int sortingOrder)
+    {
+        GameObject go = new GameObject(objectName);
+        go.transform.SetParent(transform, false);
+        SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = SquareSpriteProvider.Get();
+        sr.drawMode = SpriteDrawMode.Sliced;
+        sr.sortingOrder = sortingOrder;
+        return sr;
+    }
+
+    private float GetLineSpan()
+    {
+        return (Mathf.Abs(direction.x) > 0.5f ? arenaSize.y : arenaSize.x) + 7.5f;
+    }
+
+    private void UpdateConsumedOverlay(float consumedLength, float sweepT, float pulse)
+    {
+        if (consumedRenderer == null)
+        {
+            return;
+        }
+
+        bool horizontal = Mathf.Abs(direction.x) > 0.5f;
+        float length = Mathf.Max(0f, consumedLength + 0.3f);
+        float span = GetLineSpan();
+        consumedRenderer.transform.localPosition = (Vector3)(-direction * length * 0.5f);
+        consumedRenderer.size = horizontal
+            ? new Vector2(length, span)
+            : new Vector2(span, length);
+
+        float alpha = Mathf.Lerp(0.10f, 0.74f, Mathf.Clamp01(sweepT * 1.25f));
+        alpha += Mathf.Lerp(0.02f, 0.08f, pulse);
+        consumedRenderer.color = new Color(0.005f, 0.005f, 0.012f, Mathf.Clamp01(alpha));
+    }
+
+    private void UpdateCoreLine(float guideAlpha, float pulse)
+    {
+        if (coreLineRenderer != null)
+        {
+            coreLineRenderer.color = new Color(1f, 0.9f, 1f, Mathf.Clamp01(guideAlpha * Mathf.Lerp(0.82f, 1.25f, pulse)));
+        }
+
+        if (hotEdgeRenderer != null)
+        {
+            hotEdgeRenderer.color = new Color(tint.r, tint.g, tint.b, Mathf.Clamp01(guideAlpha * 0.78f));
+        }
+    }
+
+    private void UpdateShockBands(float consumedLength, float alpha, float pulse)
+    {
+        bool horizontal = Mathf.Abs(direction.x) > 0.5f;
+        float span = GetLineSpan();
+
+        for (int i = 0; i < shockBands.Length; i++)
+        {
+            SpriteRenderer sr = shockBands[i];
+            if (sr == null)
+            {
+                continue;
+            }
+
+            float n = (i + 1f) / (shockBands.Length + 1f);
+            float trail = Mathf.Min(consumedLength, Mathf.Lerp(0.25f, 2.9f, n));
+            float jitter = Mathf.Sin(Time.time * (11f + i * 1.7f)) * 0.06f;
+            sr.transform.localPosition = (Vector3)(-direction * (trail + jitter));
+            sr.size = horizontal
+                ? new Vector2(Mathf.Lerp(0.08f, 0.24f, pulse), span)
+                : new Vector2(span, Mathf.Lerp(0.08f, 0.24f, pulse));
+
+            float bandAlpha = alpha * Mathf.Lerp(0.32f, 0.08f, n);
+            sr.color = Color.Lerp(
+                new Color(0f, 0f, 0f, bandAlpha * 1.4f),
+                new Color(tint.r, tint.g, tint.b, bandAlpha),
+                Mathf.Lerp(0.22f, 0.65f, pulse));
         }
     }
 

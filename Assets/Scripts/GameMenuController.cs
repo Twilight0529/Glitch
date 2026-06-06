@@ -430,7 +430,7 @@ public class GameMenuController : MonoBehaviour
     private void PrepareDefeatRegistration()
     {
         rankingSubmitted = false;
-        rankingSubmittedScore = 0; 
+        rankingSubmittedScore = 0;
         rankingSubmittedTime = 0f;
 
         string lastName = RankingStorage.GetLastPlayerName();

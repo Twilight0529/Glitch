@@ -63,7 +63,7 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private float breachTelegraphSeconds = 5.2f;
     [SerializeField] private float breachSweepDuration = 13.5f;
     [SerializeField] private float breachEnemyGuideDuration = 6f;
-    [SerializeField] private float breachTransitionDuration = 0.85f;
+    [SerializeField] private float breachTransitionDuration = 1.25f;
     [SerializeField] private Color breachColor = new Color(1f, 0.42f, 0.78f, 1f);
 
     [Header("Spawn Rules")]
@@ -775,10 +775,15 @@ public class ArenaChaosDirector : MonoBehaviour
         RaiseEvent("Breach Complete");
         SpawnBreachTransitionFx();
         HideActorsForBreachTransition(breachPosition);
-        yield return new WaitForSeconds(Mathf.Max(0.1f, breachTransitionDuration));
+
+        float transitionSeconds = Mathf.Max(0.25f, breachTransitionDuration);
+        float regenerateDelay = transitionSeconds * 0.52f;
+        yield return new WaitForSeconds(regenerateDelay);
 
         arena.GenerateBreachShift();
         RepositionActorsAfterBreach(breachPosition);
+        yield return new WaitForSeconds(Mathf.Max(0.02f, transitionSeconds - regenerateDelay));
+
         activeBreachTransitionFx = null;
         breachTransitionActive = false;
     }
@@ -836,15 +841,16 @@ public class ArenaChaosDirector : MonoBehaviour
             return;
         }
 
-        float halfW = arena.ArenaWidth * 0.5f;
-        float halfH = arena.ArenaHeight * 0.5f;
         Vector2 center = transform.position;
         Vector2 fromCenter = oldBreachPosition - center;
         Vector2 entryDir = fromCenter.sqrMagnitude > 0.001f ? -fromCenter.normalized : Vector2.right;
 
-        Vector2 playerPos = center + entryDir * 2.4f;
-        playerPos.x = Mathf.Clamp(playerPos.x, center.x - halfW + 2.2f, center.x + halfW - 2.2f);
-        playerPos.y = Mathf.Clamp(playerPos.y, center.y - halfH + 2.2f, center.y + halfH - 2.2f);
+        Vector2 preferredPlayerPos = ClampPointToArena(center + entryDir * 2.6f, 2.3f);
+        Vector2 playerPos = preferredPlayerPos;
+        if (TryFindFreePointNear(preferredPlayerPos, 0.55f, 4.2f, out Vector2 safePlayerPos))
+        {
+            playerPos = safePlayerPos;
+        }
 
         if (player != null)
         {
@@ -859,11 +865,122 @@ public class ArenaChaosDirector : MonoBehaviour
 
         if (enemy != null)
         {
-            Vector2 enemyPos = playerPos - entryDir * 3.4f;
-            enemyPos.x = Mathf.Clamp(enemyPos.x, center.x - halfW + 2.2f, center.x + halfW - 2.2f);
-            enemyPos.y = Mathf.Clamp(enemyPos.y, center.y - halfH + 2.2f, center.y + halfH - 2.2f);
+            Vector2 enemyPos = ClampPointToArena(center - entryDir * Mathf.Max(6.8f, actorClearance * 2.8f), 2.4f);
+            if (TryFindFarEnemyReentryPoint(playerPos, -entryDir, out Vector2 safeEnemyPos))
+            {
+                enemyPos = safeEnemyPos;
+            }
+
             enemy.ReappearFromBreach(enemyPos);
         }
+    }
+
+    private Vector2 ClampPointToArena(Vector2 point, float inset)
+    {
+        if (arena == null)
+        {
+            return point;
+        }
+
+        float halfW = arena.ArenaWidth * 0.5f;
+        float halfH = arena.ArenaHeight * 0.5f;
+        Vector2 center = transform.position;
+        float safeInset = Mathf.Max(0.2f, inset);
+        point.x = Mathf.Clamp(point.x, center.x - halfW + safeInset, center.x + halfW - safeInset);
+        point.y = Mathf.Clamp(point.y, center.y - halfH + safeInset, center.y + halfH - safeInset);
+        return point;
+    }
+
+    private bool TryFindFreePointNear(Vector2 preferred, float probeRadius, float maxSearchRadius, out Vector2 result)
+    {
+        result = ClampPointToArena(preferred, edgePadding + probeRadius + 0.2f);
+        if (IsFree(result, probeRadius))
+        {
+            return true;
+        }
+
+        int rings = 5;
+        int samples = 16;
+        for (int r = 1; r <= rings; r++)
+        {
+            float radius = Mathf.Lerp(0.6f, Mathf.Max(0.7f, maxSearchRadius), r / (float)rings);
+            for (int i = 0; i < samples; i++)
+            {
+                float angle = (Mathf.PI * 2f) * (i / (float)samples);
+                Vector2 offset = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+                Vector2 candidate = ClampPointToArena(preferred + offset, edgePadding + probeRadius + 0.2f);
+                if (!IsFree(candidate, probeRadius))
+                {
+                    continue;
+                }
+
+                result = candidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool TryFindFarEnemyReentryPoint(Vector2 playerPos, Vector2 preferredAwayDirection, out Vector2 result)
+    {
+        result = Vector2.zero;
+        if (arena == null)
+        {
+            return false;
+        }
+
+        Vector2 away = preferredAwayDirection.sqrMagnitude > 0.001f
+            ? preferredAwayDirection.normalized
+            : ((Vector2)transform.position - playerPos).normalized;
+        if (away.sqrMagnitude < 0.001f)
+        {
+            away = Vector2.right;
+        }
+
+        Vector2 side = new Vector2(-away.y, away.x);
+        float minAxis = Mathf.Min(arena.ArenaWidth, arena.ArenaHeight);
+        float maxAxis = Mathf.Max(arena.ArenaWidth, arena.ArenaHeight);
+        float minDistance = Mathf.Min(Mathf.Max(6.8f, actorClearance * 2.8f), Mathf.Max(4.5f, minAxis * 0.42f));
+        float maxDistance = Mathf.Max(minDistance + 0.75f, maxAxis * 0.38f);
+        float maxSideOffset = Mathf.Max(1.5f, minAxis * 0.28f);
+
+        for (int band = 0; band < 6; band++)
+        {
+            float distance = Mathf.Lerp(minDistance, maxDistance, band / 5f);
+            for (int i = -3; i <= 3; i++)
+            {
+                float sideOffset = i == 0 ? 0f : (i / 3f) * maxSideOffset;
+                Vector2 candidate = ClampPointToArena(playerPos + away * distance + side * sideOffset, edgePadding + 0.8f);
+                if (Vector2.Distance(candidate, playerPos) < minDistance || !IsFree(candidate, 0.7f))
+                {
+                    continue;
+                }
+
+                result = candidate;
+                return true;
+            }
+        }
+
+        float halfW = arena.ArenaWidth * 0.5f;
+        float halfH = arena.ArenaHeight * 0.5f;
+        Vector2 center = transform.position;
+        for (int i = 0; i < spawnAttempts * 3; i++)
+        {
+            Vector2 candidate = new Vector2(
+                Random.Range(center.x - halfW + edgePadding + 0.8f, center.x + halfW - edgePadding - 0.8f),
+                Random.Range(center.y - halfH + edgePadding + 0.8f, center.y + halfH - edgePadding - 0.8f));
+
+            if (Vector2.Distance(candidate, playerPos) < minDistance || !IsFree(candidate, 0.7f))
+            {
+                continue;
+            }
+
+            result = candidate;
+            return true;
+        }
+
+        return false;
     }
 
     private void SpawnBreachTransitionFx()
