@@ -873,6 +873,8 @@ public class ArenaChaosDirector : MonoBehaviour
 
             enemy.ReappearFromBreach(enemyPos);
         }
+
+        SpawnBreachArrivalFx(playerPos, entryDir);
     }
 
     private Vector2 ClampPointToArena(Vector2 point, float inset)
@@ -989,6 +991,19 @@ public class ArenaChaosDirector : MonoBehaviour
         fx.transform.SetParent(runtimeRoot, false);
         activeBreachTransitionFx = fx.AddComponent<ArenaBreachTransitionFx>();
         activeBreachTransitionFx.Configure(arena, Mathf.Max(0.1f, breachTransitionDuration), breachColor);
+    }
+
+    private void SpawnBreachArrivalFx(Vector2 position, Vector2 entryDirection)
+    {
+        if (runtimeRoot == null)
+        {
+            return;
+        }
+
+        GameObject fx = new GameObject("BreachArrivalFx");
+        fx.transform.SetParent(runtimeRoot, false);
+        ArenaBreachArrivalFx arrivalFx = fx.AddComponent<ArenaBreachArrivalFx>();
+        arrivalFx.Configure(position, entryDirection, breachColor, Mathf.Max(0.75f, breachTransitionDuration * 0.82f));
     }
 
     private Vector2 GetBreachGatePosition(out float rotationZ, out Vector2 sweepDirection)

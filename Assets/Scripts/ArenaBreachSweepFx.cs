@@ -18,6 +18,7 @@ public class ArenaBreachSweepFx : MonoBehaviour
 
     private SpriteRenderer guideRenderer;
     private SpriteRenderer consumedRenderer;
+    private SpriteRenderer frontFillRenderer;
     private SpriteRenderer coreLineRenderer;
     private SpriteRenderer hotEdgeRenderer;
     private readonly SpriteRenderer[] guideStrips = new SpriteRenderer[10];
@@ -79,10 +80,10 @@ public class ArenaBreachSweepFx : MonoBehaviour
         float consumedLength = travelDistance * sweepT;
 
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 10f);
-        float guideAlpha = Mathf.Lerp(0.16f, 0.72f, pulse) * Mathf.Sin(t * Mathf.PI);
+        float guideAlpha = Mathf.Lerp(0.24f, 0.76f, pulse) * Mathf.Max(0.22f, Mathf.Sin(t * Mathf.PI));
         if (guideRenderer != null)
         {
-            guideRenderer.color = new Color(tint.r, tint.g, tint.b, guideAlpha * 0.55f);
+            guideRenderer.color = new Color(tint.r, tint.g, tint.b, guideAlpha * 0.68f);
         }
 
         UpdateConsumedOverlay(consumedLength, sweepT, pulse);
@@ -192,8 +193,13 @@ public class ArenaBreachSweepFx : MonoBehaviour
         bool horizontal = Mathf.Abs(direction.x) > 0.5f;
         float lineSpan = GetLineSpan();
         guideRenderer.size = horizontal
-            ? new Vector2(1.35f, lineSpan)
-            : new Vector2(lineSpan, 1.35f);
+            ? new Vector2(1.55f, lineSpan)
+            : new Vector2(lineSpan, 1.55f);
+
+        frontFillRenderer = CreateRendererChild("BreachSolidFront", 20);
+        frontFillRenderer.size = horizontal
+            ? new Vector2(0.92f, lineSpan)
+            : new Vector2(lineSpan, 0.92f);
 
         coreLineRenderer = CreateRendererChild("BreachCoreLine", 22);
         coreLineRenderer.size = horizontal
@@ -202,8 +208,8 @@ public class ArenaBreachSweepFx : MonoBehaviour
 
         hotEdgeRenderer = CreateRendererChild("BreachHotEdge", 21);
         hotEdgeRenderer.size = horizontal
-            ? new Vector2(0.42f, lineSpan)
-            : new Vector2(lineSpan, 0.42f);
+            ? new Vector2(0.7f, lineSpan)
+            : new Vector2(lineSpan, 0.7f);
 
         int count = Mathf.Min(guideStrips.Length, Mathf.Max(2, stripCount));
         for (int i = 0; i < count; i++)
@@ -254,7 +260,7 @@ public class ArenaBreachSweepFx : MonoBehaviour
 
     private float GetLineSpan()
     {
-        return (Mathf.Abs(direction.x) > 0.5f ? arenaSize.y : arenaSize.x) + 7.5f;
+        return (Mathf.Abs(direction.x) > 0.5f ? arenaSize.y : arenaSize.x) + 14f;
     }
 
     private void UpdateConsumedOverlay(float consumedLength, float sweepT, float pulse)
@@ -265,9 +271,10 @@ public class ArenaBreachSweepFx : MonoBehaviour
         }
 
         bool horizontal = Mathf.Abs(direction.x) > 0.5f;
-        float length = Mathf.Max(0f, consumedLength + 0.3f);
+        float frontOverlap = 0.9f;
+        float length = Mathf.Max(0.2f, consumedLength + frontOverlap + 0.8f);
         float span = GetLineSpan();
-        consumedRenderer.transform.localPosition = (Vector3)(-direction * length * 0.5f);
+        consumedRenderer.transform.localPosition = (Vector3)(-direction * (length * 0.5f - frontOverlap));
         consumedRenderer.size = horizontal
             ? new Vector2(length, span)
             : new Vector2(span, length);
@@ -279,6 +286,11 @@ public class ArenaBreachSweepFx : MonoBehaviour
 
     private void UpdateCoreLine(float guideAlpha, float pulse)
     {
+        if (frontFillRenderer != null)
+        {
+            frontFillRenderer.color = new Color(tint.r, tint.g, tint.b, Mathf.Clamp01(guideAlpha * 0.42f + 0.16f));
+        }
+
         if (coreLineRenderer != null)
         {
             coreLineRenderer.color = new Color(1f, 0.9f, 1f, Mathf.Clamp01(guideAlpha * Mathf.Lerp(0.82f, 1.25f, pulse)));
@@ -321,7 +333,7 @@ public class ArenaBreachSweepFx : MonoBehaviour
 
     private void UpdateGuideStrips(float alpha, float pulse)
     {
-        float span = Mathf.Abs(direction.x) > 0.5f ? arenaSize.y + 2f : arenaSize.x + 2f;
+        float span = GetLineSpan();
         for (int i = 0; i < guideStrips.Length; i++)
         {
             SpriteRenderer sr = guideStrips[i];
