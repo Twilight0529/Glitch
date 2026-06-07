@@ -153,6 +153,7 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
     private bool containmentResolved;
     private float containmentSuccessTimer;
     private LabEventVariant currentVariant = LabEventVariant.None;
+    private ThemedEventSignatureFx signatureFx;
     private const string EventPressureKey = "ThemeLabSweep";
 
     public string ActiveThemedEventLabel
@@ -421,14 +422,17 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
         {
             EnsureSterilizationVisual();
             BuildSterilizationPassLayout();
+            SpawnSignature(ThemedEventSignatureFx.SignatureKind.LabSweep, sterilizationColor, sterilizationSafeColor);
         }
         else if (currentVariant == LabEventVariant.SecurityGrid)
         {
             SpawnSecurityGrid(eventDuration);
+            SpawnSignature(ThemedEventSignatureFx.SignatureKind.LabGrid, securityGridActiveColor, securityGridTelegraphColor);
         }
         else if (currentVariant == LabEventVariant.ContainmentProtocol)
         {
             SpawnContainmentProtocol(eventDuration);
+            SpawnSignature(ThemedEventSignatureFx.SignatureKind.LabContainment, containmentColor, sterilizationSafeColor);
         }
 
         for (int i = 0; i < obstacles.Count; i++)
@@ -503,6 +507,7 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
         sterilizationPassPerpHalfExtents.Clear();
         ClearSecurityGridZones();
         ClearContainmentProtocol();
+        ClearSignature();
         currentVariant = LabEventVariant.None;
     }
 
@@ -1463,6 +1468,34 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
 
         containmentTerminals.Clear();
         containmentActivatedCount = 0;
+    }
+
+    private void SpawnSignature(ThemedEventSignatureFx.SignatureKind kind, Color primary, Color secondary)
+    {
+        ClearSignature();
+        GameObject signature = new GameObject($"LabSignature_{kind}");
+        signature.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
+        signatureFx = signature.AddComponent<ThemedEventSignatureFx>();
+        signatureFx.Configure(kind, interiorLeft, interiorRight, interiorBottom, interiorTop, eventDuration, primary, secondary);
+    }
+
+    private void ClearSignature()
+    {
+        if (signatureFx == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(signatureFx.gameObject);
+        }
+        else
+        {
+            DestroyImmediate(signatureFx.gameObject);
+        }
+
+        signatureFx = null;
     }
 
     private static void DestroyVisualGameObject(ref GameObject target)

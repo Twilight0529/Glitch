@@ -240,4 +240,5 @@ public class ScoreCollectSparkFx : MonoBehaviour
             spriteRenderer.color = c;
         }
     }
+
 }

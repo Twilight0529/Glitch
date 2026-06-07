@@ -126,6 +126,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
     private float echoPortalCooldownTimer;
     private float echoSuccessTimer;
     private RuptureEventVariant currentVariant = RuptureEventVariant.None;
+    private ThemedEventSignatureFx signatureFx;
     private const string EventPressureKey = "ThemeRuptureSpin";
 
     public string ActiveThemedEventLabel
@@ -458,14 +459,17 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         if (currentVariant == RuptureEventVariant.SpinMotion)
         {
             ChooseNextDirectionAndSpeed(forceDirectionChange: false);
+            SpawnSignature(ThemedEventSignatureFx.SignatureKind.RuptureSpin, new Color(1f, 0.42f, 0.95f, 0.92f), new Color(0.42f, 0.96f, 1f, 0.86f));
         }
         else if (currentVariant == RuptureEventVariant.RiftEchoes)
         {
             SpawnRiftEchoes(eventDuration);
+            SpawnSignature(ThemedEventSignatureFx.SignatureKind.RuptureEcho, riftEchoActiveColor, riftEchoTelegraphColor);
         }
         else if (currentVariant == RuptureEventVariant.EchoPortals)
         {
             SpawnEchoPortals(eventDuration);
+            SpawnSignature(ThemedEventSignatureFx.SignatureKind.RupturePortal, echoPortalColor, riftEchoTelegraphColor);
         }
 
         eventTimer = 0f;
@@ -732,6 +736,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         snapshots.Clear();
         ClearRiftEchoes();
         ClearEchoPortals();
+        ClearSignature();
         currentVariant = RuptureEventVariant.None;
     }
 
@@ -1190,6 +1195,34 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         }
 
         echoPortals.Clear();
+    }
+
+    private void SpawnSignature(ThemedEventSignatureFx.SignatureKind kind, Color primary, Color secondary)
+    {
+        ClearSignature();
+        GameObject signature = new GameObject($"RuptureSignature_{kind}");
+        signature.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
+        signatureFx = signature.AddComponent<ThemedEventSignatureFx>();
+        signatureFx.Configure(kind, interiorLeft, interiorRight, interiorBottom, interiorTop, eventDuration, primary, secondary);
+    }
+
+    private void ClearSignature()
+    {
+        if (signatureFx == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(signatureFx.gameObject);
+        }
+        else
+        {
+            DestroyImmediate(signatureFx.gameObject);
+        }
+
+        signatureFx = null;
     }
 
     private bool IsMapEventSuppressed()

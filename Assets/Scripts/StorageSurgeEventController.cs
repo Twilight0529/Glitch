@@ -73,19 +73,11 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
 
     [Header("Storage Distinctive Event - Magnetic Cranes")]
     [SerializeField] private bool enableMagneticCranes = true;
-    [SerializeField] private int magneticFieldCountMin = 1;
-    [SerializeField] private int magneticFieldCountMax = 3;
-    [SerializeField] private float magneticFieldRadius = 2.15f;
-    [SerializeField] private float magneticFieldTelegraphSeconds = 0.95f;
-    [SerializeField] private float magneticFieldPlayerSlowMultiplier = 0.76f;
-    [SerializeField] private float magneticFieldPlayerSlowDuration = 0.14f;
-    [SerializeField] private float magneticFieldEnemyBoostMultiplier = 1.11f;
-    [SerializeField] private float magneticFieldEnemyBoostDuration = 0.4f;
-    [SerializeField] private float magneticFieldEnemyBoostCooldown = 0.3f;
-    [SerializeField] private float magneticFieldDriftSpeed = 3.2f;
-    [SerializeField, Range(0f, 1f)] private float magneticFieldPullChance = 0.58f;
-    [SerializeField] private Color magneticFieldTelegraphColor = new Color(0.96f, 0.74f, 0.34f, 0.46f);
-    [SerializeField] private Color magneticFieldActiveColor = new Color(0.34f, 0.92f, 1f, 0.72f);
+    [SerializeField, Range(0.05f, 0.45f)] private float magneticCraneTelegraphFraction = 0.24f;
+    [SerializeField, Range(0.02f, 0.35f)] private float magneticCraneReturnFraction = 0.16f;
+    [SerializeField] private float magneticCraneLateralOffsetMax = 1.15f;
+    [SerializeField] private Color magneticCraneTelegraphColor = new Color(0.96f, 0.74f, 0.34f, 0.46f);
+    [SerializeField] private Color magneticCraneActiveColor = new Color(0.34f, 0.92f, 1f, 0.72f);
 
     [Header("Storage Distinctive Event - Cargo Transit")]
     [SerializeField] private bool enableCargoTransit = true;
@@ -94,6 +86,9 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
     [SerializeField] private float cargoTelegraphSeconds = 1.05f;
     [SerializeField] private Vector2 cargoSizeMin = new Vector2(1.25f, 0.75f);
     [SerializeField] private Vector2 cargoSizeMax = new Vector2(2.55f, 1.45f);
+    [SerializeField] private float cargoRouteMargin = 0.9f;
+    [SerializeField] private float cargoRoutePerpendicularJitter = 0.28f;
+    [SerializeField] private float cargoRouteAlongJitter = 0.32f;
     [SerializeField] private float cargoAvoidActorRadius = 2.2f;
     [SerializeField] private Color cargoTelegraphColor = new Color(1f, 0.76f, 0.36f, 0.58f);
     [SerializeField] private Color cargoActiveColor = new Color(0.34f, 0.78f, 1f, 0.86f);
@@ -146,9 +141,9 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
     private readonly List<float> conveyorLaneHalfWidths = new List<float>();
     private readonly List<float> conveyorLaneMarkerPhases = new List<float>();
     private readonly List<Vector2> conveyorLaneDirections = new List<Vector2>();
-    private readonly List<ThemedEventZoneFx> magneticFields = new List<ThemedEventZoneFx>();
     private readonly List<StorageCargoBlockFx> cargoTransitBlocks = new List<StorageCargoBlockFx>();
     private StorageEventVariant currentVariant = StorageEventVariant.None;
+    private ThemedEventSignatureFx signatureFx;
     private const string EventPressureKey = "ThemeStorageSurge";
 
     public string ActiveThemedEventLabel
@@ -157,7 +152,7 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         {
             if (GetLiveCargoTransitCount() > 0)
             {
-                return "CARGA EN TRANSITO";
+                return "RUTA DE CARGA";
             }
 
             if (!eventActive)
@@ -168,9 +163,9 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
             switch (currentVariant)
             {
                 case StorageEventVariant.MagneticCranes:
-                    return "GRUAS MAGNETICAS";
+                    return "REORDEN DE CARGA";
                 case StorageEventVariant.CargoTransit:
-                    return "CARGA EN TRANSITO";
+                    return "RUTA DE CARGA";
                 default:
                     return "TRANSPORTADORES";
             }
@@ -183,7 +178,7 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         {
             if (GetLiveCargoTransitCount() > 0)
             {
-                return "La carga cambia rutas: usa la cobertura nueva";
+                return "La carga forma una ruta con espacios de paso";
             }
 
             if (!eventActive)
@@ -194,9 +189,11 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
             switch (currentVariant)
             {
                 case StorageEventVariant.MagneticCranes:
-                    return "Los campos magneticos empujan el espacio";
+                    return "Las gruas mueven obstaculos: lee el hueco";
                 case StorageEventVariant.ConveyorOverload:
                     return "Los carriles arrastran todo en su direccion";
+                case StorageEventVariant.CargoTransit:
+                    return "La carga forma una ruta con espacios de paso";
                 default:
                     return string.Empty;
             }
@@ -220,7 +217,6 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
     {
         EndEvent(restoreControllers: true, snapBackToStart: true);
         DestroyConveyorVisuals();
-        ClearMagneticFields();
         ClearCargoTransit();
     }
 
@@ -401,14 +397,16 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         {
             BuildConveyorLayout();
             EnsureConveyorVisuals();
+            SpawnSignature(ThemedEventSignatureFx.SignatureKind.StorageConveyor, conveyorActiveColor, conveyorTelegraphColor);
         }
         else if (currentVariant == StorageEventVariant.MagneticCranes)
         {
-            SpawnMagneticFields(eventDuration);
+            SpawnSignature(ThemedEventSignatureFx.SignatureKind.StorageMagnet, magneticCraneActiveColor, magneticCraneTelegraphColor);
         }
         else if (currentVariant == StorageEventVariant.CargoTransit)
         {
             SpawnCargoTransit(eventDuration);
+            SpawnSignature(ThemedEventSignatureFx.SignatureKind.StorageCargo, cargoActiveColor, cargoTelegraphColor);
         }
 
         for (int i = 0; i < obstacles.Count; i++)
@@ -439,6 +437,11 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
             snapshots[last] = created;
         }
 
+        if (currentVariant == StorageEventVariant.MagneticCranes)
+        {
+            PrepareMagneticCraneReorder();
+        }
+
         eventTimer = 0f;
         eventActive = true;
     }
@@ -454,6 +457,11 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         {
             TickConveyorOverload(eventProgress, dt);
             ApplyActiveColorPulse(eventProgress);
+        }
+        else if (currentVariant == StorageEventVariant.MagneticCranes)
+        {
+            TickMagneticCraneReorder(eventProgress);
+            ApplyMagneticCraneColorPulse(eventProgress);
         }
 
         if (eventProgress >= 1f)
@@ -471,14 +479,15 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         }
 
         RestoreAllColors();
+        RestoreSnapshots(restoreControllers, snapBackToStart);
         ReleaseEventPressure();
 
         snapshots.Clear();
         eventActive = false;
         eventTimer = 0f;
         HideConveyorVisuals();
-        ClearMagneticFields();
         ClearCargoTransit();
+        ClearSignature();
         currentVariant = StorageEventVariant.None;
     }
 
@@ -496,12 +505,121 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         }
     }
 
+    private void ApplyMagneticCraneColorPulse(float progress)
+    {
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Max(0.01f, activeColorPulseSpeed + 1.4f));
+        float envelope = Mathf.Sin(Mathf.Clamp01(progress) * Mathf.PI);
+        float blend = Mathf.Clamp01(0.34f + activeColorPulseStrength * pulse * envelope);
+        Color target = progress < Mathf.Clamp01(magneticCraneTelegraphFraction)
+            ? magneticCraneTelegraphColor
+            : magneticCraneActiveColor;
+
+        for (int i = 0; i < snapshots.Count; i++)
+        {
+            ObstacleSnapshot snapshot = snapshots[i];
+            ApplyColorsToward(snapshot.renderers, snapshot.baseColors, target, blend);
+        }
+    }
+
     private void RestoreAllColors()
     {
         for (int i = 0; i < snapshots.Count; i++)
         {
             ObstacleSnapshot snapshot = snapshots[i];
             ApplyColors(snapshot.renderers, snapshot.baseColors, 0f, 0f);
+        }
+    }
+
+    private void PrepareMagneticCraneReorder()
+    {
+        if (snapshots.Count == 0)
+        {
+            return;
+        }
+
+        float staggerFraction = eventDuration > 0.01f
+            ? Mathf.Clamp01(waveStaggerSeconds / eventDuration)
+            : 0.08f;
+        staggerFraction = Mathf.Min(staggerFraction, 0.18f);
+
+        for (int i = 0; i < snapshots.Count; i++)
+        {
+            ObstacleSnapshot snapshot = snapshots[i];
+            if (snapshot.binding.dynamicController != null)
+            {
+                snapshot.binding.dynamicController.enabled = false;
+            }
+
+            float orderT = snapshots.Count <= 1 ? 0f : i / (float)(snapshots.Count - 1);
+            float waveDelay = orderT * staggerFraction;
+            float alternatingSign = (i & 1) == 0 ? 1f : -1f;
+            if (Random.value < Mathf.Clamp01(laneFlipChance))
+            {
+                alternatingSign *= -1f;
+            }
+
+            snapshot.displacementScale = Random.Range(0.72f, 1.28f);
+            snapshot.phaseDelay = waveDelay + Random.Range(0f, 0.035f);
+            snapshot.laneSign = alternatingSign;
+            snapshot.lateralOffset = Random.Range(-Mathf.Abs(magneticCraneLateralOffsetMax), Mathf.Abs(magneticCraneLateralOffsetMax));
+            snapshots[i] = snapshot;
+        }
+    }
+
+    private void TickMagneticCraneReorder(float eventProgress)
+    {
+        if (snapshots.Count == 0)
+        {
+            return;
+        }
+
+        float telegraphEnd = Mathf.Clamp(magneticCraneTelegraphFraction, 0.04f, 0.65f);
+        float returnStart = Mathf.Clamp01(1f - Mathf.Clamp(magneticCraneReturnFraction, 0.02f, 0.45f));
+
+        for (int i = 0; i < snapshots.Count; i++)
+        {
+            ObstacleSnapshot snapshot = snapshots[i];
+            if (snapshot.binding.transform == null)
+            {
+                continue;
+            }
+
+            float moveIn = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(telegraphEnd + snapshot.phaseDelay, 0.58f + snapshot.phaseDelay, eventProgress));
+            float moveOut = 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(returnStart + snapshot.phaseDelay * 0.25f, 0.99f, eventProgress));
+            float amount = Mathf.Clamp01(moveIn * moveOut);
+            float shudder = Mathf.Sin(Time.time * 11.5f + snapshot.phaseDelay * 37f) * recoilStrength * Mathf.Sin(amount * Mathf.PI);
+            Vector2 cargoOffset = surgeAxis * (baseDisplacement * snapshot.displacementScale * snapshot.laneSign);
+            cargoOffset += lateralAxis * snapshot.lateralOffset;
+            Vector2 target = snapshot.startPosition + cargoOffset * amount + lateralAxis * shudder;
+            target = ClampToInterior(target, snapshot.binding.obstacleRadius);
+
+            float rotationTarget = snapshot.startRotationZ + baseRotation * snapshot.laneSign * amount;
+            rotationTarget += shudder * 18f;
+            MoveTransform(snapshot.binding, target);
+            RotateTransform(snapshot.binding, rotationTarget);
+        }
+    }
+
+    private void RestoreSnapshots(bool restoreControllers, bool snapBackToStart)
+    {
+        for (int i = 0; i < snapshots.Count; i++)
+        {
+            ObstacleSnapshot snapshot = snapshots[i];
+            if (snapshot.binding.transform == null)
+            {
+                continue;
+            }
+
+            if (snapBackToStart)
+            {
+                MoveTransform(snapshot.binding, snapshot.startPosition);
+                RotateTransform(snapshot.binding, snapshot.startRotationZ);
+            }
+
+            if (restoreControllers && snapshot.binding.dynamicController != null)
+            {
+                snapshot.binding.dynamicController.enabled = snapshot.dynamicWasEnabled;
+            }
         }
     }
 
@@ -542,6 +660,29 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
             Color lighter = Color.Lerp(baseColor, Color.white, Mathf.Clamp01(lightenAmount));
             lighter.a = baseColor.a;
             renderer.color = Color.Lerp(baseColor, lighter, Mathf.Clamp01(blend));
+        }
+    }
+
+    private static void ApplyColorsToward(SpriteRenderer[] renderers, Color[] baseColors, Color target, float blend)
+    {
+        if (renderers == null || baseColors == null)
+        {
+            return;
+        }
+
+        int count = Mathf.Min(renderers.Length, baseColors.Length);
+        for (int i = 0; i < count; i++)
+        {
+            SpriteRenderer renderer = renderers[i];
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            Color baseColor = baseColors[i];
+            Color tinted = Color.Lerp(baseColor, target, Mathf.Clamp01(blend));
+            tinted.a = baseColor.a;
+            renderer.color = tinted;
         }
     }
 
@@ -849,84 +990,6 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         conveyorLaneDirections.Clear();
     }
 
-    private void SpawnMagneticFields(float totalDuration)
-    {
-        ClearMagneticFields();
-        if (!enableMagneticCranes)
-        {
-            return;
-        }
-
-        int min = Mathf.Max(1, Mathf.Min(magneticFieldCountMin, magneticFieldCountMax));
-        int max = Mathf.Max(min, Mathf.Max(magneticFieldCountMin, magneticFieldCountMax));
-        int count = Random.Range(min, max + 1);
-        float radius = Mathf.Max(0.5f, magneticFieldRadius);
-        float activeTime = Mathf.Max(0.75f, totalDuration - Mathf.Max(0.05f, magneticFieldTelegraphSeconds));
-        for (int i = 0; i < count; i++)
-        {
-            Vector2 position = PickMagneticFieldPosition(radius);
-            bool pull = Random.value < Mathf.Clamp01(magneticFieldPullChance);
-            Vector2 driftDir = Random.insideUnitCircle;
-            if (driftDir.sqrMagnitude < 0.001f)
-            {
-                driftDir = surgeAxis.sqrMagnitude > 0.001f ? surgeAxis : Vector2.right;
-            }
-
-            GameObject zone = new GameObject($"StorageMagneticField_{i}");
-            zone.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
-            zone.transform.position = new Vector3(position.x, position.y, 0f);
-            ThemedEventZoneFx fx = zone.AddComponent<ThemedEventZoneFx>();
-            fx.ConfigureCircle(
-                ThemedEventZoneFx.ZoneKind.StorageMagnetField,
-                radius,
-                magneticFieldTelegraphSeconds,
-                activeTime,
-                magneticFieldTelegraphColor,
-                magneticFieldActiveColor,
-                magneticFieldPlayerSlowMultiplier,
-                magneticFieldPlayerSlowDuration,
-                magneticFieldEnemyBoostMultiplier,
-                magneticFieldEnemyBoostDuration,
-                magneticFieldEnemyBoostCooldown,
-                magneticFieldDriftSpeed,
-                pull,
-                driftDir,
-                0f);
-            magneticFields.Add(fx);
-        }
-    }
-
-    private Vector2 PickMagneticFieldPosition(float radius)
-    {
-        float margin = Mathf.Max(0.6f, radius * 0.75f);
-        float xMin = Mathf.Min(interiorLeft + margin, interiorRight - margin);
-        float xMax = Mathf.Max(interiorLeft + margin, interiorRight - margin);
-        float yMin = Mathf.Min(interiorBottom + margin, interiorTop - margin);
-        float yMax = Mathf.Max(interiorBottom + margin, interiorTop - margin);
-        return new Vector2(Random.Range(xMin, xMax), Random.Range(yMin, yMax));
-    }
-
-    private void ClearMagneticFields()
-    {
-        for (int i = magneticFields.Count - 1; i >= 0; i--)
-        {
-            ThemedEventZoneFx field = magneticFields[i];
-            if (field != null)
-            {
-                if (Application.isPlaying)
-                {
-                    Destroy(field.gameObject);
-                }
-                else
-                {
-                    DestroyImmediate(field.gameObject);
-                }
-            }
-        }
-
-        magneticFields.Clear();
-    }
-
     private void SpawnCargoTransit(float totalDuration)
     {
         ClearCargoTransit();
@@ -948,11 +1011,13 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         int max = Mathf.Max(min, Mathf.Max(cargoBlockCountMin, cargoBlockCountMax));
         int count = Random.Range(min, max + 1);
         float activeTime = Mathf.Max(0.6f, totalDuration - Mathf.Max(0.1f, cargoTelegraphSeconds) - 0.25f);
+        bool horizontalRoute = Random.value < 0.5f;
+        float routeCenter = PickCargoRouteCenter(horizontalRoute);
 
         for (int i = 0; i < count; i++)
         {
-            Vector2 size = RollCargoSize(i);
-            Vector2 position = PickCargoTransitPosition(size, i, count);
+            Vector2 size = RollCargoRouteSize(i, horizontalRoute);
+            Vector2 position = PickCargoRoutePosition(size, i, count, horizontalRoute, routeCenter);
             GameObject cargoGo = new GameObject($"StorageCargoTransit_{i}");
             cargoGo.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
             cargoGo.transform.position = new Vector3(position.x, position.y, 0f);
@@ -977,7 +1042,7 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         return count;
     }
 
-    private Vector2 RollCargoSize(int index)
+    private Vector2 RollCargoRouteSize(int index, bool horizontalRoute)
     {
         float width = Random.Range(
             Mathf.Min(cargoSizeMin.x, cargoSizeMax.x),
@@ -986,7 +1051,7 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
             Mathf.Min(cargoSizeMin.y, cargoSizeMax.y),
             Mathf.Max(cargoSizeMin.y, cargoSizeMax.y));
 
-        if ((index & 1) == 1)
+        if (!horizontalRoute)
         {
             float swap = width;
             width = height;
@@ -996,7 +1061,42 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         return new Vector2(Mathf.Max(0.35f, width), Mathf.Max(0.35f, height));
     }
 
-    private Vector2 PickCargoTransitPosition(Vector2 size, int index, int count)
+    private float PickCargoRouteCenter(bool horizontalRoute)
+    {
+        float min = horizontalRoute ? interiorBottom : interiorLeft;
+        float max = horizontalRoute ? interiorTop : interiorRight;
+        float margin = Mathf.Max(0.7f, cargoRouteMargin);
+        float low = Mathf.Min(min + margin, max - margin);
+        float high = Mathf.Max(min + margin, max - margin);
+        float best = (low + high) * 0.5f;
+        float bestScore = float.NegativeInfinity;
+
+        for (int attempt = 0; attempt < 28; attempt++)
+        {
+            float candidate = Random.Range(low, high);
+            float score = Random.value * 0.15f;
+            if (playerController != null)
+            {
+                Vector2 playerPos = playerController.GetPosition();
+                score += Mathf.Abs((horizontalRoute ? playerPos.y : playerPos.x) - candidate);
+            }
+            if (enemyController != null)
+            {
+                Vector2 enemyPos = enemyController.GetCurrentPosition();
+                score += Mathf.Abs((horizontalRoute ? enemyPos.y : enemyPos.x) - candidate) * 0.65f;
+            }
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = candidate;
+            }
+        }
+
+        return best;
+    }
+
+    private Vector2 PickCargoRoutePosition(Vector2 size, int index, int count, bool horizontalRoute, float routeCenter)
     {
         float marginX = Mathf.Max(0.8f, size.x * 0.5f + 0.2f);
         float marginY = Mathf.Max(0.8f, size.y * 0.5f + 0.2f);
@@ -1004,11 +1104,21 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         float xMax = Mathf.Max(interiorLeft + marginX, interiorRight - marginX);
         float yMin = Mathf.Min(interiorBottom + marginY, interiorTop - marginY);
         float yMax = Mathf.Max(interiorBottom + marginY, interiorTop - marginY);
-        Vector2 fallback = new Vector2(Mathf.Lerp(xMin, xMax, (index + 1f) / Mathf.Max(2f, count + 1f)), (yMin + yMax) * 0.5f);
+        float t = (index + 1f) / Mathf.Max(2f, count + 1f);
+        float alongMin = horizontalRoute ? xMin : yMin;
+        float alongMax = horizontalRoute ? xMax : yMax;
+        float baseAlong = Mathf.Lerp(alongMin, alongMax, t);
+        Vector2 fallback = horizontalRoute
+            ? new Vector2(baseAlong, Mathf.Clamp(routeCenter, yMin, yMax))
+            : new Vector2(Mathf.Clamp(routeCenter, xMin, xMax), baseAlong);
 
-        for (int attempt = 0; attempt < 42; attempt++)
+        for (int attempt = 0; attempt < 34; attempt++)
         {
-            Vector2 candidate = new Vector2(Random.Range(xMin, xMax), Random.Range(yMin, yMax));
+            float alongJitter = attempt == 0 ? 0f : Random.Range(-Mathf.Abs(cargoRouteAlongJitter), Mathf.Abs(cargoRouteAlongJitter));
+            float perpendicularJitter = attempt == 0 ? 0f : Random.Range(-Mathf.Abs(cargoRoutePerpendicularJitter), Mathf.Abs(cargoRoutePerpendicularJitter));
+            Vector2 candidate = horizontalRoute
+                ? new Vector2(Mathf.Clamp(baseAlong + alongJitter, xMin, xMax), Mathf.Clamp(routeCenter + perpendicularJitter, yMin, yMax))
+                : new Vector2(Mathf.Clamp(routeCenter + perpendicularJitter, xMin, xMax), Mathf.Clamp(baseAlong + alongJitter, yMin, yMax));
             fallback = candidate;
             if (IsGoodCargoTransitPosition(candidate, size))
             {
@@ -1016,7 +1126,33 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
             }
         }
 
-        return fallback;
+        return PickCargoTransitFallbackPosition(size, fallback);
+    }
+
+    private Vector2 PickCargoTransitFallbackPosition(Vector2 size, Vector2 preferred)
+    {
+        if (IsGoodCargoTransitPosition(preferred, size))
+        {
+            return preferred;
+        }
+
+        float marginX = Mathf.Max(0.8f, size.x * 0.5f + 0.2f);
+        float marginY = Mathf.Max(0.8f, size.y * 0.5f + 0.2f);
+        float xMin = Mathf.Min(interiorLeft + marginX, interiorRight - marginX);
+        float xMax = Mathf.Max(interiorLeft + marginX, interiorRight - marginX);
+        float yMin = Mathf.Min(interiorBottom + marginY, interiorTop - marginY);
+        float yMax = Mathf.Max(interiorBottom + marginY, interiorTop - marginY);
+
+        for (int attempt = 0; attempt < 48; attempt++)
+        {
+            Vector2 candidate = new Vector2(Random.Range(xMin, xMax), Random.Range(yMin, yMax));
+            if (IsGoodCargoTransitPosition(candidate, size))
+            {
+                return candidate;
+            }
+        }
+
+        return preferred;
     }
 
     private bool IsGoodCargoTransitPosition(Vector2 candidate, Vector2 size)
@@ -1070,6 +1206,34 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         }
 
         cargoTransitBlocks.Clear();
+    }
+
+    private void SpawnSignature(ThemedEventSignatureFx.SignatureKind kind, Color primary, Color secondary)
+    {
+        ClearSignature();
+        GameObject signature = new GameObject($"StorageSignature_{kind}");
+        signature.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
+        signatureFx = signature.AddComponent<ThemedEventSignatureFx>();
+        signatureFx.Configure(kind, interiorLeft, interiorRight, interiorBottom, interiorTop, eventDuration, primary, secondary);
+    }
+
+    private void ClearSignature()
+    {
+        if (signatureFx == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(signatureFx.gameObject);
+        }
+        else
+        {
+            DestroyImmediate(signatureFx.gameObject);
+        }
+
+        signatureFx = null;
     }
 
     private static Vector2 PickPrimaryAxis()
