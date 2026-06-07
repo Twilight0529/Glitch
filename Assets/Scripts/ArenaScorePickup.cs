@@ -21,6 +21,8 @@ public class ArenaScorePickup : MonoBehaviour
     private float lifeTimer;
     private float lifetime;
     private int scoreValue;
+    private bool chargedDataCore;
+    private float extraFirewallCharge;
     private Vector3 basePosition;
     private SpriteRenderer spriteRenderer;
     private SpriteRenderer auraRenderer;
@@ -28,19 +30,29 @@ public class ArenaScorePickup : MonoBehaviour
 
     public int ScoreValue => scoreValue;
 
-    public void Configure(ArenaChaosDirector ownerController, GameManager manager, int points, float lifeSeconds)
+    public void Configure(ArenaChaosDirector ownerController, GameManager manager, int points, float lifeSeconds, bool dataCore = false, float firewallChargeBonus = 0f)
     {
         owner = ownerController;
         gameManager = manager;
         scoreValue = Mathf.Max(1, points);
         lifetime = Mathf.Max(0.5f, lifeSeconds);
+        chargedDataCore = dataCore;
+        extraFirewallCharge = Mathf.Max(0f, firewallChargeBonus);
+        if (chargedDataCore)
+        {
+            enableAura = true;
+            baseScale = Mathf.Max(baseScale, 1.24f);
+            EnsureAura();
+        }
+
+        ApplyVisual();
     }
 
     private void Awake()
     {
         spriteRenderer = GetComponent<SpriteRenderer>();
         basePosition = transform.position;
-        if (enableAura)
+        if (enableAura || chargedDataCore)
         {
             EnsureAura();
         }
@@ -71,6 +83,13 @@ public class ArenaScorePickup : MonoBehaviour
             return;
         }
 
+        if (chargedDataCore)
+        {
+            spriteRenderer.color = new Color(0.58f, 1f, 0.86f, 0.98f);
+            transform.localScale = Vector3.one * 1.2f;
+            return;
+        }
+
         spriteRenderer.color = new Color(0.97f, 0.97f, 0.98f, 0.96f);
     }
 
@@ -92,6 +111,8 @@ public class ArenaScorePickup : MonoBehaviour
             gameManager.AddScore(scoreValue);
         }
 
+        player.AddFirewallChargeFromScore(scoreValue);
+        player.AddFirewallCharge(extraFirewallCharge);
         GlitchAudioManager.PlayScorePickup(transform.position);
         SpawnCollectFlash();
         owner?.NotifyScorePickupConsumed(this);
@@ -105,26 +126,32 @@ public class ArenaScorePickup : MonoBehaviour
 
     private void EnsureAura()
     {
-        auraObject = new GameObject("ScoreAura");
+        if (auraObject != null)
+        {
+            return;
+        }
+
+        auraObject = new GameObject(chargedDataCore ? "DataCoreAura" : "ScoreAura");
         auraObject.transform.SetParent(transform, false);
         auraObject.transform.localPosition = Vector3.zero;
         auraObject.transform.localScale = Vector3.one * Mathf.Max(1f, auraScale);
         auraRenderer = auraObject.AddComponent<SpriteRenderer>();
         auraRenderer.sprite = CircleSpriteProvider.Get();
         auraRenderer.sortingOrder = 11;
-        auraRenderer.color = new Color(0.82f, 0.95f, 1f, 0.22f);
+        auraRenderer.color = chargedDataCore ? new Color(0.58f, 1f, 0.86f, 0.28f) : new Color(0.82f, 0.95f, 1f, 0.22f);
     }
 
     private void UpdateAura(float pulse)
     {
-        if (!enableAura || auraRenderer == null || auraObject == null)
+        if ((!enableAura && !chargedDataCore) || auraRenderer == null || auraObject == null)
         {
             return;
         }
 
         float auraPulse = 0.65f + 0.35f * (0.5f + 0.5f * Mathf.Sin(Time.time * auraPulseSpeed));
-        auraRenderer.color = new Color(0.82f, 0.95f, 1f, 0.06f + auraPulse * 0.12f);
-        auraObject.transform.localScale = Vector3.one * auraScale * Mathf.Lerp(0.88f, 1.12f, auraPulse * pulse);
+        Color auraColor = chargedDataCore ? new Color(0.58f, 1f, 0.86f, 1f) : new Color(0.82f, 0.95f, 1f, 1f);
+        auraRenderer.color = new Color(auraColor.r, auraColor.g, auraColor.b, 0.06f + auraPulse * (chargedDataCore ? 0.22f : 0.12f));
+        auraObject.transform.localScale = Vector3.one * auraScale * (chargedDataCore ? 1.22f : 1f) * Mathf.Lerp(0.88f, 1.12f, auraPulse * pulse);
     }
 
     private void SpawnCollectFlash()

@@ -71,6 +71,13 @@ public class GlitchAudioManager : MonoBehaviour
     public static void PlayParryStart(Vector3 position) => Play("parry_start", 0.52f, 1f, position);
     public static void PlayParrySuccess(Vector3 position) => Play("parry_success", 0.78f, 1f, position);
     public static void PlayProjectileReflect(Vector3 position) => Play("projectile_reflect", 0.48f, 1f, position);
+    public static void PlayFirewallReady(Vector3 position) => Play("firewall_ready", 0.58f, 1f, position);
+    public static void PlayFirewallBurst(Vector3 position)
+    {
+        BoostMusic(0.28f, 1.1f);
+        Play("firewall_burst", 0.84f, 1f, position);
+    }
+
     public static void PlayPlayerDeath(Vector3 position) => Play("player_death", 0.92f, 1f, position);
     public static void PlayUpgradeOpen() => Play("upgrade_open", 0.58f, 1f, Vector3.zero);
     public static void PlayUpgradeSelect() => Play("upgrade_select", 0.64f, 1f, Vector3.zero);
@@ -456,6 +463,10 @@ public class GlitchAudioManager : MonoBehaviour
                 return CreateClip(clipName, 0.42f, ParrySuccess);
             case "projectile_reflect":
                 return CreateClip(clipName, 0.22f, ProjectileReflect);
+            case "firewall_ready":
+                return CreateClip(clipName, 0.48f, FirewallReady);
+            case "firewall_burst":
+                return CreateClip(clipName, 0.72f, FirewallBurst);
             case "shield_break":
                 return CreateClip(clipName, 0.46f, ShieldBreak);
             case "player_death":
@@ -647,6 +658,28 @@ public class GlitchAudioManager : MonoBehaviour
         float e = Envelope(t, d, 0.003f, 0.07f);
         float f = Mathf.Lerp(1200f, 2100f, t / d);
         return SoftClip((Sine(f, t) * 0.24f + Crush(Sine(f * 0.5f, t), 6) * 0.12f + Noise(i, 17.2f) * 0.08f) * e);
+    }
+
+    private static float FirewallReady(float t, int i)
+    {
+        float d = 0.48f;
+        float e = Envelope(t, d, 0.006f, 0.16f);
+        float stepA = Sine(520f, t) * Gate(t, 9f, 0.32f);
+        float stepB = Sine(780f, t) * Gate(t + 0.04f, 9f, 0.32f);
+        float shimmer = Crush(Sine(1560f + Mathf.Sin(t * 18f) * 120f, t), 7) * 0.10f;
+        return SoftClip((stepA * 0.18f + stepB * 0.16f + shimmer + Noise(i, 18.5f) * 0.025f) * e);
+    }
+
+    private static float FirewallBurst(float t, int i)
+    {
+        float d = 0.72f;
+        float hit = Mathf.Exp(-t * 12f);
+        float e = Envelope(t, d, 0.004f, 0.24f);
+        float punch = Sine(Mathf.Lerp(96f, 54f, Mathf.Clamp01(t / d)), t) * 0.56f * hit;
+        float sweep = Sine(Mathf.Lerp(360f, 1340f, Mathf.Clamp01(t / d)), t) * 0.22f * e;
+        float staticWall = Noise(i, 19.7f) * 0.24f * Mathf.Exp(-t * 5.2f) * Gate(t, 22f, 0.42f);
+        float bitCrush = Crush(Sine(760f + Mathf.Sin(t * 30f) * 180f, t), 5) * 0.12f * e;
+        return SoftClip(punch + sweep + staticWall + bitCrush);
     }
 
     private static float ShieldBreak(float t, int i)

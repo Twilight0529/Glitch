@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -32,6 +33,22 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float parryFxRadius = 1.65f;
     [SerializeField] private float parryFxDuration = 0.2f;
     [SerializeField] private int parryFxRayCount = 12;
+
+    [Header("Firewall Burst")]
+    [SerializeField] private float firewallChargeMax = 100f;
+    [SerializeField] private float firewallChargeFromScorePickup = 2.2f;
+    [SerializeField] private float firewallChargeFromPowerup = 14f;
+    [SerializeField] private float firewallChargeFromObjectiveNode = 22f;
+    [SerializeField] private float firewallChargeFromParry = 18f;
+    [SerializeField] private float firewallBurstRadius = 4.4f;
+    [SerializeField] private float maxFirewallBurstRadius = 6.4f;
+    [SerializeField] private float firewallBurstStunDuration = 0.95f;
+    [SerializeField] private float maxFirewallBurstStunDuration = 1.55f;
+    [SerializeField] private float firewallBurstKnockbackMultiplier = 1.35f;
+    [SerializeField] private float maxFirewallChargeGainMultiplier = 1.9f;
+    [SerializeField] private Color firewallBurstColor = new Color(0.46f, 0.96f, 1f, 1f);
+    [SerializeField] private Color firewallReadyColor = new Color(1f, 0.90f, 0.54f, 1f);
+    [SerializeField] private int firewallBurstRayCount = 18;
 
     [Header("Movement Trail")]
     [SerializeField] private bool enableMovementTrail = true;
@@ -80,6 +97,8 @@ public class PlayerController : MonoBehaviour
     private SpriteRenderer parryRenderer;
     private GameObject parryVisual;
     private ParticleSystem movementTrail;
+    private float firewallCharge;
+    private float firewallChargeGainMultiplier = 1f;
     private bool deathSequenceActive;
     private bool breachConsumptionActive;
     private GameObject breachGlitchVisual;
@@ -95,6 +114,11 @@ public class PlayerController : MonoBehaviour
     public bool HasSpeedBoost => speedBoostTimer > 0f;
     public bool HasMovementSlow => movementSlowTimer > 0f;
     public bool IsParryActive => parryTimer > 0f;
+    public float FirewallCharge => firewallCharge;
+    public float FirewallChargeMax => Mathf.Max(1f, firewallChargeMax);
+    public float FirewallChargeNormalized => Mathf.Clamp01(firewallCharge / FirewallChargeMax);
+    public bool IsFirewallBurstReady => firewallCharge >= FirewallChargeMax;
+    public float FirewallBurstRadius => firewallBurstRadius;
     public string ActivePowerupLabel
     {
         get
@@ -183,6 +207,10 @@ public class PlayerController : MonoBehaviour
         }
 
         ScanParryWindow();
+        if (WasFirewallBurstPressed())
+        {
+            TryActivateFirewallBurst();
+        }
 
         moveInput = ReadMoveInput().normalized;
         float effectiveSpeed = moveSpeed;
@@ -197,6 +225,28 @@ public class PlayerController : MonoBehaviour
 
         rb.linearVelocity = moveInput * effectiveSpeed;
         UpdateMovementTrail(Mathf.Max(0.01f, effectiveSpeed));
+    }
+
+    private static bool WasFirewallBurstPressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        Mouse mouse = Mouse.current;
+        if (keyboard != null && (keyboard.qKey.wasPressedThisFrame || keyboard.rKey.wasPressedThisFrame))
+        {
+            return true;
+        }
+
+        if (mouse != null && mouse.rightButton.wasPressedThisFrame)
+        {
+            return true;
+        }
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.Q) || Input.GetKeyDown(KeyCode.R) || Input.GetMouseButtonDown(1);
+#else
+        return false;
+#endif
     }
 
     private static bool WasParryPressed()
@@ -321,6 +371,106 @@ public class PlayerController : MonoBehaviour
             shieldDurationMultiplier * Mathf.Max(1f, multiplier));
     }
 
+    public void AddFirewallChargeFromScore(int scorePoints)
+    {
+        AddFirewallCharge(firewallChargeFromScorePickup * Mathf.Max(1, scorePoints));
+    }
+
+    public void AddFirewallChargeFromPowerup()
+    {
+        AddFirewallCharge(firewallChargeFromPowerup);
+    }
+
+    public void AddFirewallChargeFromObjectiveNode()
+    {
+        AddFirewallCharge(firewallChargeFromObjectiveNode);
+    }
+
+    public void ImproveFirewallChargeGain(float multiplier)
+    {
+        firewallChargeGainMultiplier = Mathf.Min(
+            Mathf.Max(1f, maxFirewallChargeGainMultiplier),
+            firewallChargeGainMultiplier * Mathf.Max(1f, multiplier));
+    }
+
+    public void ExpandFirewallBurstRadius(float extraRadius)
+    {
+        firewallBurstRadius = Mathf.Min(
+            Mathf.Max(0.5f, maxFirewallBurstRadius),
+            firewallBurstRadius + Mathf.Max(0f, extraRadius));
+    }
+
+    public void ImproveFirewallBurstStun(float extraSeconds)
+    {
+        firewallBurstStunDuration = Mathf.Min(
+            Mathf.Max(0.1f, maxFirewallBurstStunDuration),
+            firewallBurstStunDuration + Mathf.Max(0f, extraSeconds));
+    }
+
+    public void AddFirewallCharge(float amount)
+    {
+        if (deathSequenceActive || breachConsumptionActive || amount <= 0f)
+        {
+            return;
+        }
+
+        bool wasReady = IsFirewallBurstReady;
+        firewallCharge = Mathf.Min(FirewallChargeMax, firewallCharge + amount * Mathf.Max(0.1f, firewallChargeGainMultiplier));
+        if (!wasReady && IsFirewallBurstReady)
+        {
+            GlitchAudioManager.PlayFirewallReady(transform.position);
+            SpawnFirewallReadyFx();
+        }
+    }
+
+    public bool TryActivateFirewallBurst()
+    {
+        if (!IsFirewallBurstReady || deathSequenceActive || breachConsumptionActive)
+        {
+            return false;
+        }
+
+        firewallCharge = 0f;
+        Vector2 origin = GetPosition();
+        float radius = Mathf.Max(0.5f, firewallBurstRadius);
+        Collider2D[] hits = Physics2D.OverlapCircleAll(origin, radius);
+        HashSet<EnemyController> affectedEnemies = new HashSet<EnemyController>();
+        HashSet<SplitAnomalyCloneController> affectedClones = new HashSet<SplitAnomalyCloneController>();
+
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider2D hit = hits[i];
+            if (hit == null)
+            {
+                continue;
+            }
+
+            AnomalyProjectile projectile = hit.GetComponent<AnomalyProjectile>();
+            if (projectile != null)
+            {
+                projectile.TryReflectByParry(origin);
+                continue;
+            }
+
+            EnemyController enemy = hit.GetComponent<EnemyController>();
+            if (enemy != null && affectedEnemies.Add(enemy))
+            {
+                enemy.ApplyFirewallBurst(origin, radius, firewallBurstStunDuration, firewallBurstKnockbackMultiplier);
+                continue;
+            }
+
+            SplitAnomalyCloneController clone = hit.GetComponent<SplitAnomalyCloneController>();
+            if (clone != null && affectedClones.Add(clone))
+            {
+                clone.ApplyFirewallBurst(origin, radius, firewallBurstStunDuration, firewallBurstKnockbackMultiplier);
+            }
+        }
+
+        SpawnFirewallBurstFx(radius);
+        GlitchAudioManager.PlayFirewallBurst(transform.position);
+        return true;
+    }
+
     public bool TryParryHit(Vector2 threatPosition, out Vector2 parryDirection)
     {
         parryDirection = ((Vector2)transform.position - threatPosition).sqrMagnitude > 0.0001f
@@ -335,6 +485,7 @@ public class PlayerController : MonoBehaviour
         parryDirection = -parryDirection;
         parryTimer = 0f;
         parryCooldownTimer = Mathf.Max(parryCooldownTimer, Mathf.Max(0.05f, parryCooldown * 0.55f));
+        AddFirewallCharge(firewallChargeFromParry);
         SpawnParrySuccessFx(parryDirection);
         GlitchAudioManager.PlayParrySuccess(transform.position);
         return true;
@@ -1079,6 +1230,49 @@ public class PlayerController : MonoBehaviour
             ray.transform.localScale = new Vector3(0.26f, 0.08f, 1f);
             ray.AddComponent<PlayerShieldBreakRayFx>().Configure(sr, rayDir, parryFxRadius, parryFxDuration);
             Destroy(ray, Mathf.Max(0.12f, parryFxDuration + 0.08f));
+        }
+    }
+
+    private void SpawnFirewallReadyFx()
+    {
+        GameObject ring = new GameObject("FirewallReadyRingFx");
+        ring.transform.position = transform.position;
+        SpriteRenderer ringRenderer = ring.AddComponent<SpriteRenderer>();
+        ringRenderer.sprite = CircleSpriteProvider.Get();
+        ringRenderer.color = new Color(firewallReadyColor.r, firewallReadyColor.g, firewallReadyColor.b, 0.72f);
+        ringRenderer.sortingOrder = 15;
+        ring.transform.localScale = Vector3.one * 0.45f;
+        ring.AddComponent<PlayerParryBurstFx>().Configure(ringRenderer, 1.35f, 0.32f, firewallReadyColor);
+        Destroy(ring, 0.42f);
+    }
+
+    private void SpawnFirewallBurstFx(float radius)
+    {
+        Color burst = firewallBurstColor;
+        GameObject ring = new GameObject("FirewallBurstRingFx");
+        ring.transform.position = transform.position;
+        SpriteRenderer ringRenderer = ring.AddComponent<SpriteRenderer>();
+        ringRenderer.sprite = CircleSpriteProvider.Get();
+        ringRenderer.color = new Color(burst.r, burst.g, burst.b, 0.88f);
+        ringRenderer.sortingOrder = 16;
+        ring.transform.localScale = Vector3.one * 0.35f;
+        ring.AddComponent<PlayerParryBurstFx>().Configure(ringRenderer, Mathf.Max(0.8f, radius), 0.42f, burst);
+        Destroy(ring, 0.54f);
+
+        int rays = Mathf.Max(6, firewallBurstRayCount);
+        for (int i = 0; i < rays; i++)
+        {
+            float angle = ((Mathf.PI * 2f) * i) / rays + Random.Range(-0.08f, 0.08f);
+            Vector2 rayDir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            GameObject ray = new GameObject($"FirewallBurstRay_{i}");
+            ray.transform.position = transform.position;
+            SpriteRenderer sr = ray.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.sortingOrder = 16;
+            sr.color = i % 3 == 0 ? firewallReadyColor : burst;
+            ray.transform.localScale = new Vector3(0.34f, 0.08f, 1f);
+            ray.AddComponent<PlayerShieldBreakRayFx>().Configure(sr, rayDir, radius, 0.36f);
+            Destroy(ray, 0.48f);
         }
     }
 }

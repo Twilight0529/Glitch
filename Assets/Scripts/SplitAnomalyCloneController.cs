@@ -21,6 +21,8 @@ public class SplitAnomalyCloneController : MonoBehaviour
 
     private bool splitStateActive;
     private bool splitMergeActive;
+    private float firewallStunTimer;
+    private float firewallKnockbackTimer;
     private Vector2 lastMoveDirection = Vector2.right;
 
     public void ConfigureMovement(float speed, float responsiveness, float flankOffset, float mergeMoveSpeed, int sign)
@@ -44,6 +46,28 @@ public class SplitAnomalyCloneController : MonoBehaviour
     {
         splitStateActive = active;
         splitMergeActive = merging;
+    }
+
+    public void ApplyFirewallBurst(Vector2 burstOrigin, float burstRadius, float stunSeconds, float knockbackMultiplier)
+    {
+        Vector2 direction = ((Vector2)transform.position - burstOrigin);
+        if (direction.sqrMagnitude < 0.0001f)
+        {
+            direction = -lastMoveDirection;
+        }
+
+        float distance = Vector2.Distance(transform.position, burstOrigin);
+        float radius = Mathf.Max(0.5f, burstRadius);
+        float force = Mathf.Lerp(1.15f, 0.66f, Mathf.Clamp01(distance / radius));
+        firewallStunTimer = Mathf.Max(firewallStunTimer, Mathf.Max(0.08f, stunSeconds));
+        firewallKnockbackTimer = Mathf.Max(firewallKnockbackTimer, Mathf.Max(0.08f, stunSeconds * 0.34f));
+
+        if (rb != null)
+        {
+            rb.linearVelocity = direction.normalized * Mathf.Max(0.1f, moveSpeed * 2.35f * Mathf.Max(0.1f, knockbackMultiplier) * force);
+        }
+
+        GlitchAudioManager.PlayEnemyParried(transform.position);
     }
 
     public void AbsorbIntoBreach(Vector2 breachPosition)
@@ -92,6 +116,11 @@ public class SplitAnomalyCloneController : MonoBehaviour
         if (!owner.CanDamagePlayer())
         {
             rb.linearVelocity = Vector2.zero;
+            return;
+        }
+
+        if (TickFirewallStun())
+        {
             return;
         }
 
@@ -163,6 +192,23 @@ public class SplitAnomalyCloneController : MonoBehaviour
 
         Vector2 dir = distance > 0.001f ? toOwner / distance : Vector2.zero;
         rb.linearVelocity = dir * mergeSpeed;
+    }
+
+    private bool TickFirewallStun()
+    {
+        if (firewallStunTimer <= 0f)
+        {
+            return false;
+        }
+
+        firewallStunTimer -= Time.deltaTime;
+        firewallKnockbackTimer -= Time.deltaTime;
+        if (firewallKnockbackTimer <= 0f)
+        {
+            rb.linearVelocity = Vector2.MoveTowards(rb.linearVelocity, Vector2.zero, velocityResponsiveness * 1.8f * Time.deltaTime);
+        }
+
+        return true;
     }
 
     private Vector2 ApplySimpleRepulsion(Vector2 desiredDirection)

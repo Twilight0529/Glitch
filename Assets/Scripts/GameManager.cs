@@ -28,7 +28,10 @@ public class GameManager : MonoBehaviour
         ParryWindow,
         ParryCooldown,
         ParryRadius,
-        ShieldDuration
+        ShieldDuration,
+        FirewallChargeGain,
+        FirewallBurstRadius,
+        FirewallBurstStun
     }
 
     private struct UpgradeChoice
@@ -36,6 +39,8 @@ public class GameManager : MonoBehaviour
         public PlayerUpgradeKind kind;
         public string title;
         public string description;
+        public string category;
+        public string rarity;
         public Color accent;
     }
 
@@ -970,7 +975,10 @@ public class GameManager : MonoBehaviour
             PlayerUpgradeKind.ParryWindow,
             PlayerUpgradeKind.ParryCooldown,
             PlayerUpgradeKind.ParryRadius,
-            PlayerUpgradeKind.ShieldDuration
+            PlayerUpgradeKind.ShieldDuration,
+            PlayerUpgradeKind.FirewallChargeGain,
+            PlayerUpgradeKind.FirewallBurstRadius,
+            PlayerUpgradeKind.FirewallBurstStun
         };
 
         int desired = Mathf.Clamp(upgradeOptionsShown, 1, pool.Count);
@@ -1029,6 +1037,8 @@ public class GameManager : MonoBehaviour
                     kind = kind,
                     title = "Impulso Vectorial",
                     description = "Aumenta la velocidad base del jugador.",
+                    category = "MOVIMIENTO",
+                    rarity = "COMUN",
                     accent = new Color(0.46f, 0.96f, 1f, 1f)
                 };
             case PlayerUpgradeKind.ParryWindow:
@@ -1037,6 +1047,8 @@ public class GameManager : MonoBehaviour
                     kind = kind,
                     title = "Ventana Extendida",
                     description = "El Firewall Parry permanece activo un poco mas.",
+                    category = "FIREWALL",
+                    rarity = "COMUN",
                     accent = new Color(1f, 0.90f, 0.54f, 1f)
                 };
             case PlayerUpgradeKind.ParryCooldown:
@@ -1045,6 +1057,8 @@ public class GameManager : MonoBehaviour
                     kind = kind,
                     title = "Recarga Fria",
                     description = "Reduce el tiempo de espera del Firewall Parry.",
+                    category = "FIREWALL",
+                    rarity = "COMUN",
                     accent = new Color(0.60f, 0.84f, 1f, 1f)
                 };
             case PlayerUpgradeKind.ParryRadius:
@@ -1053,7 +1067,39 @@ public class GameManager : MonoBehaviour
                     kind = kind,
                     title = "Pulso Expandido",
                     description = "Aumenta el radio efectivo del Firewall Parry.",
+                    category = "FIREWALL",
+                    rarity = "COMUN",
                     accent = new Color(0.76f, 0.64f, 1f, 1f)
+                };
+            case PlayerUpgradeKind.FirewallChargeGain:
+                return new UpgradeChoice
+                {
+                    kind = kind,
+                    title = "Recolector de Datos",
+                    description = "Pickups, nodos y parries cargan mas rapido el Firewall Burst.",
+                    category = "BUILD",
+                    rarity = "INESTABLE",
+                    accent = new Color(0.52f, 1f, 0.78f, 1f)
+                };
+            case PlayerUpgradeKind.FirewallBurstRadius:
+                return new UpgradeChoice
+                {
+                    kind = kind,
+                    title = "Firewall Amplificado",
+                    description = "Aumenta el area del Burst para empujar enemigos y limpiar proyectiles.",
+                    category = "CONTROL",
+                    rarity = "INESTABLE",
+                    accent = new Color(0.42f, 0.94f, 1f, 1f)
+                };
+            case PlayerUpgradeKind.FirewallBurstStun:
+                return new UpgradeChoice
+                {
+                    kind = kind,
+                    title = "Corte de Senal",
+                    description = "El Burst deja a la anomalia vulnerable durante mas tiempo.",
+                    category = "CONTROL",
+                    rarity = "CRITICO",
+                    accent = new Color(1f, 0.54f, 0.72f, 1f)
                 };
             default:
                 return new UpgradeChoice
@@ -1061,6 +1107,8 @@ public class GameManager : MonoBehaviour
                     kind = kind,
                     title = "Escudo Resonante",
                     description = "Los escudos duran mas cuando los recolectas.",
+                    category = "DEFENSA",
+                    rarity = "COMUN",
                     accent = new Color(1f, 0.66f, 0.86f, 1f)
                 };
         }
@@ -1125,6 +1173,15 @@ public class GameManager : MonoBehaviour
                 break;
             case PlayerUpgradeKind.ShieldDuration:
                 playerController.ImproveShieldDuration(1.18f);
+                break;
+            case PlayerUpgradeKind.FirewallChargeGain:
+                playerController.ImproveFirewallChargeGain(1.22f);
+                break;
+            case PlayerUpgradeKind.FirewallBurstRadius:
+                playerController.ExpandFirewallBurstRadius(0.42f);
+                break;
+            case PlayerUpgradeKind.FirewallBurstStun:
+                playerController.ImproveFirewallBurstStun(0.22f);
                 break;
         }
     }
@@ -1217,8 +1274,10 @@ public class GameManager : MonoBehaviour
 
         Color old = GUI.color;
         GUI.color = new Color(1f, 1f, 1f, cardAlpha);
-        GUI.Label(new Rect(animatedCard.x + (16f * s), animatedCard.y + (40f * s), animatedCard.width - (32f * s), 58f * s), choice.title.ToUpperInvariant(), upgradeButtonStyle);
-        GUI.Label(new Rect(animatedCard.x + (16f * s), animatedCard.y + (106f * s), animatedCard.width - (32f * s), 82f * s), choice.description, upgradeDescriptionStyle);
+        string meta = $"{choice.category} / {choice.rarity}";
+        GUI.Label(new Rect(animatedCard.x + (16f * s), animatedCard.y + (26f * s), animatedCard.width - (32f * s), 22f * s), meta, hudLabelStyle);
+        GUI.Label(new Rect(animatedCard.x + (16f * s), animatedCard.y + (52f * s), animatedCard.width - (32f * s), 54f * s), choice.title.ToUpperInvariant(), upgradeButtonStyle);
+        GUI.Label(new Rect(animatedCard.x + (16f * s), animatedCard.y + (112f * s), animatedCard.width - (32f * s), 78f * s), choice.description, upgradeDescriptionStyle);
 
         Rect buttonRect = new Rect(animatedCard.x + (16f * s), animatedCard.yMax - (52f * s), animatedCard.width - (32f * s), 34f * s);
         DrawSolidRect(buttonRect, new Color(choice.accent.r, choice.accent.g, choice.accent.b, (hovered ? 0.46f : 0.28f) * cardAlpha));
@@ -1462,7 +1521,7 @@ public class GameManager : MonoBehaviour
         DrawHudAmbientFrame();
 
         float s = hudScale;
-        Rect leftPanel = new Rect(12f * s, 10f * s, 320f * s, 114f * s);
+        Rect leftPanel = new Rect(12f * s, 10f * s, 320f * s, 146f * s);
         DrawSolidRect(leftPanel, new Color(0.03f, 0.05f, 0.10f, 0.58f));
         DrawSolidRect(new Rect(leftPanel.x, leftPanel.y, leftPanel.width, 2f), new Color(0.38f, 0.58f, 0.84f, 0.6f));
         DrawSolidRect(new Rect(leftPanel.x, leftPanel.yMax - 2f, leftPanel.width, 2f), new Color(0.18f, 0.32f, 0.50f, 0.42f));
@@ -1483,6 +1542,7 @@ public class GameManager : MonoBehaviour
         int shownScore = Mathf.Max(0, Mathf.RoundToInt(displayedScore));
         GUI.Label(new Rect(rightColX, valueY, colW, valueH), shownScore.ToString(), hudValueStyle);
 
+        DrawFirewallChargeMeter(leftPanel, s);
         DrawThreatMeter(leftPanel, s);
         DrawScorePopups(rightColX + (colW * 0.45f), valueY - (6f * s), s);
 
@@ -1522,6 +1582,35 @@ public class GameManager : MonoBehaviour
         DrawSolidRect(new Rect(barX, barY, threatFill, barH), new Color(barColor.r, barColor.g, barColor.b, 0.85f + pulse * 0.12f * smoothedThreat));
         DrawSolidRect(new Rect(barX, barY, barW, 1f), new Color(0.85f, 0.92f, 1f, 0.18f));
         DrawSolidRect(new Rect(barX, barY + barH - 1f, barW, 1f), new Color(0.85f, 0.92f, 1f, 0.14f));
+    }
+
+    private void DrawFirewallChargeMeter(Rect panel, float s)
+    {
+        if (playerController == null)
+        {
+            return;
+        }
+
+        float normalized = playerController.FirewallChargeNormalized;
+        bool ready = playerController.IsFirewallBurstReady;
+        float barH = 9f * s;
+        float barW = panel.width - (28f * s);
+        float barX = panel.x + (14f * s);
+        float barY = panel.yMax - (42f * s);
+        Rect background = new Rect(barX, barY, barW, barH);
+        DrawSolidRect(background, new Color(0.04f, 0.06f, 0.10f, 0.86f));
+
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (ready ? 13f : 6f));
+        Color fill = ready
+            ? Color.Lerp(new Color(0.45f, 0.95f, 1f, 0.95f), new Color(1f, 0.88f, 0.48f, 1f), pulse)
+            : Color.Lerp(new Color(0.22f, 0.48f, 0.74f, 0.82f), new Color(0.45f, 0.95f, 1f, 0.95f), normalized);
+
+        DrawSolidRect(new Rect(barX, barY, barW * normalized, barH), fill);
+        DrawSolidRect(new Rect(barX, barY, barW, 1f), new Color(0.85f, 0.92f, 1f, 0.18f));
+        DrawSolidRect(new Rect(barX, barY + barH - 1f, barW, 1f), new Color(0.85f, 0.92f, 1f, 0.14f));
+
+        string hint = ready ? "FIREWALL READY" : $"FIREWALL {Mathf.RoundToInt(normalized * 100f)}%";
+        GUI.Label(new Rect(barX, barY - (21f * s), barW, 18f * s), hint, hudLabelStyle);
     }
 
     private void DrawScorePopups(float anchorX, float anchorY, float s)

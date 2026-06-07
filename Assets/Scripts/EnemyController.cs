@@ -1659,6 +1659,25 @@ public class EnemyController : MonoBehaviour
         GlitchAudioManager.PlayEnemyParried(transform.position);
     }
 
+    public void ApplyFirewallBurst(Vector2 burstOrigin, float burstRadius, float stunSeconds, float knockbackMultiplier)
+    {
+        Vector2 direction = ((Vector2)transform.position - burstOrigin);
+        if (direction.sqrMagnitude < 0.0001f)
+        {
+            direction = -lastMoveDirection;
+        }
+
+        float distance = Vector2.Distance(transform.position, burstOrigin);
+        float radius = Mathf.Max(0.5f, burstRadius);
+        float force = Mathf.Lerp(1.25f, 0.72f, Mathf.Clamp01(distance / radius));
+        parryStunTimer = Mathf.Max(parryStunTimer, Mathf.Max(0.08f, stunSeconds));
+        parryKnockbackTimer = Mathf.Max(parryKnockbackTimer, Mathf.Max(0.08f, parryKnockbackDuration * 1.75f));
+        rb.linearVelocity = direction.normalized * Mathf.Max(0.1f, parryKnockbackSpeed * Mathf.Max(0.1f, knockbackMultiplier) * force);
+        TriggerStatePulse();
+        SpawnParryImpactBurst();
+        GlitchAudioManager.PlayEnemyParried(transform.position);
+    }
+
     private bool TickParryStun()
     {
         if (parryStunTimer <= 0f)

@@ -24,6 +24,10 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private int scorePickupBurstMin = 1;
     [SerializeField] private int scorePickupBurstMax = 2;
     [SerializeField] private float scorePickupProbeRadius = 0.34f;
+    [SerializeField, Range(0f, 1f)] private float dataCoreChance = 0.18f;
+    [SerializeField] private int dataCoreScoreMultiplier = 4;
+    [SerializeField] private float dataCoreFirewallChargeBonus = 18f;
+    [SerializeField] private float dataCoreMinPlayerDistance = 5.2f;
 
     [Header("Mini Events")]
     [SerializeField] private bool enablePulseEvents = true;
@@ -323,6 +327,11 @@ public class ArenaChaosDirector : MonoBehaviour
 
         activeObjectiveNodes.Remove(node);
         objectiveNodesActivated++;
+        if (player != null)
+        {
+            player.AddFirewallChargeFromObjectiveNode();
+        }
+
         RaiseEvent($"Node {objectiveNodesActivated}/{Mathf.Max(1, objectiveNodesTotal)} Synced");
 
         if (activeObjectiveNodes.Count <= 0)
@@ -510,12 +519,17 @@ public class ArenaChaosDirector : MonoBehaviour
 
         for (int i = 0; i < burst; i++)
         {
-            if (!TryFindSpawnPoint(scorePickupProbeRadius, out Vector2 position))
+            bool dataCore = Random.value < Mathf.Clamp01(dataCoreChance);
+            Vector2 position;
+            bool foundPoint = dataCore
+                ? TryFindDataCoreSpawnPoint(scorePickupProbeRadius, out position)
+                : TryFindSpawnPoint(scorePickupProbeRadius, out position);
+            if (!foundPoint)
             {
                 continue;
             }
 
-            GameObject go = new GameObject("ScoreDot");
+            GameObject go = new GameObject(dataCore ? "DataCore" : "ScoreDot");
             go.transform.SetParent(runtimeRoot, false);
             go.transform.position = new Vector3(position.x, position.y, 0f);
             go.transform.localScale = Vector3.one;
@@ -523,15 +537,16 @@ public class ArenaChaosDirector : MonoBehaviour
             SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
             sr.sprite = CircleSpriteProvider.Get();
             sr.drawMode = SpriteDrawMode.Sliced;
-            sr.size = Vector2.one * 0.34f;
+            sr.size = Vector2.one * (dataCore ? 0.52f : 0.34f);
             sr.sortingOrder = 12;
 
             CircleCollider2D col = go.AddComponent<CircleCollider2D>();
             col.isTrigger = true;
-            col.radius = 0.2f;
+            col.radius = dataCore ? 0.28f : 0.2f;
 
             ArenaScorePickup pickup = go.AddComponent<ArenaScorePickup>();
-            pickup.Configure(this, gameManager, Mathf.Max(1, scorePickupPoints), scorePickupLifetime);
+            int points = Mathf.Max(1, scorePickupPoints) * (dataCore ? Mathf.Max(1, dataCoreScoreMultiplier) : 1);
+            pickup.Configure(this, gameManager, points, scorePickupLifetime, dataCore, dataCore ? dataCoreFirewallChargeBonus : 0f);
             activeScorePickups.Add(pickup);
         }
     }
@@ -1391,6 +1406,34 @@ public class ArenaChaosDirector : MonoBehaviour
         }
 
         return false;
+    }
+
+    private bool TryFindDataCoreSpawnPoint(float probeRadius, out Vector2 result)
+    {
+        result = Vector2.zero;
+        if (arena == null)
+        {
+            return false;
+        }
+
+        float minDistance = Mathf.Max(actorClearance, dataCoreMinPlayerDistance);
+        for (int i = 0; i < Mathf.Max(4, spawnAttempts); i++)
+        {
+            if (!TryFindSpawnPoint(probeRadius, out Vector2 candidate))
+            {
+                break;
+            }
+
+            if (player != null && Vector2.Distance(candidate, player.GetPosition()) < minDistance)
+            {
+                continue;
+            }
+
+            result = candidate;
+            return true;
+        }
+
+        return TryFindSpawnPoint(probeRadius, out result);
     }
 
     private bool TryFindPulseSpawnPoint(
