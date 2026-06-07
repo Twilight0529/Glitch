@@ -63,6 +63,22 @@ public class StorageSurgeEventController : MonoBehaviour
     [SerializeField] private Vector2 conveyorMarkerSize = new Vector2(0.36f, 0.12f);
     [SerializeField] private float conveyorMarkerTravelSpeed = 4.1f;
 
+    [Header("Storage Distinctive Event - Magnetic Cranes")]
+    [SerializeField] private bool enableMagneticCranes = true;
+    [SerializeField] private int magneticFieldCountMin = 1;
+    [SerializeField] private int magneticFieldCountMax = 3;
+    [SerializeField] private float magneticFieldRadius = 2.15f;
+    [SerializeField] private float magneticFieldTelegraphSeconds = 0.95f;
+    [SerializeField] private float magneticFieldPlayerSlowMultiplier = 0.76f;
+    [SerializeField] private float magneticFieldPlayerSlowDuration = 0.14f;
+    [SerializeField] private float magneticFieldEnemyBoostMultiplier = 1.11f;
+    [SerializeField] private float magneticFieldEnemyBoostDuration = 0.4f;
+    [SerializeField] private float magneticFieldEnemyBoostCooldown = 0.3f;
+    [SerializeField] private float magneticFieldDriftSpeed = 3.2f;
+    [SerializeField, Range(0f, 1f)] private float magneticFieldPullChance = 0.58f;
+    [SerializeField] private Color magneticFieldTelegraphColor = new Color(0.96f, 0.74f, 0.34f, 0.46f);
+    [SerializeField] private Color magneticFieldActiveColor = new Color(0.34f, 0.92f, 1f, 0.72f);
+
     [Header("Visual Telegraph")]
     [SerializeField, Range(0f, 1f)] private float activeColorPulseStrength = 0.62f;
     [SerializeField, Range(0f, 1f)] private float activeColorLightenAmount = 0.36f;
@@ -106,6 +122,7 @@ public class StorageSurgeEventController : MonoBehaviour
     private readonly List<float> conveyorLaneHalfWidths = new List<float>();
     private readonly List<float> conveyorLaneMarkerPhases = new List<float>();
     private readonly List<Vector2> conveyorLaneDirections = new List<Vector2>();
+    private readonly List<ThemedEventZoneFx> magneticFields = new List<ThemedEventZoneFx>();
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
@@ -124,6 +141,7 @@ public class StorageSurgeEventController : MonoBehaviour
     {
         EndEvent(restoreControllers: true, snapBackToStart: true);
         DestroyConveyorVisuals();
+        ClearMagneticFields();
     }
 
     private void Update()
@@ -264,6 +282,7 @@ public class StorageSurgeEventController : MonoBehaviour
         BuildConveyorLayout();
         EnsureConveyorVisuals();
         HideConveyorVisuals();
+        SpawnMagneticFields(eventDuration);
 
         for (int i = 0; i < obstacles.Count; i++)
         {
@@ -327,6 +346,7 @@ public class StorageSurgeEventController : MonoBehaviour
         eventActive = false;
         eventTimer = 0f;
         HideConveyorVisuals();
+        ClearMagneticFields();
     }
 
     private void ApplyActiveColorPulse(float progress)
@@ -694,6 +714,84 @@ public class StorageSurgeEventController : MonoBehaviour
         conveyorLaneHalfWidths.Clear();
         conveyorLaneMarkerPhases.Clear();
         conveyorLaneDirections.Clear();
+    }
+
+    private void SpawnMagneticFields(float totalDuration)
+    {
+        ClearMagneticFields();
+        if (!enableMagneticCranes)
+        {
+            return;
+        }
+
+        int min = Mathf.Max(1, Mathf.Min(magneticFieldCountMin, magneticFieldCountMax));
+        int max = Mathf.Max(min, Mathf.Max(magneticFieldCountMin, magneticFieldCountMax));
+        int count = Random.Range(min, max + 1);
+        float radius = Mathf.Max(0.5f, magneticFieldRadius);
+        float activeTime = Mathf.Max(0.75f, totalDuration - Mathf.Max(0.05f, magneticFieldTelegraphSeconds));
+        for (int i = 0; i < count; i++)
+        {
+            Vector2 position = PickMagneticFieldPosition(radius);
+            bool pull = Random.value < Mathf.Clamp01(magneticFieldPullChance);
+            Vector2 driftDir = Random.insideUnitCircle;
+            if (driftDir.sqrMagnitude < 0.001f)
+            {
+                driftDir = surgeAxis.sqrMagnitude > 0.001f ? surgeAxis : Vector2.right;
+            }
+
+            GameObject zone = new GameObject($"StorageMagneticField_{i}");
+            zone.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
+            zone.transform.position = new Vector3(position.x, position.y, 0f);
+            ThemedEventZoneFx fx = zone.AddComponent<ThemedEventZoneFx>();
+            fx.ConfigureCircle(
+                ThemedEventZoneFx.ZoneKind.StorageMagnetField,
+                radius,
+                magneticFieldTelegraphSeconds,
+                activeTime,
+                magneticFieldTelegraphColor,
+                magneticFieldActiveColor,
+                magneticFieldPlayerSlowMultiplier,
+                magneticFieldPlayerSlowDuration,
+                magneticFieldEnemyBoostMultiplier,
+                magneticFieldEnemyBoostDuration,
+                magneticFieldEnemyBoostCooldown,
+                magneticFieldDriftSpeed,
+                pull,
+                driftDir,
+                0f);
+            magneticFields.Add(fx);
+        }
+    }
+
+    private Vector2 PickMagneticFieldPosition(float radius)
+    {
+        float margin = Mathf.Max(0.6f, radius * 0.75f);
+        float xMin = Mathf.Min(interiorLeft + margin, interiorRight - margin);
+        float xMax = Mathf.Max(interiorLeft + margin, interiorRight - margin);
+        float yMin = Mathf.Min(interiorBottom + margin, interiorTop - margin);
+        float yMax = Mathf.Max(interiorBottom + margin, interiorTop - margin);
+        return new Vector2(Random.Range(xMin, xMax), Random.Range(yMin, yMax));
+    }
+
+    private void ClearMagneticFields()
+    {
+        for (int i = magneticFields.Count - 1; i >= 0; i--)
+        {
+            ThemedEventZoneFx field = magneticFields[i];
+            if (field != null)
+            {
+                if (Application.isPlaying)
+                {
+                    Destroy(field.gameObject);
+                }
+                else
+                {
+                    DestroyImmediate(field.gameObject);
+                }
+            }
+        }
+
+        magneticFields.Clear();
     }
 
     private static Vector2 PickPrimaryAxis()

@@ -1640,6 +1640,18 @@ public class EnemyController : MonoBehaviour
         return gameManager != null && gameManager.IsRunActive && !gameManager.IsGameOver;
     }
 
+    public void ApplyExternalDisplacement(Vector2 delta)
+    {
+        if (breachAbsorbed || rb == null || delta.sqrMagnitude <= 0f)
+        {
+            return;
+        }
+
+        Vector2 target = rb.position + delta;
+        rb.position = target;
+        transform.position = new Vector3(target.x, target.y, transform.position.z);
+    }
+
     public void ApplyParryImpact(Vector2 impactPosition, Vector2 pushDirection)
     {
         Vector2 direction = pushDirection.sqrMagnitude > 0.0001f

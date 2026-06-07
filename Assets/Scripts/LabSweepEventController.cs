@@ -68,6 +68,20 @@ public class LabSweepEventController : MonoBehaviour
     [SerializeField] private float sterilizationSafeMarkerThickness = 0.14f;
     [SerializeField] private float sterilizationSafePulseSpeed = 2.8f;
 
+    [Header("Lab Distinctive Event - Security Grid")]
+    [SerializeField] private bool enableSecurityGrid = true;
+    [SerializeField] private int securityGridLinesMin = 2;
+    [SerializeField] private int securityGridLinesMax = 4;
+    [SerializeField] private float securityGridTelegraphSeconds = 1.05f;
+    [SerializeField] private Vector2 securityGridThicknessRange = new Vector2(0.26f, 0.42f);
+    [SerializeField] private float securityGridPlayerSlowMultiplier = 0.55f;
+    [SerializeField] private float securityGridPlayerSlowDuration = 0.18f;
+    [SerializeField] private float securityGridEnemyBoostMultiplier = 1.16f;
+    [SerializeField] private float securityGridEnemyBoostDuration = 0.48f;
+    [SerializeField] private float securityGridEnemyBoostCooldown = 0.32f;
+    [SerializeField] private Color securityGridTelegraphColor = new Color(1f, 0.86f, 0.54f, 0.58f);
+    [SerializeField] private Color securityGridActiveColor = new Color(0.98f, 0.28f, 0.42f, 0.82f);
+
     [Header("Visual Telegraph")]
     [SerializeField, Range(0f, 1f)] private float activeColorPulseStrength = 0.6f;
     [SerializeField, Range(0f, 1f)] private float activeColorLightenAmount = 0.34f;
@@ -110,6 +124,7 @@ public class LabSweepEventController : MonoBehaviour
     private readonly List<float> sterilizationSafeAxisValues = new List<float>();
     private readonly List<float> sterilizationPassPerpCenters = new List<float>();
     private readonly List<float> sterilizationPassPerpHalfExtents = new List<float>();
+    private readonly List<ThemedEventZoneFx> securityGridZones = new List<ThemedEventZoneFx>();
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
@@ -128,6 +143,7 @@ public class LabSweepEventController : MonoBehaviour
     {
         EndEvent(restoreControllers: true, snapBackToStart: true);
         DestroySterilizationVisuals();
+        ClearSecurityGridZones();
     }
 
     private void Update()
@@ -269,6 +285,7 @@ public class LabSweepEventController : MonoBehaviour
         EnsureSterilizationVisual();
         BuildSterilizationPassLayout();
         HideSterilizationVisuals();
+        SpawnSecurityGrid(eventDuration);
 
         for (int i = 0; i < obstacles.Count; i++)
         {
@@ -336,6 +353,7 @@ public class LabSweepEventController : MonoBehaviour
         sterilizationSafeAxisValues.Clear();
         sterilizationPassPerpCenters.Clear();
         sterilizationPassPerpHalfExtents.Clear();
+        ClearSecurityGridZones();
     }
 
     private void ApplyActiveColorPulse(float progress)
@@ -1009,6 +1027,81 @@ public class LabSweepEventController : MonoBehaviour
         sterilizationSafeRoot.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
         sterilizationSafeRoot.transform.localScale = Vector3.one;
         sterilizationSafeRoot.SetActive(false);
+    }
+
+    private void SpawnSecurityGrid(float totalDuration)
+    {
+        ClearSecurityGridZones();
+        if (!enableSecurityGrid)
+        {
+            return;
+        }
+
+        int min = Mathf.Max(1, Mathf.Min(securityGridLinesMin, securityGridLinesMax));
+        int max = Mathf.Max(min, Mathf.Max(securityGridLinesMin, securityGridLinesMax));
+        int count = Random.Range(min, max + 1);
+        float activeTime = Mathf.Max(0.75f, totalDuration - Mathf.Max(0.05f, securityGridTelegraphSeconds));
+        for (int i = 0; i < count; i++)
+        {
+            bool vertical = Random.value < 0.5f;
+            float thickness = Random.Range(
+                Mathf.Min(securityGridThicknessRange.x, securityGridThicknessRange.y),
+                Mathf.Max(securityGridThicknessRange.x, securityGridThicknessRange.y));
+
+            Vector2 position;
+            Vector2 size;
+            if (vertical)
+            {
+                float x = Random.Range(interiorLeft + 1.1f, interiorRight - 1.1f);
+                position = new Vector2(x, (interiorBottom + interiorTop) * 0.5f);
+                size = new Vector2(thickness, Mathf.Max(0.5f, interiorTop - interiorBottom));
+            }
+            else
+            {
+                float y = Random.Range(interiorBottom + 1.1f, interiorTop - 1.1f);
+                position = new Vector2((interiorLeft + interiorRight) * 0.5f, y);
+                size = new Vector2(Mathf.Max(0.5f, interiorRight - interiorLeft), thickness);
+            }
+
+            GameObject zone = new GameObject($"LabSecurityGrid_{i}");
+            zone.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
+            zone.transform.position = new Vector3(position.x, position.y, 0f);
+            ThemedEventZoneFx fx = zone.AddComponent<ThemedEventZoneFx>();
+            fx.ConfigureRect(
+                ThemedEventZoneFx.ZoneKind.LabSecurityGrid,
+                size,
+                securityGridTelegraphSeconds,
+                activeTime,
+                securityGridTelegraphColor,
+                securityGridActiveColor,
+                securityGridPlayerSlowMultiplier,
+                securityGridPlayerSlowDuration,
+                securityGridEnemyBoostMultiplier,
+                securityGridEnemyBoostDuration,
+                securityGridEnemyBoostCooldown);
+            securityGridZones.Add(fx);
+        }
+    }
+
+    private void ClearSecurityGridZones()
+    {
+        for (int i = securityGridZones.Count - 1; i >= 0; i--)
+        {
+            ThemedEventZoneFx zone = securityGridZones[i];
+            if (zone != null)
+            {
+                if (Application.isPlaying)
+                {
+                    Destroy(zone.gameObject);
+                }
+                else
+                {
+                    DestroyImmediate(zone.gameObject);
+                }
+            }
+        }
+
+        securityGridZones.Clear();
     }
 
     private static void DestroyVisualGameObject(ref GameObject target)

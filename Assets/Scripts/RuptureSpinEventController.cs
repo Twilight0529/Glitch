@@ -52,6 +52,21 @@ public class RuptureSpinEventController : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float activeColorLightenAmount = 0.38f;
     [SerializeField] private float activeColorPulseSpeed = 2.4f;
 
+    [Header("Rupture Distinctive Event - Rift Echoes")]
+    [SerializeField] private bool enableRiftEchoes = true;
+    [SerializeField] private int riftEchoCountMin = 2;
+    [SerializeField] private int riftEchoCountMax = 4;
+    [SerializeField] private float riftEchoRadius = 1.35f;
+    [SerializeField] private float riftEchoTelegraphSeconds = 0.85f;
+    [SerializeField] private float riftEchoPlayerSlowMultiplier = 0.68f;
+    [SerializeField] private float riftEchoPlayerSlowDuration = 0.16f;
+    [SerializeField] private float riftEchoEnemyBoostMultiplier = 1.08f;
+    [SerializeField] private float riftEchoEnemyBoostDuration = 0.36f;
+    [SerializeField] private float riftEchoEnemyBoostCooldown = 0.3f;
+    [SerializeField] private float riftEchoFirewallChargePerSecond = 8.5f;
+    [SerializeField] private Color riftEchoTelegraphColor = new Color(0.95f, 0.42f, 1f, 0.42f);
+    [SerializeField] private Color riftEchoActiveColor = new Color(0.42f, 0.96f, 1f, 0.76f);
+
     [Header("Debug")]
     [SerializeField] private bool debugTriggerEnabled = true;
     [SerializeField] private Key debugTriggerKey = Key.R;
@@ -80,6 +95,7 @@ public class RuptureSpinEventController : MonoBehaviour
     private bool mapEventsWereUnlocked;
     private EnemyController enemyController;
     private GameManager gameManager;
+    private readonly List<ThemedEventZoneFx> riftEchoZones = new List<ThemedEventZoneFx>();
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
@@ -103,6 +119,7 @@ public class RuptureSpinEventController : MonoBehaviour
     private void OnDisable()
     {
         EndEvent(restoreControllers: true);
+        ClearRiftEchoes();
     }
 
     private void Update()
@@ -291,6 +308,7 @@ public class RuptureSpinEventController : MonoBehaviour
         eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
         eventDuration *= Mathf.Max(0.1f, cadenceDurationMultiplier);
         ChooseNextDirectionAndSpeed(forceDirectionChange: false);
+        SpawnRiftEchoes(eventDuration);
         eventTimer = 0f;
         eventActive = true;
 
@@ -549,6 +567,7 @@ public class RuptureSpinEventController : MonoBehaviour
         }
 
         snapshots.Clear();
+        ClearRiftEchoes();
     }
 
     private void ApplyActiveColorPulse(float progress)
@@ -722,6 +741,80 @@ public class RuptureSpinEventController : MonoBehaviour
         float max = Mathf.Max(intervalMin, intervalMax);
         float cadence = Mathf.Max(0.1f, cadenceIntervalMultiplier);
         nextEventTimer = Random.Range(min, max) * cadence;
+    }
+
+    private void SpawnRiftEchoes(float totalDuration)
+    {
+        ClearRiftEchoes();
+        if (!enableRiftEchoes)
+        {
+            return;
+        }
+
+        int min = Mathf.Max(1, Mathf.Min(riftEchoCountMin, riftEchoCountMax));
+        int max = Mathf.Max(min, Mathf.Max(riftEchoCountMin, riftEchoCountMax));
+        int count = Random.Range(min, max + 1);
+        float radius = Mathf.Max(0.4f, riftEchoRadius);
+        float activeTime = Mathf.Max(0.75f, totalDuration - Mathf.Max(0.05f, riftEchoTelegraphSeconds));
+        for (int i = 0; i < count; i++)
+        {
+            Vector2 position = PickRiftEchoPosition(radius, i, count);
+            GameObject zone = new GameObject($"RuptureRiftEcho_{i}");
+            zone.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
+            zone.transform.position = new Vector3(position.x, position.y, 0f);
+            ThemedEventZoneFx fx = zone.AddComponent<ThemedEventZoneFx>();
+            fx.ConfigureCircle(
+                ThemedEventZoneFx.ZoneKind.RuptureRift,
+                radius,
+                riftEchoTelegraphSeconds,
+                activeTime,
+                riftEchoTelegraphColor,
+                riftEchoActiveColor,
+                riftEchoPlayerSlowMultiplier,
+                riftEchoPlayerSlowDuration,
+                riftEchoEnemyBoostMultiplier,
+                riftEchoEnemyBoostDuration,
+                riftEchoEnemyBoostCooldown,
+                0f,
+                false,
+                Vector2.right,
+                riftEchoFirewallChargePerSecond);
+            riftEchoZones.Add(fx);
+        }
+    }
+
+    private Vector2 PickRiftEchoPosition(float radius, int index, int count)
+    {
+        Vector2 center = centerTransform != null ? (Vector2)centerTransform.position : Vector2.zero;
+        float angle = ((Mathf.PI * 2f) * index) / Mathf.Max(1, count) + Random.Range(-0.45f, 0.45f);
+        float arenaRadius = Mathf.Min(interiorRight - interiorLeft, interiorTop - interiorBottom) * 0.38f;
+        float distance = Random.Range(Mathf.Max(radius + 0.4f, arenaRadius * 0.35f), Mathf.Max(radius + 0.8f, arenaRadius));
+        Vector2 candidate = center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * distance;
+        float margin = Mathf.Max(0.7f, radius + boundsPadding);
+        candidate.x = Mathf.Clamp(candidate.x, interiorLeft + margin, interiorRight - margin);
+        candidate.y = Mathf.Clamp(candidate.y, interiorBottom + margin, interiorTop - margin);
+        return candidate;
+    }
+
+    private void ClearRiftEchoes()
+    {
+        for (int i = riftEchoZones.Count - 1; i >= 0; i--)
+        {
+            ThemedEventZoneFx zone = riftEchoZones[i];
+            if (zone != null)
+            {
+                if (Application.isPlaying)
+                {
+                    Destroy(zone.gameObject);
+                }
+                else
+                {
+                    DestroyImmediate(zone.gameObject);
+                }
+            }
+        }
+
+        riftEchoZones.Clear();
     }
 
     private bool IsMapEventSuppressed()

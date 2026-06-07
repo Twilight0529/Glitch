@@ -300,6 +300,18 @@ public class PlayerController : MonoBehaviour
         return rb.position;
     }
 
+    public void ApplyExternalDisplacement(Vector2 delta)
+    {
+        if (deathSequenceActive || breachConsumptionActive || delta.sqrMagnitude <= 0f)
+        {
+            return;
+        }
+
+        Vector2 target = rb.position + delta;
+        rb.position = target;
+        transform.position = new Vector3(target.x, target.y, transform.position.z);
+    }
+
     public void ApplySpeedBoost(float multiplier, float duration)
     {
         speedBoostMultiplier = Mathf.Clamp(multiplier, 1f, Mathf.Max(1f, maxBoostMultiplier));
