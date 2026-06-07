@@ -59,12 +59,15 @@ public class MainMenuController : MonoBehaviour
     private float clearRankingConfirmExpireAt;
     private string rankingActionMessage = string.Empty;
     private float rankingActionMessageExpireAt;
+    private readonly Dictionary<string, bool> buttonHoverFlags = new Dictionary<string, bool>();
 
     private void Awake()
     {
         Time.timeScale = 1f;
         Cursor.visible = true;
         LoadSettings();
+        GlitchAudioManager.Ensure();
+        GlitchAudioManager.EnterMainMenu();
         ResolveFonts();
         NormalizeTransitionDurations();
         BeginIntroImmediateBlack();
@@ -226,6 +229,7 @@ public class MainMenuController : MonoBehaviour
         {
             if (clearRankingConfirmArmed)
             {
+                GlitchAudioManager.PlayRankingSubmit();
                 RankingStorage.ClearEntries();
                 clearRankingConfirmArmed = false;
                 rankingActionMessage = "Ranking limpiado.";
@@ -233,6 +237,7 @@ public class MainMenuController : MonoBehaviour
             }
             else
             {
+                GlitchAudioManager.PlayMenuToggle();
                 clearRankingConfirmArmed = true;
                 clearRankingConfirmExpireAt = Time.unscaledTime + 2.8f;
                 rankingActionMessage = "Pulsa nuevamente para confirmar.";
@@ -319,7 +324,7 @@ public class MainMenuController : MonoBehaviour
         }
 
         GUILayout.FlexibleSpace();
-        if (DrawMenuButton("Volver", 38f))
+        if (DrawMenuButton("Volver", 38f, true))
         {
             showOptions = false;
         }
@@ -703,7 +708,7 @@ public class MainMenuController : MonoBehaviour
         }
     }
 
-    private bool DrawMenuButton(string label, float height)
+    private bool DrawMenuButton(string label, float height, bool backSound = false)
     {
         bool canInteract = transitionState == MenuTransitionState.Idle;
         Color old = GUI.color;
@@ -714,6 +719,18 @@ public class MainMenuController : MonoBehaviour
         bool clicked = GUILayout.Button(label, buttonStyle, GUILayout.Height(height));
         GUI.enabled = oldEnabled;
         GUI.color = old;
+        if (clicked)
+        {
+            if (backSound)
+            {
+                GlitchAudioManager.PlayMenuBack();
+            }
+            else
+            {
+                GlitchAudioManager.PlayMenuConfirm();
+            }
+        }
+
         return clicked;
     }
 
@@ -721,6 +738,7 @@ public class MainMenuController : MonoBehaviour
     {
         bool canInteract = transitionState == MenuTransitionState.Idle;
         bool hovered = rect.Contains(Event.current.mousePosition);
+        TrackButtonHover(label, canInteract && hovered);
         float hoverLerp = GetButtonHoverState(label, hovered);
         float t = Time.unscaledTime;
         float pulse = 0.6f + 0.4f * Mathf.Sin(t * (primary ? 3.6f : 2.8f));
@@ -773,7 +791,29 @@ public class MainMenuController : MonoBehaviour
             return false;
         }
 
-        return GUI.Button(rect, GUIContent.none, GUIStyle.none);
+        bool clicked = GUI.Button(rect, GUIContent.none, GUIStyle.none);
+        if (clicked)
+        {
+            GlitchAudioManager.PlayMenuConfirm();
+        }
+
+        return clicked;
+    }
+
+    private void TrackButtonHover(string key, bool hovered)
+    {
+        if (Event.current == null || Event.current.type != EventType.Repaint)
+        {
+            return;
+        }
+
+        bool wasHovered = buttonHoverFlags.TryGetValue(key, out bool previous) && previous;
+        if (hovered && !wasHovered)
+        {
+            GlitchAudioManager.PlayMenuHover();
+        }
+
+        buttonHoverFlags[key] = hovered;
     }
 
     private float GetButtonHoverState(string key, bool hovered)

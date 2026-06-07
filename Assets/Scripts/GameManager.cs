@@ -134,6 +134,8 @@ public class GameManager : MonoBehaviour
     private float countdownElapsed;
     private float goFlashTimer;
     private int countdownStartValue;
+    private int lastCountdownCueValue;
+    private bool countdownGoCuePlayed;
     private ProceduralArenaGenerator arenaGenerator;
     private EnemyController enemyController;
     private PlayerController playerController;
@@ -190,6 +192,7 @@ public class GameManager : MonoBehaviour
     private void Start()
     {
         GlitchAudioManager.Ensure();
+        GlitchAudioManager.EnterGameplay();
         ResolveFonts();
         RefreshHudScaleSetting();
         RefreshLevelType();
@@ -376,6 +379,8 @@ public class GameManager : MonoBehaviour
         startupTimer = 0f;
         countdownStartValue = Mathf.Max(1, countdownSeconds);
         countdownElapsed = 0f;
+        lastCountdownCueValue = -1;
+        countdownGoCuePlayed = false;
         goFlashTimer = 0f;
         SurvivalTime = 0f;
         bonusScore = 0;
@@ -495,6 +500,8 @@ public class GameManager : MonoBehaviour
             {
                 runPhase = RunPhase.Countdown;
                 countdownElapsed = 0f;
+                lastCountdownCueValue = -1;
+                countdownGoCuePlayed = false;
             }
             return;
         }
@@ -502,16 +509,19 @@ public class GameManager : MonoBehaviour
         if (runPhase == RunPhase.Countdown)
         {
             countdownElapsed += dt;
+            PlayCountdownTickIfNeeded();
             if (countdownElapsed >= countdownStartValue)
             {
                 runPhase = RunPhase.GoFlash;
                 goFlashTimer = 0f;
+                PlayCountdownGoIfNeeded();
             }
             return;
         }
 
         if (runPhase == RunPhase.GoFlash)
         {
+            PlayCountdownGoIfNeeded();
             goFlashTimer += dt;
             if (goFlashTimer >= Mathf.Max(0.05f, goFlashSeconds))
             {
@@ -519,6 +529,35 @@ public class GameManager : MonoBehaviour
                 Time.timeScale = 1f;
             }
         }
+    }
+
+    private void PlayCountdownTickIfNeeded()
+    {
+        if (runPhase != RunPhase.Countdown)
+        {
+            return;
+        }
+
+        int remaining = countdownStartValue - Mathf.FloorToInt(countdownElapsed);
+        remaining = Mathf.Clamp(remaining, 1, countdownStartValue);
+        if (remaining == lastCountdownCueValue)
+        {
+            return;
+        }
+
+        lastCountdownCueValue = remaining;
+        GlitchAudioManager.PlayCountdownTick(remaining);
+    }
+
+    private void PlayCountdownGoIfNeeded()
+    {
+        if (countdownGoCuePlayed)
+        {
+            return;
+        }
+
+        countdownGoCuePlayed = true;
+        GlitchAudioManager.PlayCountdownGo();
     }
 
     private void DrawCountdownOverlay()

@@ -166,6 +166,7 @@ public class GameMenuController : MonoBehaviour
 
     private void SetState(OverlayState nextState)
     {
+        OverlayState previousState = state;
         state = nextState;
         if (state == OverlayState.Defeat)
         {
@@ -179,6 +180,15 @@ public class GameMenuController : MonoBehaviour
         Time.timeScale = gameplayActive && runCanAdvance ? 1f : 0f;
         ShouldHideGameplayHud = !gameplayActive;
         RefreshCursorVisibility();
+
+        if (previousState == OverlayState.Playing && state == OverlayState.Paused)
+        {
+            GlitchAudioManager.PlayPauseOpen();
+        }
+        else if (previousState == OverlayState.Paused && state == OverlayState.Playing)
+        {
+            GlitchAudioManager.PlayPauseClose();
+        }
     }
 
     private void RefreshCursorVisibility()
@@ -310,12 +320,14 @@ public class GameMenuController : MonoBehaviour
         GUILayout.Space(8f);
         if (GUILayout.Button("Reiniciar", buttonStyle, GUILayout.Height(38f)))
         {
+            GlitchAudioManager.PlayMenuConfirm();
             RestartLevel();
         }
 
         GUILayout.Space(8f);
         if (GUILayout.Button("Menu Principal", buttonStyle, GUILayout.Height(38f)))
         {
+            GlitchAudioManager.PlayMenuBack();
             ReturnToMainMenu();
         }
 
@@ -408,12 +420,14 @@ public class GameMenuController : MonoBehaviour
         GUI.enabled = canInteract;
         if (GUILayout.Button("Reiniciar", buttonStyle, GUILayout.Height(40f)))
         {
+            GlitchAudioManager.PlayMenuConfirm();
             RestartLevel();
         }
 
         GUILayout.Space(10f);
         if (GUILayout.Button("Menu Principal", buttonStyle, GUILayout.Height(40f)))
         {
+            GlitchAudioManager.PlayMenuBack();
             ReturnToMainMenu();
         }
         GUI.enabled = prevEnabled;
@@ -450,6 +464,7 @@ public class GameMenuController : MonoBehaviour
         rankingSubmitted = true;
         rankingSubmittedScore = gameManager.CurrentScore;
         rankingSubmittedTime = gameManager.SurvivalTime;
+        GlitchAudioManager.PlayRankingSubmit();
     }
 
     private bool IsDefeatInputUnlocked()

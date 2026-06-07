@@ -1,0 +1,7 @@
+Track: Glitch Stairs
+Author: Fupi
+Source: https://opengameart.org/content/glitch-stairs
+License: CC0 1.0 Universal (Public Domain Dedication)
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+
+The track is included as the main menu music for Glitch.
