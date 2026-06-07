@@ -5,6 +5,14 @@ using UnityEngine.InputSystem;
 public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
 {
     // Evento del laboratorio: mueve obstaculos y crea barridos de esterilizacion con zonas seguras.
+    private enum LabEventVariant
+    {
+        None,
+        SterilizationSweep,
+        SecurityGrid,
+        ContainmentProtocol
+    }
+
     private struct ObstacleBinding
     {
         public Transform transform;
@@ -144,6 +152,7 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
     private int containmentActivatedCount;
     private bool containmentResolved;
     private float containmentSuccessTimer;
+    private LabEventVariant currentVariant = LabEventVariant.None;
     private const string EventPressureKey = "ThemeLabSweep";
 
     public string ActiveThemedEventLabel
@@ -160,7 +169,20 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
                 return $"PROTOCOLO {containmentActivatedCount}/{containmentTerminals.Count}";
             }
 
-            return eventActive ? "BARRIDO LAB" : string.Empty;
+            if (!eventActive)
+            {
+                return string.Empty;
+            }
+
+            switch (currentVariant)
+            {
+                case LabEventVariant.SecurityGrid:
+                    return "GRILLA DE SEGURIDAD";
+                case LabEventVariant.ContainmentProtocol:
+                    return "PROTOCOLO DE CONTENCION";
+                default:
+                    return "BARRIDO LAB";
+            }
         }
     }
 
@@ -178,7 +200,20 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
                 return "Activa las terminales para encerrar a la anomalia";
             }
 
-            return string.Empty;
+            if (!eventActive)
+            {
+                return string.Empty;
+            }
+
+            switch (currentVariant)
+            {
+                case LabEventVariant.SecurityGrid:
+                    return "Evita las lineas rojas de seguridad";
+                case LabEventVariant.SterilizationSweep:
+                    return "Lee el telegraph y sal del barrido";
+                default:
+                    return string.Empty;
+            }
         }
     }
 
@@ -325,6 +360,30 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
         }
     }
 
+    private LabEventVariant PickVariant()
+    {
+        List<LabEventVariant> variants = new List<LabEventVariant>();
+        if (enableSterilizationSweep)
+        {
+            variants.Add(LabEventVariant.SterilizationSweep);
+        }
+        if (enableSecurityGrid)
+        {
+            variants.Add(LabEventVariant.SecurityGrid);
+        }
+        if (enableContainmentProtocol)
+        {
+            variants.Add(LabEventVariant.ContainmentProtocol);
+        }
+
+        if (variants.Count == 0)
+        {
+            return LabEventVariant.None;
+        }
+
+        return variants[Random.Range(0, variants.Count)];
+    }
+
     private void BeginEvent()
     {
         if (centerTransform == null)
@@ -336,6 +395,12 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
         BuildInteriorBounds();
         snapshots.Clear();
         moveAlongX = Random.value < 0.5f;
+        currentVariant = PickVariant();
+        if (currentVariant == LabEventVariant.None)
+        {
+            ScheduleNextEvent();
+            return;
+        }
 
         // El sweep mueve obstaculos y peligro de esterilizacion en ejes opuestos para que se lea mejor.
         eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
@@ -350,11 +415,21 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
         sterilizationAlongX = !moveAlongX;
         sterilizationPassCount = RollSterilizationPassCount();
         sterilizationEnemyBoostCooldownTimer = 0f;
-        EnsureSterilizationVisual();
-        BuildSterilizationPassLayout();
         HideSterilizationVisuals();
-        SpawnSecurityGrid(eventDuration);
-        SpawnContainmentProtocol(eventDuration);
+
+        if (currentVariant == LabEventVariant.SterilizationSweep)
+        {
+            EnsureSterilizationVisual();
+            BuildSterilizationPassLayout();
+        }
+        else if (currentVariant == LabEventVariant.SecurityGrid)
+        {
+            SpawnSecurityGrid(eventDuration);
+        }
+        else if (currentVariant == LabEventVariant.ContainmentProtocol)
+        {
+            SpawnContainmentProtocol(eventDuration);
+        }
 
         for (int i = 0; i < obstacles.Count; i++)
         {
@@ -395,8 +470,11 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
         float progress = Mathf.Clamp01(eventTimer / Mathf.Max(0.0001f, eventDuration));
 
         // La logica del peligro y el pulso de color usan el mismo progreso normalizado del evento.
-        TickSterilizationSweep(progress, dt);
-        ApplyActiveColorPulse(progress);
+        if (currentVariant == LabEventVariant.SterilizationSweep)
+        {
+            TickSterilizationSweep(progress, dt);
+            ApplyActiveColorPulse(progress);
+        }
 
         if (progress >= 1f)
         {
@@ -425,6 +503,7 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
         sterilizationPassPerpHalfExtents.Clear();
         ClearSecurityGridZones();
         ClearContainmentProtocol();
+        currentVariant = LabEventVariant.None;
     }
 
     private void ApplyActiveColorPulse(float progress)

@@ -955,16 +955,13 @@ public class GameManager : MonoBehaviour
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 7.5f);
         float alpha = Mathf.Lerp(0.9f, 0.45f, t) + pulse * 0.08f;
 
-        Color old = GUI.color;
-        GUI.color = new Color(1f, 0.56f, 0.66f, Mathf.Clamp01(alpha));
-
-        float w = 720f;
-        float h = 54f;
-        float x = (Screen.width - w) * 0.5f;
-        float y = Screen.height * 0.2f;
-        GUI.Label(new Rect(x, y, w, h), warning.ToUpperInvariant(), eventWarningStyle);
-
-        GUI.color = old;
+        DrawEventAlertPanel(
+            warning.ToUpperInvariant(),
+            Screen.height * 0.2f,
+            new Color(0.10f, 0.03f, 0.06f, 0.52f),
+            new Color(1f, 0.56f, 0.66f, Mathf.Clamp01(alpha)),
+            new Color(0.90f, 0.96f, 1f, 0.28f + pulse * 0.12f),
+            new Color(1f, 0.56f, 0.66f, Mathf.Clamp01(alpha)));
     }
 
     private void DrawThemedEventHintOverlay()
@@ -977,20 +974,75 @@ public class GameManager : MonoBehaviour
 
         EnsureWarningStyle();
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 6.8f);
-        float s = hudScale;
-        float w = Mathf.Min(Screen.width * 0.72f, 760f * s);
-        float h = 46f * s;
-        float x = (Screen.width - w) * 0.5f;
-        float y = Screen.height * 0.18f;
+        DrawEventAlertPanel(
+            hint.ToUpperInvariant(),
+            Screen.height * 0.18f,
+            new Color(0.02f, 0.04f, 0.08f, 0.44f + pulse * 0.08f),
+            new Color(0.42f, 0.96f, 1f, 0.58f + pulse * 0.18f),
+            new Color(1f, 0.46f, 0.78f, 0.38f + pulse * 0.12f),
+            new Color(0.88f, 0.97f, 1f, Mathf.Lerp(0.72f, 0.96f, pulse)));
+    }
 
-        DrawSolidRect(new Rect(x, y, w, h), new Color(0.02f, 0.04f, 0.08f, 0.44f + pulse * 0.08f));
-        DrawSolidRect(new Rect(x, y, w, 2f * s), new Color(0.42f, 0.96f, 1f, 0.58f + pulse * 0.18f));
-        DrawSolidRect(new Rect(x, y + h - (2f * s), w, 2f * s), new Color(1f, 0.46f, 0.78f, 0.38f + pulse * 0.12f));
+    private void DrawEventAlertPanel(string text, float y, Color fill, Color topLine, Color bottomLine, Color textColor)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        EnsureWarningStyle();
+        float s = hudScale;
+        float screenPadding = Mathf.Max(12f * s, 12f);
+        float availableW = Mathf.Max(120f, Screen.width - screenPadding * 2f);
+        float minPanelW = Mathf.Min(260f * s, availableW);
+        float panelW = Mathf.Clamp(Mathf.Min(availableW, 820f * s), minPanelW, availableW);
+        float textPaddingX = 18f * s;
+        float textW = Mathf.Max(80f, panelW - textPaddingX * 2f);
+        float maxTextH = Mathf.Max(42f * s, 64f * s);
+        GUIContent content = new GUIContent(text);
+        GUIStyle fittedStyle = BuildFittedWarningStyle(content, textW, maxTextH);
+        float textH = Mathf.Clamp(fittedStyle.CalcHeight(content, textW), 24f * s, maxTextH);
+        float panelH = Mathf.Clamp(textH + 18f * s, 48f * s, 92f * s);
+        float x = (Screen.width - panelW) * 0.5f;
+        y = Mathf.Clamp(y, 8f * s, Screen.height - panelH - (8f * s));
+
+        DrawSolidRect(new Rect(x, y, panelW, panelH), fill);
+        DrawSolidRect(new Rect(x, y, panelW, 2f * s), topLine);
+        DrawSolidRect(new Rect(x, y + panelH - (2f * s), panelW, 2f * s), bottomLine);
+
+        Rect textRect = new Rect(
+            x + textPaddingX,
+            y + (panelH - textH) * 0.5f,
+            textW,
+            textH);
 
         Color old = GUI.color;
-        GUI.color = new Color(0.88f, 0.97f, 1f, Mathf.Lerp(0.72f, 0.96f, pulse));
-        GUI.Label(new Rect(x, y + (5f * s), w, h), hint.ToUpperInvariant(), eventWarningStyle);
+        GUI.color = textColor;
+        GUI.Label(textRect, text, fittedStyle);
         GUI.color = old;
+    }
+
+    private GUIStyle BuildFittedWarningStyle(GUIContent content, float width, float maxHeight)
+    {
+        int preferredSize = Mathf.RoundToInt(30f * hudScale);
+        int minSize = Mathf.Max(13, Mathf.RoundToInt(16f * hudScale));
+        GUIStyle style = new GUIStyle(eventWarningStyle)
+        {
+            wordWrap = true,
+            clipping = TextClipping.Clip
+        };
+
+        for (int size = preferredSize; size >= minSize; size--)
+        {
+            style.fontSize = size;
+            if (style.CalcHeight(content, width) <= maxHeight)
+            {
+                return style;
+            }
+        }
+
+        style.fontSize = minSize;
+        return style;
     }
 
     private string GetThemedEventLabel()
@@ -1984,7 +2036,36 @@ public class GameManager : MonoBehaviour
         DrawSolidRect(rect, fill);
         DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 1f), new Color(0.85f, 0.92f, 1f, 0.35f));
         DrawSolidRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), new Color(0.85f, 0.92f, 1f, 0.25f));
-        GUI.Label(rect, text, hudChipStyle);
+        GUI.Label(rect, text, BuildFittedSingleLineStyle(hudChipStyle, text, rect.width - (10f * hudScale), rect.height, Mathf.RoundToInt(10f * hudScale)));
+    }
+
+    private static GUIStyle BuildFittedSingleLineStyle(GUIStyle baseStyle, string text, float width, float height, int minSize)
+    {
+        if (baseStyle == null || string.IsNullOrEmpty(text))
+        {
+            return baseStyle;
+        }
+
+        GUIContent content = new GUIContent(text);
+        GUIStyle style = new GUIStyle(baseStyle)
+        {
+            wordWrap = false,
+            clipping = TextClipping.Clip
+        };
+
+        int preferred = Mathf.Max(minSize, baseStyle.fontSize);
+        for (int size = preferred; size >= minSize; size--)
+        {
+            style.fontSize = size;
+            Vector2 measured = style.CalcSize(content);
+            if (measured.x <= width && measured.y <= height)
+            {
+                return style;
+            }
+        }
+
+        style.fontSize = minSize;
+        return style;
     }
 
     private void EnsureUpgradeStyles()

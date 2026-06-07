@@ -5,6 +5,14 @@ using UnityEngine.InputSystem;
 public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProvider
 {
     // Evento de Storage: reacomoda carga y activa carriles transportadores que empujan actores.
+    private enum StorageEventVariant
+    {
+        None,
+        ConveyorOverload,
+        MagneticCranes,
+        CargoTransit
+    }
+
     private struct ObstacleBinding
     {
         public Transform transform;
@@ -140,6 +148,7 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
     private readonly List<Vector2> conveyorLaneDirections = new List<Vector2>();
     private readonly List<ThemedEventZoneFx> magneticFields = new List<ThemedEventZoneFx>();
     private readonly List<StorageCargoBlockFx> cargoTransitBlocks = new List<StorageCargoBlockFx>();
+    private StorageEventVariant currentVariant = StorageEventVariant.None;
     private const string EventPressureKey = "ThemeStorageSurge";
 
     public string ActiveThemedEventLabel
@@ -151,7 +160,20 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
                 return "CARGA EN TRANSITO";
             }
 
-            return eventActive ? "REFLUJO STORAGE" : string.Empty;
+            if (!eventActive)
+            {
+                return string.Empty;
+            }
+
+            switch (currentVariant)
+            {
+                case StorageEventVariant.MagneticCranes:
+                    return "GRUAS MAGNETICAS";
+                case StorageEventVariant.CargoTransit:
+                    return "CARGA EN TRANSITO";
+                default:
+                    return "TRANSPORTADORES";
+            }
         }
     }
 
@@ -164,7 +186,20 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
                 return "La carga cambia rutas: usa la cobertura nueva";
             }
 
-            return string.Empty;
+            if (!eventActive)
+            {
+                return string.Empty;
+            }
+
+            switch (currentVariant)
+            {
+                case StorageEventVariant.MagneticCranes:
+                    return "Los campos magneticos empujan el espacio";
+                case StorageEventVariant.ConveyorOverload:
+                    return "Los carriles arrastran todo en su direccion";
+                default:
+                    return string.Empty;
+            }
         }
     }
 
@@ -306,6 +341,30 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         }
     }
 
+    private StorageEventVariant PickVariant()
+    {
+        List<StorageEventVariant> variants = new List<StorageEventVariant>();
+        if (enableConveyorOverload)
+        {
+            variants.Add(StorageEventVariant.ConveyorOverload);
+        }
+        if (enableMagneticCranes)
+        {
+            variants.Add(StorageEventVariant.MagneticCranes);
+        }
+        if (enableCargoTransit)
+        {
+            variants.Add(StorageEventVariant.CargoTransit);
+        }
+
+        if (variants.Count == 0)
+        {
+            return StorageEventVariant.None;
+        }
+
+        return variants[Random.Range(0, variants.Count)];
+    }
+
     private void BeginEvent()
     {
         if (centerTransform == null)
@@ -318,6 +377,12 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         snapshots.Clear();
         surgeAxis = PickPrimaryAxis();
         lateralAxis = new Vector2(-surgeAxis.y, surgeAxis.x);
+        currentVariant = PickVariant();
+        if (currentVariant == StorageEventVariant.None)
+        {
+            ScheduleNextEvent();
+            return;
+        }
 
         // El reacomodo de carga elige un eje principal; la sobrecarga de transportadores reutiliza ese ritmo.
         eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
@@ -330,11 +395,21 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
 
         baseDisplacement = Random.Range(Mathf.Min(displacementRange.x, displacementRange.y), Mathf.Max(displacementRange.x, displacementRange.y));
         baseRotation = Random.Range(Mathf.Min(rotationRange.x, rotationRange.y), Mathf.Max(rotationRange.x, rotationRange.y));
-        BuildConveyorLayout();
-        EnsureConveyorVisuals();
         HideConveyorVisuals();
-        SpawnMagneticFields(eventDuration);
-        SpawnCargoTransit(eventDuration);
+
+        if (currentVariant == StorageEventVariant.ConveyorOverload)
+        {
+            BuildConveyorLayout();
+            EnsureConveyorVisuals();
+        }
+        else if (currentVariant == StorageEventVariant.MagneticCranes)
+        {
+            SpawnMagneticFields(eventDuration);
+        }
+        else if (currentVariant == StorageEventVariant.CargoTransit)
+        {
+            SpawnCargoTransit(eventDuration);
+        }
 
         for (int i = 0; i < obstacles.Count; i++)
         {
@@ -375,8 +450,11 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         float eventProgress = Mathf.Clamp01(eventTimer / Mathf.Max(0.0001f, eventDuration));
 
         // Visuales del transportador, empuje de actores y pulso de obstaculos usan el mismo progreso del evento.
-        TickConveyorOverload(eventProgress, dt);
-        ApplyActiveColorPulse(eventProgress);
+        if (currentVariant == StorageEventVariant.ConveyorOverload)
+        {
+            TickConveyorOverload(eventProgress, dt);
+            ApplyActiveColorPulse(eventProgress);
+        }
 
         if (eventProgress >= 1f)
         {
@@ -401,6 +479,7 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         HideConveyorVisuals();
         ClearMagneticFields();
         ClearCargoTransit();
+        currentVariant = StorageEventVariant.None;
     }
 
     private void ApplyActiveColorPulse(float progress)

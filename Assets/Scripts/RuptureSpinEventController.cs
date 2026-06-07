@@ -5,6 +5,14 @@ using UnityEngine.InputSystem;
 public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvider
 {
     // Evento de Rupture: rota el campo de obstaculos alrededor del centro sin cruzar los limites.
+    private enum RuptureEventVariant
+    {
+        None,
+        SpinMotion,
+        RiftEchoes,
+        EchoPortals
+    }
+
     private struct ObstacleBinding
     {
         public Transform transform;
@@ -33,6 +41,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
     [SerializeField, Range(0.8f, 1.5f)] private float cadenceDurationMultiplier = 1.18f;
 
     [Header("Spin Motion (2D)")]
+    [SerializeField] private bool enableSpinMotion = true;
     [SerializeField] private float maxSweepAngle = 70f;
     [SerializeField] private float minSweepAngle = 3f;
     [SerializeField, Range(0.5f, 0.99f)] private float safeAngleFactor = 0.92f;
@@ -116,6 +125,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
     private readonly List<RuptureEchoPortal> echoPortals = new List<RuptureEchoPortal>();
     private float echoPortalCooldownTimer;
     private float echoSuccessTimer;
+    private RuptureEventVariant currentVariant = RuptureEventVariant.None;
     private const string EventPressureKey = "ThemeRuptureSpin";
 
     public string ActiveThemedEventLabel
@@ -132,7 +142,25 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
                 return "PORTALES DE ECO";
             }
 
-            return eventActive ? "RUPTURA ROTATIVA" : string.Empty;
+            if (GetLiveRiftEchoCount() > 0)
+            {
+                return "ECOS DE RUPTURA";
+            }
+
+            if (!eventActive)
+            {
+                return string.Empty;
+            }
+
+            switch (currentVariant)
+            {
+                case RuptureEventVariant.RiftEchoes:
+                    return "ECOS DE RUPTURA";
+                case RuptureEventVariant.EchoPortals:
+                    return "PORTALES DE ECO";
+                default:
+                    return "RUPTURA ROTATIVA";
+            }
         }
     }
 
@@ -150,7 +178,19 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
                 return "Cruza un portal y deja un eco para baitar a la anomalia";
             }
 
-            return string.Empty;
+            if (GetLiveRiftEchoCount() > 0)
+            {
+                return "Los ecos cargan Firewall pero alteran tu movimiento";
+            }
+
+            if (!eventActive)
+            {
+                return string.Empty;
+            }
+
+            return currentVariant == RuptureEventVariant.SpinMotion
+                ? "Los obstaculos rotan: lee el ritmo antes de cruzar"
+                : string.Empty;
         }
     }
 
@@ -309,9 +349,33 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         }
     }
 
+    private RuptureEventVariant PickVariant()
+    {
+        List<RuptureEventVariant> variants = new List<RuptureEventVariant>();
+        if (enableSpinMotion && obstacles.Count > 0)
+        {
+            variants.Add(RuptureEventVariant.SpinMotion);
+        }
+        if (enableRiftEchoes)
+        {
+            variants.Add(RuptureEventVariant.RiftEchoes);
+        }
+        if (enableEchoPortals)
+        {
+            variants.Add(RuptureEventVariant.EchoPortals);
+        }
+
+        if (variants.Count == 0)
+        {
+            return RuptureEventVariant.None;
+        }
+
+        return variants[Random.Range(0, variants.Count)];
+    }
+
     private void BeginEvent(bool forceImmediate)
     {
-        if (obstacles.Count == 0 || centerTransform == null)
+        if (centerTransform == null)
         {
             ScheduleNextEvent();
             return;
@@ -319,6 +383,13 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
 
         BuildInteriorBounds();
         snapshots.Clear();
+        currentVariant = PickVariant();
+        if (currentVariant == RuptureEventVariant.None)
+        {
+            ScheduleNextEvent();
+            return;
+        }
+
         eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
         eventDuration *= Mathf.Max(0.1f, cadenceDurationMultiplier);
         if (!TryReserveEventPressure(eventDuration))
@@ -327,62 +398,76 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
             return;
         }
 
-        // Guarda offsets desde el centro para rotar todo el campo de obstaculos como una estructura.
-        Vector2 center = centerTransform.position;
-        for (int i = 0; i < obstacles.Count; i++)
+        if (currentVariant == RuptureEventVariant.SpinMotion)
         {
-            ObstacleBinding binding = obstacles[i];
-            if (binding.transform == null)
+            // Guarda offsets desde el centro para rotar todo el campo de obstaculos como una estructura.
+            Vector2 center = centerTransform.position;
+            for (int i = 0; i < obstacles.Count; i++)
             {
-                continue;
+                ObstacleBinding binding = obstacles[i];
+                if (binding.transform == null)
+                {
+                    continue;
+                }
+
+                bool dynamicWasEnabled = false;
+                if (binding.dynamicController != null)
+                {
+                    dynamicWasEnabled = binding.dynamicController.enabled;
+                    binding.dynamicController.enabled = false;
+                }
+
+                ObstacleSnapshot snapshot = new ObstacleSnapshot
+                {
+                    binding = binding,
+                    startOffset = (Vector2)binding.transform.position - center,
+                    startRotationZ = binding.transform.eulerAngles.z,
+                    dynamicWasEnabled = dynamicWasEnabled,
+                    renderers = binding.transform.GetComponentsInChildren<SpriteRenderer>(includeInactive: true),
+                    baseColors = null
+                };
+                snapshot.baseColors = CaptureBaseColors(snapshot.renderers);
+
+                snapshots.Add(snapshot);
             }
 
-            bool dynamicWasEnabled = false;
-            if (binding.dynamicController != null)
+            if (snapshots.Count == 0)
             {
-                dynamicWasEnabled = binding.dynamicController.enabled;
-                binding.dynamicController.enabled = false;
+                ReleaseEventPressure();
+                EndEvent(restoreControllers: true);
+                currentVariant = RuptureEventVariant.None;
+                ScheduleNextEvent();
+                return;
             }
 
-            ObstacleSnapshot snapshot = new ObstacleSnapshot
+            // Limita los angulos antes de mover para evitar que los obstaculos crucen paredes.
+            safePositiveAngleDeg = Mathf.Min(maxSweepAngle, ComputeSafeSweepAngle(1f) * safeAngleFactor);
+            safeNegativeAngleDeg = Mathf.Min(maxSweepAngle, ComputeSafeSweepAngle(-1f) * safeAngleFactor);
+            if (safePositiveAngleDeg < minSweepAngle && safeNegativeAngleDeg < minSweepAngle)
             {
-                binding = binding,
-                startOffset = (Vector2)binding.transform.position - center,
-                startRotationZ = binding.transform.eulerAngles.z,
-                dynamicWasEnabled = dynamicWasEnabled,
-                renderers = binding.transform.GetComponentsInChildren<SpriteRenderer>(includeInactive: true),
-                baseColors = null
-            };
-            snapshot.baseColors = CaptureBaseColors(snapshot.renderers);
-
-            snapshots.Add(snapshot);
-        }
-
-        if (snapshots.Count == 0)
-        {
-            ReleaseEventPressure();
-            EndEvent(restoreControllers: true);
-            ScheduleNextEvent();
-            return;
-        }
-
-        // Limita los angulos antes de mover para evitar que los obstaculos crucen paredes.
-        safePositiveAngleDeg = Mathf.Min(maxSweepAngle, ComputeSafeSweepAngle(1f) * safeAngleFactor);
-        safeNegativeAngleDeg = Mathf.Min(maxSweepAngle, ComputeSafeSweepAngle(-1f) * safeAngleFactor);
-        if (safePositiveAngleDeg < minSweepAngle && safeNegativeAngleDeg < minSweepAngle)
-        {
-            EndEvent(restoreControllers: true);
-            ScheduleNextEvent();
-            return;
+                EndEvent(restoreControllers: true);
+                ScheduleNextEvent();
+                return;
+            }
         }
 
         currentAngleDeg = 0f;
         currentAngularSpeedDeg = 0f;
         targetAngularSpeedDeg = 0f;
         directionChangeTimer = 0f;
-        ChooseNextDirectionAndSpeed(forceDirectionChange: false);
-        SpawnRiftEchoes(eventDuration);
-        SpawnEchoPortals(eventDuration);
+        if (currentVariant == RuptureEventVariant.SpinMotion)
+        {
+            ChooseNextDirectionAndSpeed(forceDirectionChange: false);
+        }
+        else if (currentVariant == RuptureEventVariant.RiftEchoes)
+        {
+            SpawnRiftEchoes(eventDuration);
+        }
+        else if (currentVariant == RuptureEventVariant.EchoPortals)
+        {
+            SpawnEchoPortals(eventDuration);
+        }
+
         eventTimer = 0f;
         eventActive = true;
 
@@ -398,41 +483,44 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         eventTimer += dt;
         float progress = Mathf.Clamp01(eventTimer / Mathf.Max(0.0001f, eventDuration));
 
-        directionChangeTimer -= dt;
-        if (directionChangeTimer <= 0f)
+        if (currentVariant == RuptureEventVariant.SpinMotion)
         {
-            ChooseNextDirectionAndSpeed(forceDirectionChange: true);
+            directionChangeTimer -= dt;
+            if (directionChangeTimer <= 0f)
+            {
+                ChooseNextDirectionAndSpeed(forceDirectionChange: true);
+            }
+
+            float gateIn = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress / 0.14f));
+            float gateOut = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((1f - progress) / 0.22f));
+            float envelope = gateIn * gateOut;
+            float targetSpeed = targetAngularSpeedDeg * envelope;
+
+            // Aceleracion/desaceleracion hacen que la rotacion sea legible y no cambie de golpe.
+            float response = Mathf.Abs(targetSpeed) > Mathf.Abs(currentAngularSpeedDeg) ? angularAcceleration : angularDeceleration;
+            currentAngularSpeedDeg = Mathf.MoveTowards(currentAngularSpeedDeg, targetSpeed, response * dt);
+
+            float candidateAngle = currentAngleDeg + currentAngularSpeedDeg * dt;
+            float maxPositive = Mathf.Max(minSweepAngle, safePositiveAngleDeg);
+            float maxNegative = Mathf.Max(minSweepAngle, safeNegativeAngleDeg);
+
+            if (candidateAngle > maxPositive)
+            {
+                candidateAngle = maxPositive;
+                currentAngularSpeedDeg = -Mathf.Abs(currentAngularSpeedDeg) * 0.35f;
+                ChooseNextDirectionAndSpeed(forceDirectionChange: true, forcedSign: -1f);
+            }
+            else if (candidateAngle < -maxNegative)
+            {
+                candidateAngle = -maxNegative;
+                currentAngularSpeedDeg = Mathf.Abs(currentAngularSpeedDeg) * 0.35f;
+                ChooseNextDirectionAndSpeed(forceDirectionChange: true, forcedSign: 1f);
+            }
+
+            currentAngleDeg = candidateAngle;
+            ApplyAngle(currentAngleDeg);
+            ApplyActiveColorPulse(progress);
         }
-
-        float gateIn = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress / 0.14f));
-        float gateOut = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((1f - progress) / 0.22f));
-        float envelope = gateIn * gateOut;
-        float targetSpeed = targetAngularSpeedDeg * envelope;
-
-        // Aceleracion/desaceleracion hacen que la rotacion sea legible y no cambie de golpe.
-        float response = Mathf.Abs(targetSpeed) > Mathf.Abs(currentAngularSpeedDeg) ? angularAcceleration : angularDeceleration;
-        currentAngularSpeedDeg = Mathf.MoveTowards(currentAngularSpeedDeg, targetSpeed, response * dt);
-
-        float candidateAngle = currentAngleDeg + currentAngularSpeedDeg * dt;
-        float maxPositive = Mathf.Max(minSweepAngle, safePositiveAngleDeg);
-        float maxNegative = Mathf.Max(minSweepAngle, safeNegativeAngleDeg);
-
-        if (candidateAngle > maxPositive)
-        {
-            candidateAngle = maxPositive;
-            currentAngularSpeedDeg = -Mathf.Abs(currentAngularSpeedDeg) * 0.35f;
-            ChooseNextDirectionAndSpeed(forceDirectionChange: true, forcedSign: -1f);
-        }
-        else if (candidateAngle < -maxNegative)
-        {
-            candidateAngle = -maxNegative;
-            currentAngularSpeedDeg = Mathf.Abs(currentAngularSpeedDeg) * 0.35f;
-            ChooseNextDirectionAndSpeed(forceDirectionChange: true, forcedSign: 1f);
-        }
-
-        currentAngleDeg = candidateAngle;
-        ApplyAngle(currentAngleDeg);
-        ApplyActiveColorPulse(progress);
 
         if (progress >= 1f)
         {
@@ -610,7 +698,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
 
     private void EndEvent(bool restoreControllers)
     {
-        if (!eventActive && snapshots.Count == 0)
+        if (!eventActive && snapshots.Count == 0 && riftEchoZones.Count == 0 && echoPortals.Count == 0)
         {
             return;
         }
@@ -644,6 +732,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         snapshots.Clear();
         ClearRiftEchoes();
         ClearEchoPortals();
+        currentVariant = RuptureEventVariant.None;
     }
 
     private void ApplyActiveColorPulse(float progress)
@@ -1060,6 +1149,20 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         for (int i = 0; i < echoPortals.Count; i++)
         {
             if (echoPortals[i] != null)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private int GetLiveRiftEchoCount()
+    {
+        int count = 0;
+        for (int i = 0; i < riftEchoZones.Count; i++)
+        {
+            if (riftEchoZones[i] != null)
             {
                 count++;
             }
