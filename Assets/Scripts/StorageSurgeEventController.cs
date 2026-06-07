@@ -95,6 +95,11 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
     [SerializeField, Range(0f, 1f)] private float activeColorLightenAmount = 0.36f;
     [SerializeField] private float activeColorPulseSpeed = 2.1f;
 
+    [Header("Event Pressure")]
+    [SerializeField] private float eventPressureCost = 0.9f;
+    [SerializeField] private float eventPressureCooldown = 4f;
+    [SerializeField] private float eventPressureDurationPadding = 0.75f;
+
     [Header("Debug")]
     [SerializeField] private bool debugTriggerEnabled = true;
     [SerializeField] private Key debugTriggerKey = Key.R;
@@ -135,6 +140,7 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
     private readonly List<Vector2> conveyorLaneDirections = new List<Vector2>();
     private readonly List<ThemedEventZoneFx> magneticFields = new List<ThemedEventZoneFx>();
     private readonly List<StorageCargoBlockFx> cargoTransitBlocks = new List<StorageCargoBlockFx>();
+    private const string EventPressureKey = "ThemeStorageSurge";
 
     public string ActiveThemedEventLabel
     {
@@ -316,6 +322,12 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         // El reacomodo de carga elige un eje principal; la sobrecarga de transportadores reutiliza ese ritmo.
         eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
         eventDuration *= Mathf.Max(0.1f, cadenceDurationMultiplier);
+        if (!TryReserveEventPressure(eventDuration))
+        {
+            SchedulePressureRetry();
+            return;
+        }
+
         baseDisplacement = Random.Range(Mathf.Min(displacementRange.x, displacementRange.y), Mathf.Max(displacementRange.x, displacementRange.y));
         baseRotation = Random.Range(Mathf.Min(rotationRange.x, rotationRange.y), Mathf.Max(rotationRange.x, rotationRange.y));
         BuildConveyorLayout();
@@ -381,6 +393,7 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         }
 
         RestoreAllColors();
+        ReleaseEventPressure();
 
         snapshots.Clear();
         eventActive = false;
@@ -1130,6 +1143,39 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         float max = Mathf.Max(intervalMin, intervalMax);
         float cadence = Mathf.Max(0.1f, cadenceIntervalMultiplier);
         nextEventTimer = Random.Range(min, max) * cadence;
+    }
+
+    private void SchedulePressureRetry()
+    {
+        if (gameManager == null)
+        {
+            gameManager = FindAnyObjectByType<GameManager>();
+        }
+
+        nextEventTimer = gameManager != null ? gameManager.EventPressureRetryDelay : 1.25f;
+    }
+
+    private bool TryReserveEventPressure(float duration)
+    {
+        if (gameManager == null)
+        {
+            gameManager = FindAnyObjectByType<GameManager>();
+        }
+
+        return gameManager == null ||
+               gameManager.TryReserveEventPressure(
+                   EventPressureKey,
+                   eventPressureCost,
+                   Mathf.Max(0.1f, duration + eventPressureDurationPadding),
+                   eventPressureCooldown);
+    }
+
+    private void ReleaseEventPressure()
+    {
+        if (gameManager != null)
+        {
+            gameManager.ReleaseEventPressure(EventPressureKey, eventPressureCooldown);
+        }
     }
 
     private bool IsMapEventSuppressed()

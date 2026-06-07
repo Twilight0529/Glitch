@@ -86,6 +86,14 @@ public class ArenaChaosDirector : MonoBehaviour
     [Header("Event Banner")]
     [SerializeField] private float bannerDuration = 2f;
 
+    [Header("Event Pressure")]
+    [SerializeField] private float pulseEventPressureCost = 0.62f;
+    [SerializeField] private float pulseEventPressureCooldown = 2.4f;
+    [SerializeField] private float objectiveEventPressureCost = 0.82f;
+    [SerializeField] private float objectiveEventPressureCooldown = 3.4f;
+    [SerializeField] private float breachEventPressureCost = 1.7f;
+    [SerializeField] private float breachEventPressureCooldown = 5.5f;
+
     private ProceduralArenaGenerator arena;
     private PlayerController player;
     private EnemyController enemy;
@@ -130,6 +138,9 @@ public class ArenaChaosDirector : MonoBehaviour
     private Vector2 pendingBreachEnemyEntryDirection;
 
     private Transform runtimeRoot;
+    private const string PulseEventPressureKey = "ChaosContainmentPulse";
+    private const string ObjectiveEventPressureKey = "ChaosObjectiveNodes";
+    private const string BreachEventPressureKey = "ChaosBreach";
 
     public string ActiveEventLabel => eventLabelTimer > 0f ? activeEventLabel : string.Empty;
     public string ActiveWarningLabel => warningTimer > 0f ? activeWarningLabel : string.Empty;
@@ -244,8 +255,15 @@ public class ArenaChaosDirector : MonoBehaviour
             pulseEventTimer -= Time.deltaTime;
             if (pulseEventTimer <= 0f)
             {
-                StartCoroutine(SpawnPulseEventRoutine());
-                SchedulePulseEvent();
+                if (TryReserveDirectorEventPressure(PulseEventPressureKey, pulseEventPressureCost, EstimatePulseEventDuration(), pulseEventPressureCooldown))
+                {
+                    StartCoroutine(SpawnPulseEventRoutine());
+                    SchedulePulseEvent();
+                }
+                else
+                {
+                    pulseEventTimer = GetPressureRetryDelay();
+                }
             }
         }
 
@@ -258,8 +276,14 @@ public class ArenaChaosDirector : MonoBehaviour
             objectiveEventTimer -= Time.deltaTime;
             if (objectiveEventTimer <= 0f)
             {
-                TryStartObjectiveEvent();
-                ScheduleObjectiveEvent();
+                if (TryStartObjectiveEvent())
+                {
+                    ScheduleObjectiveEvent();
+                }
+                else
+                {
+                    objectiveEventTimer = GetPressureRetryDelay();
+                }
             }
         }
 
@@ -272,8 +296,14 @@ public class ArenaChaosDirector : MonoBehaviour
             breachEventTimer -= Time.deltaTime;
             if (breachEventTimer <= 0f && IsBreachMapOldEnough())
             {
-                TryStartBreachEvent();
-                ScheduleBreachEvent();
+                if (TryStartBreachEvent())
+                {
+                    ScheduleBreachEvent();
+                }
+                else
+                {
+                    breachEventTimer = GetPressureRetryDelay();
+                }
             }
         }
     }
@@ -463,6 +493,34 @@ public class ArenaChaosDirector : MonoBehaviour
         scorePickupTimer = Random.Range(min, max);
     }
 
+    private bool TryReserveDirectorEventPressure(string pressureKey, float cost, float duration, float cooldown)
+    {
+        return gameManager == null || gameManager.TryReserveEventPressure(pressureKey, cost, duration, cooldown);
+    }
+
+    private void ReleaseDirectorEventPressure(string pressureKey, float cooldown)
+    {
+        if (gameManager != null)
+        {
+            gameManager.ReleaseEventPressure(pressureKey, cooldown);
+        }
+    }
+
+    private float GetPressureRetryDelay()
+    {
+        return gameManager != null ? gameManager.EventPressureRetryDelay : 1.25f;
+    }
+
+    private float EstimatePulseEventDuration()
+    {
+        int maxCount = Mathf.Max(1, Mathf.Max(pulseHazardsMin, pulseHazardsMax));
+        return Mathf.Max(0f, pulsePreWarningSeconds)
+            + Mathf.Max(0f, pulseTelegraphSeconds)
+            + Mathf.Max(0f, pulseActiveSeconds)
+            + Mathf.Max(0f, pulseSpawnStagger) * maxCount
+            + 0.35f;
+    }
+
     private void TrySpawnPowerup()
     {
         if (!TryFindSpawnPoint(pickupProbeRadius, out Vector2 position))
@@ -551,11 +609,20 @@ public class ArenaChaosDirector : MonoBehaviour
         }
     }
 
-    private void TryStartObjectiveEvent()
+    private bool TryStartObjectiveEvent()
     {
         if (objectiveEventActive || runtimeRoot == null)
         {
-            return;
+            return false;
+        }
+
+        if (!TryReserveDirectorEventPressure(
+                ObjectiveEventPressureKey,
+                objectiveEventPressureCost,
+                Mathf.Max(2f, objectiveNodeLifetime),
+                objectiveEventPressureCooldown))
+        {
+            return false;
         }
 
         int desiredCount = Mathf.Max(1, objectiveNodeCount);
@@ -597,7 +664,8 @@ public class ArenaChaosDirector : MonoBehaviour
         if (activeObjectiveNodes.Count <= 0)
         {
             objectiveEventActive = false;
-            return;
+            ReleaseDirectorEventPressure(ObjectiveEventPressureKey, objectiveEventPressureCooldown);
+            return false;
         }
 
         objectiveEventActive = true;
@@ -605,6 +673,7 @@ public class ArenaChaosDirector : MonoBehaviour
         objectiveNodesTotal = activeObjectiveNodes.Count;
         RaiseWarning("Pisa los nodos celestes", 2.6f);
         RaiseEvent($"Mantener nodos 0/{activeObjectiveNodes.Count}");
+        return true;
     }
 
     private void UpdateObjectiveEvent()
@@ -637,6 +706,7 @@ public class ArenaChaosDirector : MonoBehaviour
         objectiveTimer = 0f;
         objectiveNodesTotal = 0;
         ClearObjectiveNodes();
+        ReleaseDirectorEventPressure(ObjectiveEventPressureKey, objectiveEventPressureCooldown);
         if (gameManager != null)
         {
             gameManager.AddScore(Mathf.Max(0, objectiveCompleteScore));
@@ -656,6 +726,7 @@ public class ArenaChaosDirector : MonoBehaviour
         objectiveTimer = 0f;
         objectiveNodesTotal = 0;
         ClearObjectiveNodes();
+        ReleaseDirectorEventPressure(ObjectiveEventPressureKey, objectiveEventPressureCooldown);
         RaiseWarning("Sync Failed", 1.2f);
     }
 
@@ -676,11 +747,21 @@ public class ArenaChaosDirector : MonoBehaviour
         activeObjectiveNodes.Clear();
     }
 
-    private void TryStartBreachEvent()
+    private bool TryStartBreachEvent()
     {
         if (breachEventActive || breachTransitionActive || objectiveEventActive || activeBreachGate != null || arena == null || runtimeRoot == null)
         {
-            return;
+            return false;
+        }
+
+        float pressureDuration = Mathf.Max(2f, breachTelegraphSeconds)
+            + Mathf.Max(2f, breachLifetime)
+            + Mathf.Max(0.25f, breachTransitionDuration)
+            + Mathf.Max(0f, breachArrivalHoldSeconds)
+            + 1.5f;
+        if (!TryReserveDirectorEventPressure(BreachEventPressureKey, breachEventPressureCost, pressureDuration, breachEventPressureCooldown))
+        {
+            return false;
         }
 
         Vector2 position = GetBreachGatePosition(out float rotationZ, out Vector2 sweepDirection);
@@ -718,6 +799,7 @@ public class ArenaChaosDirector : MonoBehaviour
         RaiseWarning("Brecha detectada", 2.2f);
         GlitchAudioManager.PlayBreachWarning(position);
         RaiseEvent($"Sigue las flechas | {Mathf.CeilToInt(breachTelegraphTimer)}s");
+        return true;
     }
 
     private void UpdateBreachEvent()
@@ -847,6 +929,8 @@ public class ArenaChaosDirector : MonoBehaviour
         {
             gameManager.RequestPlayerDefeat(player);
         }
+
+        ReleaseDirectorEventPressure(BreachEventPressureKey, breachEventPressureCooldown);
     }
 
     private IEnumerator CompleteBreachEventRoutine(Vector2 breachPosition)
@@ -908,6 +992,7 @@ public class ArenaChaosDirector : MonoBehaviour
         ResetCurrentArenaPlayTime();
         activeBreachTransitionFx = null;
         breachTransitionActive = false;
+        ReleaseDirectorEventPressure(BreachEventPressureKey, breachEventPressureCooldown);
     }
 
     private void FailBreachEvent()
@@ -949,6 +1034,8 @@ public class ArenaChaosDirector : MonoBehaviour
         {
             gameManager.RequestPlayerDefeat(player);
         }
+
+        ReleaseDirectorEventPressure(BreachEventPressureKey, breachEventPressureCooldown);
     }
 
     private void HideActorsForBreachTransition(Vector2 breachPosition)
@@ -1303,6 +1390,7 @@ public class ArenaChaosDirector : MonoBehaviour
         if (gameManager.IsBreachSensitiveSuppressionActive || breachEventActive || breachTransitionActive)
         {
             SchedulePulseEvent();
+            ReleaseDirectorEventPressure(PulseEventPressureKey, pulseEventPressureCooldown);
             yield break;
         }
 
@@ -1318,6 +1406,7 @@ public class ArenaChaosDirector : MonoBehaviour
             if (gameManager.IsBreachSensitiveSuppressionActive || breachEventActive || breachTransitionActive)
             {
                 SchedulePulseEvent();
+                ReleaseDirectorEventPressure(PulseEventPressureKey, pulseEventPressureCooldown);
                 yield break;
             }
 

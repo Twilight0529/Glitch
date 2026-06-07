@@ -44,6 +44,14 @@ public class GameManager : MonoBehaviour
         public Color accent;
     }
 
+    private struct EventPressureReservation
+    {
+        public string key;
+        public float pressure;
+        public float remainingSeconds;
+        public float recoveryCooldown;
+    }
+
     [Header("Run State")]
     [SerializeField] private bool autoReloadSceneOnGameOver = false;
     [SerializeField] private float reloadDelay = 1.2f;
@@ -74,6 +82,15 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float bossSpecialStatesUnlockTime = 30f;
     [SerializeField] private float mapEventsUnlockTime = 60f;
     [SerializeField] private float containmentPulseUnlockTime = 90f;
+
+    [Header("Event Pressure Curve")]
+    [SerializeField] private bool enableEventPressureBudget = true;
+    [SerializeField] private float eventPressureInitialCap = 1.05f;
+    [SerializeField] private float eventPressureMaxCap = 1.65f;
+    [SerializeField] private float eventPressureSoloHeavyAllowance = 1.8f;
+    [SerializeField] private float eventPressureRampStartTime = 60f;
+    [SerializeField] private float eventPressureRampFullTime = 240f;
+    [SerializeField] private float eventPressureRetryDelay = 1.35f;
 
     [Header("Countdown Theme")]
     [SerializeField] private float countdownPulseSpeed = 2.1f;
@@ -118,6 +135,9 @@ public class GameManager : MonoBehaviour
     public bool AreBossSpecialStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && SurvivalTime >= Mathf.Max(0f, bossSpecialStatesUnlockTime);
     public bool AreMapEventsUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, mapEventsUnlockTime);
     public bool IsContainmentPulseUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && SurvivalTime >= Mathf.Max(0f, containmentPulseUnlockTime);
+    public float EventPressureRetryDelay => Mathf.Max(0.25f, eventPressureRetryDelay);
+    public float CurrentEventPressureLoad => GetCurrentEventPressureLoad();
+    public float CurrentEventPressureCap => GetCurrentEventPressureCap();
 
     public float CurrentBehaviorChangeInterval
     {
@@ -177,6 +197,7 @@ public class GameManager : MonoBehaviour
     private float smoothedThreat;
     private readonly List<ScorePopup> scorePopups = new List<ScorePopup>();
     private readonly List<UpgradeChoice> currentUpgradeChoices = new List<UpgradeChoice>();
+    private readonly List<EventPressureReservation> eventPressureReservations = new List<EventPressureReservation>();
     private float nextUpgradeTime;
     private bool upgradeSelectionOpen;
     private bool upgradeSelectionClosing;
@@ -189,6 +210,7 @@ public class GameManager : MonoBehaviour
     private bool playerDefeatSequenceRunning;
     private Coroutine playerDefeatSequenceRoutine;
     private float breachSensitiveSuppressionTimer;
+    private float eventPressureCooldownTimer;
 
     private void Awake()
     {
@@ -252,6 +274,7 @@ public class GameManager : MonoBehaviour
         {
             breachSensitiveSuppressionTimer -= Time.deltaTime;
         }
+        TickEventPressureBudget();
 
         if (upgradeSelectionOpen)
         {
@@ -345,6 +368,130 @@ public class GameManager : MonoBehaviour
         breachSensitiveSuppressionTimer = Mathf.Max(breachSensitiveSuppressionTimer, Mathf.Max(0f, seconds));
     }
 
+    public bool TryReserveEventPressure(string eventKey, float pressureCost, float expectedDuration, float recoveryCooldown)
+    {
+        if (!enableEventPressureBudget)
+        {
+            return true;
+        }
+
+        if (!IsRunActive)
+        {
+            return false;
+        }
+
+        string key = string.IsNullOrWhiteSpace(eventKey) ? "event" : eventKey;
+        for (int i = 0; i < eventPressureReservations.Count; i++)
+        {
+            if (eventPressureReservations[i].key == key)
+            {
+                return true;
+            }
+        }
+
+        float pressure = Mathf.Max(0f, pressureCost);
+        float currentLoad = GetCurrentEventPressureLoad();
+        float cap = GetCurrentEventPressureCap();
+        bool fitsCurrentCap = currentLoad + pressure <= cap;
+        bool fitsAsSoloHeavy = currentLoad <= 0.001f && pressure <= Mathf.Max(cap, eventPressureSoloHeavyAllowance);
+        if (eventPressureCooldownTimer > 0f || (!fitsCurrentCap && !fitsAsSoloHeavy))
+        {
+            return false;
+        }
+
+        eventPressureReservations.Add(new EventPressureReservation
+        {
+            key = key,
+            pressure = pressure,
+            remainingSeconds = Mathf.Max(0.05f, expectedDuration),
+            recoveryCooldown = Mathf.Max(0f, recoveryCooldown)
+        });
+
+        return true;
+    }
+
+    public void ReleaseEventPressure(string eventKey, float recoveryCooldown)
+    {
+        if (!enableEventPressureBudget)
+        {
+            return;
+        }
+
+        string key = string.IsNullOrWhiteSpace(eventKey) ? "event" : eventKey;
+        bool removed = false;
+        for (int i = eventPressureReservations.Count - 1; i >= 0; i--)
+        {
+            if (eventPressureReservations[i].key != key)
+            {
+                continue;
+            }
+
+            eventPressureReservations.RemoveAt(i);
+            removed = true;
+        }
+
+        if (removed)
+        {
+            eventPressureCooldownTimer = Mathf.Max(eventPressureCooldownTimer, Mathf.Max(0f, recoveryCooldown));
+        }
+    }
+
+    private void TickEventPressureBudget()
+    {
+        if (!enableEventPressureBudget)
+        {
+            eventPressureReservations.Clear();
+            eventPressureCooldownTimer = 0f;
+            return;
+        }
+
+        float dt = Time.deltaTime;
+        if (eventPressureCooldownTimer > 0f)
+        {
+            eventPressureCooldownTimer = Mathf.Max(0f, eventPressureCooldownTimer - dt);
+        }
+
+        for (int i = eventPressureReservations.Count - 1; i >= 0; i--)
+        {
+            EventPressureReservation reservation = eventPressureReservations[i];
+            reservation.remainingSeconds -= dt;
+            if (reservation.remainingSeconds <= 0f)
+            {
+                eventPressureCooldownTimer = Mathf.Max(eventPressureCooldownTimer, reservation.recoveryCooldown);
+                eventPressureReservations.RemoveAt(i);
+                continue;
+            }
+
+            eventPressureReservations[i] = reservation;
+        }
+    }
+
+    private float GetCurrentEventPressureLoad()
+    {
+        float load = 0f;
+        for (int i = 0; i < eventPressureReservations.Count; i++)
+        {
+            load += Mathf.Max(0f, eventPressureReservations[i].pressure);
+        }
+
+        return load;
+    }
+
+    private float GetCurrentEventPressureCap()
+    {
+        if (!enableEventPressureBudget)
+        {
+            return float.PositiveInfinity;
+        }
+
+        float initial = Mathf.Max(0.1f, eventPressureInitialCap);
+        float max = Mathf.Max(initial, eventPressureMaxCap);
+        float start = Mathf.Max(0f, eventPressureRampStartTime);
+        float full = Mathf.Max(start + 1f, eventPressureRampFullTime);
+        float t = Mathf.InverseLerp(start, full, SurvivalTime);
+        return Mathf.Lerp(initial, max, Mathf.SmoothStep(0f, 1f, t));
+    }
+
     private void HandleOptionalReload()
     {
         if (!autoReloadSceneOnGameOver)
@@ -415,6 +562,8 @@ public class GameManager : MonoBehaviour
         playerDefeatSequenceRunning = false;
         playerDefeatSequenceRoutine = null;
         breachSensitiveSuppressionTimer = 0f;
+        eventPressureCooldownTimer = 0f;
+        eventPressureReservations.Clear();
         Time.timeScale = 0f;
     }
 

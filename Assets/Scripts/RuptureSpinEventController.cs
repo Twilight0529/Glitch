@@ -78,6 +78,11 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
     [SerializeField] private float echoSuccessLabelSeconds = 1.25f;
     [SerializeField] private Color echoPortalColor = new Color(0.48f, 0.96f, 1f, 0.9f);
 
+    [Header("Event Pressure")]
+    [SerializeField] private float eventPressureCost = 1f;
+    [SerializeField] private float eventPressureCooldown = 4.5f;
+    [SerializeField] private float eventPressureDurationPadding = 0.9f;
+
     [Header("Debug")]
     [SerializeField] private bool debugTriggerEnabled = true;
     [SerializeField] private Key debugTriggerKey = Key.R;
@@ -111,6 +116,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
     private readonly List<RuptureEchoPortal> echoPortals = new List<RuptureEchoPortal>();
     private float echoPortalCooldownTimer;
     private float echoSuccessTimer;
+    private const string EventPressureKey = "ThemeRuptureSpin";
 
     public string ActiveThemedEventLabel
     {
@@ -313,6 +319,13 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
 
         BuildInteriorBounds();
         snapshots.Clear();
+        eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
+        eventDuration *= Mathf.Max(0.1f, cadenceDurationMultiplier);
+        if (!TryReserveEventPressure(eventDuration))
+        {
+            SchedulePressureRetry();
+            return;
+        }
 
         // Guarda offsets desde el centro para rotar todo el campo de obstaculos como una estructura.
         Vector2 center = centerTransform.position;
@@ -347,6 +360,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
 
         if (snapshots.Count == 0)
         {
+            ReleaseEventPressure();
             EndEvent(restoreControllers: true);
             ScheduleNextEvent();
             return;
@@ -366,8 +380,6 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         currentAngularSpeedDeg = 0f;
         targetAngularSpeedDeg = 0f;
         directionChangeTimer = 0f;
-        eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
-        eventDuration *= Mathf.Max(0.1f, cadenceDurationMultiplier);
         ChooseNextDirectionAndSpeed(forceDirectionChange: false);
         SpawnRiftEchoes(eventDuration);
         SpawnEchoPortals(eventDuration);
@@ -612,6 +624,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         safePositiveAngleDeg = 0f;
         safeNegativeAngleDeg = 0f;
         RestoreAllColors();
+        ReleaseEventPressure();
 
         if (restoreControllers)
         {
@@ -804,6 +817,39 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         float max = Mathf.Max(intervalMin, intervalMax);
         float cadence = Mathf.Max(0.1f, cadenceIntervalMultiplier);
         nextEventTimer = Random.Range(min, max) * cadence;
+    }
+
+    private void SchedulePressureRetry()
+    {
+        if (gameManager == null)
+        {
+            gameManager = FindAnyObjectByType<GameManager>();
+        }
+
+        nextEventTimer = gameManager != null ? gameManager.EventPressureRetryDelay : 1.25f;
+    }
+
+    private bool TryReserveEventPressure(float duration)
+    {
+        if (gameManager == null)
+        {
+            gameManager = FindAnyObjectByType<GameManager>();
+        }
+
+        return gameManager == null ||
+               gameManager.TryReserveEventPressure(
+                   EventPressureKey,
+                   eventPressureCost,
+                   Mathf.Max(0.1f, duration + eventPressureDurationPadding),
+                   eventPressureCooldown);
+    }
+
+    private void ReleaseEventPressure()
+    {
+        if (gameManager != null)
+        {
+            gameManager.ReleaseEventPressure(EventPressureKey, eventPressureCooldown);
+        }
     }
 
     private void SpawnRiftEchoes(float totalDuration)

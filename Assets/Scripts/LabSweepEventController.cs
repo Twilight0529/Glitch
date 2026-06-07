@@ -97,6 +97,11 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
     [SerializeField, Range(0f, 1f)] private float activeColorLightenAmount = 0.34f;
     [SerializeField] private float activeColorPulseSpeed = 2.2f;
 
+    [Header("Event Pressure")]
+    [SerializeField] private float eventPressureCost = 0.95f;
+    [SerializeField] private float eventPressureCooldown = 4.2f;
+    [SerializeField] private float eventPressureDurationPadding = 0.75f;
+
     [Header("Debug")]
     [SerializeField] private bool debugTriggerEnabled = true;
     [SerializeField] private Key debugTriggerKey = Key.R;
@@ -139,6 +144,7 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
     private int containmentActivatedCount;
     private bool containmentResolved;
     private float containmentSuccessTimer;
+    private const string EventPressureKey = "ThemeLabSweep";
 
     public string ActiveThemedEventLabel
     {
@@ -334,6 +340,12 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
         // El sweep mueve obstaculos y peligro de esterilizacion en ejes opuestos para que se lea mejor.
         eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
         eventDuration *= Mathf.Max(0.1f, cadenceDurationMultiplier);
+        if (!TryReserveEventPressure(eventDuration))
+        {
+            SchedulePressureRetry();
+            return;
+        }
+
         eventCycles = Random.Range(Mathf.Min(minCycles, maxCycles), Mathf.Max(minCycles, maxCycles) + 1);
         sterilizationAlongX = !moveAlongX;
         sterilizationPassCount = RollSterilizationPassCount();
@@ -401,6 +413,7 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
         }
 
         RestoreAllColors();
+        ReleaseEventPressure();
 
         snapshots.Clear();
         eventActive = false;
@@ -616,6 +629,39 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
         float max = Mathf.Max(intervalMin, intervalMax);
         float cadence = Mathf.Max(0.1f, cadenceIntervalMultiplier);
         nextEventTimer = Random.Range(min, max) * cadence;
+    }
+
+    private void SchedulePressureRetry()
+    {
+        if (gameManager == null)
+        {
+            gameManager = FindAnyObjectByType<GameManager>();
+        }
+
+        nextEventTimer = gameManager != null ? gameManager.EventPressureRetryDelay : 1.25f;
+    }
+
+    private bool TryReserveEventPressure(float duration)
+    {
+        if (gameManager == null)
+        {
+            gameManager = FindAnyObjectByType<GameManager>();
+        }
+
+        return gameManager == null ||
+               gameManager.TryReserveEventPressure(
+                   EventPressureKey,
+                   eventPressureCost,
+                   Mathf.Max(0.1f, duration + eventPressureDurationPadding),
+                   eventPressureCooldown);
+    }
+
+    private void ReleaseEventPressure()
+    {
+        if (gameManager != null)
+        {
+            gameManager.ReleaseEventPressure(EventPressureKey, eventPressureCooldown);
+        }
     }
 
     private bool IsMapEventSuppressed()
