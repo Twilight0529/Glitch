@@ -1690,6 +1690,27 @@ public class EnemyController : MonoBehaviour
         GlitchAudioManager.PlayEnemyParried(transform.position);
     }
 
+    public void ApplyContainmentLock(Vector2 lockCenter, float seconds)
+    {
+        if (breachAbsorbed || rb == null)
+        {
+            return;
+        }
+
+        parryStunTimer = Mathf.Max(parryStunTimer, Mathf.Max(0.08f, seconds));
+        parryKnockbackTimer = 0f;
+        rb.linearVelocity = Vector2.zero;
+
+        if (splitClone != null)
+        {
+            splitClone.ApplyContainmentLock(seconds * 0.85f);
+        }
+
+        TriggerStatePulse();
+        SpawnParryImpactBurst();
+        GlitchAudioManager.PlayEnemyParried(transform.position);
+    }
+
     private bool TickParryStun()
     {
         if (parryStunTimer <= 0f)

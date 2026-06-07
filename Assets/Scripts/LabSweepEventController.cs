@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class LabSweepEventController : MonoBehaviour
+public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
 {
     // Evento del laboratorio: mueve obstaculos y crea barridos de esterilizacion con zonas seguras.
     private struct ObstacleBinding
@@ -82,6 +82,16 @@ public class LabSweepEventController : MonoBehaviour
     [SerializeField] private Color securityGridTelegraphColor = new Color(1f, 0.86f, 0.54f, 0.58f);
     [SerializeField] private Color securityGridActiveColor = new Color(0.98f, 0.28f, 0.42f, 0.82f);
 
+    [Header("Lab Distinctive Event - Containment Protocol")]
+    [SerializeField] private bool enableContainmentProtocol = true;
+    [SerializeField] private int containmentTerminalCount = 2;
+    [SerializeField] private float containmentTerminalActivationSeconds = 1.05f;
+    [SerializeField] private float containmentLockDuration = 2.25f;
+    [SerializeField] private float containmentFirewallReward = 24f;
+    [SerializeField] private float containmentSuccessLabelSeconds = 1.55f;
+    [SerializeField] private float containmentTerminalAvoidRadius = 2.35f;
+    [SerializeField] private Color containmentColor = new Color(0.44f, 0.96f, 1f, 0.86f);
+
     [Header("Visual Telegraph")]
     [SerializeField, Range(0f, 1f)] private float activeColorPulseStrength = 0.6f;
     [SerializeField, Range(0f, 1f)] private float activeColorLightenAmount = 0.34f;
@@ -125,6 +135,46 @@ public class LabSweepEventController : MonoBehaviour
     private readonly List<float> sterilizationPassPerpCenters = new List<float>();
     private readonly List<float> sterilizationPassPerpHalfExtents = new List<float>();
     private readonly List<ThemedEventZoneFx> securityGridZones = new List<ThemedEventZoneFx>();
+    private readonly List<LabContainmentTerminal> containmentTerminals = new List<LabContainmentTerminal>();
+    private int containmentActivatedCount;
+    private bool containmentResolved;
+    private float containmentSuccessTimer;
+
+    public string ActiveThemedEventLabel
+    {
+        get
+        {
+            if (containmentSuccessTimer > 0f)
+            {
+                return "ANOMALIA CONTENIDA";
+            }
+
+            if (containmentTerminals.Count > 0 && !containmentResolved)
+            {
+                return $"PROTOCOLO {containmentActivatedCount}/{containmentTerminals.Count}";
+            }
+
+            return eventActive ? "BARRIDO LAB" : string.Empty;
+        }
+    }
+
+    public string ActiveThemedEventHint
+    {
+        get
+        {
+            if (containmentSuccessTimer > 0f)
+            {
+                return "Anomalia encerrada: Firewall cargado";
+            }
+
+            if (containmentTerminals.Count > 0 && !containmentResolved)
+            {
+                return "Activa las terminales para encerrar a la anomalia";
+            }
+
+            return string.Empty;
+        }
+    }
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
@@ -144,10 +194,16 @@ public class LabSweepEventController : MonoBehaviour
         EndEvent(restoreControllers: true, snapBackToStart: true);
         DestroySterilizationVisuals();
         ClearSecurityGridZones();
+        ClearContainmentProtocol();
     }
 
     private void Update()
     {
+        if (containmentSuccessTimer > 0f)
+        {
+            containmentSuccessTimer -= Time.deltaTime;
+        }
+
         if (!initialized || centerTransform == null)
         {
             return;
@@ -286,6 +342,7 @@ public class LabSweepEventController : MonoBehaviour
         BuildSterilizationPassLayout();
         HideSterilizationVisuals();
         SpawnSecurityGrid(eventDuration);
+        SpawnContainmentProtocol(eventDuration);
 
         for (int i = 0; i < obstacles.Count; i++)
         {
@@ -338,7 +395,7 @@ public class LabSweepEventController : MonoBehaviour
 
     private void EndEvent(bool restoreControllers, bool snapBackToStart)
     {
-        if (!eventActive && snapshots.Count == 0)
+        if (!eventActive && snapshots.Count == 0 && containmentTerminals.Count == 0)
         {
             return;
         }
@@ -354,6 +411,7 @@ public class LabSweepEventController : MonoBehaviour
         sterilizationPassPerpCenters.Clear();
         sterilizationPassPerpHalfExtents.Clear();
         ClearSecurityGridZones();
+        ClearContainmentProtocol();
     }
 
     private void ApplyActiveColorPulse(float progress)
@@ -1102,6 +1160,184 @@ public class LabSweepEventController : MonoBehaviour
         }
 
         securityGridZones.Clear();
+    }
+
+    private void SpawnContainmentProtocol(float totalDuration)
+    {
+        ClearContainmentProtocol();
+        containmentActivatedCount = 0;
+        containmentResolved = false;
+
+        if (!enableContainmentProtocol)
+        {
+            return;
+        }
+
+        if (playerController == null)
+        {
+            playerController = FindAnyObjectByType<PlayerController>();
+        }
+        if (enemyController == null)
+        {
+            enemyController = FindAnyObjectByType<EnemyController>();
+        }
+
+        int count = Mathf.Max(1, containmentTerminalCount);
+        float lifeSeconds = Mathf.Max(containmentTerminalActivationSeconds + 1.2f, totalDuration - 0.2f);
+        for (int i = 0; i < count; i++)
+        {
+            Vector2 position = PickContainmentTerminalPosition(i, count);
+            GameObject terminalGo = new GameObject($"LabContainmentTerminal_{i}");
+            terminalGo.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
+            terminalGo.transform.position = new Vector3(position.x, position.y, 0f);
+            LabContainmentTerminal terminal = terminalGo.AddComponent<LabContainmentTerminal>();
+            terminal.Configure(this, containmentTerminalActivationSeconds, lifeSeconds, containmentColor);
+            containmentTerminals.Add(terminal);
+        }
+    }
+
+    public void NotifyContainmentTerminalActivated(LabContainmentTerminal terminal)
+    {
+        if (containmentResolved || terminal == null || !containmentTerminals.Contains(terminal))
+        {
+            return;
+        }
+
+        containmentActivatedCount = CountActivatedContainmentTerminals();
+        if (containmentActivatedCount < containmentTerminals.Count)
+        {
+            return;
+        }
+
+        containmentResolved = true;
+        containmentSuccessTimer = Mathf.Max(0.25f, containmentSuccessLabelSeconds);
+
+        if (enemyController == null)
+        {
+            enemyController = FindAnyObjectByType<EnemyController>();
+        }
+        if (playerController == null)
+        {
+            playerController = FindAnyObjectByType<PlayerController>();
+        }
+
+        Vector2 cagePosition = enemyController != null
+            ? enemyController.GetCurrentPosition()
+            : new Vector2((interiorLeft + interiorRight) * 0.5f, (interiorBottom + interiorTop) * 0.5f);
+
+        if (enemyController != null)
+        {
+            enemyController.ApplyContainmentLock(cagePosition, containmentLockDuration);
+        }
+        if (playerController != null)
+        {
+            playerController.AddFirewallCharge(containmentFirewallReward);
+        }
+
+        SpawnContainmentCage(cagePosition);
+        ClearContainmentProtocol();
+    }
+
+    private int CountActivatedContainmentTerminals()
+    {
+        int count = 0;
+        for (int i = 0; i < containmentTerminals.Count; i++)
+        {
+            if (containmentTerminals[i] != null && containmentTerminals[i].IsActivated)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private Vector2 PickContainmentTerminalPosition(int index, int count)
+    {
+        Vector2 center = centerTransform != null ? (Vector2)centerTransform.position : Vector2.zero;
+        float arenaRadius = Mathf.Min(interiorRight - interiorLeft, interiorTop - interiorBottom) * 0.43f;
+        float margin = 1.05f;
+        Vector2 fallback = center;
+
+        for (int attempt = 0; attempt < 36; attempt++)
+        {
+            float angle = ((Mathf.PI * 2f) * index / Mathf.Max(1, count)) + Random.Range(-0.72f, 0.72f) + attempt * 0.17f;
+            float distance = Random.Range(arenaRadius * 0.45f, arenaRadius);
+            Vector2 candidate = center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * distance;
+            candidate.x = Mathf.Clamp(candidate.x, interiorLeft + margin, interiorRight - margin);
+            candidate.y = Mathf.Clamp(candidate.y, interiorBottom + margin, interiorTop - margin);
+            fallback = candidate;
+
+            if (IsGoodContainmentTerminalPosition(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return fallback;
+    }
+
+    private bool IsGoodContainmentTerminalPosition(Vector2 candidate)
+    {
+        float avoid = Mathf.Max(0.8f, containmentTerminalAvoidRadius);
+        if (playerController != null && Vector2.Distance(playerController.GetPosition(), candidate) < avoid)
+        {
+            return false;
+        }
+        if (enemyController != null && Vector2.Distance(enemyController.GetCurrentPosition(), candidate) < avoid)
+        {
+            return false;
+        }
+
+        Collider2D[] hits = Physics2D.OverlapCircleAll(candidate, 0.58f);
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider2D hit = hits[i];
+            if (hit == null || hit.isTrigger)
+            {
+                continue;
+            }
+
+            if (hit.GetComponent<PlayerController>() != null || hit.GetComponent<EnemyController>() != null)
+            {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private void SpawnContainmentCage(Vector2 position)
+    {
+        GameObject cage = new GameObject("LabContainmentCage");
+        cage.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
+        cage.transform.position = new Vector3(position.x, position.y, 0f);
+        LabContainmentCageFx fx = cage.AddComponent<LabContainmentCageFx>();
+        fx.Configure(1.8f, Mathf.Max(0.4f, containmentLockDuration), containmentColor);
+    }
+
+    private void ClearContainmentProtocol()
+    {
+        for (int i = containmentTerminals.Count - 1; i >= 0; i--)
+        {
+            LabContainmentTerminal terminal = containmentTerminals[i];
+            if (terminal != null)
+            {
+                if (Application.isPlaying)
+                {
+                    Destroy(terminal.gameObject);
+                }
+                else
+                {
+                    DestroyImmediate(terminal.gameObject);
+                }
+            }
+        }
+
+        containmentTerminals.Clear();
+        containmentActivatedCount = 0;
     }
 
     private static void DestroyVisualGameObject(ref GameObject target)

@@ -145,6 +145,7 @@ public class GameManager : MonoBehaviour
     private EnemyController enemyController;
     private PlayerController playerController;
     private ArenaChaosDirector chaosDirector;
+    private IThemedEventStatusProvider themedEventStatusProvider;
     private string levelType = "Unknown";
     private GUIStyle countdownStyle;
     private GUIStyle countdownSubStyle;
@@ -228,6 +229,10 @@ public class GameManager : MonoBehaviour
         if (chaosDirector == null)
         {
             chaosDirector = FindAnyObjectByType<ArenaChaosDirector>();
+        }
+        if (!IsThemedEventStatusProviderValid())
+        {
+            themedEventStatusProvider = FindThemedEventStatusProvider();
         }
 
         if (enemyController != null)
@@ -754,6 +759,7 @@ public class GameManager : MonoBehaviour
         enemyController = FindAnyObjectByType<EnemyController>();
         playerController = FindAnyObjectByType<PlayerController>();
         chaosDirector = FindAnyObjectByType<ArenaChaosDirector>();
+        themedEventStatusProvider = FindThemedEventStatusProvider();
         if (arenaGenerator != null)
         {
             levelType = arenaGenerator.ActiveThemeLabel;
@@ -762,36 +768,36 @@ public class GameManager : MonoBehaviour
 
     private string GetMapEventLabel()
     {
-        if (chaosDirector == null)
+        if (chaosDirector != null)
         {
-            return "Nominal";
+            string warning = chaosDirector.ActiveWarningLabel;
+            if (!string.IsNullOrWhiteSpace(warning))
+            {
+                return warning;
+            }
+
+            string label = chaosDirector.ActiveEventLabel;
+            if (!string.IsNullOrWhiteSpace(label))
+            {
+                return label;
+            }
         }
 
-        string warning = chaosDirector.ActiveWarningLabel;
-        if (!string.IsNullOrWhiteSpace(warning))
+        string themedLabel = GetThemedEventLabel();
+        if (!string.IsNullOrWhiteSpace(themedLabel))
         {
-            return warning;
+            return themedLabel;
         }
 
-        string label = chaosDirector.ActiveEventLabel;
-        if (string.IsNullOrWhiteSpace(label))
-        {
-            return "Nominal";
-        }
-
-        return label;
+        return "Nominal";
     }
 
     private void DrawChaosWarningOverlay()
     {
-        if (chaosDirector == null)
-        {
-            return;
-        }
-
-        string warning = chaosDirector.ActiveWarningLabel;
+        string warning = chaosDirector != null ? chaosDirector.ActiveWarningLabel : string.Empty;
         if (string.IsNullOrWhiteSpace(warning))
         {
+            DrawThemedEventHintOverlay();
             return;
         }
 
@@ -810,6 +816,73 @@ public class GameManager : MonoBehaviour
         GUI.Label(new Rect(x, y, w, h), warning.ToUpperInvariant(), eventWarningStyle);
 
         GUI.color = old;
+    }
+
+    private void DrawThemedEventHintOverlay()
+    {
+        string hint = GetThemedEventHint();
+        if (string.IsNullOrWhiteSpace(hint))
+        {
+            return;
+        }
+
+        EnsureWarningStyle();
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 6.8f);
+        float s = hudScale;
+        float w = Mathf.Min(Screen.width * 0.72f, 760f * s);
+        float h = 46f * s;
+        float x = (Screen.width - w) * 0.5f;
+        float y = Screen.height * 0.18f;
+
+        DrawSolidRect(new Rect(x, y, w, h), new Color(0.02f, 0.04f, 0.08f, 0.44f + pulse * 0.08f));
+        DrawSolidRect(new Rect(x, y, w, 2f * s), new Color(0.42f, 0.96f, 1f, 0.58f + pulse * 0.18f));
+        DrawSolidRect(new Rect(x, y + h - (2f * s), w, 2f * s), new Color(1f, 0.46f, 0.78f, 0.38f + pulse * 0.12f));
+
+        Color old = GUI.color;
+        GUI.color = new Color(0.88f, 0.97f, 1f, Mathf.Lerp(0.72f, 0.96f, pulse));
+        GUI.Label(new Rect(x, y + (5f * s), w, h), hint.ToUpperInvariant(), eventWarningStyle);
+        GUI.color = old;
+    }
+
+    private string GetThemedEventLabel()
+    {
+        IThemedEventStatusProvider provider = GetThemedEventStatusProvider();
+        return provider != null ? provider.ActiveThemedEventLabel : string.Empty;
+    }
+
+    private string GetThemedEventHint()
+    {
+        IThemedEventStatusProvider provider = GetThemedEventStatusProvider();
+        return provider != null ? provider.ActiveThemedEventHint : string.Empty;
+    }
+
+    private IThemedEventStatusProvider GetThemedEventStatusProvider()
+    {
+        if (!IsThemedEventStatusProviderValid())
+        {
+            themedEventStatusProvider = FindThemedEventStatusProvider();
+        }
+
+        return themedEventStatusProvider;
+    }
+
+    private bool IsThemedEventStatusProviderValid()
+    {
+        return themedEventStatusProvider is MonoBehaviour behaviour && behaviour != null && behaviour.isActiveAndEnabled;
+    }
+
+    private static IThemedEventStatusProvider FindThemedEventStatusProvider()
+    {
+        MonoBehaviour[] behaviours = FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None);
+        for (int i = 0; i < behaviours.Length; i++)
+        {
+            if (behaviours[i] != null && behaviours[i].isActiveAndEnabled && behaviours[i] is IThemedEventStatusProvider provider)
+            {
+                return provider;
+            }
+        }
+
+        return null;
     }
 
     private void TrackBossTempoPulse()

@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class StorageSurgeEventController : MonoBehaviour
+public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProvider
 {
     // Evento de Storage: reacomoda carga y activa carriles transportadores que empujan actores.
     private struct ObstacleBinding
@@ -79,6 +79,17 @@ public class StorageSurgeEventController : MonoBehaviour
     [SerializeField] private Color magneticFieldTelegraphColor = new Color(0.96f, 0.74f, 0.34f, 0.46f);
     [SerializeField] private Color magneticFieldActiveColor = new Color(0.34f, 0.92f, 1f, 0.72f);
 
+    [Header("Storage Distinctive Event - Cargo Transit")]
+    [SerializeField] private bool enableCargoTransit = true;
+    [SerializeField] private int cargoBlockCountMin = 2;
+    [SerializeField] private int cargoBlockCountMax = 4;
+    [SerializeField] private float cargoTelegraphSeconds = 1.05f;
+    [SerializeField] private Vector2 cargoSizeMin = new Vector2(1.25f, 0.75f);
+    [SerializeField] private Vector2 cargoSizeMax = new Vector2(2.55f, 1.45f);
+    [SerializeField] private float cargoAvoidActorRadius = 2.2f;
+    [SerializeField] private Color cargoTelegraphColor = new Color(1f, 0.76f, 0.36f, 0.58f);
+    [SerializeField] private Color cargoActiveColor = new Color(0.34f, 0.78f, 1f, 0.86f);
+
     [Header("Visual Telegraph")]
     [SerializeField, Range(0f, 1f)] private float activeColorPulseStrength = 0.62f;
     [SerializeField, Range(0f, 1f)] private float activeColorLightenAmount = 0.36f;
@@ -123,6 +134,33 @@ public class StorageSurgeEventController : MonoBehaviour
     private readonly List<float> conveyorLaneMarkerPhases = new List<float>();
     private readonly List<Vector2> conveyorLaneDirections = new List<Vector2>();
     private readonly List<ThemedEventZoneFx> magneticFields = new List<ThemedEventZoneFx>();
+    private readonly List<StorageCargoBlockFx> cargoTransitBlocks = new List<StorageCargoBlockFx>();
+
+    public string ActiveThemedEventLabel
+    {
+        get
+        {
+            if (GetLiveCargoTransitCount() > 0)
+            {
+                return "CARGA EN TRANSITO";
+            }
+
+            return eventActive ? "REFLUJO STORAGE" : string.Empty;
+        }
+    }
+
+    public string ActiveThemedEventHint
+    {
+        get
+        {
+            if (GetLiveCargoTransitCount() > 0)
+            {
+                return "La carga cambia rutas: usa la cobertura nueva";
+            }
+
+            return string.Empty;
+        }
+    }
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
@@ -142,6 +180,7 @@ public class StorageSurgeEventController : MonoBehaviour
         EndEvent(restoreControllers: true, snapBackToStart: true);
         DestroyConveyorVisuals();
         ClearMagneticFields();
+        ClearCargoTransit();
     }
 
     private void Update()
@@ -283,6 +322,7 @@ public class StorageSurgeEventController : MonoBehaviour
         EnsureConveyorVisuals();
         HideConveyorVisuals();
         SpawnMagneticFields(eventDuration);
+        SpawnCargoTransit(eventDuration);
 
         for (int i = 0; i < obstacles.Count; i++)
         {
@@ -335,7 +375,7 @@ public class StorageSurgeEventController : MonoBehaviour
 
     private void EndEvent(bool restoreControllers, bool snapBackToStart)
     {
-        if (!eventActive && snapshots.Count == 0)
+        if (!eventActive && snapshots.Count == 0 && cargoTransitBlocks.Count == 0)
         {
             return;
         }
@@ -347,6 +387,7 @@ public class StorageSurgeEventController : MonoBehaviour
         eventTimer = 0f;
         HideConveyorVisuals();
         ClearMagneticFields();
+        ClearCargoTransit();
     }
 
     private void ApplyActiveColorPulse(float progress)
@@ -792,6 +833,151 @@ public class StorageSurgeEventController : MonoBehaviour
         }
 
         magneticFields.Clear();
+    }
+
+    private void SpawnCargoTransit(float totalDuration)
+    {
+        ClearCargoTransit();
+        if (!enableCargoTransit)
+        {
+            return;
+        }
+
+        if (playerController == null)
+        {
+            playerController = FindAnyObjectByType<PlayerController>();
+        }
+        if (enemyController == null)
+        {
+            enemyController = FindAnyObjectByType<EnemyController>();
+        }
+
+        int min = Mathf.Max(1, Mathf.Min(cargoBlockCountMin, cargoBlockCountMax));
+        int max = Mathf.Max(min, Mathf.Max(cargoBlockCountMin, cargoBlockCountMax));
+        int count = Random.Range(min, max + 1);
+        float activeTime = Mathf.Max(0.6f, totalDuration - Mathf.Max(0.1f, cargoTelegraphSeconds) - 0.25f);
+
+        for (int i = 0; i < count; i++)
+        {
+            Vector2 size = RollCargoSize(i);
+            Vector2 position = PickCargoTransitPosition(size, i, count);
+            GameObject cargoGo = new GameObject($"StorageCargoTransit_{i}");
+            cargoGo.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
+            cargoGo.transform.position = new Vector3(position.x, position.y, 0f);
+
+            StorageCargoBlockFx cargo = cargoGo.AddComponent<StorageCargoBlockFx>();
+            cargo.Configure(size, cargoTelegraphSeconds, activeTime, cargoTelegraphColor, cargoActiveColor);
+            cargoTransitBlocks.Add(cargo);
+        }
+    }
+
+    private int GetLiveCargoTransitCount()
+    {
+        int count = 0;
+        for (int i = 0; i < cargoTransitBlocks.Count; i++)
+        {
+            if (cargoTransitBlocks[i] != null)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private Vector2 RollCargoSize(int index)
+    {
+        float width = Random.Range(
+            Mathf.Min(cargoSizeMin.x, cargoSizeMax.x),
+            Mathf.Max(cargoSizeMin.x, cargoSizeMax.x));
+        float height = Random.Range(
+            Mathf.Min(cargoSizeMin.y, cargoSizeMax.y),
+            Mathf.Max(cargoSizeMin.y, cargoSizeMax.y));
+
+        if ((index & 1) == 1)
+        {
+            float swap = width;
+            width = height;
+            height = swap;
+        }
+
+        return new Vector2(Mathf.Max(0.35f, width), Mathf.Max(0.35f, height));
+    }
+
+    private Vector2 PickCargoTransitPosition(Vector2 size, int index, int count)
+    {
+        float marginX = Mathf.Max(0.8f, size.x * 0.5f + 0.2f);
+        float marginY = Mathf.Max(0.8f, size.y * 0.5f + 0.2f);
+        float xMin = Mathf.Min(interiorLeft + marginX, interiorRight - marginX);
+        float xMax = Mathf.Max(interiorLeft + marginX, interiorRight - marginX);
+        float yMin = Mathf.Min(interiorBottom + marginY, interiorTop - marginY);
+        float yMax = Mathf.Max(interiorBottom + marginY, interiorTop - marginY);
+        Vector2 fallback = new Vector2(Mathf.Lerp(xMin, xMax, (index + 1f) / Mathf.Max(2f, count + 1f)), (yMin + yMax) * 0.5f);
+
+        for (int attempt = 0; attempt < 42; attempt++)
+        {
+            Vector2 candidate = new Vector2(Random.Range(xMin, xMax), Random.Range(yMin, yMax));
+            fallback = candidate;
+            if (IsGoodCargoTransitPosition(candidate, size))
+            {
+                return candidate;
+            }
+        }
+
+        return fallback;
+    }
+
+    private bool IsGoodCargoTransitPosition(Vector2 candidate, Vector2 size)
+    {
+        float avoid = Mathf.Max(0.8f, cargoAvoidActorRadius);
+        if (playerController != null && Vector2.Distance(playerController.GetPosition(), candidate) < avoid)
+        {
+            return false;
+        }
+        if (enemyController != null && Vector2.Distance(enemyController.GetCurrentPosition(), candidate) < avoid)
+        {
+            return false;
+        }
+
+        Collider2D[] hits = Physics2D.OverlapBoxAll(candidate, size + Vector2.one * 0.24f, 0f);
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider2D hit = hits[i];
+            if (hit == null || hit.isTrigger)
+            {
+                continue;
+            }
+
+            if (hit.GetComponent<PlayerController>() != null || hit.GetComponent<EnemyController>() != null || hit.GetComponent<SplitAnomalyCloneController>() != null)
+            {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private void ClearCargoTransit()
+    {
+        for (int i = cargoTransitBlocks.Count - 1; i >= 0; i--)
+        {
+            StorageCargoBlockFx block = cargoTransitBlocks[i];
+            if (block != null)
+            {
+                if (Application.isPlaying)
+                {
+                    Destroy(block.gameObject);
+                }
+                else
+                {
+                    DestroyImmediate(block.gameObject);
+                }
+            }
+        }
+
+        cargoTransitBlocks.Clear();
     }
 
     private static Vector2 PickPrimaryAxis()

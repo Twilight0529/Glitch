@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-public class RuptureSpinEventController : MonoBehaviour
+public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvider
 {
     // Evento de Rupture: rota el campo de obstaculos alrededor del centro sin cruzar los limites.
     private struct ObstacleBinding
@@ -67,6 +67,17 @@ public class RuptureSpinEventController : MonoBehaviour
     [SerializeField] private Color riftEchoTelegraphColor = new Color(0.95f, 0.42f, 1f, 0.42f);
     [SerializeField] private Color riftEchoActiveColor = new Color(0.42f, 0.96f, 1f, 0.76f);
 
+    [Header("Rupture Distinctive Event - Echo Portals")]
+    [SerializeField] private bool enableEchoPortals = true;
+    [SerializeField] private float echoPortalRadius = 0.72f;
+    [SerializeField] private float echoPortalCooldown = 0.85f;
+    [SerializeField] private float echoTrapRadius = 1.05f;
+    [SerializeField] private float echoTrapDuration = 1.35f;
+    [SerializeField] private float echoTrapStunDuration = 1.15f;
+    [SerializeField] private float echoFirewallReward = 12f;
+    [SerializeField] private float echoSuccessLabelSeconds = 1.25f;
+    [SerializeField] private Color echoPortalColor = new Color(0.48f, 0.96f, 1f, 0.9f);
+
     [Header("Debug")]
     [SerializeField] private bool debugTriggerEnabled = true;
     [SerializeField] private Key debugTriggerKey = Key.R;
@@ -95,7 +106,47 @@ public class RuptureSpinEventController : MonoBehaviour
     private bool mapEventsWereUnlocked;
     private EnemyController enemyController;
     private GameManager gameManager;
+    private PlayerController playerController;
     private readonly List<ThemedEventZoneFx> riftEchoZones = new List<ThemedEventZoneFx>();
+    private readonly List<RuptureEchoPortal> echoPortals = new List<RuptureEchoPortal>();
+    private float echoPortalCooldownTimer;
+    private float echoSuccessTimer;
+
+    public string ActiveThemedEventLabel
+    {
+        get
+        {
+            if (echoSuccessTimer > 0f)
+            {
+                return "ECO ANCLADO";
+            }
+
+            if (GetLiveEchoPortalCount() > 1)
+            {
+                return "PORTALES DE ECO";
+            }
+
+            return eventActive ? "RUPTURA ROTATIVA" : string.Empty;
+        }
+    }
+
+    public string ActiveThemedEventHint
+    {
+        get
+        {
+            if (echoSuccessTimer > 0f)
+            {
+                return "Eco activado: la anomalia quedo vulnerable";
+            }
+
+            if (GetLiveEchoPortalCount() > 1)
+            {
+                return "Cruza un portal y deja un eco para baitar a la anomalia";
+            }
+
+            return string.Empty;
+        }
+    }
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
@@ -120,10 +171,20 @@ public class RuptureSpinEventController : MonoBehaviour
     {
         EndEvent(restoreControllers: true);
         ClearRiftEchoes();
+        ClearEchoPortals();
     }
 
     private void Update()
     {
+        if (echoPortalCooldownTimer > 0f)
+        {
+            echoPortalCooldownTimer -= Time.deltaTime;
+        }
+        if (echoSuccessTimer > 0f)
+        {
+            echoSuccessTimer -= Time.deltaTime;
+        }
+
         if (!initialized || centerTransform == null)
         {
             return;
@@ -309,6 +370,7 @@ public class RuptureSpinEventController : MonoBehaviour
         eventDuration *= Mathf.Max(0.1f, cadenceDurationMultiplier);
         ChooseNextDirectionAndSpeed(forceDirectionChange: false);
         SpawnRiftEchoes(eventDuration);
+        SpawnEchoPortals(eventDuration);
         eventTimer = 0f;
         eventActive = true;
 
@@ -568,6 +630,7 @@ public class RuptureSpinEventController : MonoBehaviour
 
         snapshots.Clear();
         ClearRiftEchoes();
+        ClearEchoPortals();
     }
 
     private void ApplyActiveColorPulse(float progress)
@@ -815,6 +878,169 @@ public class RuptureSpinEventController : MonoBehaviour
         }
 
         riftEchoZones.Clear();
+    }
+
+    private void SpawnEchoPortals(float totalDuration)
+    {
+        ClearEchoPortals();
+        echoPortalCooldownTimer = 0f;
+        if (!enableEchoPortals)
+        {
+            return;
+        }
+
+        if (playerController == null)
+        {
+            playerController = FindAnyObjectByType<PlayerController>();
+        }
+
+        float lifeSeconds = Mathf.Max(1.2f, totalDuration - 0.35f);
+        Vector2 first;
+        Vector2 second;
+        PickEchoPortalPair(out first, out second);
+        CreateEchoPortal(first, 0, lifeSeconds);
+        CreateEchoPortal(second, 1, lifeSeconds);
+    }
+
+    private void CreateEchoPortal(Vector2 position, int index, float lifeSeconds)
+    {
+        GameObject portalGo = new GameObject($"RuptureEchoPortal_{index}");
+        portalGo.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
+        portalGo.transform.position = new Vector3(position.x, position.y, 0f);
+        RuptureEchoPortal portal = portalGo.AddComponent<RuptureEchoPortal>();
+        portal.Configure(this, index, echoPortalRadius, lifeSeconds, echoPortalColor);
+        echoPortals.Add(portal);
+    }
+
+    private void PickEchoPortalPair(out Vector2 first, out Vector2 second)
+    {
+        Vector2 center = centerTransform != null ? (Vector2)centerTransform.position : Vector2.zero;
+        bool horizontal = Random.value < 0.5f;
+        float margin = Mathf.Max(1.2f, echoPortalRadius + 0.8f);
+        float jitterX = Random.Range(-2.4f, 2.4f);
+        float jitterY = Random.Range(-2f, 2f);
+
+        if (horizontal)
+        {
+            first = new Vector2(interiorLeft + margin, Mathf.Clamp(center.y + jitterY, interiorBottom + margin, interiorTop - margin));
+            second = new Vector2(interiorRight - margin, Mathf.Clamp(center.y - jitterY, interiorBottom + margin, interiorTop - margin));
+        }
+        else
+        {
+            first = new Vector2(Mathf.Clamp(center.x + jitterX, interiorLeft + margin, interiorRight - margin), interiorBottom + margin);
+            second = new Vector2(Mathf.Clamp(center.x - jitterX, interiorLeft + margin, interiorRight - margin), interiorTop - margin);
+        }
+
+        if (playerController != null && Vector2.Distance(playerController.GetPosition(), first) < Vector2.Distance(playerController.GetPosition(), second))
+        {
+            Vector2 swap = first;
+            first = second;
+            second = swap;
+        }
+    }
+
+    public void NotifyRupturePortalEntered(RuptureEchoPortal portal, PlayerController player)
+    {
+        if (!eventActive || portal == null || player == null || echoPortalCooldownTimer > 0f)
+        {
+            return;
+        }
+
+        RuptureEchoPortal exitPortal = GetOtherEchoPortal(portal);
+        if (exitPortal == null)
+        {
+            return;
+        }
+
+        Vector2 oldPosition = player.GetPosition();
+        Vector2 exitPosition = ResolveEchoPortalExitPosition(exitPortal.Position);
+        player.TeleportTo(exitPosition);
+        player.AddFirewallCharge(echoFirewallReward);
+        SpawnPlayerEchoTrap(oldPosition);
+        echoPortalCooldownTimer = Mathf.Max(0.05f, echoPortalCooldown);
+    }
+
+    private RuptureEchoPortal GetOtherEchoPortal(RuptureEchoPortal portal)
+    {
+        for (int i = 0; i < echoPortals.Count; i++)
+        {
+            RuptureEchoPortal candidate = echoPortals[i];
+            if (candidate != null && candidate != portal)
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private Vector2 ResolveEchoPortalExitPosition(Vector2 portalPosition)
+    {
+        Vector2 center = centerTransform != null ? (Vector2)centerTransform.position : Vector2.zero;
+        Vector2 away = portalPosition - center;
+        if (away.sqrMagnitude < 0.001f)
+        {
+            away = Vector2.right;
+        }
+
+        return ClampToInterior(portalPosition + away.normalized * Mathf.Max(0.25f, echoPortalRadius * 1.35f), 0.35f);
+    }
+
+    private void SpawnPlayerEchoTrap(Vector2 position)
+    {
+        GameObject echoGo = new GameObject("RupturePlayerEchoTrap");
+        echoGo.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
+        echoGo.transform.position = new Vector3(position.x, position.y, 0f);
+        RupturePlayerEchoFx echo = echoGo.AddComponent<RupturePlayerEchoFx>();
+        echo.Configure(this, echoTrapRadius, echoTrapDuration, echoTrapStunDuration, echoPortalColor);
+    }
+
+    public void NotifyRuptureEchoTrapTriggered()
+    {
+        echoSuccessTimer = Mathf.Max(echoSuccessTimer, Mathf.Max(0.25f, echoSuccessLabelSeconds));
+    }
+
+    private Vector2 ClampToInterior(Vector2 position, float radius)
+    {
+        float margin = Mathf.Max(0f, radius + boundsPadding);
+        position.x = Mathf.Clamp(position.x, interiorLeft + margin, interiorRight - margin);
+        position.y = Mathf.Clamp(position.y, interiorBottom + margin, interiorTop - margin);
+        return position;
+    }
+
+    private int GetLiveEchoPortalCount()
+    {
+        int count = 0;
+        for (int i = 0; i < echoPortals.Count; i++)
+        {
+            if (echoPortals[i] != null)
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private void ClearEchoPortals()
+    {
+        for (int i = echoPortals.Count - 1; i >= 0; i--)
+        {
+            RuptureEchoPortal portal = echoPortals[i];
+            if (portal != null)
+            {
+                if (Application.isPlaying)
+                {
+                    Destroy(portal.gameObject);
+                }
+                else
+                {
+                    DestroyImmediate(portal.gameObject);
+                }
+            }
+        }
+
+        echoPortals.Clear();
     }
 
     private bool IsMapEventSuppressed()

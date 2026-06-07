@@ -70,6 +70,19 @@ public class SplitAnomalyCloneController : MonoBehaviour
         GlitchAudioManager.PlayEnemyParried(transform.position);
     }
 
+    public void ApplyContainmentLock(float seconds)
+    {
+        firewallStunTimer = Mathf.Max(firewallStunTimer, Mathf.Max(0.08f, seconds));
+        firewallKnockbackTimer = 0f;
+
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector2.zero;
+        }
+
+        GlitchAudioManager.PlayEnemyParried(transform.position);
+    }
+
     public void AbsorbIntoBreach(Vector2 breachPosition)
     {
         splitStateActive = false;
