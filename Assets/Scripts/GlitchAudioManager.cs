@@ -11,14 +11,27 @@ public class GlitchAudioManager : MonoBehaviour
     [SerializeField] private float sfxVolume = 0.82f;
     [SerializeField] private float ambienceVolume = 0.18f;
     [SerializeField] private float tensionVolume = 0.22f;
+    [SerializeField] private string authoredMusicResourcePath = "Audio/Music/a_flawless_getaway_loop";
+    [SerializeField] private float authoredMusicVolume = 0.48f;
+    [SerializeField] private float musicFoundationVolume = 0.02f;
+    [SerializeField] private float musicPulseVolume = 0.04f;
+    [SerializeField] private float musicArpVolume = 0.015f;
+    [SerializeField] private float musicPressureVolume = 0.07f;
     [SerializeField] private int sfxSourceCount = 12;
 
     private readonly Dictionary<string, AudioClip> clips = new Dictionary<string, AudioClip>();
     private AudioSource[] sfxSources;
     private AudioSource ambienceSource;
     private AudioSource tensionSource;
+    private AudioSource authoredMusicSource;
+    private AudioSource musicFoundationSource;
+    private AudioSource musicPulseSource;
+    private AudioSource musicArpSource;
+    private AudioSource musicPressureSource;
     private int sfxCursor;
     private int sampleRate;
+    private float musicIntensityBoost;
+    private float musicBreachHoldTimer;
     private PlayerController player;
     private EnemyController enemy;
     private GameManager gameManager;
@@ -51,16 +64,52 @@ public class GlitchAudioManager : MonoBehaviour
     public static void PlayUpgradeOpen() => Play("upgrade_open", 0.58f, 1f, Vector3.zero);
     public static void PlayUpgradeSelect() => Play("upgrade_select", 0.64f, 1f, Vector3.zero);
     public static void PlayEnemyParried(Vector3 position) => Play("enemy_parried", 0.72f, 1f, position);
-    public static void PlayBreachWarning(Vector3 position) => Play("breach_warning", 0.78f, 1f, position);
-    public static void PlayBreachSweep(Vector3 position) => Play("breach_sweep", 0.88f, 1f, position);
-    public static void PlayBreachEnter(Vector3 position) => Play("breach_enter", 0.86f, 1f, position);
-    public static void PlayBreachTransition(Vector3 position) => Play("breach_transition", 0.9f, 1f, position);
-    public static void PlayBreachArrival(Vector3 position) => Play("breach_arrival", 0.76f, 1f, position);
-    public static void PlayBreachEnemyReentry(Vector3 position) => Play("breach_enemy_reentry", 0.82f, 1f, position);
-    public static void PlayBreachFail(Vector3 position) => Play("breach_fail", 0.94f, 1f, position);
+    public static void PlayBreachWarning(Vector3 position)
+    {
+        BoostMusic(0.26f, 1.6f);
+        Play("breach_warning", 0.78f, 1f, position);
+    }
+
+    public static void PlayBreachSweep(Vector3 position)
+    {
+        BoostMusic(0.55f, 2.4f);
+        Play("breach_sweep", 0.88f, 1f, position);
+    }
+
+    public static void PlayBreachEnter(Vector3 position)
+    {
+        BoostMusic(0.42f, 1.4f);
+        Play("breach_enter", 0.86f, 1f, position);
+    }
+
+    public static void PlayBreachTransition(Vector3 position)
+    {
+        BoostMusic(0.62f, 2.8f);
+        Play("breach_transition", 0.9f, 1f, position);
+    }
+
+    public static void PlayBreachArrival(Vector3 position)
+    {
+        BoostMusic(0.34f, 1.6f);
+        Play("breach_arrival", 0.76f, 1f, position);
+    }
+
+    public static void PlayBreachEnemyReentry(Vector3 position)
+    {
+        BoostMusic(0.48f, 1.8f);
+        Play("breach_enemy_reentry", 0.82f, 1f, position);
+    }
+
+    public static void PlayBreachFail(Vector3 position)
+    {
+        BoostMusic(0.74f, 2.2f);
+        Play("breach_fail", 0.94f, 1f, position);
+    }
 
     public static void PlayEnemyState(EnemyController.AnomalyState state, Vector3 position)
     {
+        BoostMusic(IsMajorState(state) ? 0.34f : 0.16f, IsMajorState(state) ? 2.2f : 0.8f);
+
         switch (state)
         {
             case EnemyController.AnomalyState.Split:
@@ -82,6 +131,21 @@ public class GlitchAudioManager : MonoBehaviour
                 Play("state_minor", 0.42f, 1f, position);
                 break;
         }
+    }
+
+    private static void BoostMusic(float amount, float holdSeconds)
+    {
+        Ensure();
+        instance.musicIntensityBoost = Mathf.Max(instance.musicIntensityBoost, Mathf.Clamp01(amount));
+        instance.musicBreachHoldTimer = Mathf.Max(instance.musicBreachHoldTimer, Mathf.Max(0f, holdSeconds));
+    }
+
+    private static bool IsMajorState(EnemyController.AnomalyState state)
+    {
+        return state == EnemyController.AnomalyState.Split ||
+               state == EnemyController.AnomalyState.ExpansionShoot ||
+               state == EnemyController.AnomalyState.SpeedSurge ||
+               state == EnemyController.AnomalyState.Destroyer;
     }
 
     private static void Play(string clipName, float volume, float pitch, Vector3 position)
@@ -121,17 +185,22 @@ public class GlitchAudioManager : MonoBehaviour
             sfxSources[i] = CreateSource($"Sfx_{i}");
         }
 
-        ambienceSource = CreateSource("AmbientLoop");
-        ambienceSource.loop = true;
-        ambienceSource.clip = GetClip("ambient_loop");
-        ambienceSource.volume = 0f;
-        ambienceSource.Play();
+        ambienceSource = CreateLoopSource("AmbientLoop", "ambient_loop");
+        tensionSource = CreateLoopSource("ThreatLoop", "threat_loop");
+        authoredMusicSource = CreateAuthoredMusicSource();
+        musicFoundationSource = CreateLoopSource("MusicFoundation", "music_foundation");
+        musicPulseSource = CreateLoopSource("MusicPulse", "music_pulse");
+        musicArpSource = CreateLoopSource("MusicArp", "music_arp");
+        musicPressureSource = CreateLoopSource("MusicPressure", "music_pressure");
 
-        tensionSource = CreateSource("ThreatLoop");
-        tensionSource.loop = true;
-        tensionSource.clip = GetClip("threat_loop");
-        tensionSource.volume = 0f;
-        tensionSource.Play();
+        double loopStartTime = AudioSettings.dspTime + 0.05;
+        PlayLoopSource(ambienceSource, loopStartTime);
+        PlayLoopSource(tensionSource, loopStartTime);
+        PlayLoopSource(authoredMusicSource, loopStartTime);
+        PlayLoopSource(musicFoundationSource, loopStartTime);
+        PlayLoopSource(musicPulseSource, loopStartTime);
+        PlayLoopSource(musicArpSource, loopStartTime);
+        PlayLoopSource(musicPressureSource, loopStartTime);
     }
 
     private AudioSource CreateSource(string sourceName)
@@ -144,6 +213,42 @@ public class GlitchAudioManager : MonoBehaviour
         source.dopplerLevel = 0f;
         source.ignoreListenerPause = true;
         return source;
+    }
+
+    private AudioSource CreateLoopSource(string sourceName, string clipName)
+    {
+        AudioSource source = CreateSource(sourceName);
+        source.loop = true;
+        source.clip = GetClip(clipName);
+        source.volume = 0f;
+        return source;
+    }
+
+    private AudioSource CreateAuthoredMusicSource()
+    {
+        AudioClip clip = Resources.Load<AudioClip>(authoredMusicResourcePath);
+        if (clip == null)
+        {
+            return null;
+        }
+
+        AudioSource source = CreateSource("AuthoredMusic");
+        source.loop = true;
+        source.clip = clip;
+        source.volume = 0f;
+        source.priority = 32;
+        return source;
+    }
+
+    private static void PlayLoopSource(AudioSource source, double startTime)
+    {
+        if (source == null)
+        {
+            return;
+        }
+
+        source.timeSamples = 0;
+        source.PlayScheduled(startTime);
     }
 
     private void StartAmbience()
@@ -170,30 +275,52 @@ public class GlitchAudioManager : MonoBehaviour
 
     private void UpdateReactiveAmbience()
     {
+        float dt = Time.unscaledDeltaTime;
         bool active = gameManager != null && gameManager.IsRunActive && !gameManager.IsGameOver;
         float threat = 0f;
+        bool breachLure = false;
         if (active && player != null && enemy != null)
         {
             float distance = Vector2.Distance(player.GetPosition(), enemy.GetCurrentPosition());
             threat = 1f - Mathf.Clamp01((distance - 2f) / 10f);
-            if (enemy.IsBreachLureActive())
+            breachLure = enemy.IsBreachLureActive();
+            if (breachLure)
             {
                 threat *= 0.45f;
             }
         }
 
+        musicIntensityBoost = Mathf.MoveTowards(musicIntensityBoost, 0f, dt * 0.42f);
+        musicBreachHoldTimer = Mathf.Max(0f, musicBreachHoldTimer - dt);
+
+        float progression = active && gameManager != null ? Mathf.Clamp01(gameManager.SurvivalTime / 150f) : 0f;
+        float breachPressure = musicBreachHoldTimer > 0f || breachLure ? 0.34f : 0f;
+        float musicIntensity = active
+            ? Mathf.Clamp01(threat * 0.68f + progression * 0.24f + musicIntensityBoost + breachPressure)
+            : 0f;
+
         float ambientTarget = active ? ambienceVolume : ambienceVolume * 0.35f;
         float tensionTarget = active ? tensionVolume * Mathf.SmoothStep(0f, 1f, threat) : 0f;
-        if (ambienceSource != null)
+        MoveLoop(ambienceSource, ambientTarget, Mathf.Lerp(0.92f, 1.04f, threat), 0.25f, 0.15f);
+        MoveLoop(tensionSource, tensionTarget, Mathf.Lerp(0.82f, 1.18f, threat), 0.45f, 0.3f);
+
+        MoveLoop(authoredMusicSource, active ? authoredMusicVolume : 0f, 1f, 0.22f, 0.1f);
+        MoveLoop(musicFoundationSource, active ? musicFoundationVolume : 0f, 1f, 0.28f, 0.12f);
+        MoveLoop(musicPulseSource, active ? musicPulseVolume * Smooth01(0.12f, 0.78f, musicIntensity) : 0f, Mathf.Lerp(0.98f, 1.04f, musicIntensity), 0.36f, 0.16f);
+        MoveLoop(musicArpSource, active ? musicArpVolume * Smooth01(0.30f, 0.92f, musicIntensity) : 0f, Mathf.Lerp(0.96f, 1.08f, musicIntensity), 0.34f, 0.22f);
+        MoveLoop(musicPressureSource, active ? musicPressureVolume * Smooth01(0.52f, 1f, musicIntensity) : 0f, Mathf.Lerp(0.9f, 1.12f, musicIntensity), 0.5f, 0.28f);
+    }
+
+    private static void MoveLoop(AudioSource source, float targetVolume, float targetPitch, float volumeRate, float pitchRate)
+    {
+        if (source == null)
         {
-            ambienceSource.volume = Mathf.MoveTowards(ambienceSource.volume, ambientTarget, Time.unscaledDeltaTime * 0.25f);
-            ambienceSource.pitch = Mathf.MoveTowards(ambienceSource.pitch, Mathf.Lerp(0.92f, 1.04f, threat), Time.unscaledDeltaTime * 0.15f);
+            return;
         }
-        if (tensionSource != null)
-        {
-            tensionSource.volume = Mathf.MoveTowards(tensionSource.volume, tensionTarget, Time.unscaledDeltaTime * 0.45f);
-            tensionSource.pitch = Mathf.MoveTowards(tensionSource.pitch, Mathf.Lerp(0.82f, 1.18f, threat), Time.unscaledDeltaTime * 0.3f);
-        }
+
+        float dt = Time.unscaledDeltaTime;
+        source.volume = Mathf.MoveTowards(source.volume, Mathf.Max(0f, targetVolume), dt * Mathf.Max(0.01f, volumeRate));
+        source.pitch = Mathf.MoveTowards(source.pitch, Mathf.Clamp(targetPitch, 0.45f, 1.75f), dt * Mathf.Max(0.01f, pitchRate));
     }
 
     private void PlayInternal(string clipName, float volume, float pitch, Vector3 position)
@@ -256,6 +383,14 @@ public class GlitchAudioManager : MonoBehaviour
                 return CreateClip(clipName, 5.2f, AmbientLoop);
             case "threat_loop":
                 return CreateClip(clipName, 2.8f, ThreatLoop);
+            case "music_foundation":
+                return CreateClip(clipName, 8f, MusicFoundation);
+            case "music_pulse":
+                return CreateClip(clipName, 8f, MusicPulse);
+            case "music_arp":
+                return CreateClip(clipName, 8f, MusicArp);
+            case "music_pressure":
+                return CreateClip(clipName, 8f, MusicPressure);
             case "score_pickup":
                 return CreateClip(clipName, 0.18f, ScorePickup);
             case "powerup_spawn":
@@ -341,6 +476,48 @@ public class GlitchAudioManager : MonoBehaviour
         float grit = Square(82f, t) * 0.05f * pulse + Noise(i, 7.7f) * 0.03f * pulse;
         float warning = Sine(520f + 80f * pulse, t) * 0.035f * Gate(t, 7f, 0.28f);
         return SoftClip(bass + grit + warning);
+    }
+
+    private static float MusicFoundation(float t, int i)
+    {
+        float kickSidechain = BeatDecay(t, 0.5f, 0.16f, 0f);
+        float drone = Sine(55f, t) * 0.16f + Sine(82.5f, t) * 0.07f + Sine(110f, t) * 0.045f;
+        float pulse = Sine(55f, t) * 0.18f * kickSidechain;
+        float scan = Sine(220f, t) * 0.025f * Gate(t, 2f, 0.55f);
+        return SoftClip(drone + pulse + scan);
+    }
+
+    private static float MusicPulse(float t, int i)
+    {
+        float kickEnv = BeatDecay(t, 0.5f, 0.075f, 0f);
+        float kickPhase = Mathf.Repeat(t, 0.5f) / 0.5f;
+        float kick = Sine(Mathf.Lerp(92f, 42f, Mathf.Clamp01(kickPhase * 3.2f)), t) * 0.46f * kickEnv;
+        float snare = Noise(i, 101.4f) * 0.19f * BeatDecay(t, 1f, 0.045f, 0.5f);
+        float hat = Noise(i, 103.8f) * 0.06f * Gate(t, 8f, 0.10f);
+        float click = Square(1200f, t) * 0.035f * Gate(t, 4f, 0.08f);
+        return SoftClip(kick + snare + hat + click);
+    }
+
+    private static float MusicArp(float t, int i)
+    {
+        float stepLength = 0.25f;
+        int step = Mathf.FloorToInt(Mathf.Repeat(t, 8f) / stepLength);
+        float local = Mathf.Repeat(t, stepLength);
+        float attack = Mathf.Clamp01(local / 0.012f);
+        float env = Mathf.SmoothStep(0f, 1f, attack) * Mathf.Exp(-local * 11f);
+        float f = ArpFrequency(step);
+        float tone = Sine(f, t) * 0.24f + Crush(Square(f * 0.5f, t), 6) * 0.09f;
+        float alias = Sine(f * 2f, t) * 0.04f * Gate(t, 16f, 0.34f);
+        return SoftClip((tone + alias + Noise(i, 108.2f) * 0.025f) * env);
+    }
+
+    private static float MusicPressure(float t, int i)
+    {
+        float rise = 0.4f + 0.6f * Mathf.Pow(0.5f + 0.5f * Sine(0.25f, t), 2f);
+        float glitchHat = Noise(i, 112.9f) * 0.15f * Gate(t, 12f, 0.16f);
+        float modem = Sine(680f + Mathf.Sin(t * 9f) * 180f, t) * 0.07f * Gate(t, 3f, 0.42f);
+        float shimmer = Crush(Sine(1360f, t), 5) * 0.045f * Gate(t, 6f, 0.24f);
+        return SoftClip((glitchHat + modem + shimmer) * rise);
     }
 
     private static float ScorePickup(float t, int i)
@@ -585,6 +762,61 @@ public class GlitchAudioManager : MonoBehaviour
     private static float Gate(float t, float rate, float duty)
     {
         return Mathf.Repeat(t * rate, 1f) <= Mathf.Clamp01(duty) ? 1f : 0f;
+    }
+
+    private static float BeatDecay(float t, float interval, float decay, float offset)
+    {
+        float phase = Mathf.Repeat(t - offset, Mathf.Max(0.001f, interval));
+        return Mathf.Exp(-phase / Mathf.Max(0.001f, decay));
+    }
+
+    private static float Smooth01(float edge0, float edge1, float value)
+    {
+        if (edge1 <= edge0)
+        {
+            return value >= edge1 ? 1f : 0f;
+        }
+
+        return Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(edge0, edge1, value));
+    }
+
+    private static float ArpFrequency(int step)
+    {
+        switch (step % 16)
+        {
+            case 0:
+                return 220f;
+            case 1:
+                return 277.5f;
+            case 2:
+                return 330f;
+            case 3:
+                return 440f;
+            case 4:
+                return 247.5f;
+            case 5:
+                return 330f;
+            case 6:
+                return 415f;
+            case 7:
+                return 555f;
+            case 8:
+                return 196f;
+            case 9:
+                return 247.5f;
+            case 10:
+                return 330f;
+            case 11:
+                return 392f;
+            case 12:
+                return 207.5f;
+            case 13:
+                return 277.5f;
+            case 14:
+                return 370f;
+            default:
+                return 440f;
+        }
     }
 
     private static float Crush(float value, int steps)

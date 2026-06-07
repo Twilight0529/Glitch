@@ -1,0 +1,7 @@
+Track: A Flawless Getaway (loop version)
+Author: Vitalezzz
+Source: https://opengameart.org/content/a-flawless-getaway
+License: CC0 1.0 Universal (Public Domain Dedication)
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+
+The loop version is included as the main authored level music for Glitch.
