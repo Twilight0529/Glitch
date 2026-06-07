@@ -36,6 +36,7 @@ public class ArenaBreachSweepFx : MonoBehaviour
     private Color tint = Color.magenta;
     private float duration = 8f;
     private float travelDistance;
+    private float currentConsumedLength;
     private float age;
     private bool restoreOnDestroy = true;
 
@@ -80,6 +81,7 @@ public class ArenaBreachSweepFx : MonoBehaviour
         Vector2 guidePosition = Vector2.Lerp(startPosition, endPosition, sweepT);
         transform.position = guidePosition;
         float consumedLength = travelDistance * sweepT;
+        currentConsumedLength = consumedLength;
 
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 10f);
         float guideAlpha = Mathf.Lerp(0.24f, 0.76f, pulse) * Mathf.Max(0.22f, Mathf.Sin(t * Mathf.PI));
@@ -100,6 +102,17 @@ public class ArenaBreachSweepFx : MonoBehaviour
         {
             enabled = false;
         }
+    }
+
+    public bool HasConsumedPoint(Vector2 point, float margin)
+    {
+        if (travelDistance <= 0.001f)
+        {
+            return false;
+        }
+
+        float alongSweep = Vector2.Dot(point - startPosition, direction);
+        return alongSweep <= currentConsumedLength + Mathf.Max(0f, margin);
     }
 
     private void CaptureArenaSlices(ProceduralArenaGenerator arena)

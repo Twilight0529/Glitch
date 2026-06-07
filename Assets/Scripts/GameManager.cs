@@ -109,9 +109,10 @@ public class GameManager : MonoBehaviour
     public float DifficultyMultiplier => 1f + (SurvivalTime * difficultyRampPerSecond);
     public int CurrentScore => Mathf.Max(0, Mathf.FloorToInt(SurvivalTime * Mathf.Max(0f, pointsPerSecond)) + bonusScore);
     public string CurrentLevelTypeLabel => levelType;
-    public bool AreBossSpecialStatesUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, bossSpecialStatesUnlockTime);
+    public bool IsBreachSensitiveSuppressionActive => breachSensitiveSuppressionTimer > 0f;
+    public bool AreBossSpecialStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && SurvivalTime >= Mathf.Max(0f, bossSpecialStatesUnlockTime);
     public bool AreMapEventsUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, mapEventsUnlockTime);
-    public bool IsContainmentPulseUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, containmentPulseUnlockTime);
+    public bool IsContainmentPulseUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && SurvivalTime >= Mathf.Max(0f, containmentPulseUnlockTime);
 
     public float CurrentBehaviorChangeInterval
     {
@@ -179,6 +180,7 @@ public class GameManager : MonoBehaviour
     private int upgradePickCount;
     private bool playerDefeatSequenceRunning;
     private Coroutine playerDefeatSequenceRoutine;
+    private float breachSensitiveSuppressionTimer;
 
     private void Awake()
     {
@@ -232,6 +234,10 @@ public class GameManager : MonoBehaviour
         if (bossStateBannerTimer > 0f)
         {
             bossStateBannerTimer -= Time.deltaTime;
+        }
+        if (breachSensitiveSuppressionTimer > 0f)
+        {
+            breachSensitiveSuppressionTimer -= Time.deltaTime;
         }
 
         if (upgradeSelectionOpen)
@@ -321,6 +327,11 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    public void SuppressBreachSensitiveSystems(float seconds)
+    {
+        breachSensitiveSuppressionTimer = Mathf.Max(breachSensitiveSuppressionTimer, Mathf.Max(0f, seconds));
+    }
+
     private void HandleOptionalReload()
     {
         if (!autoReloadSceneOnGameOver)
@@ -388,6 +399,7 @@ public class GameManager : MonoBehaviour
         upgradePickCount = 0;
         playerDefeatSequenceRunning = false;
         playerDefeatSequenceRoutine = null;
+        breachSensitiveSuppressionTimer = 0f;
         Time.timeScale = 0f;
     }
 

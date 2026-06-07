@@ -58,6 +58,11 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float shieldBreakBurstDuration = 0.22f;
     [SerializeField] private int shieldBreakBurstRayCount = 8;
 
+    [Header("Breach Consumption")]
+    [SerializeField] private int breachGlitchStripCount = 7;
+    [SerializeField] private float breachGlitchRadius = 0.82f;
+    [SerializeField] private float breachGlitchPulseSpeed = 18f;
+
     private Rigidbody2D rb;
     private Collider2D bodyCollider;
     private SpriteRenderer bodyRenderer;
@@ -76,6 +81,10 @@ public class PlayerController : MonoBehaviour
     private GameObject parryVisual;
     private ParticleSystem movementTrail;
     private bool deathSequenceActive;
+    private bool breachConsumptionActive;
+    private GameObject breachGlitchVisual;
+    private SpriteRenderer[] breachGlitchRenderers;
+    private Color breachGlitchColor = new Color(1f, 0.42f, 0.78f, 1f);
     private Color baseBodyColor = Color.white;
     private Vector3 baseBodyScale = Vector3.one;
 
@@ -153,6 +162,13 @@ public class PlayerController : MonoBehaviour
         if (deathSequenceActive)
         {
             rb.linearVelocity = Vector2.zero;
+            return;
+        }
+
+        if (breachConsumptionActive)
+        {
+            rb.linearVelocity = Vector2.zero;
+            UpdateBreachConsumptionVisual();
             return;
         }
 
@@ -332,8 +348,59 @@ public class PlayerController : MonoBehaviour
         }
 
         deathSequenceActive = true;
+        breachConsumptionActive = false;
+        DestroyBreachConsumptionVisual();
         GlitchAudioManager.PlayPlayerDeath(transform.position);
         StartCoroutine(DeathExplosionRoutine());
+        return true;
+    }
+
+    public bool BeginBreachConsumption(Color glitchColor)
+    {
+        if (deathSequenceActive)
+        {
+            return false;
+        }
+
+        breachConsumptionActive = true;
+        breachGlitchColor = glitchColor;
+        speedBoostTimer = 0f;
+        speedBoostMultiplier = 1f;
+        movementSlowTimer = 0f;
+        movementSlowMultiplier = 1f;
+        shieldTimer = 0f;
+        parryTimer = 0f;
+        parryCooldownTimer = 0f;
+        moveInput = Vector2.zero;
+
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector2.zero;
+        }
+
+        if (bodyCollider != null)
+        {
+            bodyCollider.enabled = false;
+        }
+
+        if (shieldVisual != null)
+        {
+            shieldVisual.SetActive(false);
+        }
+
+        if (parryVisual != null)
+        {
+            parryVisual.SetActive(false);
+        }
+
+        if (movementTrail != null)
+        {
+            ParticleSystem.EmissionModule emission = movementTrail.emission;
+            emission.rateOverTime = 0f;
+        }
+
+        EnsureBreachConsumptionVisual();
+        UpdateBreachConsumptionVisual();
         return true;
     }
 
@@ -618,6 +685,88 @@ public class PlayerController : MonoBehaviour
 
         ParticleSystem.EmissionModule emission = movementTrail.emission;
         emission.rateOverTime = rate;
+    }
+
+    private void EnsureBreachConsumptionVisual()
+    {
+        if (breachGlitchVisual != null)
+        {
+            breachGlitchVisual.SetActive(true);
+            return;
+        }
+
+        breachGlitchVisual = new GameObject("BreachConsumptionGlitch");
+        breachGlitchVisual.transform.SetParent(transform, false);
+        breachGlitchVisual.transform.localPosition = Vector3.zero;
+        breachGlitchVisual.transform.localScale = Vector3.one;
+
+        int count = Mathf.Max(3, breachGlitchStripCount);
+        breachGlitchRenderers = new SpriteRenderer[count];
+        for (int i = 0; i < count; i++)
+        {
+            GameObject strip = new GameObject($"BreachGlitchStrip_{i}");
+            strip.transform.SetParent(breachGlitchVisual.transform, false);
+            SpriteRenderer sr = strip.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.sortingOrder = 21;
+            sr.color = Color.clear;
+            breachGlitchRenderers[i] = sr;
+        }
+    }
+
+    private void UpdateBreachConsumptionVisual()
+    {
+        if (bodyRenderer != null)
+        {
+            float bodyPulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * Mathf.Max(0.1f, breachGlitchPulseSpeed));
+            bodyRenderer.color = Color.Lerp(baseBodyColor, breachGlitchColor, 0.46f + bodyPulse * 0.32f);
+            transform.localScale = baseBodyScale * Mathf.Lerp(0.92f, 1.08f, bodyPulse);
+        }
+
+        if (breachGlitchVisual == null || breachGlitchRenderers == null)
+        {
+            return;
+        }
+
+        float radius = Mathf.Max(0.1f, breachGlitchRadius);
+        for (int i = 0; i < breachGlitchRenderers.Length; i++)
+        {
+            SpriteRenderer sr = breachGlitchRenderers[i];
+            if (sr == null)
+            {
+                continue;
+            }
+
+            float seed = i * 2.17f + 0.31f;
+            float snap = Mathf.Floor(Mathf.PerlinNoise(seed, Time.unscaledTime * 11f) * 7f) / 7f;
+            float lateral = Mathf.Lerp(-radius, radius, Mathf.PerlinNoise(seed + 4.4f, Time.unscaledTime * 5.3f));
+            float vertical = Mathf.Lerp(-radius, radius, Mathf.PerlinNoise(seed + 8.8f, Time.unscaledTime * 4.7f));
+            sr.transform.localPosition = new Vector3(lateral + (snap - 0.5f) * 0.24f, vertical, -0.01f);
+            sr.transform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(-12f, 12f, Mathf.PerlinNoise(seed + 1.9f, Time.unscaledTime * 6f)));
+
+            bool horizontal = i % 2 == 0;
+            float length = Mathf.Lerp(0.22f, 0.82f, Mathf.PerlinNoise(seed + 12.1f, Time.unscaledTime * 7f));
+            float thickness = Mathf.Lerp(0.035f, 0.13f, Mathf.PerlinNoise(seed + 16.5f, Time.unscaledTime * 9f));
+            sr.size = horizontal ? new Vector2(length, thickness) : new Vector2(thickness, length);
+
+            float blink = Mathf.PerlinNoise(seed + 21f, Time.unscaledTime * 14f);
+            Color c = Color.Lerp(new Color(0.1f, 0.95f, 1f, 0.78f), breachGlitchColor, blink);
+            c.a = Mathf.Lerp(0.22f, 0.88f, blink);
+            sr.color = c;
+        }
+    }
+
+    private void DestroyBreachConsumptionVisual()
+    {
+        if (breachGlitchVisual == null)
+        {
+            return;
+        }
+
+        Destroy(breachGlitchVisual);
+        breachGlitchVisual = null;
+        breachGlitchRenderers = null;
     }
 
     private IEnumerator DeathExplosionRoutine()

@@ -724,6 +724,12 @@ public class EnemyController : MonoBehaviour
 
     private void HandleStateSwitch()
     {
+        if (AreSpecialStatesSuppressedForBreach() && IsPre60SpecialState(currentState))
+        {
+            SelectNextState(forceDifferent: true);
+            return;
+        }
+
         stateTimer += Time.deltaTime;
 
         if (emergencyDestroyerActive)
@@ -1079,11 +1085,20 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
-        bool specialUnlocked = gameManager != null && gameManager.AreBossSpecialStatesUnlocked;
-        if (!specialUnlocked)
+        if (!CanUseSpecialStates())
         {
             options.RemoveAll(o => IsPre60SpecialState(o.state));
         }
+    }
+
+    private bool CanUseSpecialStates()
+    {
+        return gameManager != null && gameManager.AreBossSpecialStatesUnlocked;
+    }
+
+    private bool AreSpecialStatesSuppressedForBreach()
+    {
+        return gameManager != null && gameManager.IsBreachSensitiveSuppressionActive;
     }
 
     private static bool IsPre60SpecialState(AnomalyState state)
@@ -1340,7 +1355,7 @@ public class EnemyController : MonoBehaviour
         switch (pacingPhase)
         {
             case PacingPhase.SustainPeak:
-                return enableAdvancedStates ? AnomalyState.SpeedSurge : AnomalyState.DirectChase;
+                return enableAdvancedStates && CanUseSpecialStates() ? AnomalyState.SpeedSurge : AnomalyState.DirectChase;
             case PacingPhase.Relax:
                 return AnomalyState.DirectChase;
             case PacingPhase.PeakFade:
@@ -2419,7 +2434,7 @@ public class EnemyController : MonoBehaviour
 
     private void EnterEmergencyDestroyerFromStuck()
     {
-        if (currentState == AnomalyState.Destroyer)
+        if (currentState == AnomalyState.Destroyer || AreSpecialStatesSuppressedForBreach())
         {
             return; 
         }

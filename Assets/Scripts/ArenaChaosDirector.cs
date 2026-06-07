@@ -66,6 +66,9 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private float breachTransitionDuration = 1.25f;
     [SerializeField] private float breachArrivalHoldSeconds = 2f;
     [SerializeField] private float breachArrivalFxDuration = 2.25f;
+    [SerializeField] private float breachSystemSuppressionWindowSeconds = 5f;
+    [SerializeField] private float breachConsumedPlayerDeathDelay = 0.7f;
+    [SerializeField] private float breachSweepPlayerConsumeMargin = 0.18f;
     [SerializeField] private Color breachColor = new Color(1f, 0.42f, 0.78f, 1f);
 
     [Header("Spawn Rules")]
@@ -113,6 +116,7 @@ public class ArenaChaosDirector : MonoBehaviour
     private bool breachSweepStarted;
     private bool breachTransitionActive;
     private bool pendingBreachEnemyReentry;
+    private bool breachPlayerConsumed;
     private float breachTelegraphTimer;
     private Vector2 activeBreachPosition;
     private Vector2 activeBreachSweepDirection;
@@ -202,6 +206,14 @@ public class ArenaChaosDirector : MonoBehaviour
             }
         }
 
+        bool breachUnlocked = ShouldRunBreachEvents();
+        if (breachUnlocked && !breachWasUnlocked)
+        {
+            breachEventTimer = Mathf.Min(breachEventTimer, 3f);
+        }
+        breachWasUnlocked = breachUnlocked;
+        RefreshBreachSensitiveSuppression(breachUnlocked);
+
         bool pulseUnlocked = ShouldRunPulseEvents();
         if (pulseUnlocked && !pulseWasUnlocked)
         {
@@ -216,15 +228,8 @@ public class ArenaChaosDirector : MonoBehaviour
         }
         objectiveWasUnlocked = objectiveUnlocked;
 
-        bool breachUnlocked = ShouldRunBreachEvents();
-        if (breachUnlocked && !breachWasUnlocked)
-        {
-            breachEventTimer = Mathf.Min(breachEventTimer, 3f);
-        }
-        breachWasUnlocked = breachUnlocked;
-
-        bool breachBlockingMapEvents = breachEventActive || breachTransitionActive;
-        if (pulseUnlocked && !breachBlockingMapEvents && (enemy == null || !enemy.IsMapEventSuppressed()))
+        bool breachBlockingMapEvents = breachEventActive || breachTransitionActive || IsBreachSuppressionWindowActive(breachUnlocked);
+        if (pulseUnlocked && !breachBlockingMapEvents && !IsBreachSuppressionWindowActive(breachUnlocked) && (enemy == null || !enemy.IsMapEventSuppressed()))
         {
             pulseEventTimer -= Time.deltaTime;
             if (pulseEventTimer <= 0f)
@@ -403,6 +408,7 @@ public class ArenaChaosDirector : MonoBehaviour
         breachSweepStarted = false;
         breachTransitionActive = false;
         pendingBreachEnemyReentry = false;
+        breachPlayerConsumed = false;
         breachTimer = 0f;
         breachTelegraphTimer = 0f;
     }
@@ -678,6 +684,7 @@ public class ArenaChaosDirector : MonoBehaviour
         breachEventActive = true;
         breachTimer = Mathf.Max(2f, breachLifetime);
         breachSweepStarted = false;
+        breachPlayerConsumed = false;
         breachTelegraphTimer = Mathf.Max(0.4f, breachTelegraphSeconds);
         activeBreachPosition = position;
         activeBreachSweepDirection = sweepDirection;
@@ -707,6 +714,7 @@ public class ArenaChaosDirector : MonoBehaviour
 
         if (!breachSweepStarted)
         {
+            RefreshBreachSensitiveSuppression(true);
             breachTelegraphTimer -= Time.deltaTime;
             activeEventLabel = $"Corre hacia la brecha | {Mathf.CeilToInt(Mathf.Max(0f, breachTelegraphTimer))}s";
             eventLabelTimer = 0.25f;
@@ -718,9 +726,15 @@ public class ArenaChaosDirector : MonoBehaviour
             return;
         }
 
+        RefreshBreachSensitiveSuppression(true);
         breachTimer -= Time.deltaTime;
         activeEventLabel = $"Escapa del glitch | {Mathf.CeilToInt(Mathf.Max(0f, breachTimer))}s";
         eventLabelTimer = 0.25f;
+
+        if (TryConsumePlayerByBreachSweep())
+        {
+            return;
+        }
 
         if (breachTimer <= 0f)
         {
@@ -736,6 +750,7 @@ public class ArenaChaosDirector : MonoBehaviour
         }
 
         breachSweepStarted = true;
+        RefreshBreachSensitiveSuppression(true);
         breachTimer = Mathf.Max(2f, breachLifetime);
         if (activeBreachIndicatorFx != null)
         {
@@ -746,6 +761,71 @@ public class ArenaChaosDirector : MonoBehaviour
         SpawnBreachSweep(activeBreachPosition, activeBreachSweepDirection);
         GlitchAudioManager.PlayBreachSweep(activeBreachPosition);
         RaiseWarning("El sector se desintegra", 2f);
+    }
+
+    private bool TryConsumePlayerByBreachSweep()
+    {
+        if (breachPlayerConsumed || player == null || activeBreachSweepFx == null)
+        {
+            return false;
+        }
+
+        if (!activeBreachSweepFx.HasConsumedPoint(player.GetPosition(), breachSweepPlayerConsumeMargin))
+        {
+            return false;
+        }
+
+        breachPlayerConsumed = true;
+        StartCoroutine(ConsumePlayerByBreachSweepRoutine());
+        return true;
+    }
+
+    private IEnumerator ConsumePlayerByBreachSweepRoutine()
+    {
+        breachEventActive = false;
+        breachTimer = 0f;
+        pendingBreachEnemyReentry = false;
+        RefreshBreachSensitiveSuppression(true);
+
+        if (activeBreachGate != null)
+        {
+            Destroy(activeBreachGate.gameObject);
+            activeBreachGate = null;
+        }
+        if (activeBreachIndicatorFx != null)
+        {
+            activeBreachIndicatorFx.FadeOutAndDestroy();
+            activeBreachIndicatorFx = null;
+        }
+
+        if (enemy != null)
+        {
+            enemy.ReappearFromBreach(enemy.GetCurrentPosition());
+        }
+
+        RaiseWarning("Consumido por el glitch", 1.2f);
+        activeEventLabel = "El barrido te consumio";
+        eventLabelTimer = 1.2f;
+        Vector3 playerPosition = player != null ? player.transform.position : transform.position;
+        GlitchAudioManager.PlayBreachFail(playerPosition);
+        if (player != null)
+        {
+            player.BeginBreachConsumption(breachColor);
+        }
+
+        float delay = Mathf.Max(0.05f, breachConsumedPlayerDeathDelay);
+        float elapsed = 0f;
+        while (elapsed < delay)
+        {
+            RefreshBreachSensitiveSuppression(true);
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        if (gameManager != null && player != null)
+        {
+            gameManager.RequestPlayerDefeat(player);
+        }
     }
 
     private IEnumerator CompleteBreachEventRoutine(Vector2 breachPosition)
@@ -803,6 +883,7 @@ public class ArenaChaosDirector : MonoBehaviour
         }
 
         ReleasePendingBreachEnemy();
+        RefreshBreachSensitiveSuppression(true);
         activeBreachTransitionFx = null;
         breachTransitionActive = false;
     }
@@ -841,6 +922,7 @@ public class ArenaChaosDirector : MonoBehaviour
 
         RaiseWarning("Consumido por el glitch", 1.2f);
         GlitchAudioManager.PlayBreachFail(player != null ? player.transform.position : transform.position);
+        RefreshBreachSensitiveSuppression(true);
         if (gameManager != null && player != null)
         {
             gameManager.RequestPlayerDefeat(player);
@@ -1196,6 +1278,11 @@ public class ArenaChaosDirector : MonoBehaviour
         {
             yield break;
         }
+        if (gameManager.IsBreachSensitiveSuppressionActive || breachEventActive || breachTransitionActive)
+        {
+            SchedulePulseEvent();
+            yield break;
+        }
 
         RaiseEvent("Containment Lock");
 
@@ -1206,6 +1293,12 @@ public class ArenaChaosDirector : MonoBehaviour
         // Distribuye los peligros como un anillo irregular para que el jugador pueda leer un patron.
         for (int i = 0; i < count; i++)
         {
+            if (gameManager.IsBreachSensitiveSuppressionActive || breachEventActive || breachTransitionActive)
+            {
+                SchedulePulseEvent();
+                yield break;
+            }
+
             float ringAngle = basePhase + ((360f / Mathf.Max(1, count)) * i);
             Vector2 ringDirection = new Vector2(Mathf.Cos(ringAngle * Mathf.Deg2Rad), Mathf.Sin(ringAngle * Mathf.Deg2Rad));
             Vector2 preferred = pulseCenter + ringDirection * Random.Range(clusterRadius * 0.3f, clusterRadius);
@@ -1453,5 +1546,27 @@ public class ArenaChaosDirector : MonoBehaviour
     private bool ShouldRunBreachEvents()
     {
         return enableBreachEvents && gameManager != null && gameManager.AreMapEventsUnlocked;
+    }
+
+    private void RefreshBreachSensitiveSuppression(bool breachUnlocked)
+    {
+        if (gameManager == null || !IsBreachSuppressionWindowActive(breachUnlocked))
+        {
+            return;
+        }
+
+        gameManager.SuppressBreachSensitiveSystems(Mathf.Max(0.1f, breachSystemSuppressionWindowSeconds));
+    }
+
+    private bool IsBreachSuppressionWindowActive(bool breachUnlocked)
+    {
+        if (breachEventActive || breachTransitionActive || pendingBreachEnemyReentry || breachPlayerConsumed)
+        {
+            return true;
+        }
+
+        return breachUnlocked &&
+               breachSystemSuppressionWindowSeconds > 0f &&
+               breachEventTimer <= Mathf.Max(0f, breachSystemSuppressionWindowSeconds);
     }
 }
