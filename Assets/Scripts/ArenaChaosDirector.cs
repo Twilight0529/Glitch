@@ -66,6 +66,7 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private float breachTransitionDuration = 1.25f;
     [SerializeField] private float breachArrivalHoldSeconds = 2f;
     [SerializeField] private float breachArrivalFxDuration = 2.25f;
+    [SerializeField] private float minimumBreachMapAgeSeconds = 50f;
     [SerializeField] private float breachSystemSuppressionWindowSeconds = 5f;
     [SerializeField] private float breachConsumedPlayerDeathDelay = 0.7f;
     [SerializeField] private float breachSweepPlayerConsumeMargin = 0.18f;
@@ -118,6 +119,7 @@ public class ArenaChaosDirector : MonoBehaviour
     private bool pendingBreachEnemyReentry;
     private bool breachPlayerConsumed;
     private float breachTelegraphTimer;
+    private float currentArenaPlayableSeconds;
     private Vector2 activeBreachPosition;
     private Vector2 activeBreachSweepDirection;
     private Vector2 pendingBreachEnemyPosition;
@@ -138,6 +140,7 @@ public class ArenaChaosDirector : MonoBehaviour
         pulseWasUnlocked = false;
         objectiveWasUnlocked = false;
         breachWasUnlocked = false;
+        currentArenaPlayableSeconds = 0f;
         SchedulePowerup();
         ScheduleScorePickup();
         SchedulePulseEvent();
@@ -157,6 +160,7 @@ public class ArenaChaosDirector : MonoBehaviour
         pulseWasUnlocked = false;
         objectiveWasUnlocked = false;
         breachWasUnlocked = false;
+        currentArenaPlayableSeconds = 0f;
         SchedulePowerup();
         ScheduleScorePickup();
         SchedulePulseEvent();
@@ -185,6 +189,8 @@ public class ArenaChaosDirector : MonoBehaviour
         {
             return;
         }
+
+        TrackCurrentArenaPlayTime();
 
         if (enablePowerups && activePickup == null)
         {
@@ -260,7 +266,7 @@ public class ArenaChaosDirector : MonoBehaviour
         else if (breachUnlocked && !objectiveEventActive && !breachTransitionActive && (enemy == null || !enemy.IsMapEventSuppressed()))
         {
             breachEventTimer -= Time.deltaTime;
-            if (breachEventTimer <= 0f)
+            if (breachEventTimer <= 0f && IsBreachMapOldEnough())
             {
                 TryStartBreachEvent();
                 ScheduleBreachEvent();
@@ -884,6 +890,7 @@ public class ArenaChaosDirector : MonoBehaviour
 
         ReleasePendingBreachEnemy();
         RefreshBreachSensitiveSuppression(true);
+        ResetCurrentArenaPlayTime();
         activeBreachTransitionFx = null;
         breachTransitionActive = false;
     }
@@ -1548,6 +1555,41 @@ public class ArenaChaosDirector : MonoBehaviour
         return enableBreachEvents && gameManager != null && gameManager.AreMapEventsUnlocked;
     }
 
+    private void TrackCurrentArenaPlayTime()
+    {
+        if (breachEventActive || breachTransitionActive || pendingBreachEnemyReentry || breachPlayerConsumed)
+        {
+            return;
+        }
+
+        currentArenaPlayableSeconds += Time.deltaTime;
+    }
+
+    private void ResetCurrentArenaPlayTime()
+    {
+        currentArenaPlayableSeconds = 0f;
+    }
+
+    private bool IsBreachMapOldEnough()
+    {
+        return currentArenaPlayableSeconds >= Mathf.Max(0f, minimumBreachMapAgeSeconds);
+    }
+
+    private float GetBreachMapAgeRemaining()
+    {
+        return Mathf.Max(0f, Mathf.Max(0f, minimumBreachMapAgeSeconds) - currentArenaPlayableSeconds);
+    }
+
+    private float GetBreachSecondsUntilEligibleStart(bool breachUnlocked)
+    {
+        if (!breachUnlocked)
+        {
+            return float.PositiveInfinity;
+        }
+
+        return Mathf.Max(Mathf.Max(0f, breachEventTimer), GetBreachMapAgeRemaining());
+    }
+
     private void RefreshBreachSensitiveSuppression(bool breachUnlocked)
     {
         if (gameManager == null || !IsBreachSuppressionWindowActive(breachUnlocked))
@@ -1565,8 +1607,7 @@ public class ArenaChaosDirector : MonoBehaviour
             return true;
         }
 
-        return breachUnlocked &&
-               breachSystemSuppressionWindowSeconds > 0f &&
-               breachEventTimer <= Mathf.Max(0f, breachSystemSuppressionWindowSeconds);
+        return breachSystemSuppressionWindowSeconds > 0f &&
+               GetBreachSecondsUntilEligibleStart(breachUnlocked) <= Mathf.Max(0f, breachSystemSuppressionWindowSeconds);
     }
 }
