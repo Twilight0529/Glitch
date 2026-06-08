@@ -41,6 +41,7 @@ public class MainMenuController : MonoBehaviour
     private bool showDeveloperMenu;
     private bool queuedGameplayLoad;
     private int selectedUnlockIndex;
+    private int selectedAchievementIndex;
     private string selectedUnlockSection = MetaProgressionStorage.SectionRunUpgrades;
     private Font titleFont;
     private Font uiFont;
@@ -401,13 +402,24 @@ public class MainMenuController : MonoBehaviour
 
         Rect area = new Rect(panel.x + 18f, panel.y + 16f, panel.width - 36f, panel.height - 28f);
         MetaProgressionStorage.RunReward last = MetaProgressionStorage.LastRunReward;
-        List<MetaProgressionStorage.UnlockDefinition> unlocks = GetUnlocksForSection(selectedUnlockSection);
-        if (unlocks.Count == 0)
+        bool showingAchievements = selectedUnlockSection == AchievementStorage.SectionAchievements;
+        List<MetaProgressionStorage.UnlockDefinition> unlocks = showingAchievements
+            ? null
+            : GetUnlocksForSection(selectedUnlockSection);
+        IReadOnlyList<AchievementStorage.AchievementDefinition> achievements = AchievementStorage.Definitions;
+        if (!showingAchievements && (unlocks == null || unlocks.Count == 0))
         {
             return;
         }
 
-        selectedUnlockIndex = Mathf.Clamp(selectedUnlockIndex, 0, unlocks.Count - 1);
+        if (showingAchievements)
+        {
+            selectedAchievementIndex = Mathf.Clamp(selectedAchievementIndex, 0, Mathf.Max(0, achievements.Count - 1));
+        }
+        else
+        {
+            selectedUnlockIndex = Mathf.Clamp(selectedUnlockIndex, 0, unlocks.Count - 1);
+        }
 
         GUI.Label(new Rect(area.x, area.y, area.width, 42f), "Desbloqueos", panelTitleStyle);
         DrawSolidRect(new Rect(area.x, area.y + 50f, area.width, 1f), new Color(0.70f, 0.90f, 1f, 0.24f));
@@ -430,8 +442,16 @@ public class MainMenuController : MonoBehaviour
 
         Rect listRect = new Rect(area.x, area.y + 158f, area.width * 0.43f, area.height - 214f);
         Rect detailRect = new Rect(listRect.xMax + 14f, listRect.y, area.width - listRect.width - 14f, listRect.height);
-        DrawUnlockList(listRect, unlocks);
-        DrawUnlockDetails(detailRect, unlocks[selectedUnlockIndex]);
+        if (showingAchievements)
+        {
+            DrawAchievementList(listRect, achievements);
+            DrawAchievementDetails(detailRect, achievements[selectedAchievementIndex]);
+        }
+        else
+        {
+            DrawUnlockList(listRect, unlocks);
+            DrawUnlockDetails(detailRect, unlocks[selectedUnlockIndex]);
+        }
 
         if (!string.IsNullOrEmpty(unlockActionMessage))
         {
@@ -488,6 +508,21 @@ public class MainMenuController : MonoBehaviour
         if (GUILayout.Button("Reset progresion", buttonStyle, GUILayout.Height(34f)))
         {
             MetaProgressionStorage.ResetProgress();
+            AchievementStorage.ResetAchievements();
+            GlitchAudioManager.PlayMenuBack();
+        }
+        GUILayout.EndHorizontal();
+
+        GUILayout.Space(6f);
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Completar logros", buttonStyle, GUILayout.Height(34f)))
+        {
+            AchievementStorage.UnlockAll();
+            GlitchAudioManager.PlayUpgradeSelect();
+        }
+        if (GUILayout.Button("Reset logros", buttonStyle, GUILayout.Height(34f)))
+        {
+            AchievementStorage.ResetAchievements();
             GlitchAudioManager.PlayMenuBack();
         }
         GUILayout.EndHorizontal();
@@ -566,9 +601,10 @@ public class MainMenuController : MonoBehaviour
     private void DrawUnlockSectionTabs(Rect tabsRect)
     {
         float gap = 10f;
-        float tabW = (tabsRect.width - gap) * 0.5f;
+        float tabW = (tabsRect.width - gap * 2f) / 3f;
         DrawUnlockSectionTab(new Rect(tabsRect.x, tabsRect.y, tabW, tabsRect.height), MetaProgressionStorage.SectionRunUpgrades, "Mejoras");
         DrawUnlockSectionTab(new Rect(tabsRect.x + tabW + gap, tabsRect.y, tabW, tabsRect.height), MetaProgressionStorage.SectionSkins, "Colores");
+        DrawUnlockSectionTab(new Rect(tabsRect.x + (tabW + gap) * 2f, tabsRect.y, tabW, tabsRect.height), AchievementStorage.SectionAchievements, "Logros");
     }
 
     private void DrawUnlockSectionTab(Rect rect, string section, string label)
@@ -592,7 +628,103 @@ public class MainMenuController : MonoBehaviour
             GlitchAudioManager.PlayMenuToggle();
             selectedUnlockSection = section;
             selectedUnlockIndex = 0;
+            selectedAchievementIndex = 0;
         }
+    }
+
+    private void DrawAchievementList(Rect listRect, IReadOnlyList<AchievementStorage.AchievementDefinition> achievements)
+    {
+        DrawSolidRect(listRect, new Color(0.02f, 0.035f, 0.07f, 0.62f));
+        DrawSolidRect(new Rect(listRect.x, listRect.y, listRect.width, 2f), new Color(0.95f, 0.64f, 1f, 0.38f));
+
+        float rowGap = 7f;
+        float rowHeight = Mathf.Min(50f, (listRect.height - rowGap * (achievements.Count + 1)) / Mathf.Max(1, achievements.Count));
+        float y = listRect.y + rowGap;
+        for (int i = 0; i < achievements.Count; i++)
+        {
+            Rect row = new Rect(listRect.x + 8f, y, listRect.width - 16f, rowHeight);
+            DrawAchievementSelectableRow(row, achievements[i], i);
+            y += rowHeight + rowGap;
+        }
+    }
+
+    private void DrawAchievementSelectableRow(Rect row, AchievementStorage.AchievementDefinition achievement, int index)
+    {
+        bool unlocked = AchievementStorage.IsUnlocked(achievement.id);
+        bool selected = index == selectedAchievementIndex;
+        bool hovered = row.Contains(Event.current.mousePosition);
+        TrackButtonHover($"achievement_row_{index}", hovered);
+
+        Color fill = unlocked
+            ? new Color(0.13f, 0.18f, 0.12f, 0.82f)
+            : new Color(0.05f, 0.07f, 0.12f, 0.78f);
+        if (selected || hovered)
+        {
+            fill = Color.Lerp(fill, new Color(0.18f, 0.16f, 0.28f, 0.92f), selected ? 0.85f : 0.45f);
+        }
+
+        DrawSolidRect(row, fill);
+        DrawSolidRect(new Rect(row.x, row.y, row.width, 2f), unlocked ? new Color(1f, 0.84f, 0.48f, 0.60f) : new Color(0.84f, 0.58f, 1f, 0.38f));
+        if (selected)
+        {
+            DrawSolidRect(new Rect(row.x, row.y, 4f, row.height), new Color(1f, 0.72f, 0.92f, 0.82f));
+        }
+
+        int progress = AchievementStorage.GetProgress(achievement, 0f);
+        string state = unlocked ? "COMPLETADO" : $"{progress}/{achievement.target}";
+        GUI.Label(new Rect(row.x + 10f, row.y + 4f, row.width - 20f, 22f), achievement.title, rankingRowStyle);
+        GUI.Label(new Rect(row.x + 10f, row.y + row.height - 23f, row.width - 20f, 19f), state, unlocked ? rankingScoreStyle : paragraphStyle);
+
+        if (GUI.Button(row, GUIContent.none, GUIStyle.none))
+        {
+            GlitchAudioManager.PlayMenuToggle();
+            selectedAchievementIndex = index;
+        }
+    }
+
+    private void DrawAchievementDetails(Rect detailRect, AchievementStorage.AchievementDefinition achievement)
+    {
+        bool unlocked = AchievementStorage.IsUnlocked(achievement.id);
+        int progress = AchievementStorage.GetProgress(achievement, 0f);
+        float normalized = unlocked ? 1f : Mathf.Clamp01(progress / Mathf.Max(1f, achievement.target));
+        Color accent = unlocked ? new Color(1f, 0.82f, 0.46f, 1f) : new Color(0.94f, 0.58f, 1f, 1f);
+
+        DrawSolidRect(detailRect, new Color(0.025f, 0.045f, 0.085f, 0.76f));
+        DrawSolidRect(new Rect(detailRect.x, detailRect.y, detailRect.width, 2f), new Color(accent.r, accent.g, accent.b, 0.55f));
+        DrawSolidRect(new Rect(detailRect.x, detailRect.yMax - 2f, detailRect.width, 2f), new Color(accent.r, accent.g, accent.b, 0.30f));
+
+        Rect icon = new Rect(detailRect.x + 18f, detailRect.y + 18f, 62f, 62f);
+        DrawSolidRect(icon, new Color(accent.r, accent.g, accent.b, unlocked ? 0.25f : 0.14f));
+        DrawSolidRect(new Rect(icon.x, icon.y, icon.width, 2f), new Color(accent.r, accent.g, accent.b, 0.68f));
+        GUI.Label(icon, unlocked ? "OK" : "?", rankingScoreStyle);
+
+        Rect titleRect = new Rect(icon.xMax + 14f, detailRect.y + 12f, detailRect.width - 112f, 42f);
+        GUI.Label(titleRect, achievement.title, BuildFittedSingleLineStyle(rankingTitleStyle, achievement.title, titleRect.width, titleRect.height, 13));
+        GUI.Label(new Rect(icon.xMax + 14f, detailRect.y + 54f, detailRect.width - 112f, 24f), unlocked ? "COMPLETADO" : $"+{achievement.dataReward} DATOS", rankingScoreStyle);
+
+        GUIStyle detailParagraph = new GUIStyle(paragraphStyle)
+        {
+            wordWrap = true,
+            alignment = TextAnchor.UpperLeft,
+            clipping = TextClipping.Clip
+        };
+
+        Rect desc = new Rect(detailRect.x + 18f, detailRect.y + 104f, detailRect.width - 36f, 68f);
+        GUI.Label(desc, achievement.description, detailParagraph);
+
+        Rect progressLabel = new Rect(detailRect.x + 18f, desc.yMax + 8f, detailRect.width - 36f, 22f);
+        GUI.Label(progressLabel, $"{achievement.progressLabel}: {progress}/{achievement.target}", paragraphStyle);
+
+        Rect bar = new Rect(detailRect.x + 18f, progressLabel.yMax + 6f, detailRect.width - 36f, 10f);
+        DrawSolidRect(bar, new Color(0.04f, 0.06f, 0.10f, 0.92f));
+        DrawSolidRect(new Rect(bar.x, bar.y, bar.width * normalized, bar.height), new Color(accent.r, accent.g, accent.b, 0.78f));
+
+        Rect noteRect = new Rect(detailRect.x + 18f, detailRect.yMax - 84f, detailRect.width - 36f, 48f);
+        DrawSolidRect(noteRect, new Color(accent.r, accent.g, accent.b, 0.10f));
+        string note = unlocked
+            ? $"Recompensa cobrada: +{achievement.dataReward} Datos."
+            : "Completa este objetivo para cobrar Datos y avanzar tu progreso.";
+        GUI.Label(new Rect(noteRect.x + 10f, noteRect.y + 6f, noteRect.width - 20f, noteRect.height - 12f), note, detailParagraph);
     }
 
     private void DrawUnlockSelectableRow(Rect row, MetaProgressionStorage.UnlockDefinition unlock, int index)

@@ -248,6 +248,10 @@ public class GameManager : MonoBehaviour
     private float contractCompletePulseTimer;
     private string lastContractCompletionLabel;
     private int contractDataBonusEarned;
+    private string achievementToastTitle;
+    private string achievementToastDescription;
+    private int achievementToastReward;
+    private float achievementToastTimer;
     private bool upgradeSelectionOpen;
     private bool upgradeSelectionClosing;
     private float upgradeSelectionAge;
@@ -319,6 +323,10 @@ public class GameManager : MonoBehaviour
         {
             bossStateBannerTimer -= Time.deltaTime;
         }
+        if (achievementToastTimer > 0f)
+        {
+            achievementToastTimer -= Time.unscaledDeltaTime;
+        }
         if (breachSensitiveSuppressionTimer > 0f)
         {
             breachSensitiveSuppressionTimer -= Time.deltaTime;
@@ -353,6 +361,7 @@ public class GameManager : MonoBehaviour
         }
 
         SurvivalTime += Time.deltaTime;
+        TrackSurvivalAchievement();
         UpdateRunContracts();
         if (ShouldOpenUpgradeSelection())
         {
@@ -424,16 +433,24 @@ public class GameManager : MonoBehaviour
     public void NotifyScorePickupCollected(int scoreValue)
     {
         NotifyContractProgress(RunContractKind.Pickups, 1);
+        TryAdvanceAchievementCounter(AchievementStorage.CounterPickups, 1, 25, AchievementStorage.PickupsTwentyFiveId);
     }
 
     public void NotifyParrySuccess()
     {
         NotifyContractProgress(RunContractKind.Parry, 1);
+        TryAdvanceAchievementCounter(AchievementStorage.CounterParries, 1, 5, AchievementStorage.ParryFiveId);
     }
 
     public void NotifyFirewallBurstActivated()
     {
         NotifyContractProgress(RunContractKind.FirewallBurst, 1);
+        TryUnlockAchievement(AchievementStorage.FirstFirewallBurstId);
+    }
+
+    public void NotifyRuptureEchoTrapSuccess()
+    {
+        TryUnlockAchievement(AchievementStorage.RuptureEchoTrapId);
     }
 
     private void UpdateRunContracts()
@@ -590,6 +607,7 @@ public class GameManager : MonoBehaviour
             AddScore(reward);
         }
 
+        TryUnlockAchievement(AchievementStorage.FirstContractId);
         GlitchAudioManager.PlayUpgradeSelect();
     }
 
@@ -597,6 +615,41 @@ public class GameManager : MonoBehaviour
     {
         hasActiveContract = false;
         nextContractTime = SurvivalTime + Mathf.Max(8f, contractInterval * 0.65f);
+    }
+
+    private void TrackSurvivalAchievement()
+    {
+        if (SurvivalTime >= 180f)
+        {
+            TryUnlockAchievement(AchievementStorage.SurviveThreeMinutesId);
+        }
+    }
+
+    private void TryAdvanceAchievementCounter(string counterId, int amount, int target, string achievementId)
+    {
+        AchievementStorage.AchievementDefinition achievement;
+        if (AchievementStorage.AddCounterAndTryUnlock(counterId, amount, target, achievementId, out achievement))
+        {
+            ShowAchievementToast(achievement);
+        }
+    }
+
+    private void TryUnlockAchievement(string achievementId)
+    {
+        AchievementStorage.AchievementDefinition achievement;
+        if (AchievementStorage.TryUnlock(achievementId, out achievement))
+        {
+            ShowAchievementToast(achievement);
+        }
+    }
+
+    private void ShowAchievementToast(AchievementStorage.AchievementDefinition achievement)
+    {
+        achievementToastTitle = achievement.title;
+        achievementToastDescription = achievement.description;
+        achievementToastReward = Mathf.Max(0, achievement.dataReward);
+        achievementToastTimer = 4.2f;
+        GlitchAudioManager.PlayUpgradeSelect();
     }
 
     public void SuppressBreachSensitiveSystems(float seconds)
@@ -794,6 +847,10 @@ public class GameManager : MonoBehaviour
         contractCompletePulseTimer = 0f;
         lastContractCompletionLabel = string.Empty;
         contractDataBonusEarned = 0;
+        achievementToastTitle = string.Empty;
+        achievementToastDescription = string.Empty;
+        achievementToastReward = 0;
+        achievementToastTimer = 0f;
         upgradeSelectionOpen = false;
         upgradeSelectionClosing = false;
         upgradeSelectionAge = 0f;
@@ -2190,11 +2247,48 @@ public class GameManager : MonoBehaviour
         }
 
         DrawRunContractHud(s);
+        DrawAchievementToast(s);
 
         if (enableReactiveHudFx)
         {
             DrawThreatVignette();
         }
+    }
+
+    private void DrawAchievementToast(float s)
+    {
+        if (achievementToastTimer <= 0f || string.IsNullOrWhiteSpace(achievementToastTitle))
+        {
+            return;
+        }
+
+        float life = Mathf.Clamp01(achievementToastTimer / 4.2f);
+        float enter = Mathf.Clamp01((4.2f - achievementToastTimer) / 0.32f);
+        float exit = Mathf.Clamp01(achievementToastTimer / 0.36f);
+        float alpha = Mathf.Min(enter, exit);
+        float bob = Mathf.Sin(Time.unscaledTime * 18f) * 1.5f * s;
+        float y = Mathf.Lerp(68f * s, 88f * s, enter) + bob;
+        Rect panel = new Rect((Screen.width - (390f * s)) * 0.5f, y, 390f * s, 70f * s);
+        Color accent = Color.Lerp(new Color(0.44f, 0.95f, 1f, 1f), new Color(1f, 0.78f, 0.44f, 1f), 1f - life);
+
+        DrawSolidRect(panel, new Color(0.03f, 0.045f, 0.085f, 0.82f * alpha));
+        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, 0.72f * alpha));
+        DrawSolidRect(new Rect(panel.x, panel.yMax - (2f * s), panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, 0.36f * alpha));
+        DrawSolidRect(new Rect(panel.x + (10f * s), panel.y + (10f * s), 42f * s, 42f * s), new Color(accent.r, accent.g, accent.b, 0.18f * alpha));
+
+        Color old = GUI.color;
+        GUI.color = new Color(1f, 1f, 1f, alpha);
+        GUI.Label(new Rect(panel.x + (62f * s), panel.y + (7f * s), panel.width - (122f * s), 18f * s), "LOGRO DESBLOQUEADO", hudLabelStyle);
+        GUI.Label(
+            new Rect(panel.x + (62f * s), panel.y + (25f * s), panel.width - (122f * s), 25f * s),
+            achievementToastTitle,
+            BuildFittedSingleLineStyle(hudValueStyle, achievementToastTitle, panel.width - (122f * s), 25f * s, Mathf.RoundToInt(14f * s)));
+        GUI.Label(
+            new Rect(panel.x + (62f * s), panel.y + (49f * s), panel.width - (122f * s), 18f * s),
+            achievementToastDescription,
+            BuildFittedSingleLineStyle(hudLabelStyle, achievementToastDescription, panel.width - (122f * s), 18f * s, Mathf.RoundToInt(9f * s)));
+        GUI.Label(new Rect(panel.xMax - (78f * s), panel.y + (20f * s), 66f * s, 32f * s), $"+{achievementToastReward}", hudValueStyle);
+        GUI.color = old;
     }
 
     private void DrawRunContractHud(float s)

@@ -1057,6 +1057,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         }
 
         playerController?.AddFirewallCharge(riftEchoTrapFirewallReward);
+        FindAnyObjectByType<GameManager>()?.NotifyRuptureEchoTrapSuccess();
         echoSuccessTimer = Mathf.Max(echoSuccessTimer, Mathf.Max(0.25f, echoSuccessLabelSeconds));
         GlitchAudioManager.PlayRuptureRiftOpen(midpoint);
         return true;
