@@ -303,35 +303,148 @@ public class GameMenuController : MonoBehaviour
 
     private void DrawPauseMenu()
     {
-        DrawScreenFade(0.62f);
-        Rect panel = CenterRect(340f, 270f);
-        DrawPanel(panel, new Color(0.05f, 0.07f, 0.12f, 0.90f), new Color(0.58f, 0.66f, 0.86f, 0.52f));
+        float t = Time.unscaledTime;
+        float pulse = 0.5f + 0.5f * Mathf.Sin(t * 2.6f);
+        DrawScreenFade(0.66f);
+        DrawPauseBackdrop(t, pulse);
 
-        Rect area = new Rect(panel.x + 16f, panel.y + 14f, panel.width - 32f, panel.height - 24f);
-        GUILayout.BeginArea(area);
-        GUILayout.Label("Pausa", titleStyle);
-        GUILayout.Space(16f);
+        float mainW = 340f;
+        float mainH = 292f;
+        float audioW = 250f;
+        float gap = 16f;
+        float totalW = mainW + gap + audioW;
+        float startX = (Screen.width - totalW) * 0.5f;
+        float y = (Screen.height - mainH) * 0.5f;
+        Rect panel = new Rect(startX, y, mainW, mainH);
+        Rect audioPanel = new Rect(panel.xMax + gap, y + 18f, audioW, mainH - 36f);
 
-        if (GUILayout.Button("Continuar", buttonStyle, GUILayout.Height(38f)))
+        DrawPanel(panel, new Color(0.04f, 0.06f, 0.11f, 0.92f), new Color(0.58f, 0.72f, 0.96f, 0.62f));
+        DrawPausePanelFx(panel, new Color(0.66f, 0.82f, 1f, 1f), pulse);
+
+        DrawPanel(audioPanel, new Color(0.035f, 0.05f, 0.09f, 0.88f), new Color(0.86f, 0.58f, 1f, 0.55f));
+        DrawPausePanelFx(audioPanel, new Color(0.96f, 0.58f, 1f, 1f), 1f - pulse);
+
+        Rect titleRect = new Rect(panel.x + 18f, panel.y + 18f, panel.width - 36f, 48f);
+        DrawGlitchLabel(titleRect, "Pausa", titleStyle, 0.16f + pulse * 0.10f);
+        DrawSolidRect(new Rect(panel.x + 34f, panel.y + 70f, panel.width - 68f, 1f), new Color(0.82f, 0.92f, 1f, 0.20f));
+
+        if (DrawPauseButton(new Rect(panel.x + 18f, panel.y + 92f, panel.width - 36f, 42f), "Continuar", true))
         {
             SetState(OverlayState.Playing);
         }
 
-        GUILayout.Space(8f);
-        if (GUILayout.Button("Reiniciar", buttonStyle, GUILayout.Height(38f)))
+        if (DrawPauseButton(new Rect(panel.x + 18f, panel.y + 148f, panel.width - 36f, 42f), "Reiniciar", false))
         {
             GlitchAudioManager.PlayMenuConfirm();
             RestartLevel();
         }
 
-        GUILayout.Space(8f);
-        if (GUILayout.Button("Menu Principal", buttonStyle, GUILayout.Height(38f)))
+        if (DrawPauseButton(new Rect(panel.x + 18f, panel.y + 204f, panel.width - 36f, 42f), "Menu Principal", false))
         {
             GlitchAudioManager.PlayMenuBack();
             ReturnToMainMenu();
         }
 
-        GUILayout.EndArea();
+        DrawPauseAudioPanel(audioPanel);
+    }
+
+    private void DrawPauseAudioPanel(Rect panel)
+    {
+        Rect title = new Rect(panel.x + 16f, panel.y + 14f, panel.width - 32f, 28f);
+        GUI.Label(title, "Audio", GetFittedSingleLineStyle(titleStyle, "Audio", title.width, 26, 18));
+        DrawSolidRect(new Rect(panel.x + 20f, panel.y + 50f, panel.width - 40f, 1f), new Color(0.96f, 0.68f, 1f, 0.22f));
+
+        float music = DrawPauseVolumeSlider(panel, 72f, "Musica", UserSettings.GetMusicVolume(), new Color(0.88f, 0.58f, 1f, 1f));
+        if (!Mathf.Approximately(music, UserSettings.GetMusicVolume()))
+        {
+            UserSettings.SetMusicVolume(music);
+        }
+
+        float sfx = DrawPauseVolumeSlider(panel, 146f, "SFX", UserSettings.GetSfxVolume(), new Color(0.48f, 0.94f, 1f, 1f));
+        if (!Mathf.Approximately(sfx, UserSettings.GetSfxVolume()))
+        {
+            UserSettings.SetSfxVolume(sfx);
+        }
+
+        Rect hint = new Rect(panel.x + 18f, panel.yMax - 42f, panel.width - 36f, 30f);
+        GUI.Label(hint, "Ajustes aplicados en tiempo real.", rankingStatusStyle);
+    }
+
+    private float DrawPauseVolumeSlider(Rect panel, float yOffset, string label, float value, Color accent)
+    {
+        Rect labelRect = new Rect(panel.x + 18f, panel.y + yOffset, panel.width - 36f, 22f);
+        Rect barRect = new Rect(labelRect.x, labelRect.yMax + 8f, labelRect.width, 10f);
+        Rect sliderRect = new Rect(barRect.x, barRect.y - 6f, barRect.width, 24f);
+        string valueText = $"{Mathf.RoundToInt(value * 100f)}%";
+        GUIStyle valueStyle = new GUIStyle(bodyStyle)
+        {
+            alignment = TextAnchor.MiddleRight,
+            fontStyle = FontStyle.Bold
+        };
+        valueStyle.normal.textColor = new Color(1f, 0.84f, 0.56f, 0.98f);
+
+        GUI.Label(labelRect, label, bodyStyle);
+        GUI.Label(new Rect(labelRect.xMax - 62f, labelRect.y, 62f, labelRect.height), valueText, valueStyle);
+        DrawSolidRect(barRect, new Color(0.04f, 0.06f, 0.10f, 0.92f));
+        DrawSolidRect(new Rect(barRect.x, barRect.y, barRect.width * Mathf.Clamp01(value), barRect.height), new Color(accent.r, accent.g, accent.b, 0.72f));
+        DrawSolidRect(new Rect(barRect.x, barRect.y, barRect.width, 1f), new Color(1f, 1f, 1f, 0.18f));
+        return GUI.HorizontalSlider(sliderRect, value, 0f, 1f);
+    }
+
+    private bool DrawPauseButton(Rect rect, string label, bool primary)
+    {
+        bool hovered = rect.Contains(Event.current.mousePosition);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (primary ? 4.0f : 3.0f));
+        Color fill = primary
+            ? new Color(0.10f, 0.18f, 0.28f, 0.94f)
+            : new Color(0.07f, 0.10f, 0.16f, 0.92f);
+        if (hovered)
+        {
+            fill = Color.Lerp(fill, new Color(0.18f, 0.28f, 0.42f, 0.96f), 0.72f);
+        }
+
+        Color border = hovered
+            ? new Color(0.90f, 0.96f, 1f, 0.78f)
+            : new Color(0.54f, 0.70f, 0.96f, 0.42f + pulse * 0.16f);
+        DrawSolidRect(rect, fill);
+        DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 2f), border);
+        DrawSolidRect(new Rect(rect.x, rect.yMax - 2f, rect.width, 2f), new Color(border.r, border.g, border.b, border.a * 0.58f));
+        DrawSolidRect(new Rect(rect.x + 7f, rect.y + 7f, 3f, rect.height - 14f), new Color(0.86f, 0.96f, 1f, hovered ? 0.46f : 0.22f));
+
+        if (hovered)
+        {
+            float scanX = rect.x + 16f + Mathf.Repeat(Time.unscaledTime * 82f, Mathf.Max(1f, rect.width - 48f));
+            DrawSolidRect(new Rect(scanX, rect.y + rect.height * 0.5f - 1f, 24f, 2f), new Color(1f, 1f, 1f, 0.24f));
+        }
+
+        GUI.Label(rect, label, buttonStyle);
+        bool clicked = GUI.Button(rect, GUIContent.none, GUIStyle.none);
+        if (clicked && primary)
+        {
+            GlitchAudioManager.PlayMenuConfirm();
+        }
+
+        return clicked;
+    }
+
+    private void DrawPauseBackdrop(float time, float pulse)
+    {
+        DrawHudGlitchOverlay(0.20f + pulse * 0.10f, time);
+        float stripeAlpha = 0.06f + pulse * 0.035f;
+        for (float y = 0f; y < Screen.height + 80f; y += 80f)
+        {
+            float drift = Mathf.Sin(time * 1.4f + y * 0.02f) * 34f;
+            DrawSolidRect(new Rect(drift - 40f, y, Screen.width + 80f, 2f), new Color(0.62f, 0.82f, 1f, stripeAlpha));
+        }
+    }
+
+    private void DrawPausePanelFx(Rect rect, Color accent, float pulse)
+    {
+        DrawSolidRect(new Rect(rect.x + 8f, rect.y + 8f, 24f, 2f), new Color(accent.r, accent.g, accent.b, 0.42f));
+        DrawSolidRect(new Rect(rect.x + 8f, rect.y + 8f, 2f, 24f), new Color(accent.r, accent.g, accent.b, 0.42f));
+        DrawSolidRect(new Rect(rect.xMax - 32f, rect.y + 8f, 24f, 2f), new Color(accent.r, accent.g, accent.b, 0.42f));
+        DrawSolidRect(new Rect(rect.xMax - 10f, rect.y + 8f, 2f, 24f), new Color(accent.r, accent.g, accent.b, 0.42f));
+        DrawSolidRect(new Rect(rect.x + 2f, rect.y + Mathf.Repeat(Time.unscaledTime * 36f, Mathf.Max(1f, rect.height)), rect.width - 4f, 1f), new Color(accent.r, accent.g, accent.b, 0.06f + pulse * 0.06f));
     }
 
     private void DrawDefeatMenu()

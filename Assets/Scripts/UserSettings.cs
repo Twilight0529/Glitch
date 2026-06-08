@@ -4,6 +4,8 @@ public static class UserSettings
 {
     // Guarda y lee preferencias del jugador usando PlayerPrefs.
     public const string MasterVolumeKey = "glitch_master_volume";
+    public const string MusicVolumeKey = "glitch_music_volume";
+    public const string SfxVolumeKey = "glitch_sfx_volume";
     public const string MenuUiScaleKey = "glitch_menu_ui_scale";
     public const string HudScaleKey = "glitch_hud_scale";
     public const string MenuMotionKey = "glitch_menu_motion";
@@ -11,6 +13,8 @@ public static class UserSettings
     public const string VSyncKey = "glitch_vsync";
 
     public const float DefaultMasterVolume = 0.8f;
+    public const float DefaultMusicVolume = 0.85f;
+    public const float DefaultSfxVolume = 0.9f;
     public const float DefaultMenuUiScale = 1f;
     public const float DefaultHudScale = 1.1f;
     public const float DefaultMenuMotion = 1f;
@@ -32,6 +36,28 @@ public static class UserSettings
     public static void SetMasterVolume(float value)
     {
         PlayerPrefs.SetFloat(MasterVolumeKey, Mathf.Clamp01(value));
+        PlayerPrefs.Save();
+    }
+
+    public static float GetMusicVolume()
+    {
+        return Mathf.Clamp01(PlayerPrefs.GetFloat(MusicVolumeKey, DefaultMusicVolume));
+    }
+
+    public static void SetMusicVolume(float value)
+    {
+        PlayerPrefs.SetFloat(MusicVolumeKey, Mathf.Clamp01(value));
+        PlayerPrefs.Save();
+    }
+
+    public static float GetSfxVolume()
+    {
+        return Mathf.Clamp01(PlayerPrefs.GetFloat(SfxVolumeKey, DefaultSfxVolume));
+    }
+
+    public static void SetSfxVolume(float value)
+    {
+        PlayerPrefs.SetFloat(SfxVolumeKey, Mathf.Clamp01(value));
         PlayerPrefs.Save();
     }
 
@@ -102,6 +128,8 @@ public static class UserSettings
     public static void ResetOptions()
     {
         SetMasterVolume(DefaultMasterVolume);
+        SetMusicVolume(DefaultMusicVolume);
+        SetSfxVolume(DefaultSfxVolume);
         SetMenuUiScale(DefaultMenuUiScale);
         SetHudScale(DefaultHudScale);
         SetMenuMotion(DefaultMenuMotion);

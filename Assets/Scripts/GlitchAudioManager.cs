@@ -372,15 +372,16 @@ public class GlitchAudioManager : MonoBehaviour
 
         float ambientTarget = active ? ambienceVolume : menuActive ? ambienceVolume * 0.42f : ambienceVolume * 0.18f;
         float tensionTarget = active ? tensionVolume * Mathf.SmoothStep(0f, 1f, threat) : 0f;
-        MoveLoop(ambienceSource, ambientTarget, Mathf.Lerp(0.92f, 1.04f, threat), 0.25f, 0.15f);
-        MoveLoop(tensionSource, tensionTarget, Mathf.Lerp(0.82f, 1.18f, threat), 0.45f, 0.3f);
+        float musicSetting = UserSettings.GetMusicVolume();
+        MoveLoop(ambienceSource, ambientTarget * musicSetting, Mathf.Lerp(0.92f, 1.04f, threat), 0.25f, 0.15f);
+        MoveLoop(tensionSource, tensionTarget * musicSetting, Mathf.Lerp(0.82f, 1.18f, threat), 0.45f, 0.3f);
 
-        MoveLoop(menuMusicSource, menuActive ? menuMusicVolume : 0f, menuActive ? 1f : 0.96f, 0.28f, 0.1f);
-        MoveLoop(authoredMusicSource, gameplaySceneLive ? authoredMusicVolume : 0f, 1f, 0.22f, 0.1f);
-        MoveLoop(musicFoundationSource, active ? musicFoundationVolume : 0f, 1f, 0.28f, 0.12f);
-        MoveLoop(musicPulseSource, active ? musicPulseVolume * Smooth01(0.12f, 0.78f, musicIntensity) : 0f, Mathf.Lerp(0.98f, 1.04f, musicIntensity), 0.36f, 0.16f);
-        MoveLoop(musicArpSource, active ? musicArpVolume * Smooth01(0.30f, 0.92f, musicIntensity) : 0f, Mathf.Lerp(0.96f, 1.08f, musicIntensity), 0.34f, 0.22f);
-        MoveLoop(musicPressureSource, active ? musicPressureVolume * Smooth01(0.52f, 1f, musicIntensity) : 0f, Mathf.Lerp(0.9f, 1.12f, musicIntensity), 0.5f, 0.28f);
+        MoveLoop(menuMusicSource, (menuActive ? menuMusicVolume : 0f) * musicSetting, menuActive ? 1f : 0.96f, 0.28f, 0.1f);
+        MoveLoop(authoredMusicSource, (gameplaySceneLive ? authoredMusicVolume : 0f) * musicSetting, 1f, 0.22f, 0.1f);
+        MoveLoop(musicFoundationSource, (active ? musicFoundationVolume : 0f) * musicSetting, 1f, 0.28f, 0.12f);
+        MoveLoop(musicPulseSource, (active ? musicPulseVolume * Smooth01(0.12f, 0.78f, musicIntensity) : 0f) * musicSetting, Mathf.Lerp(0.98f, 1.04f, musicIntensity), 0.36f, 0.16f);
+        MoveLoop(musicArpSource, (active ? musicArpVolume * Smooth01(0.30f, 0.92f, musicIntensity) : 0f) * musicSetting, Mathf.Lerp(0.96f, 1.08f, musicIntensity), 0.34f, 0.22f);
+        MoveLoop(musicPressureSource, (active ? musicPressureVolume * Smooth01(0.52f, 1f, musicIntensity) : 0f) * musicSetting, Mathf.Lerp(0.9f, 1.12f, musicIntensity), 0.5f, 0.28f);
     }
 
     private static void MoveLoop(AudioSource source, float targetVolume, float targetPitch, float volumeRate, float pitchRate)
@@ -414,7 +415,7 @@ public class GlitchAudioManager : MonoBehaviour
         source.clip = clip;
         source.pitch = Mathf.Clamp(pitch + UnityEngine.Random.Range(-0.025f, 0.025f), 0.45f, 1.75f);
         source.panStereo = ComputePan(position);
-        source.volume = Mathf.Clamp01(volume * sfxVolume);
+        source.volume = Mathf.Clamp01(volume * sfxVolume * UserSettings.GetSfxVolume());
         source.Play();
     }
 
