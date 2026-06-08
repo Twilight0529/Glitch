@@ -167,6 +167,8 @@ public class GameManager : MonoBehaviour
     public MetaProgressionStorage.RunReward LastMetaReward { get; private set; }
     public bool HasAwardedMetaReward { get; private set; }
     public int ContractDataBonusEarned => contractDataBonusEarned;
+    public int OperationDataBonusEarned => operationDataBonusEarned;
+    public string CurrentOperationTitle => activeOperation.title;
     public float SurvivalTime { get; private set; }
     public float DifficultyMultiplier => 1f + (SurvivalTime * difficultyRampPerSecond);
     public int CurrentScore => Mathf.Max(0, Mathf.FloorToInt(SurvivalTime * Mathf.Max(0f, pointsPerSecond)) + bonusScore);
@@ -252,6 +254,11 @@ public class GameManager : MonoBehaviour
     private float contractCompletePulseTimer;
     private string lastContractCompletionLabel;
     private int contractDataBonusEarned;
+    private ContainmentOperationStorage.OperationDefinition activeOperation;
+    private int operationProgress;
+    private bool operationCompleted;
+    private int operationDataBonusEarned;
+    private float operationCompletePulseTimer;
     private string achievementToastTitle;
     private string achievementToastDescription;
     private string achievementToastHeader;
@@ -376,6 +383,7 @@ public class GameManager : MonoBehaviour
         TrackSurvivalAchievement();
         TrySetDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Survival, Mathf.FloorToInt(SurvivalTime));
         TrySetDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Score, CurrentScore);
+        UpdateContainmentOperation();
         UpdateRunContracts();
         if (ShouldOpenUpgradeSelection())
         {
@@ -394,7 +402,7 @@ public class GameManager : MonoBehaviour
         runPhase = RunPhase.Active;
         if (!HasAwardedMetaReward)
         {
-            LastMetaReward = MetaProgressionStorage.AwardRun(CurrentScore, SurvivalTime, levelType, contractDataBonusEarned);
+            LastMetaReward = MetaProgressionStorage.AwardRun(CurrentScore, SurvivalTime, levelType, contractDataBonusEarned + operationDataBonusEarned);
             HasAwardedMetaReward = true;
         }
 
@@ -447,6 +455,12 @@ public class GameManager : MonoBehaviour
 
     public void NotifyScorePickupCollected(int scoreValue)
     {
+        if (activeOperation.id == ContainmentOperationStorage.ExtractionId)
+        {
+            AddScore(1);
+            AdvanceContainmentOperation(1);
+        }
+
         NotifyContractProgress(RunContractKind.Pickups, 1);
         TryAdvanceAchievementCounter(AchievementStorage.CounterPickups, 1, 25, AchievementStorage.PickupsTwentyFiveId);
         TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Pickups, 1);
@@ -461,14 +475,101 @@ public class GameManager : MonoBehaviour
 
     public void NotifyFirewallBurstActivated()
     {
+        if (activeOperation.id == ContainmentOperationStorage.FirewallId)
+        {
+            AddScore(10);
+            AdvanceContainmentOperation(1);
+        }
+
         NotifyContractProgress(RunContractKind.FirewallBurst, 1);
         TryUnlockAchievement(AchievementStorage.FirstFirewallBurstId);
         TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.FirewallBurst, 1);
     }
 
+    public void NotifyBreachEscaped()
+    {
+        if (activeOperation.id == ContainmentOperationStorage.BreachId)
+        {
+            AdvanceContainmentOperation(1);
+        }
+    }
+
     public void NotifyRuptureEchoTrapSuccess()
     {
         TryUnlockAchievement(AchievementStorage.RuptureEchoTrapId);
+    }
+
+    private void UpdateContainmentOperation()
+    {
+        if (operationCompletePulseTimer > 0f)
+        {
+            operationCompletePulseTimer -= Time.deltaTime;
+        }
+
+        if (operationCompleted)
+        {
+            return;
+        }
+
+        if (activeOperation.id == ContainmentOperationStorage.NoneId)
+        {
+            return;
+        }
+
+        if (activeOperation.id == ContainmentOperationStorage.ContractId)
+        {
+            return;
+        }
+
+        if (activeOperation.target <= 0)
+        {
+            return;
+        }
+
+        if (activeOperation.id == ContainmentOperationStorage.BreachId ||
+            activeOperation.id == ContainmentOperationStorage.ExtractionId ||
+            activeOperation.id == ContainmentOperationStorage.FirewallId)
+        {
+            return;
+        }
+    }
+
+    private void AdvanceContainmentOperation(int amount)
+    {
+        if (operationCompleted || amount <= 0 || activeOperation.target <= 0)
+        {
+            return;
+        }
+
+        operationProgress = Mathf.Clamp(operationProgress + amount, 0, activeOperation.target);
+        if (operationProgress >= activeOperation.target)
+        {
+            CompleteContainmentOperation();
+        }
+    }
+
+    private void CompleteContainmentOperation()
+    {
+        if (operationCompleted)
+        {
+            return;
+        }
+
+        operationCompleted = true;
+        operationProgress = Mathf.Max(operationProgress, activeOperation.target);
+        operationDataBonusEarned += Mathf.Max(0, activeOperation.dataReward);
+        operationCompletePulseTimer = 2.4f;
+        ShowOperationToast();
+        GlitchAudioManager.PlayUpgradeSelect();
+    }
+
+    private void ShowOperationToast()
+    {
+        achievementToastHeader = "OPERACION COMPLETADA";
+        achievementToastTitle = activeOperation.title;
+        achievementToastDescription = activeOperation.reward;
+        achievementToastReward = Mathf.Max(0, activeOperation.dataReward);
+        achievementToastTimer = 4.2f;
     }
 
     private void UpdateRunContracts()
@@ -627,6 +728,11 @@ public class GameManager : MonoBehaviour
 
         TryUnlockAchievement(AchievementStorage.FirstContractId);
         TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Contract, 1);
+        if (activeOperation.id == ContainmentOperationStorage.ContractId)
+        {
+            AdvanceContainmentOperation(1);
+        }
+
         GlitchAudioManager.PlayUpgradeSelect();
     }
 
@@ -901,6 +1007,16 @@ public class GameManager : MonoBehaviour
         contractCompletePulseTimer = 0f;
         lastContractCompletionLabel = string.Empty;
         contractDataBonusEarned = 0;
+        activeOperation = ContainmentOperationStorage.SelectedOperation;
+        operationProgress = 0;
+        operationCompleted = activeOperation.id == ContainmentOperationStorage.NoneId;
+        operationDataBonusEarned = 0;
+        operationCompletePulseTimer = 0f;
+        if (activeOperation.id == ContainmentOperationStorage.ContractId)
+        {
+            nextContractTime = Mathf.Min(nextContractTime, 14f);
+        }
+
         achievementToastTitle = string.Empty;
         achievementToastDescription = string.Empty;
         achievementToastHeader = string.Empty;
@@ -2528,6 +2644,7 @@ public class GameManager : MonoBehaviour
         }
 
         DrawRunContractHud(s);
+        DrawOperationHud(s);
         DrawAchievementToast(s);
 
         if (enableReactiveHudFx)
@@ -2603,6 +2720,42 @@ public class GameManager : MonoBehaviour
         GUI.Label(new Rect(panel.x + (12f * s), panel.y + (24f * s), panel.width - (24f * s), 18f * s), $"{activeContract.hint}  {activeContract.progress}/{activeContract.target}", hudLabelStyle);
 
         Rect bar = new Rect(panel.x + (12f * s), panel.yMax - (14f * s), panel.width - (24f * s), 7f * s);
+        DrawSolidRect(bar, new Color(0.04f, 0.06f, 0.10f, 0.92f));
+        DrawSolidRect(new Rect(bar.x, bar.y, bar.width * normalized, bar.height), new Color(accent.r, accent.g, accent.b, 0.82f));
+    }
+
+    private void DrawOperationHud(float s)
+    {
+        if (activeOperation.id == ContainmentOperationStorage.NoneId)
+        {
+            return;
+        }
+
+        float y = hasActiveContract || contractCompletePulseTimer > 0f ? 234f * s : 164f * s;
+        Rect panel = new Rect(12f * s, y, 320f * s, 58f * s);
+        Color accent = operationCompleted ? new Color(1f, 0.82f, 0.46f, 1f) : activeOperation.accent;
+        float pulse = operationCompletePulseTimer > 0f ? 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 12f) : 0.25f;
+
+        DrawSolidRect(panel, new Color(0.03f, 0.05f, 0.10f, 0.68f));
+        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, 0.50f + pulse * 0.22f));
+        DrawSolidRect(new Rect(panel.x, panel.yMax - (2f * s), panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, 0.25f));
+
+        string header = operationCompleted ? "OPERACION COMPLETADA" : activeOperation.title.ToUpperInvariant();
+        GUI.Label(
+            new Rect(panel.x + (12f * s), panel.y + (5f * s), panel.width - (24f * s), 18f * s),
+            header,
+            BuildFittedSingleLineStyle(hudLabelStyle, header, panel.width - (24f * s), 18f * s, Mathf.RoundToInt(9f * s)));
+
+        string progress = activeOperation.target > 0
+            ? $"{activeOperation.objective}  {operationProgress}/{activeOperation.target}"
+            : activeOperation.objective;
+        GUI.Label(
+            new Rect(panel.x + (12f * s), panel.y + (23f * s), panel.width - (24f * s), 17f * s),
+            progress,
+            BuildFittedSingleLineStyle(hudLabelStyle, progress, panel.width - (24f * s), 17f * s, Mathf.RoundToInt(8f * s)));
+
+        Rect bar = new Rect(panel.x + (12f * s), panel.yMax - (11f * s), panel.width - (24f * s), 6f * s);
+        float normalized = activeOperation.target > 0 ? Mathf.Clamp01(operationProgress / Mathf.Max(1f, activeOperation.target)) : 1f;
         DrawSolidRect(bar, new Color(0.04f, 0.06f, 0.10f, 0.92f));
         DrawSolidRect(new Rect(bar.x, bar.y, bar.width * normalized, bar.height), new Color(accent.r, accent.g, accent.b, 0.82f));
     }

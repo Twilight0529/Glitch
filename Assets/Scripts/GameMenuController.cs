@@ -504,7 +504,7 @@ public class GameMenuController : MonoBehaviour
         GUILayout.Label($"Datos recuperados: +{reward.dataEarned}  |  Total: {reward.totalData}", bodyStyle);
         if (reward.contractBonusData > 0)
         {
-            GUILayout.Label($"Bonus por contratos: +{reward.contractBonusData} datos", bodyStyle);
+            GUILayout.Label($"Bonus contratos/operacion: +{reward.contractBonusData} datos", bodyStyle);
         }
         GUILayout.Label($"Rendimiento: {reward.performanceGrade}  |  Runs totales: {reward.totalRuns}", bodyStyle);
         string recordLine = GetRunRecordLine(reward);
@@ -514,6 +514,10 @@ public class GameMenuController : MonoBehaviour
         }
         GUILayout.Label($"Operacion diaria: {DailyChallengeStorage.CurrentSummary}", rankingStatusStyle);
         GUILayout.Label($"Zona de contencion: {level}", bodyStyle);
+        if (gameManager != null && !string.IsNullOrWhiteSpace(gameManager.CurrentOperationTitle))
+        {
+            GUILayout.Label($"Operacion: {gameManager.CurrentOperationTitle}", bodyStyle);
+        }
 
         GUILayout.Space(14f);
         GUILayout.Label("Ingresa tu nombre para el ranking:", bodyStyle);

@@ -130,6 +130,7 @@ public class ArenaChaosDirector : MonoBehaviour
     private bool breachTransitionActive;
     private bool pendingBreachEnemyReentry;
     private bool breachPlayerConsumed;
+    private bool operationModifiersApplied;
     private float breachTelegraphTimer;
     private float currentArenaPlayableSeconds;
     private Vector2 activeBreachPosition;
@@ -151,6 +152,7 @@ public class ArenaChaosDirector : MonoBehaviour
         arena = arenaGenerator;
         RefreshReferences();
         EnsureRuntimeRoot();
+        ApplyOperationModifiersOnce();
         ClearRuntimeObjects();
         pulseWasUnlocked = false;
         objectiveWasUnlocked = false;
@@ -172,6 +174,7 @@ public class ArenaChaosDirector : MonoBehaviour
 
         RefreshReferences();
         EnsureRuntimeRoot();
+        ApplyOperationModifiersOnce();
         pulseWasUnlocked = false;
         objectiveWasUnlocked = false;
         breachWasUnlocked = false;
@@ -181,6 +184,31 @@ public class ArenaChaosDirector : MonoBehaviour
         SchedulePulseEvent();
         ScheduleObjectiveEvent();
         ScheduleBreachEvent();
+    }
+
+    private void ApplyOperationModifiersOnce()
+    {
+        if (operationModifiersApplied)
+        {
+            return;
+        }
+
+        operationModifiersApplied = true;
+        ContainmentOperationStorage.OperationDefinition operation = ContainmentOperationStorage.SelectedOperation;
+        if (operation.id == ContainmentOperationStorage.ExtractionId)
+        {
+            scorePickupIntervalRange = new Vector2(
+                Mathf.Max(0.35f, scorePickupIntervalRange.x * 0.72f),
+                Mathf.Max(0.55f, scorePickupIntervalRange.y * 0.78f));
+            scorePickupMaxAlive = Mathf.Max(scorePickupMaxAlive, scorePickupMaxAlive + 2);
+            dataCoreChance = Mathf.Clamp01(dataCoreChance + 0.08f);
+        }
+        else if (operation.id == ContainmentOperationStorage.BreachId)
+        {
+            minimumBreachMapAgeSeconds = Mathf.Max(34f, minimumBreachMapAgeSeconds - 14f);
+            breachTelegraphSeconds += 1.1f;
+            breachLifetime += 2f;
+        }
     }
 
     private void Update()
@@ -964,6 +992,7 @@ public class ArenaChaosDirector : MonoBehaviour
         if (gameManager != null)
         {
             gameManager.AddScore(Mathf.Max(0, breachScoreBonus));
+            gameManager.NotifyBreachEscaped();
         }
 
         RaiseWarning("Sector reconfigurado", 1.8f);

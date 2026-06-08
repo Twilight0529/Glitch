@@ -41,10 +41,12 @@ public class MainMenuController : MonoBehaviour
     private bool showOptions;
     private bool showUnlocks;
     private bool showStats;
+    private bool showOperations;
     private bool showDeveloperMenu;
     private bool queuedGameplayLoad;
     private int selectedUnlockIndex;
     private int selectedAchievementIndex;
+    private int selectedOperationIndex;
     private string selectedUnlockSection = MetaProgressionStorage.SectionRunUpgrades;
     private Font titleFont;
     private Font uiFont;
@@ -110,6 +112,7 @@ public class MainMenuController : MonoBehaviour
             showOptions = false;
             showUnlocks = false;
             showStats = false;
+            showOperations = false;
             GlitchAudioManager.PlayMenuToggle();
         }
     }
@@ -126,6 +129,10 @@ public class MainMenuController : MonoBehaviour
         else if (showStats)
         {
             DrawStatsMenu();
+        }
+        else if (showOperations)
+        {
+            DrawOperationsMenu();
         }
         else if (showDeveloperMenu)
         {
@@ -190,8 +197,10 @@ public class MainMenuController : MonoBehaviour
         float markerX = panel.x + 42f + Mathf.Repeat(Time.unscaledTime * 90f, Mathf.Max(1f, panel.width - 88f));
         DrawSolidRect(new Rect(markerX, panel.y + 109f, 26f, 3f), new Color(0.90f, 0.97f, 1f, 0.35f));
 
-        GUI.Label(new Rect(panel.x + 18f, panel.y + 114f, panel.width - 36f, 22f), $"Datos Recuperados: {MetaProgressionStorage.CurrentData}", paragraphStyle);
-        float buttonY = panel.y + 144f;
+        GUI.Label(new Rect(panel.x + 18f, panel.y + 114f, panel.width - 36f, 20f), $"Datos Recuperados: {MetaProgressionStorage.CurrentData}", paragraphStyle);
+        string operationLine = $"Operacion: {ContainmentOperationStorage.SelectedOperation.title}";
+        GUI.Label(new Rect(panel.x + 18f, panel.y + 134f, panel.width - 36f, 20f), operationLine, BuildFittedSingleLineStyle(paragraphStyle, operationLine, panel.width - 36f, 20f, 9));
+        float buttonY = panel.y + 158f;
         Rect playRect = new Rect(panel.x + 18f, buttonY, panel.width - 36f, 44f);
         Rect unlocksRect = new Rect(panel.x + 18f, buttonY + 54f, panel.width - 36f, 38f);
         Rect statsRect = new Rect(panel.x + 18f, buttonY + 102f, panel.width - 36f, 38f);
@@ -200,24 +209,32 @@ public class MainMenuController : MonoBehaviour
 
         if (DrawAnimatedMenuButton(playRect, "Jugar", true))
         {
-            StartGameplay();
+            selectedOperationIndex = ContainmentOperationStorage.GetDefinitionIndex(ContainmentOperationStorage.SelectedOperationId);
+            showOptions = false;
+            showUnlocks = false;
+            showStats = false;
+            showOperations = true;
+            GlitchAudioManager.PlayMenuConfirm();
         }
         if (DrawAnimatedMenuButton(unlocksRect, "Desbloqueos"))
         {
             showOptions = false;
             showStats = false;
+            showOperations = false;
             showUnlocks = true;
         }
         if (DrawAnimatedMenuButton(statsRect, "Estadisticas"))
         {
             showOptions = false;
             showUnlocks = false;
+            showOperations = false;
             showStats = true;
         }
         if (DrawAnimatedMenuButton(optionsRect, "Opciones"))
         {
             showUnlocks = false;
             showStats = false;
+            showOperations = false;
             showOptions = true;
         }
         if (DrawAnimatedMenuButton(exitRect, "Salir"))
@@ -226,6 +243,146 @@ public class MainMenuController : MonoBehaviour
         }
 
         DrawRankingPanel(rankingRect, sideBySide);
+    }
+
+    private void DrawOperationsMenu()
+    {
+        DrawScreenFade(0.48f);
+        float bob = Mathf.Sin(Time.unscaledTime * 1.18f + 0.7f) * 4f;
+        Rect panel = CenterRect(Mathf.Min(820f, Screen.width - 40f), Mathf.Min(540f, Screen.height - 36f));
+        panel.y += bob;
+        DrawPanel(panel, new Color(0.025f, 0.04f, 0.08f, 0.94f), new Color(0.48f, 0.90f, 1f, 0.58f));
+        DrawPanelFx(panel, new Color(0.50f, 0.95f, 1f, 1f), 0.11f);
+
+        Rect area = new Rect(panel.x + 18f, panel.y + 16f, panel.width - 36f, panel.height - 28f);
+        GUI.Label(new Rect(area.x, area.y, area.width, 42f), "Operaciones", panelTitleStyle);
+        DrawSolidRect(new Rect(area.x, area.y + 50f, area.width, 1f), new Color(0.70f, 0.90f, 1f, 0.24f));
+
+        IReadOnlyList<ContainmentOperationStorage.OperationDefinition> operations = ContainmentOperationStorage.Definitions;
+        selectedOperationIndex = Mathf.Clamp(selectedOperationIndex, 0, Mathf.Max(0, operations.Count - 1));
+        ContainmentOperationStorage.OperationDefinition selected = operations[selectedOperationIndex];
+
+        Rect list = new Rect(area.x, area.y + 70f, 270f, area.height - 128f);
+        Rect detail = new Rect(list.xMax + 18f, list.y, area.xMax - list.xMax - 18f, list.height);
+        DrawSolidRect(list, new Color(0.02f, 0.035f, 0.07f, 0.64f));
+        DrawSolidRect(new Rect(list.x, list.y, list.width, 2f), new Color(0.48f, 0.86f, 1f, 0.38f));
+
+        float rowH = Mathf.Min(66f, (list.height - 16f) / Mathf.Max(1, operations.Count));
+        for (int i = 0; i < operations.Count; i++)
+        {
+            ContainmentOperationStorage.OperationDefinition operation = operations[i];
+            Rect row = new Rect(list.x + 10f, list.y + 10f + i * rowH, list.width - 20f, rowH - 8f);
+            bool selectedRow = i == selectedOperationIndex;
+            bool stored = ContainmentOperationStorage.IsSelected(operation.id);
+            Color fill = selectedRow
+                ? new Color(operation.accent.r, operation.accent.g, operation.accent.b, 0.20f)
+                : new Color(0.04f, 0.06f, 0.11f, 0.76f);
+            DrawSolidRect(row, fill);
+            DrawSolidRect(new Rect(row.x, row.y, 4f, row.height), new Color(operation.accent.r, operation.accent.g, operation.accent.b, selectedRow ? 0.92f : 0.44f));
+            GUI.Label(new Rect(row.x + 12f, row.y + 4f, row.width - 24f, 23f), operation.title, BuildFittedSingleLineStyle(rankingRowStyle, operation.title, row.width - 24f, 23f, 11));
+            string state = stored ? "SELECCIONADA" : operation.subtitle;
+            GUI.Label(new Rect(row.x + 12f, row.y + 29f, row.width - 24f, 20f), state, BuildFittedSingleLineStyle(paragraphStyle, state, row.width - 24f, 20f, 9));
+            if (GUI.Button(row, GUIContent.none, GUIStyle.none))
+            {
+                selectedOperationIndex = i;
+                selected = operation;
+                GlitchAudioManager.PlayMenuHover();
+            }
+        }
+
+        DrawOperationDetails(detail, selected);
+
+        Rect backRect = new Rect(area.x, area.yMax - 42f, 136f, 34f);
+        if (DrawAnimatedMenuButton(backRect, "Volver"))
+        {
+            showOperations = false;
+        }
+
+        Rect startRect = new Rect(area.xMax - 230f, area.yMax - 42f, 230f, 34f);
+        if (DrawAnimatedMenuButton(startRect, "Iniciar operacion", true))
+        {
+            ContainmentOperationStorage.SelectOperation(selected.id);
+            StartGameplay();
+        }
+    }
+
+    private void DrawOperationDetails(Rect detail, ContainmentOperationStorage.OperationDefinition operation)
+    {
+        DrawSolidRect(detail, new Color(0.02f, 0.035f, 0.07f, 0.72f));
+        DrawSolidRect(new Rect(detail.x, detail.y, detail.width, 2f), new Color(operation.accent.r, operation.accent.g, operation.accent.b, 0.70f));
+        DrawSolidRect(new Rect(detail.x, detail.yMax - 2f, detail.width, 2f), new Color(operation.accent.r, operation.accent.g, operation.accent.b, 0.32f));
+
+        Rect icon = new Rect(detail.x + 18f, detail.y + 20f, 66f, 66f);
+        DrawOperationIcon(icon, operation);
+        GUI.Label(new Rect(icon.xMax + 18f, detail.y + 18f, detail.width - icon.width - 54f, 34f), operation.title, BuildFittedSingleLineStyle(panelTitleStyle, operation.title, detail.width - icon.width - 54f, 34f, 18));
+        GUI.Label(new Rect(icon.xMax + 18f, detail.y + 54f, detail.width - icon.width - 54f, 22f), operation.subtitle, rankingScoreStyle);
+
+        GUIStyle wrapped = new GUIStyle(paragraphStyle)
+        {
+            wordWrap = true,
+            alignment = TextAnchor.UpperLeft
+        };
+
+        Rect description = new Rect(detail.x + 18f, detail.y + 104f, detail.width - 36f, 62f);
+        GUI.Label(description, operation.description, wrapped);
+
+        float y = description.yMax + 10f;
+        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 46f), "Objetivo", operation.objective, operation.accent);
+        y += 54f;
+        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 46f), "Riesgo", operation.risk, new Color(1f, 0.58f, 0.72f, 1f));
+        y += 54f;
+        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 46f), "Recompensa", operation.reward, new Color(1f, 0.82f, 0.46f, 1f));
+
+        Rect selectedChip = new Rect(detail.x + 18f, detail.yMax - 42f, detail.width - 36f, 26f);
+        string selectedText = ContainmentOperationStorage.IsSelected(operation.id)
+            ? "Esta operacion quedara activa al iniciar."
+            : "Se seleccionara al iniciar la run.";
+        DrawSolidRect(selectedChip, new Color(operation.accent.r, operation.accent.g, operation.accent.b, 0.10f));
+        GUI.Label(new Rect(selectedChip.x + 10f, selectedChip.y, selectedChip.width - 20f, selectedChip.height), selectedText, paragraphStyle);
+    }
+
+    private void DrawOperationInfoRow(Rect rect, string label, string value, Color accent)
+    {
+        DrawSolidRect(rect, new Color(0.05f, 0.07f, 0.12f, 0.72f));
+        DrawSolidRect(new Rect(rect.x, rect.y, 4f, rect.height), new Color(accent.r, accent.g, accent.b, 0.70f));
+        GUI.Label(new Rect(rect.x + 12f, rect.y + 3f, 118f, 20f), label, rankingScoreStyle);
+        GUI.Label(new Rect(rect.x + 12f, rect.y + 22f, rect.width - 24f, 20f), value, BuildFittedSingleLineStyle(paragraphStyle, value, rect.width - 24f, 20f, 9));
+    }
+
+    private void DrawOperationIcon(Rect rect, ContainmentOperationStorage.OperationDefinition operation)
+    {
+        DrawSolidRect(rect, new Color(operation.accent.r, operation.accent.g, operation.accent.b, 0.18f));
+        DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 2f), new Color(operation.accent.r, operation.accent.g, operation.accent.b, 0.72f));
+        DrawSolidRect(new Rect(rect.x, rect.yMax - 2f, rect.width, 2f), new Color(operation.accent.r, operation.accent.g, operation.accent.b, 0.32f));
+
+        if (operation.id == ContainmentOperationStorage.FirewallId)
+        {
+            DrawSolidRect(new Rect(rect.center.x - 15f, rect.center.y - 15f, 30f, 30f), new Color(0.32f, 0.88f, 1f, 0.90f));
+            DrawSolidRect(new Rect(rect.x + 10f, rect.center.y - 2f, rect.width - 20f, 4f), new Color(1f, 0.82f, 0.44f, 0.88f));
+        }
+        else if (operation.id == ContainmentOperationStorage.ExtractionId)
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                DrawSolidRect(new Rect(rect.x + 12f + i * 9f, rect.y + 18f + (i % 2) * 12f, 8f, 8f), Color.white);
+            }
+            DrawSolidRect(new Rect(rect.x + 26f, rect.yMax - 22f, 22f, 10f), new Color(0.54f, 1f, 0.72f, 0.95f));
+        }
+        else if (operation.id == ContainmentOperationStorage.ContractId)
+        {
+            DrawSolidRect(new Rect(rect.x + 14f, rect.y + 15f, rect.width - 28f, 8f), operation.accent);
+            DrawSolidRect(new Rect(rect.x + 14f, rect.y + 30f, rect.width - 28f, 8f), operation.accent);
+            DrawSolidRect(new Rect(rect.x + 14f, rect.y + 45f, rect.width - 28f, 8f), new Color(1f, 0.82f, 0.46f, 1f));
+        }
+        else if (operation.id == ContainmentOperationStorage.BreachId)
+        {
+            DrawSolidRect(new Rect(rect.center.x - 7f, rect.y + 8f, 14f, rect.height - 16f), operation.accent);
+            DrawSolidRect(new Rect(rect.x + 13f, rect.center.y - 2f, rect.width - 26f, 4f), new Color(0.50f, 0.95f, 1f, 0.86f));
+        }
+        else
+        {
+            DrawSolidRect(new Rect(rect.center.x - 14f, rect.center.y - 14f, 28f, 28f), new Color(0.48f, 0.90f, 1f, 0.90f));
+        }
     }
 
     private void DrawRankingPanel(Rect panel, bool sideBySide)
