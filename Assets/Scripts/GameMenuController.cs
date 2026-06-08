@@ -350,7 +350,7 @@ public class GameMenuController : MonoBehaviour
         DrawDefeatCinematicIntro(defeatElapsed, introT);
         DrawDefeatBackdrop(pulse, hudGlitch, t);
 
-        Rect panel = CenterRect(Mathf.Min(540f, Screen.width - 48f), Mathf.Min(540f, Screen.height - 48f));
+        Rect panel = CenterRect(Mathf.Min(560f, Screen.width - 48f), Mathf.Min(560f, Screen.height - 48f));
         float panelScale = Mathf.Lerp(0.90f, 1f, introEase);
         if (introT < 1f)
         {
@@ -380,7 +380,6 @@ public class GameMenuController : MonoBehaviour
 
         string level = gameManager != null ? gameManager.CurrentLevelTypeLabel : "Unknown";
         float time = gameManager != null ? gameManager.SurvivalTime : 0f;
-        float threat = gameManager != null ? gameManager.DifficultyMultiplier : 1f;
         int score = gameManager != null ? gameManager.CurrentScore : 0;
         MetaProgressionStorage.RunReward reward = gameManager != null && gameManager.HasAwardedMetaReward
             ? gameManager.LastMetaReward
@@ -393,7 +392,12 @@ public class GameMenuController : MonoBehaviour
         {
             GUILayout.Label($"Bonus por contratos: +{reward.contractBonusData} datos", bodyStyle);
         }
-        GUILayout.Label($"Nivel de amenaza final: x{threat:F2}", bodyStyle);
+        GUILayout.Label($"Rendimiento: {reward.performanceGrade}  |  Runs totales: {reward.totalRuns}", bodyStyle);
+        string recordLine = GetRunRecordLine(reward);
+        if (!string.IsNullOrWhiteSpace(recordLine))
+        {
+            GUILayout.Label(recordLine, rankingStatusStyle);
+        }
         GUILayout.Label($"Zona de contencion: {level}", bodyStyle);
 
         GUILayout.Space(14f);
@@ -473,6 +477,24 @@ public class GameMenuController : MonoBehaviour
         rankingSubmittedScore = gameManager.CurrentScore;
         rankingSubmittedTime = gameManager.SurvivalTime;
         GlitchAudioManager.PlayRankingSubmit();
+    }
+
+    private static string GetRunRecordLine(MetaProgressionStorage.RunReward reward)
+    {
+        if (reward.newBestScore && reward.newBestTime)
+        {
+            return $"Nuevo record de zona: {reward.bestScoreForLevel} pts | {reward.bestTimeForLevel:F1}s";
+        }
+        if (reward.newBestScore)
+        {
+            return $"Nuevo record de puntuacion: {reward.bestScoreForLevel} pts";
+        }
+        if (reward.newBestTime)
+        {
+            return $"Nuevo record de supervivencia: {reward.bestTimeForLevel:F1}s";
+        }
+
+        return $"Record de zona: {reward.bestScoreForLevel} pts | {reward.bestTimeForLevel:F1}s";
     }
 
     private bool IsDefeatInputUnlocked()

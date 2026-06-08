@@ -236,7 +236,7 @@ public class ScoreCollectSparkFx : MonoBehaviour
         transform.localScale = new Vector3(Mathf.Lerp(0.12f, 0.02f, t), Mathf.Lerp(0.05f, 0.02f, t), 1f);
         if (spriteRenderer != null)
         {
-            Color c = spriteRenderer.color;
+            Color c = spriteRenderer.color; 
             c.a = Mathf.Lerp(1f, 0f, t);
             spriteRenderer.color = c;
         }

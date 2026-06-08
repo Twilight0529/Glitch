@@ -24,6 +24,23 @@ public static class MetaProgressionStorage
         public int dataEarned;
         public int contractBonusData;
         public int totalData;
+        public bool newBestScore;
+        public bool newBestTime;
+        public int bestScoreForLevel;
+        public float bestTimeForLevel;
+        public int totalRuns;
+        public int totalScore;
+        public float totalSurvivalTime;
+        public string performanceGrade;
+    }
+
+    public struct CareerStats
+    {
+        public int totalRuns;
+        public int totalScore;
+        public float totalSurvivalTime;
+        public int bestScore;
+        public float bestSurvivalTime;
     }
 
     public const string UnlockHazardResistance = "upgrade_hazard_resistance";
@@ -45,7 +62,22 @@ public static class MetaProgressionStorage
     private const string LastLevelKey = "Glitch_Meta_LastLevel";
     private const string LastEarnedKey = "Glitch_Meta_LastEarned";
     private const string LastContractBonusKey = "Glitch_Meta_LastContractBonus";
+    private const string LastNewBestScoreKey = "Glitch_Meta_LastNewBestScore";
+    private const string LastNewBestTimeKey = "Glitch_Meta_LastNewBestTime";
+    private const string LastBestScoreKey = "Glitch_Meta_LastBestScore";
+    private const string LastBestTimeKey = "Glitch_Meta_LastBestTime";
+    private const string LastTotalRunsKey = "Glitch_Meta_LastTotalRuns";
+    private const string LastTotalScoreKey = "Glitch_Meta_LastTotalScore";
+    private const string LastTotalTimeKey = "Glitch_Meta_LastTotalTime";
+    private const string LastGradeKey = "Glitch_Meta_LastGrade";
+    private const string TotalRunsKey = "Glitch_Meta_TotalRuns";
+    private const string TotalScoreKey = "Glitch_Meta_TotalScore";
+    private const string TotalTimeKey = "Glitch_Meta_TotalTime";
+    private const string GlobalBestScoreKey = "Glitch_Meta_GlobalBestScore";
+    private const string GlobalBestTimeKey = "Glitch_Meta_GlobalBestTime";
     private const string SelectedSkinKey = "Glitch_Meta_SelectedSkin";
+
+    private static readonly string[] knownLevelLabels = { "Lab", "Storage", "Rupture", "Unknown" };
 
     private static readonly UnlockDefinition[] definitions =
     {
@@ -156,22 +188,68 @@ public static class MetaProgressionStorage
         levelLabel = PlayerPrefs.GetString(LastLevelKey, "Unknown"),
         dataEarned = Mathf.Max(0, PlayerPrefs.GetInt(LastEarnedKey, 0)),
         contractBonusData = Mathf.Max(0, PlayerPrefs.GetInt(LastContractBonusKey, 0)),
-        totalData = CurrentData
+        totalData = CurrentData,
+        newBestScore = PlayerPrefs.GetInt(LastNewBestScoreKey, 0) == 1,
+        newBestTime = PlayerPrefs.GetInt(LastNewBestTimeKey, 0) == 1,
+        bestScoreForLevel = Mathf.Max(0, PlayerPrefs.GetInt(LastBestScoreKey, 0)),
+        bestTimeForLevel = Mathf.Max(0f, PlayerPrefs.GetFloat(LastBestTimeKey, 0f)),
+        totalRuns = Mathf.Max(0, PlayerPrefs.GetInt(LastTotalRunsKey, 0)),
+        totalScore = Mathf.Max(0, PlayerPrefs.GetInt(LastTotalScoreKey, 0)),
+        totalSurvivalTime = Mathf.Max(0f, PlayerPrefs.GetFloat(LastTotalTimeKey, 0f)),
+        performanceGrade = PlayerPrefs.GetString(LastGradeKey, "D")
+    };
+
+    public static CareerStats Stats => new CareerStats
+    {
+        totalRuns = Mathf.Max(0, PlayerPrefs.GetInt(TotalRunsKey, 0)),
+        totalScore = Mathf.Max(0, PlayerPrefs.GetInt(TotalScoreKey, 0)),
+        totalSurvivalTime = Mathf.Max(0f, PlayerPrefs.GetFloat(TotalTimeKey, 0f)),
+        bestScore = Mathf.Max(0, PlayerPrefs.GetInt(GlobalBestScoreKey, 0)),
+        bestSurvivalTime = Mathf.Max(0f, PlayerPrefs.GetFloat(GlobalBestTimeKey, 0f))
     };
 
     public static RunReward AwardRun(int score, float survivalTime, string levelLabel, int contractBonusData = 0)
     {
         int safeScore = Mathf.Max(0, score);
+        float safeTime = Mathf.Max(0f, survivalTime);
         int safeContractBonus = Mathf.Max(0, contractBonusData);
-        int earned = CalculateDataReward(safeScore, survivalTime) + safeContractBonus;
+        int earned = CalculateDataReward(safeScore, safeTime) + safeContractBonus;
         int total = CurrentData + earned;
+        string safeLevel = string.IsNullOrWhiteSpace(levelLabel) ? "Unknown" : levelLabel;
+        int previousBestScore = Mathf.Max(0, PlayerPrefs.GetInt(GetBestScoreKey(safeLevel), 0));
+        float previousBestTime = Mathf.Max(0f, PlayerPrefs.GetFloat(GetBestTimeKey(safeLevel), 0f));
+        bool newBestScore = safeScore > previousBestScore;
+        bool newBestTime = safeTime > previousBestTime;
+        int bestScoreForLevel = newBestScore ? safeScore : previousBestScore;
+        float bestTimeForLevel = newBestTime ? safeTime : previousBestTime;
+        int totalRuns = Mathf.Max(0, PlayerPrefs.GetInt(TotalRunsKey, 0)) + 1;
+        int totalScore = Mathf.Max(0, PlayerPrefs.GetInt(TotalScoreKey, 0)) + safeScore;
+        float totalTime = Mathf.Max(0f, PlayerPrefs.GetFloat(TotalTimeKey, 0f)) + safeTime;
+        int globalBestScore = Mathf.Max(safeScore, PlayerPrefs.GetInt(GlobalBestScoreKey, 0));
+        float globalBestTime = Mathf.Max(safeTime, PlayerPrefs.GetFloat(GlobalBestTimeKey, 0f));
+        string grade = CalculatePerformanceGrade(safeScore, safeTime);
 
         PlayerPrefs.SetInt(DataKey, total);
         PlayerPrefs.SetInt(LastScoreKey, safeScore);
-        PlayerPrefs.SetFloat(LastTimeKey, Mathf.Max(0f, survivalTime));
-        PlayerPrefs.SetString(LastLevelKey, string.IsNullOrWhiteSpace(levelLabel) ? "Unknown" : levelLabel);
+        PlayerPrefs.SetFloat(LastTimeKey, safeTime);
+        PlayerPrefs.SetString(LastLevelKey, safeLevel);
         PlayerPrefs.SetInt(LastEarnedKey, earned);
         PlayerPrefs.SetInt(LastContractBonusKey, safeContractBonus);
+        PlayerPrefs.SetInt(LastNewBestScoreKey, newBestScore ? 1 : 0);
+        PlayerPrefs.SetInt(LastNewBestTimeKey, newBestTime ? 1 : 0);
+        PlayerPrefs.SetInt(LastBestScoreKey, bestScoreForLevel);
+        PlayerPrefs.SetFloat(LastBestTimeKey, bestTimeForLevel);
+        PlayerPrefs.SetInt(LastTotalRunsKey, totalRuns);
+        PlayerPrefs.SetInt(LastTotalScoreKey, totalScore);
+        PlayerPrefs.SetFloat(LastTotalTimeKey, totalTime);
+        PlayerPrefs.SetString(LastGradeKey, grade);
+        PlayerPrefs.SetInt(TotalRunsKey, totalRuns);
+        PlayerPrefs.SetInt(TotalScoreKey, totalScore);
+        PlayerPrefs.SetFloat(TotalTimeKey, totalTime);
+        PlayerPrefs.SetInt(GlobalBestScoreKey, globalBestScore);
+        PlayerPrefs.SetFloat(GlobalBestTimeKey, globalBestTime);
+        PlayerPrefs.SetInt(GetBestScoreKey(safeLevel), bestScoreForLevel);
+        PlayerPrefs.SetFloat(GetBestTimeKey(safeLevel), bestTimeForLevel);
         PlayerPrefs.Save();
 
         return LastRunReward;
@@ -206,6 +284,19 @@ public static class MetaProgressionStorage
         int scoreData = Mathf.FloorToInt(Mathf.Max(0, score) / 18f);
         int survivalBonus = Mathf.FloorToInt(Mathf.Max(0f, survivalTime) / 60f) * 3;
         return Mathf.Max(score > 0 ? 1 : 0, scoreData + survivalBonus);
+    }
+
+    public static string GetArenaRecordLabel(string levelLabel)
+    {
+        string safeLevel = string.IsNullOrWhiteSpace(levelLabel) ? "Unknown" : levelLabel;
+        int bestScore = Mathf.Max(0, PlayerPrefs.GetInt(GetBestScoreKey(safeLevel), 0));
+        float bestTime = Mathf.Max(0f, PlayerPrefs.GetFloat(GetBestTimeKey(safeLevel), 0f));
+        if (bestScore <= 0 && bestTime <= 0f)
+        {
+            return "Sin registros";
+        }
+
+        return $"{bestScore} pts | {bestTime:F1}s";
     }
 
     public static bool IsUnlocked(string id)
@@ -288,13 +379,55 @@ public static class MetaProgressionStorage
         PlayerPrefs.DeleteKey(LastLevelKey);
         PlayerPrefs.DeleteKey(LastEarnedKey);
         PlayerPrefs.DeleteKey(LastContractBonusKey);
+        PlayerPrefs.DeleteKey(LastNewBestScoreKey);
+        PlayerPrefs.DeleteKey(LastNewBestTimeKey);
+        PlayerPrefs.DeleteKey(LastBestScoreKey);
+        PlayerPrefs.DeleteKey(LastBestTimeKey);
+        PlayerPrefs.DeleteKey(LastTotalRunsKey);
+        PlayerPrefs.DeleteKey(LastTotalScoreKey);
+        PlayerPrefs.DeleteKey(LastTotalTimeKey);
+        PlayerPrefs.DeleteKey(LastGradeKey);
+        PlayerPrefs.DeleteKey(TotalRunsKey);
+        PlayerPrefs.DeleteKey(TotalScoreKey);
+        PlayerPrefs.DeleteKey(TotalTimeKey);
+        PlayerPrefs.DeleteKey(GlobalBestScoreKey);
+        PlayerPrefs.DeleteKey(GlobalBestTimeKey);
         PlayerPrefs.DeleteKey(SelectedSkinKey);
         for (int i = 0; i < definitions.Length; i++)
         {
             PlayerPrefs.DeleteKey(GetUnlockKey(definitions[i].id));
         }
+        for (int i = 0; i < knownLevelLabels.Length; i++)
+        {
+            PlayerPrefs.DeleteKey(GetBestScoreKey(knownLevelLabels[i]));
+            PlayerPrefs.DeleteKey(GetBestTimeKey(knownLevelLabels[i]));
+        }
 
         PlayerPrefs.Save();
+    }
+
+    private static string CalculatePerformanceGrade(int score, float survivalTime)
+    {
+        int safeScore = Mathf.Max(0, score);
+        float safeTime = Mathf.Max(0f, survivalTime);
+        if (safeScore >= 650 || safeTime >= 210f)
+        {
+            return "S";
+        }
+        if (safeScore >= 430 || safeTime >= 150f)
+        {
+            return "A";
+        }
+        if (safeScore >= 260 || safeTime >= 95f)
+        {
+            return "B";
+        }
+        if (safeScore >= 120 || safeTime >= 45f)
+        {
+            return "C";
+        }
+
+        return "D";
     }
 
     private static bool TryGetDefinition(string id, out UnlockDefinition definition)
@@ -315,5 +448,25 @@ public static class MetaProgressionStorage
     private static string GetUnlockKey(string id)
     {
         return $"Glitch_Meta_Unlock_{id}";
+    }
+
+    private static string GetBestScoreKey(string levelLabel)
+    {
+        return $"Glitch_Meta_BestScore_{SanitizeKey(levelLabel)}";
+    }
+
+    private static string GetBestTimeKey(string levelLabel)
+    {
+        return $"Glitch_Meta_BestTime_{SanitizeKey(levelLabel)}";
+    }
+
+    private static string SanitizeKey(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return "Unknown";
+        }
+
+        return raw.Trim().Replace(" ", string.Empty);
     }
 }

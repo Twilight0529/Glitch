@@ -181,8 +181,13 @@ public class MainMenuController : MonoBehaviour
         DrawSolidRect(new Rect(markerX, panel.y + 109f, 26f, 3f), new Color(0.90f, 0.97f, 1f, 0.35f));
 
         GUI.Label(new Rect(panel.x + 18f, panel.y + 114f, panel.width - 36f, 22f), $"Datos Recuperados: {MetaProgressionStorage.CurrentData}", paragraphStyle);
+        MetaProgressionStorage.CareerStats stats = MetaProgressionStorage.Stats;
+        string profileLine = stats.totalRuns > 0
+            ? $"Perfil: {stats.totalRuns} runs | Mejor {stats.bestScore} pts | {stats.bestSurvivalTime:F1}s"
+            : "Perfil: sin runs registradas";
+        GUI.Label(new Rect(panel.x + 18f, panel.y + 132f, panel.width - 36f, 22f), profileLine, paragraphStyle);
 
-        float buttonY = panel.y + 144f;
+        float buttonY = panel.y + 156f;
         Rect playRect = new Rect(panel.x + 18f, buttonY, panel.width - 36f, 44f);
         Rect unlocksRect = new Rect(panel.x + 18f, buttonY + 54f, panel.width - 36f, 38f);
         Rect optionsRect = new Rect(panel.x + 18f, buttonY + 102f, panel.width - 36f, 38f);
@@ -720,11 +725,19 @@ public class MainMenuController : MonoBehaviour
         DrawSolidRect(new Rect(bar.x, bar.y, bar.width * normalized, bar.height), new Color(accent.r, accent.g, accent.b, 0.78f));
 
         Rect noteRect = new Rect(detailRect.x + 18f, detailRect.yMax - 84f, detailRect.width - 36f, 48f);
-        DrawSolidRect(noteRect, new Color(accent.r, accent.g, accent.b, 0.10f));
+        Color noteFill = unlocked
+            ? new Color(0.20f, 0.15f, 0.08f, 0.78f)
+            : new Color(accent.r, accent.g, accent.b, 0.10f);
+        DrawSolidRect(noteRect, noteFill);
+        DrawSolidRect(new Rect(noteRect.x, noteRect.y, noteRect.width, 2f), new Color(accent.r, accent.g, accent.b, unlocked ? 0.46f : 0.22f));
         string note = unlocked
             ? $"Recompensa cobrada: +{achievement.dataReward} Datos."
             : "Completa este objetivo para cobrar Datos y avanzar tu progreso.";
-        GUI.Label(new Rect(noteRect.x + 10f, noteRect.y + 6f, noteRect.width - 20f, noteRect.height - 12f), note, detailParagraph);
+        GUIStyle noteStyle = new GUIStyle(detailParagraph);
+        noteStyle.normal.textColor = unlocked
+            ? new Color(1f, 0.82f, 0.48f, 0.98f)
+            : new Color(0.82f, 0.90f, 1f, 0.94f);
+        GUI.Label(new Rect(noteRect.x + 10f, noteRect.y + 6f, noteRect.width - 20f, noteRect.height - 12f), note, noteStyle);
     }
 
     private void DrawUnlockSelectableRow(Rect row, MetaProgressionStorage.UnlockDefinition unlock, int index)
