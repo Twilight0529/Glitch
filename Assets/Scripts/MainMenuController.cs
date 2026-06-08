@@ -374,7 +374,7 @@ public class MainMenuController : MonoBehaviour
         Rect audio = new Rect(area.x, area.y + 66f, area.width * 0.48f, 124f);
         Rect interfaceBox = new Rect(audio.xMax + 18f, audio.y, area.width - audio.width - 18f, 184f);
         Rect display = new Rect(area.x, audio.yMax + 18f, audio.width, 156f);
-        Rect actions = new Rect(interfaceBox.x, interfaceBox.yMax + 18f, interfaceBox.width, 96f);
+        Rect actions = new Rect(interfaceBox.x, interfaceBox.yMax + 18f, interfaceBox.width, 136f);
 
         DrawStatsSection(audio, "Audio", new Color(0.55f, 0.95f, 1f, 1f));
         float newMaster = DrawOptionSlider(audio, 42f, "Volumen maestro", masterVolume, 0f, 1f);
@@ -429,6 +429,15 @@ public class MainMenuController : MonoBehaviour
         if (DrawAnimatedMenuButton(resetRect, "Restaurar opciones"))
         {
             ResetOptionsToDefault();
+        }
+
+        Rect tutorialRect = new Rect(actions.x + 14f, actions.y + 84f, actions.width - 28f, 34f);
+        if (DrawAnimatedMenuButton(tutorialRect, "Mostrar tutorial"))
+        {
+            UserSettings.SetShowIntroTutorial(true);
+            optionsActionMessage = "Tutorial de inicio activado.";
+            optionsActionMessageExpireAt = Time.unscaledTime + 2.2f;
+            GlitchAudioManager.PlayMenuConfirm();
         }
 
         if (!string.IsNullOrEmpty(optionsActionMessage))

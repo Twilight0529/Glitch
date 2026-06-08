@@ -11,6 +11,7 @@ public static class UserSettings
     public const string MenuMotionKey = "glitch_menu_motion";
     public const string FullscreenKey = "glitch_fullscreen";
     public const string VSyncKey = "glitch_vsync";
+    public const string IntroTutorialKey = "glitch_intro_tutorial";
 
     public const float DefaultMasterVolume = 0.8f;
     public const float DefaultMusicVolume = 0.85f;
@@ -20,6 +21,7 @@ public static class UserSettings
     public const float DefaultMenuMotion = 1f;
     public const bool DefaultFullscreen = false;
     public const bool DefaultVSync = true;
+    public const bool DefaultShowIntroTutorial = true;
 
     public const float MinMenuUiScale = 0.8f;
     public const float MaxMenuUiScale = 1.25f;
@@ -125,6 +127,17 @@ public static class UserSettings
         PlayerPrefs.Save();
     }
 
+    public static bool GetShowIntroTutorial()
+    {
+        return PlayerPrefs.GetInt(IntroTutorialKey, DefaultShowIntroTutorial ? 1 : 0) == 1;
+    }
+
+    public static void SetShowIntroTutorial(bool value)
+    {
+        PlayerPrefs.SetInt(IntroTutorialKey, value ? 1 : 0);
+        PlayerPrefs.Save();
+    }
+
     public static void ResetOptions()
     {
         SetMasterVolume(DefaultMasterVolume);
@@ -135,5 +148,6 @@ public static class UserSettings
         SetMenuMotion(DefaultMenuMotion);
         SetFullscreen(DefaultFullscreen);
         SetVSync(DefaultVSync);
+        SetShowIntroTutorial(DefaultShowIntroTutorial);
     }
 }

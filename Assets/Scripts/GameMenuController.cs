@@ -195,7 +195,8 @@ public class GameMenuController : MonoBehaviour
     {
         bool gameplayActive = state == OverlayState.Playing;
         bool upgradeSelectionOpen = gameManager != null && gameManager.IsUpgradeSelectionOpen;
-        Cursor.visible = !gameplayActive || upgradeSelectionOpen;
+        bool introTutorialOpen = gameManager != null && gameManager.IsIntroTutorialOpen;
+        Cursor.visible = !gameplayActive || upgradeSelectionOpen || introTutorialOpen;
     }
 
     private void RestartLevel()

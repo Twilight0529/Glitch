@@ -33972,6 +33972,11 @@ MonoBehaviour:
   blockedPathCommitDistanceMultiplier: 3
   blockedOscillationThreshold: 3
   blockedOscillationResetSeconds: 1.2
+  parryStunDuration: 0.34
+  parryKnockbackDuration: 0.16
+  parryKnockbackSpeed: 12
+  parryBurstRadius: 1.45
+  parryBurstDuration: 0.22
 --- !u!58 &961830799
 CircleCollider2D:
   m_ObjectHideFlags: 0
@@ -42341,9 +42346,30 @@ MonoBehaviour:
   chaosTempoEnabled: 1
   chaosBehaviorIntervalMultiplier: 0.72
   pointsPerSecond: 4
+  enableRunUpgrades: 1
+  firstUpgradeTime: 35
+  upgradeInterval: 42
+  upgradeOptionsShown: 3
+  upgradeScoreBonus: 8
+  upgradeChoiceLimitSeconds: 10
+  upgradeEnterDuration: 0.32
+  upgradeExitDuration: 0.46
+  enableRunContracts: 1
+  firstContractTime: 24
+  contractInterval: 42
+  contractDuration: 55
+  contractScoreReward: 24
+  contractDataReward: 5
   bossSpecialStatesUnlockTime: 30
   mapEventsUnlockTime: 60
   containmentPulseUnlockTime: 90
+  enableEventPressureBudget: 1
+  eventPressureInitialCap: 1.05
+  eventPressureMaxCap: 1.65
+  eventPressureSoloHeavyAllowance: 1.8
+  eventPressureRampStartTime: 60
+  eventPressureRampFullTime: 240
+  eventPressureRetryDelay: 1.35
   countdownPulseSpeed: 2.1
   countdownBackdropOpacity: 0.33
   countdownGlitchOpacity: 0.18
@@ -42396,7 +42422,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GlobalFontSettings
   importantFont: {fileID: 12800000, guid: d1c3af6db7bf49a40a71f86e15eef580, type: 3}
-  secondaryFont: {fileID: 12800000, guid: 738ad71b37eac1d438238be4c4057c22, type: 3}
+  secondaryFont: {fileID: 12800000, guid: d1c3af6db7bf49a40a71f86e15eef580, type: 3}
   persistAcrossScenes: 1
 --- !u!1 &1183992384
 GameObject:
@@ -61400,12 +61426,44 @@ MonoBehaviour:
   shieldColor: {r: 0.95, g: 0.64, b: 0.88, a: 0.85}
   shieldPulseSpeed: 7.2
   shieldRadius: 0.72
+  maxShieldDurationMultiplier: 1.8
+  parryActiveDuration: 0.16
+  parryCooldown: 0.85
+  parryRadius: 0.95
+  maxParryActiveDuration: 0.32
+  minParryCooldown: 0.42
+  maxParryRadius: 1.55
+  parryReadyColor: {r: 0.46, g: 0.96, b: 1, a: 0.62}
+  parrySuccessColor: {r: 1, g: 0.96, b: 0.64, a: 1}
+  parryFxRadius: 1.65
+  parryFxDuration: 0.2
+  parryFxRayCount: 12
+  firewallChargeMax: 100
+  firewallChargeFromScorePickup: 1.25
+  firewallChargeFromPowerup: 9
+  firewallChargeFromObjectiveNode: 14
+  firewallChargeFromParry: 11
+  firewallBurstRadius: 4.4
+  maxFirewallBurstRadius: 6.4
+  firewallBurstStunDuration: 0.95
+  maxFirewallBurstStunDuration: 1.55
+  firewallBurstKnockbackMultiplier: 1.35
+  maxFirewallChargeGainMultiplier: 1.55
+  firewallBurstColor: {r: 0.46, g: 0.96, b: 1, a: 1}
+  firewallReadyColor: {r: 1, g: 0.9, b: 0.54, a: 1}
+  firewallBurstRayCount: 18
   enableMovementTrail: 1
+  maxPermanentMoveSpeed: 15.5
   trailColor: {r: 0.42, g: 0.92, b: 1, a: 0.85}
   trailParticleLifetime: 0.36
   trailStartSize: 0.17
   trailEmissionAtMaxSpeed: 42
   trailMinVelocityToEmit: 1.1
+  minExternalDisplacementMultiplier: 0.45
+  minSlowDurationUpgradeMultiplier: 0.45
+  minSlowSeverityUpgradeMultiplier: 0.55
+  hazardFirewallChargeCooldown: 0.7
+  maxHazardFirewallChargeBonus: 9
   enableDeathExplosion: 1
   deathChargeDuration: 0.26
   deathFlashDuration: 0.08
@@ -61420,6 +61478,9 @@ MonoBehaviour:
   shieldBreakBurstRadius: 1.25
   shieldBreakBurstDuration: 0.22
   shieldBreakBurstRayCount: 8
+  breachGlitchStripCount: 7
+  breachGlitchRadius: 0.82
+  breachGlitchPulseSpeed: 18
 --- !u!58 &1747962577
 CircleCollider2D:
   m_ObjectHideFlags: 0
@@ -73624,6 +73685,7 @@ MonoBehaviour:
   durationMax: 5
   cadenceIntervalMultiplier: 0.68
   cadenceDurationMultiplier: 1.18
+  enableSpinMotion: 1
   maxSweepAngle: 70
   minSweepAngle: 3
   safeAngleFactor: 0.92
@@ -73638,6 +73700,30 @@ MonoBehaviour:
   activeColorPulseStrength: 0.65
   activeColorLightenAmount: 0.38
   activeColorPulseSpeed: 2.4
+  enableRiftEchoes: 1
+  riftEchoCountMin: 2
+  riftEchoCountMax: 4
+  riftEchoRadius: 1.35
+  riftEchoTelegraphSeconds: 0.85
+  riftEchoLinkDuration: 4.8
+  riftEchoLinkTriggerRadius: 0.42
+  riftEchoTrapStunDuration: 1.2
+  riftEchoAnchorFirewallReward: 2
+  riftEchoTrapFirewallReward: 11
+  riftEchoTelegraphColor: {r: 0.95, g: 0.42, b: 1, a: 0.42}
+  riftEchoActiveColor: {r: 0.42, g: 0.96, b: 1, a: 0.76}
+  enableEchoPortals: 1
+  echoPortalRadius: 0.72
+  echoPortalCooldown: 0.85
+  echoTrapRadius: 1.05
+  echoTrapDuration: 1.35
+  echoTrapStunDuration: 1.15
+  echoFirewallReward: 8
+  echoSuccessLabelSeconds: 1.25
+  echoPortalColor: {r: 0.48, g: 0.96, b: 1, a: 0.9}
+  eventPressureCost: 1
+  eventPressureCooldown: 4.5
+  eventPressureDurationPadding: 0.9
   debugTriggerEnabled: 1
   debugTriggerKey: 32
 --- !u!114 &2048093580

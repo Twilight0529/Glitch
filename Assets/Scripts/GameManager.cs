@@ -163,6 +163,7 @@ public class GameManager : MonoBehaviour
     public bool IsGameOver { get; private set; }
     public bool IsRunActive => runPhase == RunPhase.Active && !IsGameOver && !playerDefeatSequenceRunning;
     public bool IsUpgradeSelectionOpen => upgradeSelectionOpen;
+    public bool IsIntroTutorialOpen => introTutorialOpen;
     public MetaProgressionStorage.RunReward LastMetaReward { get; private set; }
     public bool HasAwardedMetaReward { get; private set; }
     public int ContractDataBonusEarned => contractDataBonusEarned;
@@ -225,6 +226,9 @@ public class GameManager : MonoBehaviour
     private GUIStyle upgradeIconStyle;
     private GUIStyle upgradeImpactStyle;
     private GUIStyle upgradeCardTitleStyle;
+    private GUIStyle tutorialBodyStyle;
+    private GUIStyle tutorialHeaderStyle;
+    private GUIStyle tutorialTinyStyle;
     private Font importantFont;
     private Font secondaryFont;
     private string lastBossStateRaw;
@@ -265,6 +269,8 @@ public class GameManager : MonoBehaviour
     private Coroutine playerDefeatSequenceRoutine;
     private float breachSensitiveSuppressionTimer;
     private float eventPressureCooldownTimer;
+    private bool introTutorialOpen;
+    private bool introTutorialDontShowAgain;
 
     private void Awake()
     {
@@ -309,6 +315,11 @@ public class GameManager : MonoBehaviour
         if (!IsThemedEventStatusProviderValid())
         {
             themedEventStatusProvider = FindThemedEventStatusProvider();
+        }
+
+        if (introTutorialOpen)
+        {
+            return;
         }
 
         if (enemyController != null)
@@ -840,6 +851,12 @@ public class GameManager : MonoBehaviour
             return;
         }
 
+        if (introTutorialOpen)
+        {
+            DrawIntroTutorialOverlay();
+            return;
+        }
+
         if (runPhase == RunPhase.Active)
         {
             DrawRuntimeHud();
@@ -903,7 +920,233 @@ public class GameManager : MonoBehaviour
         breachSensitiveSuppressionTimer = 0f;
         eventPressureCooldownTimer = 0f;
         eventPressureReservations.Clear();
+        introTutorialOpen = UserSettings.GetShowIntroTutorial();
+        introTutorialDontShowAgain = false;
         Time.timeScale = 0f;
+    }
+
+    private void DrawIntroTutorialOverlay()
+    {
+        EnsureUpgradeStyles();
+        EnsureTutorialStyles();
+
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 2.4f);
+        DrawSolidRect(new Rect(0f, 0f, Screen.width, Screen.height), new Color(0.005f, 0.01f, 0.02f, 0.82f));
+
+        float panelW = Mathf.Min(980f, Screen.width - 28f);
+        float panelH = Mathf.Min(590f, Screen.height - 26f);
+        Rect panel = new Rect((Screen.width - panelW) * 0.5f, (Screen.height - panelH) * 0.5f, panelW, panelH);
+        DrawTutorialPanel(panel, new Color(0.025f, 0.04f, 0.08f, 0.95f), new Color(0.45f, 0.95f, 1f, 0.62f + pulse * 0.12f));
+
+        Rect area = new Rect(panel.x + 22f, panel.y + 18f, panel.width - 44f, panel.height - 34f);
+        GUI.Label(new Rect(area.x, area.y, area.width, 36f), "PROTOCOLO DE CONTENCION", upgradeTitleStyle);
+        GUI.Label(
+            new Rect(area.x, area.y + 38f, area.width, 24f),
+            "Controles, recursos y senales que vas a usar desde la primera partida.",
+            BuildFittedSingleLineStyle(tutorialHeaderStyle, "Controles, recursos y senales que vas a usar desde la primera partida.", area.width, 24f, 12));
+        DrawSolidRect(new Rect(area.x, area.y + 70f, area.width, 2f), new Color(0.68f, 0.92f, 1f, 0.26f));
+
+        float gap = 14f;
+        float footerH = 58f;
+        float gridY = area.y + 88f;
+        float gridH = area.height - 88f - footerH;
+        float cardW = (area.width - gap) * 0.5f;
+        float cardH = (gridH - gap) * 0.5f;
+
+        DrawTutorialCard(new Rect(area.x, gridY, cardW, cardH), "1. MOVIMIENTO", "WASD o flechas para esquivar. Puedes mantener dos direcciones para moverte en diagonal.", new Color(0.43f, 0.94f, 1f, 1f), DrawTutorialMovementVisual);
+        DrawTutorialCard(new Rect(area.x + cardW + gap, gridY, cardW, cardH), "2. PARRY Y FIREWALL", "Parry: Espacio/E/click izq. al contacto. Si aciertas, empujas y cargas Firewall. Firewall: Q/R/click der. con barra llena.", new Color(1f, 0.62f, 0.78f, 1f), DrawTutorialDefenseVisual);
+        DrawTutorialCard(new Rect(area.x, gridY + cardH + gap, cardW, cardH), "3. RECURSOS Y MEJORAS", "Los datos suman puntaje y progreso meta. El rayo da velocidad, el escudo absorbe un golpe y las alteraciones mejoran la run.", new Color(1f, 0.78f, 0.36f, 1f), DrawTutorialPowerupVisual);
+        DrawTutorialCard(new Rect(area.x + cardW + gap, gridY + cardH + gap, cardW, cardH), "4. EVENTOS DE ARENA", "Las alertas visuales anticipan reglas temporales: sigue flechas, evita zonas peligrosas y cruza brechas cuando aparezcan.", new Color(0.82f, 0.52f, 1f, 1f), DrawTutorialEventsVisual);
+
+        Rect footer = new Rect(area.x, area.yMax - footerH + 10f, area.width, footerH - 10f);
+        DrawTutorialCheckbox(new Rect(footer.x, footer.y + 8f, 240f, 32f), "No volver a mostrar");
+
+        Rect startButton = new Rect(footer.xMax - 250f, footer.y + 6f, 250f, 36f);
+        DrawSolidRect(startButton, new Color(0.09f, 0.18f, 0.28f, 0.92f));
+        DrawSolidRect(new Rect(startButton.x, startButton.y, startButton.width, 2f), new Color(0.50f, 0.96f, 1f, 0.70f));
+        DrawSolidRect(new Rect(startButton.x, startButton.yMax - 2f, startButton.width, 2f), new Color(1f, 0.58f, 0.78f, 0.48f));
+        if (GUI.Button(startButton, "INICIAR PROTOCOLO", upgradeButtonStyle))
+        {
+            CloseIntroTutorial();
+        }
+    }
+
+    private void CloseIntroTutorial()
+    {
+        if (introTutorialDontShowAgain)
+        {
+            UserSettings.SetShowIntroTutorial(false);
+        }
+
+        introTutorialOpen = false;
+        GlitchAudioManager.PlayMenuConfirm();
+    }
+
+    private delegate void TutorialVisualDrawer(Rect rect, Color accent);
+
+    private void DrawTutorialCard(Rect rect, string title, string body, Color accent, TutorialVisualDrawer visualDrawer)
+    {
+        DrawSolidRect(rect, new Color(0.015f, 0.025f, 0.05f, 0.78f));
+        DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 2f), new Color(accent.r, accent.g, accent.b, 0.72f));
+        DrawSolidRect(new Rect(rect.x, rect.yMax - 2f, rect.width, 2f), new Color(accent.r, accent.g, accent.b, 0.24f));
+        DrawSolidRect(new Rect(rect.x + 12f, rect.y + 12f, 58f, 4f), new Color(accent.r, accent.g, accent.b, 0.62f));
+
+        Rect visual = new Rect(rect.x + 14f, rect.y + 24f, Mathf.Min(150f, rect.width * 0.34f), rect.height - 42f);
+        visualDrawer(visual, accent);
+
+        float textX = visual.xMax + 16f;
+        Rect titleRect = new Rect(textX, rect.y + 24f, rect.xMax - textX - 14f, 28f);
+        GUI.Label(titleRect, title, BuildFittedSingleLineStyle(tutorialHeaderStyle, title, titleRect.width, titleRect.height, 11));
+
+        Rect bodyRect = new Rect(textX, titleRect.yMax + 8f, rect.xMax - textX - 14f, rect.yMax - titleRect.yMax - 22f);
+        GUI.Label(bodyRect, body, tutorialBodyStyle);
+    }
+
+    private void DrawTutorialMovementVisual(Rect rect, Color accent)
+    {
+        DrawSolidRect(rect, new Color(0.03f, 0.06f, 0.10f, 0.82f));
+        float key = Mathf.Min(32f, rect.width * 0.23f);
+        float startX = rect.x + 12f;
+        float startY = rect.y + 12f;
+        DrawKey(new Rect(startX + key + 6f, startY, key, key), "W", accent);
+        DrawKey(new Rect(startX, startY + key + 6f, key, key), "A", accent);
+        DrawKey(new Rect(startX + key + 6f, startY + key + 6f, key, key), "S", accent);
+        DrawKey(new Rect(startX + (key + 6f) * 2f, startY + key + 6f, key, key), "D", accent);
+
+        Vector2 player = new Vector2(rect.xMax - 42f, rect.yMax - 38f);
+        DrawSolidRect(new Rect(player.x - 11f, player.y - 11f, 22f, 22f), new Color(0.30f, 0.88f, 1f, 1f));
+        DrawArrowLine(new Vector2(rect.x + 64f, rect.yMax - 30f), new Vector2(player.x - 18f, player.y), accent);
+        DrawSolidRect(new Rect(player.x + 17f, player.y - 2f, 18f, 4f), new Color(accent.r, accent.g, accent.b, 0.58f));
+    }
+
+    private void DrawTutorialDefenseVisual(Rect rect, Color accent)
+    {
+        DrawSolidRect(rect, new Color(0.055f, 0.025f, 0.050f, 0.82f));
+        float ringRadius = Mathf.Min(34f, Mathf.Min(rect.width * 0.24f, rect.height * 0.24f));
+        Vector2 center = new Vector2(rect.center.x, rect.y + Mathf.Clamp(rect.height * 0.39f, 48f, 62f));
+        DrawTutorialRing(center, ringRadius, accent, 0.52f);
+        DrawTutorialRing(center, ringRadius * 0.72f, new Color(0.48f, 0.96f, 1f, 1f), 0.40f);
+        DrawSolidRect(new Rect(center.x - 11f, center.y - 11f, 22f, 22f), new Color(0.30f, 0.88f, 1f, 1f));
+        DrawSolidRect(new Rect(rect.x + 12f, center.y - 36f, 22f, 22f), new Color(1f, 0.20f, 0.28f, 1f));
+        DrawArrowLine(new Vector2(rect.x + 40f, center.y - 25f), new Vector2(center.x - 18f, center.y - 8f), new Color(1f, 0.56f, 0.65f, 1f));
+
+        float keyGap = 6f;
+        float keyW = Mathf.Floor((rect.width - 28f - (keyGap * 2f)) / 3f);
+        float keyY = rect.yMax - 48f;
+        Rect parryLabel = new Rect(rect.x + 10f, keyY - 18f, (keyW * 2f) + keyGap, 16f);
+        Rect burstLabel = new Rect(rect.x + 10f + ((keyW + keyGap) * 2f), keyY - 18f, keyW, 16f);
+        DrawTutorialLabel(parryLabel, "PARRY");
+        DrawTutorialLabel(burstLabel, "BURST");
+        DrawKey(new Rect(rect.x + 10f, keyY, keyW, 24f), "ESP", accent);
+        DrawKey(new Rect(rect.x + 10f + keyW + keyGap, keyY, keyW, 24f), "E", accent);
+        DrawKey(new Rect(rect.x + 10f + ((keyW + keyGap) * 2f), keyY, keyW, 24f), "Q/R", new Color(1f, 0.86f, 0.46f, 1f));
+
+        Rect charge = new Rect(rect.x + 14f, rect.yMax - 18f, rect.width - 28f, 7f);
+        DrawSolidRect(charge, new Color(0.04f, 0.06f, 0.10f, 0.92f));
+        DrawSolidRect(new Rect(charge.x, charge.y, charge.width * 0.78f, charge.height), new Color(1f, 0.86f, 0.46f, 0.86f));
+    }
+
+    private void DrawTutorialPowerupVisual(Rect rect, Color accent)
+    {
+        DrawSolidRect(rect, new Color(0.06f, 0.045f, 0.02f, 0.82f));
+        Rect data = new Rect(rect.x + 14f, rect.y + 18f, 16f, 16f);
+        for (int i = 0; i < 4; i++)
+        {
+            DrawSolidRect(new Rect(data.x + i * 22f, data.y + (i % 2) * 8f, data.width, data.height), new Color(0.95f, 0.96f, 1f, 0.88f));
+        }
+
+        Rect speed = new Rect(rect.center.x - 18f, rect.center.y - 24f, 36f, 48f);
+        DrawSolidRect(new Rect(speed.x + 13f, speed.y, 12f, 22f), new Color(0.36f, 0.95f, 1f, 1f));
+        DrawSolidRect(new Rect(speed.x + 3f, speed.y + 18f, 30f, 10f), new Color(0.36f, 0.95f, 1f, 1f));
+        DrawSolidRect(new Rect(speed.x + 8f, speed.y + 28f, 12f, 20f), new Color(0.36f, 0.95f, 1f, 1f));
+
+        Rect shield = new Rect(rect.xMax - 46f, rect.yMax - 58f, 34f, 42f);
+        DrawSolidRect(new Rect(shield.x + 5f, shield.y, shield.width - 10f, 12f), new Color(0.52f, 1f, 0.74f, 0.92f));
+        DrawSolidRect(new Rect(shield.x, shield.y + 10f, shield.width, 18f), new Color(0.52f, 1f, 0.74f, 0.92f));
+        DrawSolidRect(new Rect(shield.x + 8f, shield.y + 28f, shield.width - 16f, 12f), new Color(0.52f, 1f, 0.74f, 0.92f));
+        DrawTutorialLabel(new Rect(rect.x + 10f, rect.yMax - 27f, rect.width - 20f, 20f), "+ DATOS");
+    }
+
+    private void DrawTutorialEventsVisual(Rect rect, Color accent)
+    {
+        DrawSolidRect(rect, new Color(0.055f, 0.025f, 0.070f, 0.82f));
+        Rect arena = new Rect(rect.x + 13f, rect.y + 16f, rect.width - 26f, rect.height - 32f);
+        DrawTutorialFrame(arena, new Color(0.62f, 0.78f, 1f, 0.36f), 2f);
+        float sweepX = arena.x + Mathf.Repeat(Time.unscaledTime * 38f, Mathf.Max(1f, arena.width - 20f));
+        DrawSolidRect(new Rect(sweepX, arena.y, 8f, arena.height), new Color(1f, 0.35f, 0.78f, 0.70f));
+        DrawSolidRect(new Rect(sweepX + 10f, arena.y, 24f, arena.height), new Color(1f, 0.35f, 0.78f, 0.18f));
+        DrawSolidRect(new Rect(arena.xMax - 26f, arena.center.y - 22f, 18f, 44f), new Color(0.48f, 0.95f, 1f, 0.72f));
+        DrawSolidRect(new Rect(arena.x + 28f, arena.center.y - 9f, 18f, 18f), new Color(0.30f, 0.88f, 1f, 1f));
+        DrawArrowLine(new Vector2(arena.x + 52f, arena.center.y), new Vector2(arena.xMax - 34f, arena.center.y), accent);
+        DrawTutorialLabel(new Rect(rect.x + 10f, rect.yMax - 27f, rect.width - 20f, 20f), "ESCAPA");
+    }
+
+    private void DrawTutorialCheckbox(Rect rect, string label)
+    {
+        if (GUI.Button(rect, GUIContent.none, GUIStyle.none))
+        {
+            introTutorialDontShowAgain = !introTutorialDontShowAgain;
+            GlitchAudioManager.PlayMenuHover();
+        }
+
+        Rect box = new Rect(rect.x, rect.y + 5f, 22f, 22f);
+        DrawSolidRect(box, new Color(0.04f, 0.07f, 0.12f, 0.95f));
+        DrawTutorialFrame(box, new Color(0.65f, 0.92f, 1f, 0.52f), 2f);
+        if (introTutorialDontShowAgain)
+        {
+            DrawSolidRect(new Rect(box.x + 5f, box.y + 9f, 6f, 6f), new Color(1f, 0.78f, 0.42f, 1f));
+            DrawSolidRect(new Rect(box.x + 10f, box.y + 6f, 8f, 10f), new Color(1f, 0.78f, 0.42f, 1f));
+        }
+
+        GUI.Label(new Rect(box.xMax + 10f, rect.y, rect.width - 32f, rect.height), label, tutorialBodyStyle);
+    }
+
+    private void DrawKey(Rect rect, string text, Color accent)
+    {
+        DrawSolidRect(rect, new Color(0.06f, 0.10f, 0.16f, 0.95f));
+        DrawTutorialFrame(rect, new Color(accent.r, accent.g, accent.b, 0.44f), 2f);
+        GUI.Label(rect, text, BuildFittedSingleLineStyle(tutorialTinyStyle, text, rect.width - 4f, rect.height - 2f, 8));
+    }
+
+    private void DrawTutorialLabel(Rect rect, string text)
+    {
+        GUI.Label(rect, text, BuildFittedSingleLineStyle(tutorialTinyStyle, text, rect.width - 4f, rect.height - 2f, 8));
+    }
+
+    private void DrawArrowLine(Vector2 from, Vector2 to, Color color)
+    {
+        DrawSolidRect(new Rect(Mathf.Min(from.x, to.x), from.y - 2f, Mathf.Abs(to.x - from.x), 4f), new Color(color.r, color.g, color.b, 0.68f));
+        DrawSolidRect(new Rect(to.x - 12f, to.y - 8f, 12f, 4f), new Color(color.r, color.g, color.b, 0.68f));
+        DrawSolidRect(new Rect(to.x - 12f, to.y + 4f, 12f, 4f), new Color(color.r, color.g, color.b, 0.68f));
+    }
+
+    private void DrawTutorialRing(Vector2 center, float radius, Color color, float alpha)
+    {
+        float size = radius * 2f;
+        Rect ring = new Rect(center.x - radius, center.y - radius, size, size);
+        DrawTutorialFrame(ring, new Color(color.r, color.g, color.b, alpha), 3f);
+    }
+
+    private void DrawTutorialPanel(Rect rect, Color fill, Color border)
+    {
+        DrawSolidRect(rect, fill);
+        DrawTutorialFrame(rect, border, 2f);
+        DrawSolidRect(new Rect(rect.x + 8f, rect.y + 8f, 42f, 2f), new Color(border.r, border.g, border.b, 0.75f));
+        DrawSolidRect(new Rect(rect.x + 8f, rect.y + 8f, 2f, 42f), new Color(border.r, border.g, border.b, 0.75f));
+        DrawSolidRect(new Rect(rect.xMax - 50f, rect.y + 8f, 42f, 2f), new Color(border.r, border.g, border.b, 0.60f));
+        DrawSolidRect(new Rect(rect.xMax - 10f, rect.y + 8f, 2f, 42f), new Color(border.r, border.g, border.b, 0.60f));
+        DrawSolidRect(new Rect(rect.x + 8f, rect.yMax - 10f, 42f, 2f), new Color(border.r, border.g, border.b, 0.50f));
+        DrawSolidRect(new Rect(rect.x + 8f, rect.yMax - 50f, 2f, 42f), new Color(border.r, border.g, border.b, 0.50f));
+        DrawSolidRect(new Rect(rect.xMax - 50f, rect.yMax - 10f, 42f, 2f), new Color(border.r, border.g, border.b, 0.50f));
+        DrawSolidRect(new Rect(rect.xMax - 10f, rect.yMax - 50f, 2f, 42f), new Color(border.r, border.g, border.b, 0.50f));
+    }
+
+    private void DrawTutorialFrame(Rect rect, Color color, float thickness)
+    {
+        DrawSolidRect(new Rect(rect.x, rect.y, rect.width, thickness), color);
+        DrawSolidRect(new Rect(rect.x, rect.yMax - thickness, rect.width, thickness), color);
+        DrawSolidRect(new Rect(rect.x, rect.y, thickness, rect.height), color);
+        DrawSolidRect(new Rect(rect.xMax - thickness, rect.y, thickness, rect.height), color);
     }
 
     private IEnumerator PlayerDefeatSequenceRoutine(PlayerController defeatedPlayer)
@@ -2589,6 +2832,47 @@ public class GameManager : MonoBehaviour
 
         style.fontSize = minSize;
         return style;
+    }
+
+    private void EnsureTutorialStyles()
+    {
+        if (tutorialBodyStyle != null && tutorialHeaderStyle != null && tutorialTinyStyle != null)
+        {
+            return;
+        }
+
+        tutorialHeaderStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = importantFont,
+            fontSize = Mathf.RoundToInt(17f * hudScale),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleLeft,
+            clipping = TextClipping.Clip,
+            wordWrap = false
+        };
+        tutorialHeaderStyle.normal.textColor = new Color(0.94f, 0.98f, 1f, 0.98f);
+
+        tutorialBodyStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = secondaryFont,
+            fontSize = Mathf.RoundToInt(14f * hudScale),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.UpperLeft,
+            clipping = TextClipping.Clip,
+            wordWrap = true
+        };
+        tutorialBodyStyle.normal.textColor = new Color(0.82f, 0.90f, 1f, 0.92f);
+
+        tutorialTinyStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = importantFont,
+            fontSize = Mathf.RoundToInt(14f * hudScale),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            clipping = TextClipping.Clip,
+            wordWrap = false
+        };
+        tutorialTinyStyle.normal.textColor = new Color(0.96f, 0.99f, 1f, 0.98f);
     }
 
     private void EnsureUpgradeStyles()

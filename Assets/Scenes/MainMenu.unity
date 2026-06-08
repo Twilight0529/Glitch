@@ -169,10 +169,14 @@ MonoBehaviour:
   gameplaySceneName: Level1
   masterVolume: 0.8
   uiScale: 1
+  hudScale: 1.1
+  fullscreen: 0
+  vSyncEnabled: 1
   introBlackHoldDuration: 0.2
   introFadeOutDuration: 1.3
   exitFadeInDuration: 1.05
   transitionBlack: {r: 0, g: 0, b: 0, a: 1}
+  menuMotionIntensity: 1
 --- !u!114 &174515012
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -186,7 +190,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GlobalFontSettings
   importantFont: {fileID: 12800000, guid: d1c3af6db7bf49a40a71f86e15eef580, type: 3}
-  secondaryFont: {fileID: 12800000, guid: 738ad71b37eac1d438238be4c4057c22, type: 3}
+  secondaryFont: {fileID: 12800000, guid: d1c3af6db7bf49a40a71f86e15eef580, type: 3}
   persistAcrossScenes: 1
 --- !u!1 &519420028
 GameObject:
