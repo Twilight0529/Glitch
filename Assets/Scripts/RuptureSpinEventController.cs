@@ -70,8 +70,8 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
     [SerializeField] private float riftEchoLinkDuration = 4.8f;
     [SerializeField] private float riftEchoLinkTriggerRadius = 0.42f;
     [SerializeField] private float riftEchoTrapStunDuration = 1.2f;
-    [SerializeField] private float riftEchoAnchorFirewallReward = 4f;
-    [SerializeField] private float riftEchoTrapFirewallReward = 18f;
+    [SerializeField] private float riftEchoAnchorFirewallReward = 2f;
+    [SerializeField] private float riftEchoTrapFirewallReward = 11f;
     [SerializeField] private Color riftEchoTelegraphColor = new Color(0.95f, 0.42f, 1f, 0.42f);
     [SerializeField] private Color riftEchoActiveColor = new Color(0.42f, 0.96f, 1f, 0.76f);
 
@@ -82,7 +82,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
     [SerializeField] private float echoTrapRadius = 1.05f;
     [SerializeField] private float echoTrapDuration = 1.35f;
     [SerializeField] private float echoTrapStunDuration = 1.15f;
-    [SerializeField] private float echoFirewallReward = 12f;
+    [SerializeField] private float echoFirewallReward = 8f;
     [SerializeField] private float echoSuccessLabelSeconds = 1.25f;
     [SerializeField] private Color echoPortalColor = new Color(0.48f, 0.96f, 1f, 0.9f);
 

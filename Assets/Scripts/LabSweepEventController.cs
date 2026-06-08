@@ -95,7 +95,7 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
     [SerializeField] private int containmentTerminalCount = 2;
     [SerializeField] private float containmentTerminalActivationSeconds = 1.05f;
     [SerializeField] private float containmentLockDuration = 2.25f;
-    [SerializeField] private float containmentFirewallReward = 24f;
+    [SerializeField] private float containmentFirewallReward = 15f;
     [SerializeField] private float containmentSuccessLabelSeconds = 1.55f;
     [SerializeField] private float containmentTerminalAvoidRadius = 2.35f;
     [SerializeField] private Color containmentColor = new Color(0.44f, 0.96f, 1f, 0.86f);

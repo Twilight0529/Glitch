@@ -26,7 +26,7 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private float scorePickupProbeRadius = 0.34f;
     [SerializeField, Range(0f, 1f)] private float dataCoreChance = 0.18f;
     [SerializeField] private int dataCoreScoreMultiplier = 4;
-    [SerializeField] private float dataCoreFirewallChargeBonus = 18f;
+    [SerializeField] private float dataCoreFirewallChargeBonus = 10f;
     [SerializeField] private float dataCoreMinPlayerDistance = 5.2f;
 
     [Header("Mini Events")]

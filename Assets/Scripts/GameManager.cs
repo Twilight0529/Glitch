@@ -1513,7 +1513,7 @@ public class GameManager : MonoBehaviour
                 playerController.ImproveShieldDuration(1.18f);
                 break;
             case PlayerUpgradeKind.FirewallChargeGain:
-                playerController.ImproveFirewallChargeGain(1.22f);
+                playerController.ImproveFirewallChargeGain(1.16f);
                 break;
             case PlayerUpgradeKind.FirewallBurstRadius:
                 playerController.ExpandFirewallBurstRadius(0.42f);
@@ -1528,7 +1528,7 @@ public class GameManager : MonoBehaviour
                 playerController.ImproveExternalDisplacementResistance(0.78f);
                 break;
             case PlayerUpgradeKind.HazardFirewallCharge:
-                playerController.ImproveHazardFirewallCharge(3.8f);
+                playerController.ImproveHazardFirewallCharge(2.4f);
                 break;
         }
     }

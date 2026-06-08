@@ -36,16 +36,16 @@ public class PlayerController : MonoBehaviour
 
     [Header("Firewall Burst")]
     [SerializeField] private float firewallChargeMax = 100f;
-    [SerializeField] private float firewallChargeFromScorePickup = 2.2f;
-    [SerializeField] private float firewallChargeFromPowerup = 14f;
-    [SerializeField] private float firewallChargeFromObjectiveNode = 22f;
-    [SerializeField] private float firewallChargeFromParry = 18f;
+    [SerializeField] private float firewallChargeFromScorePickup = 1.25f;
+    [SerializeField] private float firewallChargeFromPowerup = 9f;
+    [SerializeField] private float firewallChargeFromObjectiveNode = 14f;
+    [SerializeField] private float firewallChargeFromParry = 11f;
     [SerializeField] private float firewallBurstRadius = 4.4f;
     [SerializeField] private float maxFirewallBurstRadius = 6.4f;
     [SerializeField] private float firewallBurstStunDuration = 0.95f;
     [SerializeField] private float maxFirewallBurstStunDuration = 1.55f;
     [SerializeField] private float firewallBurstKnockbackMultiplier = 1.35f;
-    [SerializeField] private float maxFirewallChargeGainMultiplier = 1.9f;
+    [SerializeField] private float maxFirewallChargeGainMultiplier = 1.55f;
     [SerializeField] private Color firewallBurstColor = new Color(0.46f, 0.96f, 1f, 1f);
     [SerializeField] private Color firewallReadyColor = new Color(1f, 0.90f, 0.54f, 1f);
     [SerializeField] private int firewallBurstRayCount = 18;
@@ -65,7 +65,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField, Range(0.2f, 1f)] private float minSlowDurationUpgradeMultiplier = 0.45f;
     [SerializeField, Range(0.2f, 1f)] private float minSlowSeverityUpgradeMultiplier = 0.55f;
     [SerializeField] private float hazardFirewallChargeCooldown = 0.7f;
-    [SerializeField] private float maxHazardFirewallChargeBonus = 14f;
+    [SerializeField] private float maxHazardFirewallChargeBonus = 9f;
 
     [Header("Death Explosion")]
     [SerializeField] private bool enableDeathExplosion = true;
