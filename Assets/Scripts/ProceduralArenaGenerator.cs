@@ -390,6 +390,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
     {
         ConfigureThemeMapEventController("RuptureSpinEventController", activeTheme == ArenaTheme.RuptureZone, obstaclesRoot, dynamicRoot);
         ConfigureThemeMapEventController("LabSweepEventController", activeTheme == ArenaTheme.ContainmentLab, obstaclesRoot, dynamicRoot);
+        ConfigureThemeMapEventController("LabAmbientSecurityController", activeTheme == ArenaTheme.ContainmentLab, obstaclesRoot, dynamicRoot);
         ConfigureThemeMapEventController("StorageSurgeEventController", activeTheme == ArenaTheme.StorageBay, obstaclesRoot, dynamicRoot);
         ConfigureThemeMapEventController("StorageAmbientCraneController", activeTheme == ArenaTheme.StorageBay, obstaclesRoot, dynamicRoot);
     }
