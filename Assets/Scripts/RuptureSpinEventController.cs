@@ -67,12 +67,11 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
     [SerializeField] private int riftEchoCountMax = 4;
     [SerializeField] private float riftEchoRadius = 1.35f;
     [SerializeField] private float riftEchoTelegraphSeconds = 0.85f;
-    [SerializeField] private float riftEchoPlayerSlowMultiplier = 0.68f;
-    [SerializeField] private float riftEchoPlayerSlowDuration = 0.16f;
-    [SerializeField] private float riftEchoEnemyBoostMultiplier = 1.08f;
-    [SerializeField] private float riftEchoEnemyBoostDuration = 0.36f;
-    [SerializeField] private float riftEchoEnemyBoostCooldown = 0.3f;
-    [SerializeField] private float riftEchoFirewallChargePerSecond = 8.5f;
+    [SerializeField] private float riftEchoLinkDuration = 4.8f;
+    [SerializeField] private float riftEchoLinkTriggerRadius = 0.42f;
+    [SerializeField] private float riftEchoTrapStunDuration = 1.2f;
+    [SerializeField] private float riftEchoAnchorFirewallReward = 4f;
+    [SerializeField] private float riftEchoTrapFirewallReward = 18f;
     [SerializeField] private Color riftEchoTelegraphColor = new Color(0.95f, 0.42f, 1f, 0.42f);
     [SerializeField] private Color riftEchoActiveColor = new Color(0.42f, 0.96f, 1f, 0.76f);
 
@@ -121,8 +120,10 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
     private EnemyController enemyController;
     private GameManager gameManager;
     private PlayerController playerController;
-    private readonly List<ThemedEventZoneFx> riftEchoZones = new List<ThemedEventZoneFx>();
+    private readonly List<RuptureResonanceAnchor> riftEchoAnchors = new List<RuptureResonanceAnchor>();
+    private readonly List<RuptureResonanceLink> riftEchoLinks = new List<RuptureResonanceLink>();
     private readonly List<RuptureEchoPortal> echoPortals = new List<RuptureEchoPortal>();
+    private RuptureResonanceAnchor lastTriggeredRiftEcho;
     private float echoPortalCooldownTimer;
     private float echoSuccessTimer;
     private RuptureEventVariant currentVariant = RuptureEventVariant.None;
@@ -145,7 +146,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
 
             if (GetLiveRiftEchoCount() > 0)
             {
-                return "ECOS DE RUPTURA";
+                return "CADENA DE ECOS";
             }
 
             if (!eventActive)
@@ -156,7 +157,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
             switch (currentVariant)
             {
                 case RuptureEventVariant.RiftEchoes:
-                    return "ECOS DE RUPTURA";
+                    return "CADENA DE ECOS";
                 case RuptureEventVariant.EchoPortals:
                     return "PORTALES DE ECO";
                 default:
@@ -181,7 +182,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
 
             if (GetLiveRiftEchoCount() > 0)
             {
-                return "Los ecos cargan Firewall pero alteran tu movimiento";
+                return "Toca dos ecos y cruza la anomalia por la linea";
             }
 
             if (!eventActive)
@@ -702,7 +703,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
 
     private void EndEvent(bool restoreControllers)
     {
-        if (!eventActive && snapshots.Count == 0 && riftEchoZones.Count == 0 && echoPortals.Count == 0)
+        if (!eventActive && snapshots.Count == 0 && riftEchoAnchors.Count == 0 && riftEchoLinks.Count == 0 && echoPortals.Count == 0)
         {
             return;
         }
@@ -958,31 +959,23 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         int max = Mathf.Max(min, Mathf.Max(riftEchoCountMin, riftEchoCountMax));
         int count = Random.Range(min, max + 1);
         float radius = Mathf.Max(0.4f, riftEchoRadius);
-        float activeTime = Mathf.Max(0.75f, totalDuration - Mathf.Max(0.05f, riftEchoTelegraphSeconds));
+        float lifeSeconds = Mathf.Max(1.2f, totalDuration - 0.2f);
         for (int i = 0; i < count; i++)
         {
             Vector2 position = PickRiftEchoPosition(radius, i, count);
             GameObject zone = new GameObject($"RuptureRiftEcho_{i}");
             zone.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
             zone.transform.position = new Vector3(position.x, position.y, 0f);
-            ThemedEventZoneFx fx = zone.AddComponent<ThemedEventZoneFx>();
-            fx.ConfigureCircle(
-                ThemedEventZoneFx.ZoneKind.RuptureRift,
+            RuptureResonanceAnchor anchor = zone.AddComponent<RuptureResonanceAnchor>();
+            anchor.Configure(
+                this,
+                i,
                 radius,
+                lifeSeconds,
                 riftEchoTelegraphSeconds,
-                activeTime,
                 riftEchoTelegraphColor,
-                riftEchoActiveColor,
-                riftEchoPlayerSlowMultiplier,
-                riftEchoPlayerSlowDuration,
-                riftEchoEnemyBoostMultiplier,
-                riftEchoEnemyBoostDuration,
-                riftEchoEnemyBoostCooldown,
-                0f,
-                false,
-                Vector2.right,
-                riftEchoFirewallChargePerSecond);
-            riftEchoZones.Add(fx);
+                riftEchoActiveColor);
+            riftEchoAnchors.Add(anchor);
         }
     }
 
@@ -999,25 +992,148 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         return candidate;
     }
 
+    public void NotifyRiftEchoAnchorTriggered(RuptureResonanceAnchor anchor, PlayerController player)
+    {
+        if (!eventActive ||
+            currentVariant != RuptureEventVariant.RiftEchoes ||
+            anchor == null ||
+            player == null)
+        {
+            return;
+        }
+
+        player.AddFirewallCharge(riftEchoAnchorFirewallReward);
+        GlitchAudioManager.PlayRuptureFragmentMaterialize(anchor.transform.position);
+
+        if (lastTriggeredRiftEcho != null && lastTriggeredRiftEcho != anchor)
+        {
+            CreateRiftEchoLink(lastTriggeredRiftEcho.Position, anchor.Position);
+        }
+
+        lastTriggeredRiftEcho = anchor;
+    }
+
+    public bool TryDetonateRiftEchoLink(Vector2 start, Vector2 end, float triggerRadius)
+    {
+        Vector2 midpoint = (start + end) * 0.5f;
+        bool affected = false;
+
+        if (enemyController == null)
+        {
+            enemyController = FindAnyObjectByType<EnemyController>();
+        }
+
+        if (enemyController != null &&
+            DistancePointToSegment(enemyController.GetCurrentPosition(), start, end) <= triggerRadius)
+        {
+            enemyController.ApplyContainmentLock(midpoint, riftEchoTrapStunDuration);
+            affected = true;
+        }
+
+        SplitAnomalyCloneController[] clones = FindObjectsByType<SplitAnomalyCloneController>(FindObjectsSortMode.None);
+        for (int i = 0; i < clones.Length; i++)
+        {
+            SplitAnomalyCloneController clone = clones[i];
+            if (clone == null)
+            {
+                continue;
+            }
+
+            if (DistancePointToSegment(clone.transform.position, start, end) <= triggerRadius)
+            {
+                clone.ApplyContainmentLock(riftEchoTrapStunDuration * 0.85f);
+                affected = true;
+            }
+        }
+
+        if (!affected)
+        {
+            return false;
+        }
+
+        if (playerController == null)
+        {
+            playerController = FindAnyObjectByType<PlayerController>();
+        }
+
+        playerController?.AddFirewallCharge(riftEchoTrapFirewallReward);
+        echoSuccessTimer = Mathf.Max(echoSuccessTimer, Mathf.Max(0.25f, echoSuccessLabelSeconds));
+        GlitchAudioManager.PlayRuptureRiftOpen(midpoint);
+        return true;
+    }
+
+    private void CreateRiftEchoLink(Vector2 start, Vector2 end)
+    {
+        if ((end - start).sqrMagnitude < 0.25f)
+        {
+            return;
+        }
+
+        GameObject linkGo = new GameObject("RuptureResonanceLink");
+        linkGo.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
+        RuptureResonanceLink link = linkGo.AddComponent<RuptureResonanceLink>();
+        link.Configure(
+            this,
+            start,
+            end,
+            Mathf.Max(0.4f, riftEchoLinkDuration),
+            Mathf.Max(0.08f, riftEchoLinkTriggerRadius),
+            riftEchoActiveColor,
+            riftEchoTelegraphColor);
+        riftEchoLinks.Add(link);
+    }
+
+    private static float DistancePointToSegment(Vector2 point, Vector2 a, Vector2 b)
+    {
+        Vector2 ab = b - a;
+        float lengthSq = ab.sqrMagnitude;
+        if (lengthSq <= 0.0001f)
+        {
+            return Vector2.Distance(point, a);
+        }
+
+        float t = Mathf.Clamp01(Vector2.Dot(point - a, ab) / lengthSq);
+        Vector2 closest = a + ab * t;
+        return Vector2.Distance(point, closest);
+    }
+
     private void ClearRiftEchoes()
     {
-        for (int i = riftEchoZones.Count - 1; i >= 0; i--)
+        lastTriggeredRiftEcho = null;
+        for (int i = riftEchoLinks.Count - 1; i >= 0; i--)
         {
-            ThemedEventZoneFx zone = riftEchoZones[i];
-            if (zone != null)
+            RuptureResonanceLink link = riftEchoLinks[i];
+            if (link != null)
             {
                 if (Application.isPlaying)
                 {
-                    Destroy(zone.gameObject);
+                    Destroy(link.gameObject);
                 }
                 else
                 {
-                    DestroyImmediate(zone.gameObject);
+                    DestroyImmediate(link.gameObject);
                 }
             }
         }
 
-        riftEchoZones.Clear();
+        for (int i = riftEchoAnchors.Count - 1; i >= 0; i--)
+        {
+            RuptureResonanceAnchor anchor = riftEchoAnchors[i];
+            if (anchor != null)
+            {
+                if (Application.isPlaying)
+                {
+                    Destroy(anchor.gameObject);
+                }
+                else
+                {
+                    DestroyImmediate(anchor.gameObject);
+                }
+            }
+        }
+
+        riftEchoLinks.Clear();
+        riftEchoAnchors.Clear();
     }
 
     private void SpawnEchoPortals(float totalDuration)
@@ -1165,9 +1281,17 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
     private int GetLiveRiftEchoCount()
     {
         int count = 0;
-        for (int i = 0; i < riftEchoZones.Count; i++)
+        for (int i = 0; i < riftEchoAnchors.Count; i++)
         {
-            if (riftEchoZones[i] != null)
+            if (riftEchoAnchors[i] != null)
+            {
+                count++;
+            }
+        }
+
+        for (int i = 0; i < riftEchoLinks.Count; i++)
+        {
+            if (riftEchoLinks[i] != null)
             {
                 count++;
             }
