@@ -31,7 +31,10 @@ public class GameManager : MonoBehaviour
         ShieldDuration,
         FirewallChargeGain,
         FirewallBurstRadius,
-        FirewallBurstStun
+        FirewallBurstStun,
+        HazardResistance,
+        DisplacementStabilizer,
+        HazardFirewallCharge
     }
 
     private struct UpgradeChoice
@@ -1252,7 +1255,10 @@ public class GameManager : MonoBehaviour
             PlayerUpgradeKind.ShieldDuration,
             PlayerUpgradeKind.FirewallChargeGain,
             PlayerUpgradeKind.FirewallBurstRadius,
-            PlayerUpgradeKind.FirewallBurstStun
+            PlayerUpgradeKind.FirewallBurstStun,
+            PlayerUpgradeKind.HazardResistance,
+            PlayerUpgradeKind.DisplacementStabilizer,
+            PlayerUpgradeKind.HazardFirewallCharge
         };
 
         int desired = Mathf.Clamp(upgradeOptionsShown, 1, pool.Count);
@@ -1375,6 +1381,36 @@ public class GameManager : MonoBehaviour
                     rarity = "CRITICO",
                     accent = new Color(1f, 0.54f, 0.72f, 1f)
                 };
+            case PlayerUpgradeKind.HazardResistance:
+                return new UpgradeChoice
+                {
+                    kind = kind,
+                    title = "Filtro Ambiental",
+                    description = "Reduce la duracion e intensidad de slows provocados por la arena.",
+                    category = "SUPERVIVENCIA",
+                    rarity = "INESTABLE",
+                    accent = new Color(0.52f, 1f, 0.86f, 1f)
+                };
+            case PlayerUpgradeKind.DisplacementStabilizer:
+                return new UpgradeChoice
+                {
+                    kind = kind,
+                    title = "Anclaje Inercial",
+                    description = "Reduce empujes, corrientes y desplazamientos externos del mapa.",
+                    category = "MOVIMIENTO",
+                    rarity = "INESTABLE",
+                    accent = new Color(0.50f, 0.72f, 1f, 1f)
+                };
+            case PlayerUpgradeKind.HazardFirewallCharge:
+                return new UpgradeChoice
+                {
+                    kind = kind,
+                    title = "Reciclaje de Riesgo",
+                    description = "Los slows y empujes de la arena cargan un poco el Firewall.",
+                    category = "BUILD",
+                    rarity = "CRITICO",
+                    accent = new Color(1f, 0.72f, 0.40f, 1f)
+                };
             default:
                 return new UpgradeChoice
                 {
@@ -1456,6 +1492,15 @@ public class GameManager : MonoBehaviour
                 break;
             case PlayerUpgradeKind.FirewallBurstStun:
                 playerController.ImproveFirewallBurstStun(0.22f);
+                break;
+            case PlayerUpgradeKind.HazardResistance:
+                playerController.ImproveHazardResistance(0.82f);
+                break;
+            case PlayerUpgradeKind.DisplacementStabilizer:
+                playerController.ImproveExternalDisplacementResistance(0.78f);
+                break;
+            case PlayerUpgradeKind.HazardFirewallCharge:
+                playerController.ImproveHazardFirewallCharge(3.8f);
                 break;
         }
     }

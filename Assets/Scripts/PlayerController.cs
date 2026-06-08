@@ -59,6 +59,14 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float trailEmissionAtMaxSpeed = 42f;
     [SerializeField] private float trailMinVelocityToEmit = 1.1f;
 
+    // Mejoras acumulables que permiten adaptar al jugador a eventos agresivos de la arena.
+    [Header("Environmental Upgrades")]
+    [SerializeField, Range(0.2f, 1f)] private float minExternalDisplacementMultiplier = 0.45f;
+    [SerializeField, Range(0.2f, 1f)] private float minSlowDurationUpgradeMultiplier = 0.45f;
+    [SerializeField, Range(0.2f, 1f)] private float minSlowSeverityUpgradeMultiplier = 0.55f;
+    [SerializeField] private float hazardFirewallChargeCooldown = 0.7f;
+    [SerializeField] private float maxHazardFirewallChargeBonus = 14f;
+
     [Header("Death Explosion")]
     [SerializeField] private bool enableDeathExplosion = true;
     [SerializeField] private float deathChargeDuration = 0.26f;
@@ -90,6 +98,11 @@ public class PlayerController : MonoBehaviour
     private float movementSlowMultiplier = 1f;
     private float shieldTimer;
     private float shieldDurationMultiplier = 1f;
+    private float externalDisplacementUpgradeMultiplier = 1f;
+    private float movementSlowDurationUpgradeMultiplier = 1f;
+    private float movementSlowSeverityUpgradeMultiplier = 1f;
+    private float hazardFirewallChargeBonus;
+    private float hazardFirewallChargeTimer;
     private SpriteRenderer shieldRenderer;
     private GameObject shieldVisual;
     private float parryTimer;
@@ -307,9 +320,11 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
-        Vector2 target = rb.position + delta;
+        Vector2 adjustedDelta = delta * Mathf.Clamp(externalDisplacementUpgradeMultiplier, minExternalDisplacementMultiplier, 1f);
+        Vector2 target = rb.position + adjustedDelta;
         rb.position = target;
         transform.position = new Vector3(target.x, target.y, transform.position.z);
+        TryConvertHazardPressureToFirewall();
     }
 
     public void TeleportTo(Vector2 position)
@@ -337,10 +352,15 @@ public class PlayerController : MonoBehaviour
 
     public void ApplyMovementSlow(float multiplier, float duration)
     {
+        // La resistencia ambiental acerca el slow a velocidad normal y acorta su duracion.
+        float clampedMultiplier = Mathf.Clamp(multiplier, minSlowMultiplier, 1f);
+        float mitigatedMultiplier = Mathf.Lerp(1f, clampedMultiplier, Mathf.Clamp01(movementSlowSeverityUpgradeMultiplier));
+        float mitigatedDuration = Mathf.Max(0.05f, duration * Mathf.Clamp(movementSlowDurationUpgradeMultiplier, minSlowDurationUpgradeMultiplier, 1f));
         movementSlowMultiplier = Mathf.Min(
             movementSlowTimer > 0f ? movementSlowMultiplier : 1f,
-            Mathf.Clamp(multiplier, minSlowMultiplier, 1f));
-        movementSlowTimer = Mathf.Max(movementSlowTimer, Mathf.Max(0.05f, duration));
+            Mathf.Clamp(mitigatedMultiplier, minSlowMultiplier, 1f));
+        movementSlowTimer = Mathf.Max(movementSlowTimer, mitigatedDuration);
+        TryConvertHazardPressureToFirewall();
     }
 
     public bool TryAbsorbHit()
@@ -395,6 +415,37 @@ public class PlayerController : MonoBehaviour
             shieldDurationMultiplier * Mathf.Max(1f, multiplier));
     }
 
+    public void ImproveHazardResistance(float multiplier)
+    {
+        float clamped = Mathf.Clamp(multiplier, 0.2f, 1f);
+        movementSlowDurationUpgradeMultiplier = Mathf.Max(
+            Mathf.Max(0.05f, minSlowDurationUpgradeMultiplier),
+            movementSlowDurationUpgradeMultiplier * clamped);
+        movementSlowSeverityUpgradeMultiplier = Mathf.Max(
+            Mathf.Max(0.05f, minSlowSeverityUpgradeMultiplier),
+            movementSlowSeverityUpgradeMultiplier * clamped);
+
+        if (movementSlowTimer > 0f)
+        {
+            movementSlowTimer *= clamped;
+            movementSlowMultiplier = Mathf.Lerp(1f, movementSlowMultiplier, Mathf.Clamp01(movementSlowSeverityUpgradeMultiplier));
+        }
+    }
+
+    public void ImproveExternalDisplacementResistance(float multiplier)
+    {
+        externalDisplacementUpgradeMultiplier = Mathf.Max(
+            Mathf.Max(0.05f, minExternalDisplacementMultiplier),
+            externalDisplacementUpgradeMultiplier * Mathf.Clamp(multiplier, 0.2f, 1f));
+    }
+
+    public void ImproveHazardFirewallCharge(float bonus)
+    {
+        hazardFirewallChargeBonus = Mathf.Min(
+            Mathf.Max(0f, maxHazardFirewallChargeBonus),
+            hazardFirewallChargeBonus + Mathf.Max(0f, bonus));
+    }
+
     public void AddFirewallChargeFromScore(int scorePoints)
     {
         AddFirewallCharge(firewallChargeFromScorePickup * Mathf.Max(1, scorePoints));
@@ -445,6 +496,18 @@ public class PlayerController : MonoBehaviour
             GlitchAudioManager.PlayFirewallReady(transform.position);
             SpawnFirewallReadyFx();
         }
+    }
+
+    private void TryConvertHazardPressureToFirewall()
+    {
+        // El riesgo ambiental puede transformarse en recurso, pero con cooldown para evitar carga gratis por frame.
+        if (hazardFirewallChargeBonus <= 0f || hazardFirewallChargeTimer > 0f)
+        {
+            return;
+        }
+
+        AddFirewallCharge(hazardFirewallChargeBonus);
+        hazardFirewallChargeTimer = Mathf.Max(0.05f, hazardFirewallChargeCooldown);
     }
 
     public bool TryActivateFirewallBurst()
@@ -607,6 +670,15 @@ public class PlayerController : MonoBehaviour
             {
                 movementSlowTimer = 0f;
                 movementSlowMultiplier = 1f;
+            }
+        }
+
+        if (hazardFirewallChargeTimer > 0f)
+        {
+            hazardFirewallChargeTimer -= Time.deltaTime;
+            if (hazardFirewallChargeTimer < 0f)
+            {
+                hazardFirewallChargeTimer = 0f;
             }
         }
     }
