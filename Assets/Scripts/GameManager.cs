@@ -250,6 +250,7 @@ public class GameManager : MonoBehaviour
     private int contractDataBonusEarned;
     private string achievementToastTitle;
     private string achievementToastDescription;
+    private string achievementToastHeader;
     private int achievementToastReward;
     private float achievementToastTimer;
     private bool upgradeSelectionOpen;
@@ -362,6 +363,8 @@ public class GameManager : MonoBehaviour
 
         SurvivalTime += Time.deltaTime;
         TrackSurvivalAchievement();
+        TrySetDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Survival, Mathf.FloorToInt(SurvivalTime));
+        TrySetDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Score, CurrentScore);
         UpdateRunContracts();
         if (ShouldOpenUpgradeSelection())
         {
@@ -428,24 +431,28 @@ public class GameManager : MonoBehaviour
         }
 
         NotifyContractProgress(RunContractKind.Score, amount);
+        TrySetDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Score, CurrentScore);
     }
 
     public void NotifyScorePickupCollected(int scoreValue)
     {
         NotifyContractProgress(RunContractKind.Pickups, 1);
         TryAdvanceAchievementCounter(AchievementStorage.CounterPickups, 1, 25, AchievementStorage.PickupsTwentyFiveId);
+        TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Pickups, 1);
     }
 
     public void NotifyParrySuccess()
     {
         NotifyContractProgress(RunContractKind.Parry, 1);
         TryAdvanceAchievementCounter(AchievementStorage.CounterParries, 1, 5, AchievementStorage.ParryFiveId);
+        TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Parry, 1);
     }
 
     public void NotifyFirewallBurstActivated()
     {
         NotifyContractProgress(RunContractKind.FirewallBurst, 1);
         TryUnlockAchievement(AchievementStorage.FirstFirewallBurstId);
+        TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.FirewallBurst, 1);
     }
 
     public void NotifyRuptureEchoTrapSuccess()
@@ -608,6 +615,7 @@ public class GameManager : MonoBehaviour
         }
 
         TryUnlockAchievement(AchievementStorage.FirstContractId);
+        TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Contract, 1);
         GlitchAudioManager.PlayUpgradeSelect();
     }
 
@@ -643,11 +651,40 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    private void TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind kind, int amount)
+    {
+        DailyChallengeStorage.DailyChallenge challenge;
+        if (DailyChallengeStorage.AddProgress(kind, amount, out challenge))
+        {
+            ShowDailyChallengeToast(challenge);
+        }
+    }
+
+    private void TrySetDailyChallengeProgress(DailyChallengeStorage.ChallengeKind kind, int progress)
+    {
+        DailyChallengeStorage.DailyChallenge challenge;
+        if (DailyChallengeStorage.SetProgress(kind, progress, out challenge))
+        {
+            ShowDailyChallengeToast(challenge);
+        }
+    }
+
     private void ShowAchievementToast(AchievementStorage.AchievementDefinition achievement)
     {
+        achievementToastHeader = "LOGRO DESBLOQUEADO";
         achievementToastTitle = achievement.title;
         achievementToastDescription = achievement.description;
         achievementToastReward = Mathf.Max(0, achievement.dataReward);
+        achievementToastTimer = 4.2f;
+        GlitchAudioManager.PlayUpgradeSelect();
+    }
+
+    private void ShowDailyChallengeToast(DailyChallengeStorage.DailyChallenge challenge)
+    {
+        achievementToastHeader = "OPERACION COMPLETADA";
+        achievementToastTitle = challenge.title;
+        achievementToastDescription = challenge.description;
+        achievementToastReward = Mathf.Max(0, challenge.dataReward);
         achievementToastTimer = 4.2f;
         GlitchAudioManager.PlayUpgradeSelect();
     }
@@ -849,6 +886,7 @@ public class GameManager : MonoBehaviour
         contractDataBonusEarned = 0;
         achievementToastTitle = string.Empty;
         achievementToastDescription = string.Empty;
+        achievementToastHeader = string.Empty;
         achievementToastReward = 0;
         achievementToastTimer = 0f;
         upgradeSelectionOpen = false;
@@ -2278,7 +2316,8 @@ public class GameManager : MonoBehaviour
 
         Color old = GUI.color;
         GUI.color = new Color(1f, 1f, 1f, alpha);
-        GUI.Label(new Rect(panel.x + (62f * s), panel.y + (7f * s), panel.width - (122f * s), 18f * s), "LOGRO DESBLOQUEADO", hudLabelStyle);
+        string header = string.IsNullOrWhiteSpace(achievementToastHeader) ? "LOGRO DESBLOQUEADO" : achievementToastHeader;
+        GUI.Label(new Rect(panel.x + (62f * s), panel.y + (7f * s), panel.width - (122f * s), 18f * s), header, hudLabelStyle);
         GUI.Label(
             new Rect(panel.x + (62f * s), panel.y + (25f * s), panel.width - (122f * s), 25f * s),
             achievementToastTitle,

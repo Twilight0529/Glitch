@@ -398,6 +398,7 @@ public class GameMenuController : MonoBehaviour
         {
             GUILayout.Label(recordLine, rankingStatusStyle);
         }
+        GUILayout.Label($"Operacion diaria: {DailyChallengeStorage.CurrentSummary}", rankingStatusStyle);
         GUILayout.Label($"Zona de contencion: {level}", bodyStyle);
 
         GUILayout.Space(14f);

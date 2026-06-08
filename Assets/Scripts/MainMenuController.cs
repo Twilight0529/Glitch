@@ -38,6 +38,7 @@ public class MainMenuController : MonoBehaviour
 
     private bool showOptions;
     private bool showUnlocks;
+    private bool showStats;
     private bool showDeveloperMenu;
     private bool queuedGameplayLoad;
     private int selectedUnlockIndex;
@@ -104,6 +105,7 @@ public class MainMenuController : MonoBehaviour
             showDeveloperMenu = !showDeveloperMenu;
             showOptions = false;
             showUnlocks = false;
+            showStats = false;
             GlitchAudioManager.PlayMenuToggle();
         }
     }
@@ -116,6 +118,10 @@ public class MainMenuController : MonoBehaviour
         if (showOptions)
         {
             DrawOptionsMenu();
+        }
+        else if (showStats)
+        {
+            DrawStatsMenu();
         }
         else if (showDeveloperMenu)
         {
@@ -181,17 +187,12 @@ public class MainMenuController : MonoBehaviour
         DrawSolidRect(new Rect(markerX, panel.y + 109f, 26f, 3f), new Color(0.90f, 0.97f, 1f, 0.35f));
 
         GUI.Label(new Rect(panel.x + 18f, panel.y + 114f, panel.width - 36f, 22f), $"Datos Recuperados: {MetaProgressionStorage.CurrentData}", paragraphStyle);
-        MetaProgressionStorage.CareerStats stats = MetaProgressionStorage.Stats;
-        string profileLine = stats.totalRuns > 0
-            ? $"Perfil: {stats.totalRuns} runs | Mejor {stats.bestScore} pts | {stats.bestSurvivalTime:F1}s"
-            : "Perfil: sin runs registradas";
-        GUI.Label(new Rect(panel.x + 18f, panel.y + 132f, panel.width - 36f, 22f), profileLine, paragraphStyle);
-
-        float buttonY = panel.y + 156f;
+        float buttonY = panel.y + 144f;
         Rect playRect = new Rect(panel.x + 18f, buttonY, panel.width - 36f, 44f);
         Rect unlocksRect = new Rect(panel.x + 18f, buttonY + 54f, panel.width - 36f, 38f);
-        Rect optionsRect = new Rect(panel.x + 18f, buttonY + 102f, panel.width - 36f, 38f);
-        Rect exitRect = new Rect(panel.x + 18f, buttonY + 150f, panel.width - 36f, 38f);
+        Rect statsRect = new Rect(panel.x + 18f, buttonY + 102f, panel.width - 36f, 38f);
+        Rect optionsRect = new Rect(panel.x + 18f, buttonY + 150f, panel.width - 36f, 38f);
+        Rect exitRect = new Rect(panel.x + 18f, buttonY + 198f, panel.width - 36f, 38f);
 
         if (DrawAnimatedMenuButton(playRect, "Jugar", true))
         {
@@ -200,11 +201,19 @@ public class MainMenuController : MonoBehaviour
         if (DrawAnimatedMenuButton(unlocksRect, "Desbloqueos"))
         {
             showOptions = false;
+            showStats = false;
             showUnlocks = true;
+        }
+        if (DrawAnimatedMenuButton(statsRect, "Estadisticas"))
+        {
+            showOptions = false;
+            showUnlocks = false;
+            showStats = true;
         }
         if (DrawAnimatedMenuButton(optionsRect, "Opciones"))
         {
             showUnlocks = false;
+            showStats = false;
             showOptions = true;
         }
         if (DrawAnimatedMenuButton(exitRect, "Salir"))
@@ -311,7 +320,7 @@ public class MainMenuController : MonoBehaviour
     private void GetMainMenuLayout(out Rect mainPanel, out Rect rankingPanel, out bool sideBySide)
     {
         float mainW = 390f;
-        float mainH = 360f;
+        float mainH = 400f;
         float rankW = 400f;
         float rankH = 320f;
         float gap = 22f;
@@ -389,6 +398,96 @@ public class MainMenuController : MonoBehaviour
         }
 
         GUILayout.EndArea();
+    }
+
+    private void DrawStatsMenu()
+    {
+        DrawScreenFade(0.46f);
+        float bob = Mathf.Sin(Time.unscaledTime * 1.2f + 0.35f) * 5f;
+        Rect panel = CenterRect(Mathf.Min(720f, Screen.width - 42f), Mathf.Min(520f, Screen.height - 42f));
+        panel.y += bob;
+        DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.92f), new Color(0.54f, 0.76f, 1f, 0.55f));
+        DrawPanelFx(panel, new Color(0.50f, 0.92f, 1f, 1f), 0.10f);
+
+        Rect area = new Rect(panel.x + 18f, panel.y + 16f, panel.width - 36f, panel.height - 28f);
+        GUI.Label(new Rect(area.x, area.y, area.width, 42f), "Estadisticas", panelTitleStyle);
+        DrawSolidRect(new Rect(area.x, area.y + 50f, area.width, 1f), new Color(0.70f, 0.90f, 1f, 0.24f));
+
+        MetaProgressionStorage.CareerStats stats = MetaProgressionStorage.Stats;
+        MetaProgressionStorage.RunReward last = MetaProgressionStorage.LastRunReward;
+        DailyChallengeStorage.DailyChallenge daily = DailyChallengeStorage.CurrentChallenge;
+        int dailyProgress = DailyChallengeStorage.CurrentProgress;
+        bool dailyComplete = DailyChallengeStorage.IsCompleted;
+
+        float footerH = 52f;
+        Rect contentArea = new Rect(area.x, area.y + 66f, area.width, area.height - 122f - footerH);
+        Rect left = new Rect(contentArea.x, contentArea.y, contentArea.width * 0.48f, contentArea.height);
+        Rect right = new Rect(left.xMax + 18f, left.y, area.width - left.width - 18f, left.height);
+
+        DrawStatsSection(left, "Perfil", new Color(0.45f, 0.90f, 1f, 1f));
+        DrawStatLine(left, 34f, "Datos recuperados", MetaProgressionStorage.CurrentData.ToString());
+        DrawStatLine(left, 64f, "Runs totales", stats.totalRuns.ToString());
+        DrawStatLine(left, 94f, "Mejor puntuacion", $"{stats.bestScore} pts");
+        DrawStatLine(left, 124f, "Mejor supervivencia", $"{stats.bestSurvivalTime:F1}s");
+        DrawStatLine(left, 154f, "Puntos acumulados", stats.totalScore.ToString());
+        DrawStatLine(left, 184f, "Tiempo acumulado", FormatDuration(stats.totalSurvivalTime));
+
+        Rect records = new Rect(left.x, left.y + 230f, left.width, left.height - 230f);
+        DrawStatsSection(records, "Records por zona", new Color(0.74f, 0.88f, 1f, 1f));
+        DrawStatLine(records, 34f, "Lab", MetaProgressionStorage.GetArenaRecordLabel("Lab"));
+        DrawStatLine(records, 64f, "Storage", MetaProgressionStorage.GetArenaRecordLabel("Storage"));
+        DrawStatLine(records, 94f, "Rupture", MetaProgressionStorage.GetArenaRecordLabel("Rupture"));
+
+        DrawStatsSection(right, "Operacion diaria", dailyComplete ? new Color(1f, 0.82f, 0.46f, 1f) : new Color(0.95f, 0.58f, 1f, 1f));
+        GUI.Label(new Rect(right.x + 14f, right.y + 34f, right.width - 28f, 28f), daily.title, rankingTitleStyle);
+        GUIStyle wrapped = new GUIStyle(paragraphStyle)
+        {
+            wordWrap = true,
+            alignment = TextAnchor.UpperLeft,
+            clipping = TextClipping.Clip
+        };
+        GUI.Label(new Rect(right.x + 14f, right.y + 70f, right.width - 28f, 54f), daily.description, wrapped);
+        DrawStatLine(right, 130f, daily.progressLabel, dailyComplete ? "COMPLETADA" : $"{dailyProgress}/{daily.target}");
+
+        Rect bar = new Rect(right.x + 14f, right.y + 164f, right.width - 28f, 10f);
+        float normalized = dailyComplete ? 1f : Mathf.Clamp01(dailyProgress / Mathf.Max(1f, daily.target));
+        DrawSolidRect(bar, new Color(0.04f, 0.06f, 0.10f, 0.92f));
+        Color dailyAccent = dailyComplete ? new Color(1f, 0.82f, 0.46f, 0.86f) : new Color(0.95f, 0.58f, 1f, 0.78f);
+        DrawSolidRect(new Rect(bar.x, bar.y, bar.width * normalized, bar.height), dailyAccent);
+        DrawStatLine(right, 184f, "Recompensa", dailyComplete ? "Cobrada" : $"+{daily.dataReward} Datos");
+
+        Rect lastRun = new Rect(right.x, right.y + 218f, right.width, Mathf.Max(146f, right.height - 218f));
+        DrawStatsSection(lastRun, "Ultima run", new Color(1f, 0.76f, 0.50f, 1f));
+        string lastSummary = last.score > 0
+            ? $"{last.score} pts | {last.survivalTime:F1}s | {last.performanceGrade}"
+            : "Sin runs registradas";
+        DrawStatLine(lastRun, 30f, "Resultado", lastSummary);
+        DrawStatLine(lastRun, 58f, "Zona", last.levelLabel);
+        DrawStatLine(lastRun, 86f, "Datos ganados", $"+{last.dataEarned}");
+        DrawStatLine(lastRun, 114f, "Bonus contratos", $"+{last.contractBonusData}");
+
+        Rect backRect = new Rect(area.xMax - 132f, area.yMax - 36f, 132f, 34f);
+        if (DrawAnimatedMenuButton(backRect, "Volver", true))
+        {
+            showStats = false;
+        }
+    }
+
+    private void DrawStatsSection(Rect rect, string title, Color accent)
+    {
+        DrawSolidRect(rect, new Color(0.025f, 0.045f, 0.085f, 0.72f));
+        DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 2f), new Color(accent.r, accent.g, accent.b, 0.55f));
+        GUI.Label(new Rect(rect.x + 12f, rect.y + 6f, rect.width - 24f, 24f), title, rankingRowStyle);
+    }
+
+    private void DrawStatLine(Rect container, float yOffset, string label, string value)
+    {
+        Rect row = new Rect(container.x + 14f, container.y + yOffset, container.width - 28f, 26f);
+        DrawSolidRect(row, new Color(1f, 1f, 1f, 0.025f));
+        Rect labelRect = new Rect(row.x + 6f, row.y, row.width * 0.58f, row.height);
+        Rect valueRect = new Rect(row.x + row.width * 0.60f, row.y, row.width * 0.38f, row.height);
+        GUI.Label(labelRect, label, BuildFittedSingleLineStyle(paragraphStyle, label, labelRect.width, labelRect.height, 10));
+        GUI.Label(valueRect, value, BuildFittedSingleLineStyle(rankingScoreStyle, value, valueRect.width, valueRect.height, 10));
     }
 
     private void DrawUnlocksMenu()
@@ -528,6 +627,22 @@ public class MainMenuController : MonoBehaviour
         if (GUILayout.Button("Reset logros", buttonStyle, GUILayout.Height(34f)))
         {
             AchievementStorage.ResetAchievements();
+            GlitchAudioManager.PlayMenuBack();
+        }
+        GUILayout.EndHorizontal();
+
+        GUILayout.Space(6f);
+        GUILayout.Label($"Operacion diaria: {DailyChallengeStorage.CurrentSummary}", paragraphStyle);
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Completar diaria", buttonStyle, GUILayout.Height(34f)))
+        {
+            DailyChallengeStorage.DailyChallenge challenge;
+            DailyChallengeStorage.CompleteCurrentChallenge(out challenge);
+            GlitchAudioManager.PlayUpgradeSelect();
+        }
+        if (GUILayout.Button("Reset diaria", buttonStyle, GUILayout.Height(34f)))
+        {
+            DailyChallengeStorage.ResetCurrentChallenge();
             GlitchAudioManager.PlayMenuBack();
         }
         GUILayout.EndHorizontal();
@@ -1469,6 +1584,21 @@ public class MainMenuController : MonoBehaviour
 
         style.fontSize = minSize;
         return style;
+    }
+
+    private static string FormatDuration(float seconds)
+    {
+        int total = Mathf.Max(0, Mathf.FloorToInt(seconds));
+        int minutes = total / 60;
+        int secs = total % 60;
+        if (minutes >= 60)
+        {
+            int hours = minutes / 60;
+            minutes %= 60;
+            return $"{hours}h {minutes}m";
+        }
+
+        return $"{minutes}m {secs}s";
     }
 
     private void DrawPanel(Rect rect, Color fill, Color border)
