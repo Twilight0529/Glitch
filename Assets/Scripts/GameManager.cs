@@ -132,6 +132,8 @@ public class GameManager : MonoBehaviour
     public bool IsGameOver { get; private set; }
     public bool IsRunActive => runPhase == RunPhase.Active && !IsGameOver && !playerDefeatSequenceRunning;
     public bool IsUpgradeSelectionOpen => upgradeSelectionOpen;
+    public MetaProgressionStorage.RunReward LastMetaReward { get; private set; }
+    public bool HasAwardedMetaReward { get; private set; }
     public float SurvivalTime { get; private set; }
     public float DifficultyMultiplier => 1f + (SurvivalTime * difficultyRampPerSecond);
     public int CurrentScore => Mathf.Max(0, Mathf.FloorToInt(SurvivalTime * Mathf.Max(0f, pointsPerSecond)) + bonusScore);
@@ -328,6 +330,12 @@ public class GameManager : MonoBehaviour
 
         IsGameOver = true;
         runPhase = RunPhase.Active;
+        if (!HasAwardedMetaReward)
+        {
+            LastMetaReward = MetaProgressionStorage.AwardRun(CurrentScore, SurvivalTime, levelType);
+            HasAwardedMetaReward = true;
+        }
+
         Debug.Log($"GAME OVER | Time Survived: {SurvivalTime:F2}s");
     }
 
@@ -570,6 +578,8 @@ public class GameManager : MonoBehaviour
         upgradePickCount = 0;
         playerDefeatSequenceRunning = false;
         playerDefeatSequenceRoutine = null;
+        HasAwardedMetaReward = false;
+        LastMetaReward = default;
         breachSensitiveSuppressionTimer = 0f;
         eventPressureCooldownTimer = 0f;
         eventPressureReservations.Clear();
@@ -1260,14 +1270,16 @@ public class GameManager : MonoBehaviour
             PlayerUpgradeKind.ParryRadius,
             PlayerUpgradeKind.ShieldDuration,
             PlayerUpgradeKind.FirewallChargeGain,
-            PlayerUpgradeKind.FirewallBurstRadius,
-            PlayerUpgradeKind.FirewallBurstStun,
-            PlayerUpgradeKind.HazardResistance,
-            PlayerUpgradeKind.DisplacementStabilizer,
-            PlayerUpgradeKind.HazardFirewallCharge
+            PlayerUpgradeKind.FirewallBurstRadius
         };
 
-        int desired = Mathf.Clamp(upgradeOptionsShown, 1, pool.Count);
+        AddUnlockedUpgrade(pool, PlayerUpgradeKind.FirewallBurstStun, MetaProgressionStorage.UnlockFirewallBurstStun);
+        AddUnlockedUpgrade(pool, PlayerUpgradeKind.HazardResistance, MetaProgressionStorage.UnlockHazardResistance);
+        AddUnlockedUpgrade(pool, PlayerUpgradeKind.DisplacementStabilizer, MetaProgressionStorage.UnlockDisplacementStabilizer);
+        AddUnlockedUpgrade(pool, PlayerUpgradeKind.HazardFirewallCharge, MetaProgressionStorage.UnlockHazardFirewallCharge);
+
+        int optionBonus = MetaProgressionStorage.IsUnlocked(MetaProgressionStorage.UnlockExtraUpgradeChoice) ? 1 : 0;
+        int desired = Mathf.Clamp(upgradeOptionsShown + optionBonus, 1, pool.Count);
         while (currentUpgradeChoices.Count < desired && pool.Count > 0)
         {
             int index = Random.Range(0, pool.Count);
@@ -1287,6 +1299,14 @@ public class GameManager : MonoBehaviour
             upgradeSelectedAccent = Color.white;
             Time.timeScale = 0f;
             GlitchAudioManager.PlayUpgradeOpen();
+        }
+    }
+
+    private static void AddUnlockedUpgrade(List<PlayerUpgradeKind> pool, PlayerUpgradeKind kind, string unlockId)
+    {
+        if (MetaProgressionStorage.IsUnlocked(unlockId))
+        {
+            pool.Add(kind);
         }
     }
 

@@ -189,9 +189,25 @@ public class PlayerController : MonoBehaviour
             baseBodyColor = bodyRenderer.color;
         }
 
+        ApplySelectedMetaSkin();
         EnsureShieldVisual();
         EnsureParryVisual();
         EnsureMovementTrail();
+    }
+
+    private void ApplySelectedMetaSkin()
+    {
+        if (!MetaProgressionStorage.TryGetSelectedSkinColors(out Color bodyColor, out Color selectedTrailColor))
+        {
+            return;
+        }
+
+        trailColor = selectedTrailColor;
+        baseBodyColor = bodyColor;
+        if (bodyRenderer != null)
+        {
+            bodyRenderer.color = bodyColor;
+        }
     }
 
     private void Update()

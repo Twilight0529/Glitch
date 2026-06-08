@@ -350,7 +350,7 @@ public class GameMenuController : MonoBehaviour
         DrawDefeatCinematicIntro(defeatElapsed, introT);
         DrawDefeatBackdrop(pulse, hudGlitch, t);
 
-        Rect panel = CenterRect(500f, 470f);
+        Rect panel = CenterRect(Mathf.Min(540f, Screen.width - 48f), Mathf.Min(540f, Screen.height - 48f));
         float panelScale = Mathf.Lerp(0.90f, 1f, introEase);
         if (introT < 1f)
         {
@@ -382,9 +382,13 @@ public class GameMenuController : MonoBehaviour
         float time = gameManager != null ? gameManager.SurvivalTime : 0f;
         float threat = gameManager != null ? gameManager.DifficultyMultiplier : 1f;
         int score = gameManager != null ? gameManager.CurrentScore : 0;
+        MetaProgressionStorage.RunReward reward = gameManager != null && gameManager.HasAwardedMetaReward
+            ? gameManager.LastMetaReward
+            : MetaProgressionStorage.LastRunReward;
 
         GUILayout.Label($"Tiempo sobrevivido: {time:F1}s", bodyStyle);
         GUILayout.Label($"Puntuacion final: {score}", bodyStyle);
+        GUILayout.Label($"Datos recuperados: +{reward.dataEarned}  |  Total: {reward.totalData}", bodyStyle);
         GUILayout.Label($"Nivel de amenaza final: x{threat:F2}", bodyStyle);
         GUILayout.Label($"Zona de contencion: {level}", bodyStyle);
 

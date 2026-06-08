@@ -34,7 +34,10 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private float menuMotionIntensity = 1f;
 
     private bool showOptions;
+    private bool showUnlocks;
     private bool queuedGameplayLoad;
+    private int selectedUnlockIndex;
+    private string selectedUnlockSection = MetaProgressionStorage.SectionRunUpgrades;
     private Font titleFont;
     private Font uiFont;
     private GUIStyle titleStyle;
@@ -59,6 +62,8 @@ public class MainMenuController : MonoBehaviour
     private float clearRankingConfirmExpireAt;
     private string rankingActionMessage = string.Empty;
     private float rankingActionMessageExpireAt;
+    private string unlockActionMessage = string.Empty;
+    private float unlockActionMessageExpireAt;
     private readonly Dictionary<string, bool> buttonHoverFlags = new Dictionary<string, bool>();
 
     private void Awake()
@@ -100,6 +105,10 @@ public class MainMenuController : MonoBehaviour
         {
             DrawOptionsMenu();
         }
+        else if (showUnlocks)
+        {
+            DrawUnlocksMenu();
+        }
         else
         {
             DrawMainMenu();
@@ -135,17 +144,26 @@ public class MainMenuController : MonoBehaviour
         float markerX = panel.x + 42f + Mathf.Repeat(Time.unscaledTime * 90f, Mathf.Max(1f, panel.width - 88f));
         DrawSolidRect(new Rect(markerX, panel.y + 109f, 26f, 3f), new Color(0.90f, 0.97f, 1f, 0.35f));
 
-        float buttonY = panel.y + 132f;
+        GUI.Label(new Rect(panel.x + 18f, panel.y + 114f, panel.width - 36f, 22f), $"Datos Recuperados: {MetaProgressionStorage.CurrentData}", paragraphStyle);
+
+        float buttonY = panel.y + 144f;
         Rect playRect = new Rect(panel.x + 18f, buttonY, panel.width - 36f, 44f);
-        Rect optionsRect = new Rect(panel.x + 18f, buttonY + 54f, panel.width - 36f, 38f);
-        Rect exitRect = new Rect(panel.x + 18f, buttonY + 102f, panel.width - 36f, 38f);
+        Rect unlocksRect = new Rect(panel.x + 18f, buttonY + 54f, panel.width - 36f, 38f);
+        Rect optionsRect = new Rect(panel.x + 18f, buttonY + 102f, panel.width - 36f, 38f);
+        Rect exitRect = new Rect(panel.x + 18f, buttonY + 150f, panel.width - 36f, 38f);
 
         if (DrawAnimatedMenuButton(playRect, "Jugar", true))
         {
             StartGameplay();
         }
+        if (DrawAnimatedMenuButton(unlocksRect, "Desbloqueos"))
+        {
+            showOptions = false;
+            showUnlocks = true;
+        }
         if (DrawAnimatedMenuButton(optionsRect, "Opciones"))
         {
+            showUnlocks = false;
             showOptions = true;
         }
         if (DrawAnimatedMenuButton(exitRect, "Salir"))
@@ -330,6 +348,298 @@ public class MainMenuController : MonoBehaviour
         }
 
         GUILayout.EndArea();
+    }
+
+    private void DrawUnlocksMenu()
+    {
+        DrawScreenFade(0.46f);
+        float bob = Mathf.Sin(Time.unscaledTime * 1.2f + 0.7f) * 5f;
+        Rect panel = CenterRect(Mathf.Min(700f, Screen.width - 42f), Mathf.Min(520f, Screen.height - 42f));
+        panel.y += bob;
+        DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.92f), new Color(0.52f, 0.78f, 1f, 0.55f));
+        DrawPanelFx(panel, new Color(0.48f, 0.94f, 1f, 1f), 0.10f);
+
+        if (!string.IsNullOrEmpty(unlockActionMessage) && Time.unscaledTime >= unlockActionMessageExpireAt)
+        {
+            unlockActionMessage = string.Empty;
+        }
+
+        Rect area = new Rect(panel.x + 18f, panel.y + 16f, panel.width - 36f, panel.height - 28f);
+        MetaProgressionStorage.RunReward last = MetaProgressionStorage.LastRunReward;
+        List<MetaProgressionStorage.UnlockDefinition> unlocks = GetUnlocksForSection(selectedUnlockSection);
+        if (unlocks.Count == 0)
+        {
+            return;
+        }
+
+        selectedUnlockIndex = Mathf.Clamp(selectedUnlockIndex, 0, unlocks.Count - 1);
+
+        GUI.Label(new Rect(area.x, area.y, area.width, 42f), "Desbloqueos", panelTitleStyle);
+        DrawSolidRect(new Rect(area.x, area.y + 50f, area.width, 1f), new Color(0.70f, 0.90f, 1f, 0.24f));
+
+        Rect dataRect = new Rect(area.x, area.y + 62f, area.width * 0.44f, 40f);
+        DrawSolidRect(dataRect, new Color(0.05f, 0.09f, 0.14f, 0.82f));
+        GUI.Label(new Rect(dataRect.x + 10f, dataRect.y + 2f, dataRect.width - 20f, 18f), "DATOS RECUPERADOS", rankingRowStyle);
+        GUI.Label(new Rect(dataRect.x + 10f, dataRect.y + 18f, dataRect.width - 20f, 22f), MetaProgressionStorage.CurrentData.ToString(), rankingScoreStyle);
+
+        Rect lastRunRect = new Rect(area.x + dataRect.width + 12f, area.y + 62f, area.width - dataRect.width - 12f, 40f);
+        string lastRun = last.dataEarned > 0
+            ? $"+{last.dataEarned} datos | {last.score} pts | {last.survivalTime:F1}s"
+            : "Completa una run para recuperar datos.";
+        DrawSolidRect(lastRunRect, new Color(0.05f, 0.07f, 0.12f, 0.72f));
+        GUI.Label(new Rect(lastRunRect.x + 10f, lastRunRect.y + 2f, lastRunRect.width - 20f, 18f), "ULTIMA RUN", rankingRowStyle);
+        GUI.Label(new Rect(lastRunRect.x + 10f, lastRunRect.y + 20f, lastRunRect.width - 20f, 18f), lastRun, paragraphStyle);
+
+        Rect tabsRect = new Rect(area.x, area.y + 114f, area.width, 34f);
+        DrawUnlockSectionTabs(tabsRect);
+
+        Rect listRect = new Rect(area.x, area.y + 158f, area.width * 0.43f, area.height - 214f);
+        Rect detailRect = new Rect(listRect.xMax + 14f, listRect.y, area.width - listRect.width - 14f, listRect.height);
+        DrawUnlockList(listRect, unlocks);
+        DrawUnlockDetails(detailRect, unlocks[selectedUnlockIndex]);
+
+        if (!string.IsNullOrEmpty(unlockActionMessage))
+        {
+            GUI.Label(new Rect(area.x, area.yMax - 42f, area.width * 0.62f, 32f), unlockActionMessage, paragraphStyle);
+        }
+
+        Rect backRect = new Rect(area.xMax - 132f, area.yMax - 42f, 132f, 34f);
+        if (DrawAnimatedMenuButton(backRect, "Volver", true))
+        {
+            showUnlocks = false;
+        }
+    }
+
+    private void DrawUnlockList(Rect listRect, IReadOnlyList<MetaProgressionStorage.UnlockDefinition> unlocks)
+    {
+        DrawSolidRect(listRect, new Color(0.02f, 0.035f, 0.07f, 0.62f));
+        DrawSolidRect(new Rect(listRect.x, listRect.y, listRect.width, 2f), new Color(0.48f, 0.86f, 1f, 0.35f));
+
+        float rowGap = 7f;
+        float rowHeight = Mathf.Min(54f, (listRect.height - rowGap * (unlocks.Count + 1)) / Mathf.Max(1, unlocks.Count));
+        float y = listRect.y + rowGap;
+        for (int i = 0; i < unlocks.Count; i++)
+        {
+            Rect row = new Rect(listRect.x + 8f, y, listRect.width - 16f, rowHeight);
+            DrawUnlockSelectableRow(row, unlocks[i], i);
+            y += rowHeight + rowGap;
+        }
+    }
+
+    private List<MetaProgressionStorage.UnlockDefinition> GetUnlocksForSection(string section)
+    {
+        List<MetaProgressionStorage.UnlockDefinition> result = new List<MetaProgressionStorage.UnlockDefinition>();
+        IReadOnlyList<MetaProgressionStorage.UnlockDefinition> all = MetaProgressionStorage.UnlockDefinitions;
+        for (int i = 0; i < all.Count; i++)
+        {
+            if (all[i].section == section)
+            {
+                result.Add(all[i]);
+            }
+        }
+
+        return result;
+    }
+
+    private void DrawUnlockSectionTabs(Rect tabsRect)
+    {
+        float gap = 10f;
+        float tabW = (tabsRect.width - gap) * 0.5f;
+        DrawUnlockSectionTab(new Rect(tabsRect.x, tabsRect.y, tabW, tabsRect.height), MetaProgressionStorage.SectionRunUpgrades, "Mejoras");
+        DrawUnlockSectionTab(new Rect(tabsRect.x + tabW + gap, tabsRect.y, tabW, tabsRect.height), MetaProgressionStorage.SectionSkins, "Colores");
+    }
+
+    private void DrawUnlockSectionTab(Rect rect, string section, string label)
+    {
+        bool selected = selectedUnlockSection == section;
+        bool hovered = rect.Contains(Event.current.mousePosition);
+        Color fill = selected
+            ? new Color(0.12f, 0.24f, 0.34f, 0.92f)
+            : new Color(0.05f, 0.08f, 0.13f, 0.72f);
+        if (hovered && !selected)
+        {
+            fill = Color.Lerp(fill, new Color(0.10f, 0.18f, 0.26f, 0.88f), 0.6f);
+        }
+
+        DrawSolidRect(rect, fill);
+        DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 2f), new Color(0.48f, 0.86f, 1f, selected ? 0.82f : 0.32f));
+        GUI.Label(rect, label, buttonStyle);
+
+        if (GUI.Button(rect, GUIContent.none, GUIStyle.none))
+        {
+            GlitchAudioManager.PlayMenuToggle();
+            selectedUnlockSection = section;
+            selectedUnlockIndex = 0;
+        }
+    }
+
+    private void DrawUnlockSelectableRow(Rect row, MetaProgressionStorage.UnlockDefinition unlock, int index)
+    {
+        bool unlocked = MetaProgressionStorage.IsUnlocked(unlock.id);
+        bool selected = index == selectedUnlockIndex;
+        bool hovered = row.Contains(Event.current.mousePosition);
+        TrackButtonHover($"unlock_row_{index}", hovered);
+
+        Color fill = unlocked
+            ? new Color(0.08f, 0.18f, 0.15f, 0.82f)
+            : new Color(0.05f, 0.07f, 0.12f, 0.78f);
+        if (selected || hovered)
+        {
+            fill = Color.Lerp(fill, new Color(0.12f, 0.20f, 0.30f, 0.92f), selected ? 0.85f : 0.45f);
+        }
+
+        DrawSolidRect(row, fill);
+        DrawSolidRect(new Rect(row.x, row.y, row.width, 2f), unlocked ? new Color(0.50f, 1f, 0.74f, 0.52f) : new Color(0.48f, 0.72f, 1f, 0.38f));
+        if (selected)
+        {
+            DrawSolidRect(new Rect(row.x, row.y, 4f, row.height), new Color(0.48f, 0.94f, 1f, 0.82f));
+        }
+
+        float textX = row.x + (unlock.skin ? 44f : 10f);
+        if (unlock.skin)
+        {
+            Rect swatch = new Rect(row.x + 10f, row.y + 10f, 24f, row.height - 20f);
+            DrawSolidRect(swatch, unlock.bodyColor);
+            DrawSolidRect(new Rect(swatch.x, swatch.y, swatch.width, 2f), unlock.trailColor);
+        }
+
+        GUI.Label(new Rect(textX, row.y + 4f, row.xMax - textX - 10f, 22f), unlock.title, rankingRowStyle);
+
+        string state = GetUnlockStateLabel(unlock, unlocked);
+        GUI.Label(new Rect(textX, row.y + row.height - 24f, row.xMax - textX - 10f, 20f), state, unlocked ? rankingScoreStyle : paragraphStyle);
+
+        if (GUI.Button(row, GUIContent.none, GUIStyle.none))
+        {
+            GlitchAudioManager.PlayMenuToggle();
+            selectedUnlockIndex = index;
+        }
+    }
+
+    private void DrawUnlockDetails(Rect detailRect, MetaProgressionStorage.UnlockDefinition unlock)
+    {
+        bool unlocked = MetaProgressionStorage.IsUnlocked(unlock.id);
+        bool selectedSkin = unlock.skin && MetaProgressionStorage.IsSelectedSkin(unlock.id);
+        bool canBuy = !unlocked && MetaProgressionStorage.CurrentData >= unlock.cost;
+        bool canSelect = unlock.skin && unlocked && !selectedSkin;
+        Color accent = unlocked ? new Color(0.50f, 1f, 0.74f, 1f) : new Color(0.48f, 0.86f, 1f, 1f);
+
+        DrawSolidRect(detailRect, new Color(0.025f, 0.045f, 0.085f, 0.76f));
+        DrawSolidRect(new Rect(detailRect.x, detailRect.y, detailRect.width, 2f), new Color(accent.r, accent.g, accent.b, 0.55f));
+        DrawSolidRect(new Rect(detailRect.x, detailRect.yMax - 2f, detailRect.width, 2f), new Color(accent.r, accent.g, accent.b, 0.30f));
+
+        Rect icon = new Rect(detailRect.x + 18f, detailRect.y + 18f, 62f, 62f);
+        DrawSolidRect(icon, unlock.skin ? unlock.bodyColor : new Color(accent.r, accent.g, accent.b, 0.18f));
+        DrawSolidRect(new Rect(icon.x, icon.y, icon.width, 2f), new Color(accent.r, accent.g, accent.b, 0.68f));
+        if (unlock.skin)
+        {
+            DrawSolidRect(new Rect(icon.x + 8f, icon.yMax - 16f, icon.width - 16f, 6f), unlock.trailColor);
+        }
+        else
+        {
+            GUI.Label(icon, unlocked ? "OK" : "++", rankingScoreStyle);
+        }
+
+        Rect titleRect = new Rect(icon.xMax + 14f, detailRect.y + 12f, detailRect.width - 112f, 42f);
+        GUI.Label(titleRect, unlock.title, BuildFittedSingleLineStyle(rankingTitleStyle, unlock.title, titleRect.width, titleRect.height, 13));
+        GUI.Label(new Rect(icon.xMax + 14f, detailRect.y + 54f, detailRect.width - 112f, 24f), GetUnlockStateLabel(unlock, unlocked), rankingScoreStyle);
+
+        Rect desc = new Rect(detailRect.x + 18f, detailRect.y + 104f, detailRect.width - 36f, 90f);
+        GUIStyle detailParagraph = new GUIStyle(paragraphStyle)
+        {
+            wordWrap = true,
+            alignment = TextAnchor.UpperLeft,
+            clipping = TextClipping.Clip
+        };
+        GUI.Label(desc, unlock.description, detailParagraph);
+
+        Rect button = new Rect(detailRect.x + 18f, detailRect.yMax - 42f, detailRect.width - 36f, 34f);
+        Rect ruleRect = new Rect(detailRect.x + 18f, button.y - 68f, detailRect.width - 36f, 50f);
+        DrawSolidRect(ruleRect, new Color(accent.r, accent.g, accent.b, 0.10f));
+        GUI.Label(
+            new Rect(ruleRect.x + 10f, ruleRect.y + 5f, ruleRect.width - 20f, ruleRect.height - 10f),
+            GetUnlockRuleText(unlock, unlocked, selectedSkin),
+            detailParagraph);
+
+        bool oldEnabled = GUI.enabled;
+        GUI.enabled = (canBuy || canSelect) && transitionState == MenuTransitionState.Idle;
+        if (GUI.Button(button, GetUnlockButtonLabel(unlock, unlocked, selectedSkin), buttonStyle))
+        {
+            bool success = false;
+            if (canSelect)
+            {
+                success = MetaProgressionStorage.TrySelectSkin(unlock.id);
+                unlockActionMessage = success ? $"Color activo: {unlock.title}" : "No se pudo seleccionar.";
+            }
+            else if (MetaProgressionStorage.TryUnlock(unlock.id))
+            {
+                success = true;
+                if (unlock.skin)
+                {
+                    MetaProgressionStorage.TrySelectSkin(unlock.id);
+                    unlockActionMessage = $"Color activo: {unlock.title}";
+                }
+                else
+                {
+                    unlockActionMessage = $"Desbloqueado: {unlock.title}";
+                }
+            }
+            else
+            {
+                unlockActionMessage = "Datos insuficientes.";
+            }
+
+            if (success)
+            {
+                GlitchAudioManager.PlayUpgradeSelect();
+            }
+            else
+            {
+                GlitchAudioManager.PlayMenuToggle();
+            }
+
+            unlockActionMessageExpireAt = Time.unscaledTime + 2.4f;
+        }
+        GUI.enabled = oldEnabled;
+    }
+
+    private static string GetUnlockStateLabel(MetaProgressionStorage.UnlockDefinition unlock, bool unlocked)
+    {
+        if (unlock.skin && MetaProgressionStorage.IsSelectedSkin(unlock.id))
+        {
+            return "SELECCIONADO";
+        }
+
+        return unlocked ? "DESBLOQUEADO" : $"{unlock.cost} DATOS";
+    }
+
+    private static string GetUnlockButtonLabel(MetaProgressionStorage.UnlockDefinition unlock, bool unlocked, bool selectedSkin)
+    {
+        if (unlock.skin)
+        {
+            if (selectedSkin)
+            {
+                return "Color activo";
+            }
+
+            return unlocked ? "Usar color" : "Comprar color";
+        }
+
+        return unlocked ? "Desbloqueado" : "Comprar desbloqueo";
+    }
+
+    private static string GetUnlockRuleText(MetaProgressionStorage.UnlockDefinition unlock, bool unlocked, bool selectedSkin)
+    {
+        if (unlock.skin)
+        {
+            if (selectedSkin)
+            {
+                return "Color activo para la proxima run.";
+            }
+
+            return unlocked ? "Selecciona este color para usarlo." : "Compra esta paleta del jugador.";
+        }
+
+        return unlocked ? "Modulo disponible en futuras runs." : "Suma este modulo al pool de mejoras.";
     }
 
     private void StartGameplay()
@@ -863,6 +1173,35 @@ public class MainMenuController : MonoBehaviour
 
         GUI.color = old;
         GUI.Label(rect, text, style);
+    }
+
+    private static GUIStyle BuildFittedSingleLineStyle(GUIStyle baseStyle, string text, float width, float height, int minSize)
+    {
+        if (baseStyle == null || string.IsNullOrEmpty(text))
+        {
+            return baseStyle;
+        }
+
+        GUIContent content = new GUIContent(text);
+        GUIStyle style = new GUIStyle(baseStyle)
+        {
+            wordWrap = false,
+            clipping = TextClipping.Clip
+        };
+
+        int preferred = Mathf.Max(minSize, baseStyle.fontSize);
+        for (int size = preferred; size >= minSize; size--)
+        {
+            style.fontSize = size;
+            Vector2 measured = style.CalcSize(content);
+            if (measured.x <= width && measured.y <= height)
+            {
+                return style;
+            }
+        }
+
+        style.fontSize = minSize;
+        return style;
     }
 
     private void DrawPanel(Rect rect, Color fill, Color border)
