@@ -75,6 +75,7 @@ public class StorageAmbientCraneController : MonoBehaviour
     private Vector2 operationStartPosition;
     private Vector2 operationTargetPosition;
     private StorageCraneHookFx activeHook;
+    private bool operationImpactPlayed;
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
@@ -256,6 +257,7 @@ public class StorageAmbientCraneController : MonoBehaviour
         operationStartPosition = start;
         operationTargetPosition = target;
         activeCargoCollider = activeCollider;
+        operationImpactPlayed = false;
         if (forceSide.HasValue)
         {
             operationFromLeft = forceSide.Value;
@@ -275,6 +277,7 @@ public class StorageAmbientCraneController : MonoBehaviour
         activeHook = hookGo.AddComponent<StorageCraneHookFx>();
         float sideX = operationFromLeft ? interiorLeft : interiorRight;
         activeHook.ConfigureSide(targetObject.transform, sideX, operationFromLeft, operationDuration, telegraphFraction, craneWarningColor, craneActiveColor);
+        GlitchAudioManager.PlayStorageCraneStart(targetObject.transform.position);
     }
 
     private void TickOperation()
@@ -298,6 +301,18 @@ public class StorageAmbientCraneController : MonoBehaviour
         if (currentOperation == CraneOperationKind.AddCargo && activeCargoCollider != null && progress >= moveEnd)
         {
             activeCargoCollider.enabled = true;
+        }
+        if (!operationImpactPlayed && progress >= moveEnd)
+        {
+            operationImpactPlayed = true;
+            if (currentOperation == CraneOperationKind.RemoveCargo)
+            {
+                GlitchAudioManager.PlayStorageCargoRemove(position);
+            }
+            else
+            {
+                GlitchAudioManager.PlayStorageCargoImpact(position);
+            }
         }
 
         if (progress >= 1f)

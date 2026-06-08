@@ -133,6 +133,20 @@ public class GlitchAudioManager : MonoBehaviour
         Play("breach_fail", 0.94f, 1f, position);
     }
 
+    public static void PlayLabSecurityScan(Vector3 position) => Play("lab_security_scan", 0.52f, 1f, position);
+    public static void PlayLabGateLock(Vector3 position) => Play("lab_gate_lock", 0.66f, 1f, position);
+    public static void PlayLabGateRelease(Vector3 position) => Play("lab_gate_release", 0.46f, 1f, position);
+    public static void PlayStorageCraneStart(Vector3 position) => Play("storage_crane_start", 0.52f, 1f, position);
+    public static void PlayStorageCargoImpact(Vector3 position) => Play("storage_cargo_impact", 0.62f, 1f, position);
+    public static void PlayStorageCargoRemove(Vector3 position) => Play("storage_cargo_remove", 0.48f, 1f, position);
+    public static void PlayRuptureRiftOpen(Vector3 position)
+    {
+        BoostMusic(0.12f, 0.9f);
+        Play("rupture_rift_open", 0.58f, 1f, position);
+    }
+    public static void PlayRuptureFragmentMaterialize(Vector3 position) => Play("rupture_fragment_materialize", 0.54f, 1f, position);
+    public static void PlayRuptureFragmentDissolve(Vector3 position) => Play("rupture_fragment_dissolve", 0.50f, 1f, position);
+
     public static void PlayEnemyState(EnemyController.AnomalyState state, Vector3 position)
     {
         BoostMusic(IsMajorState(state) ? 0.34f : 0.16f, IsMajorState(state) ? 2.2f : 0.8f);
@@ -521,6 +535,24 @@ public class GlitchAudioManager : MonoBehaviour
                 return CreateClip(clipName, 0.82f, BreachEnemyReentry);
             case "breach_fail":
                 return CreateClip(clipName, 0.9f, BreachFail);
+            case "lab_security_scan":
+                return CreateClip(clipName, 0.82f, LabSecurityScan);
+            case "lab_gate_lock":
+                return CreateClip(clipName, 0.46f, LabGateLock);
+            case "lab_gate_release":
+                return CreateClip(clipName, 0.36f, LabGateRelease);
+            case "storage_crane_start":
+                return CreateClip(clipName, 0.78f, StorageCraneStart);
+            case "storage_cargo_impact":
+                return CreateClip(clipName, 0.44f, StorageCargoImpact);
+            case "storage_cargo_remove":
+                return CreateClip(clipName, 0.48f, StorageCargoRemove);
+            case "rupture_rift_open":
+                return CreateClip(clipName, 0.92f, RuptureRiftOpen);
+            case "rupture_fragment_materialize":
+                return CreateClip(clipName, 0.44f, RuptureFragmentMaterialize);
+            case "rupture_fragment_dissolve":
+                return CreateClip(clipName, 0.52f, RuptureFragmentDissolve);
             default:
                 return CreateClip(clipName, 0.2f, StateMinor);
         }
@@ -914,6 +946,92 @@ public class GlitchAudioManager : MonoBehaviour
         float collapse = Sine(Mathf.Lerp(130f, 28f, t / d), t) * 0.58f;
         float dissolve = Noise(i, 96.6f) * Mathf.Lerp(0.16f, 0.34f, t / d);
         return SoftClip((collapse + dissolve) * e);
+    }
+
+    private static float LabSecurityScan(float t, int i)
+    {
+        float d = 0.82f;
+        float e = Envelope(t, d, 0.018f, 0.18f);
+        float scan = Sine(Mathf.Lerp(340f, 980f, Mathf.Clamp01(t / d)), t) * 0.18f;
+        float alarm = (Sine(620f, t) * 0.22f + Sine(930f, t) * 0.08f) * Gate(t, 7.5f, 0.34f);
+        float relay = Noise(i, 121.4f) * 0.045f * Gate(t, 24f, 0.18f);
+        return SoftClip((scan + alarm + relay) * e);
+    }
+
+    private static float LabGateLock(float t, int i)
+    {
+        float d = 0.46f;
+        float hit = Mathf.Exp(-t * 12f);
+        float servo = Sine(Mathf.Lerp(180f, 74f, Mathf.Clamp01(t / d)), t) * 0.38f;
+        float clampTone = Sine(520f, t) * 0.13f * Envelope(t, d, 0.003f, 0.18f);
+        float metal = Noise(i, 124.8f) * 0.20f * hit;
+        return SoftClip(servo * Envelope(t, d, 0.01f, 0.14f) + clampTone + metal);
+    }
+
+    private static float LabGateRelease(float t, int i)
+    {
+        float d = 0.36f;
+        float e = Envelope(t, d, 0.006f, 0.12f);
+        float servo = Sine(Mathf.Lerp(240f, 560f, Mathf.Clamp01(t / d)), t) * 0.20f;
+        float vent = Noise(i, 127.3f) * 0.10f * Mathf.Exp(-t * 5f);
+        return SoftClip((servo + vent + Sine(96f, t) * 0.12f * Mathf.Exp(-t * 8f)) * e);
+    }
+
+    private static float StorageCraneStart(float t, int i)
+    {
+        float d = 0.78f;
+        float e = Envelope(t, d, 0.02f, 0.22f);
+        float motor = Sine(Mathf.Lerp(58f, 116f, Mathf.Clamp01(t / d)), t) * 0.34f;
+        float chain = Noise(i, 131.2f) * 0.13f * Gate(t, 18f, 0.28f);
+        float beep = Sine(740f, t) * 0.10f * Gate(t, 3.6f, 0.18f);
+        return SoftClip((motor + chain + beep) * e);
+    }
+
+    private static float StorageCargoImpact(float t, int i)
+    {
+        float d = 0.44f;
+        float hit = Mathf.Exp(-t * 16f);
+        float thud = Sine(Mathf.Lerp(82f, 42f, Mathf.Clamp01(t / d)), t) * 0.58f * hit;
+        float metal = Noise(i, 134.7f) * 0.26f * hit + Square(166f, t) * 0.08f * hit;
+        float tail = Sine(280f, t) * 0.08f * Envelope(t, d, 0.002f, 0.22f);
+        return SoftClip(thud + metal + tail);
+    }
+
+    private static float StorageCargoRemove(float t, int i)
+    {
+        float d = 0.48f;
+        float e = Envelope(t, d, 0.012f, 0.16f);
+        float lift = Sine(Mathf.Lerp(120f, 340f, Mathf.Clamp01(t / d)), t) * 0.22f;
+        float ratchet = Noise(i, 137.6f) * 0.10f * Gate(t, 20f, 0.22f);
+        return SoftClip((lift + ratchet + Sine(650f, t) * 0.06f * Gate(t, 5f, 0.25f)) * e);
+    }
+
+    private static float RuptureRiftOpen(float t, int i)
+    {
+        float d = 0.92f;
+        float e = Envelope(t, d, 0.02f, 0.26f);
+        float tear = Sine(Mathf.Lerp(920f, 180f, Mathf.Clamp01(t / d)), t) * 0.20f * Gate(t, 13f, 0.48f);
+        float voidBass = Sine(Mathf.Lerp(44f, 70f, Mathf.Clamp01(t / d)), t) * 0.36f;
+        float staticRip = Noise(i, 142.5f) * Mathf.Lerp(0.05f, 0.22f, Mathf.Clamp01(t / d)) * Gate(t, 31f, 0.44f);
+        return SoftClip((tear + voidBass + staticRip) * e);
+    }
+
+    private static float RuptureFragmentMaterialize(float t, int i)
+    {
+        float d = 0.44f;
+        float e = Envelope(t, d, 0.004f, 0.14f);
+        float snap = Sine(Mathf.Lerp(1480f, 520f, Mathf.Clamp01(t / d)), t) * 0.20f;
+        float pixel = Crush(Sine(760f + Mathf.Sin(t * 38f) * 240f, t), 5) * 0.16f * Gate(t, 26f, 0.42f);
+        return SoftClip((snap + pixel + Noise(i, 146.2f) * 0.11f) * e);
+    }
+
+    private static float RuptureFragmentDissolve(float t, int i)
+    {
+        float d = 0.52f;
+        float e = Envelope(t, d, 0.008f, 0.18f);
+        float crumble = Noise(i, 149.9f) * Mathf.Lerp(0.18f, 0.05f, Mathf.Clamp01(t / d)) * Gate(t, 34f, 0.62f);
+        float fall = Sine(Mathf.Lerp(620f, 90f, Mathf.Clamp01(t / d)), t) * 0.18f;
+        return SoftClip((crumble + fall + Crush(Sine(310f, t), 4) * 0.08f) * e);
     }
 
     private static float Envelope(float t, float duration, float attack, float release)

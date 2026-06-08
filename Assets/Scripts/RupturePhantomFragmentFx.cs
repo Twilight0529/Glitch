@@ -21,6 +21,8 @@ public class RupturePhantomFragmentFx : MonoBehaviour
     private float age;
     private float baseRotationZ;
     private float jitterSeed;
+    private bool materializeSfxPlayed;
+    private bool dissolveSfxPlayed;
 
     public void Configure(
         Vector2 size,
@@ -41,6 +43,8 @@ public class RupturePhantomFragmentFx : MonoBehaviour
         warningColor = warning;
         activeColor = active;
         jitterSeed = Random.Range(0f, 100f);
+        materializeSfxPlayed = false;
+        dissolveSfxPlayed = false;
         EnsureVisuals();
         UpdateVisuals(0f);
     }
@@ -126,6 +130,16 @@ public class RupturePhantomFragmentFx : MonoBehaviour
         {
             fragmentCollider.size = fragmentSize;
             fragmentCollider.enabled = progress >= materializeEndFraction && progress < dissolveStartFraction;
+        }
+        if (!materializeSfxPlayed && progress >= materializeEndFraction)
+        {
+            materializeSfxPlayed = true;
+            GlitchAudioManager.PlayRuptureFragmentMaterialize(transform.position);
+        }
+        if (!dissolveSfxPlayed && progress >= dissolveStartFraction)
+        {
+            dissolveSfxPlayed = true;
+            GlitchAudioManager.PlayRuptureFragmentDissolve(transform.position);
         }
 
         Color color = Color.Lerp(warningColor, activeColor, materialize);

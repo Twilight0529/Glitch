@@ -129,6 +129,10 @@ public class LabAmbientSecurityController : MonoBehaviour
             SpawnScan(horizontal, laneCenter, lockdownDuration, telegraphFraction);
             SpawnGate(firstSide, firstSize, firstTarget, lockdownDuration, telegraphFraction, deployEndFraction, retractStartFraction);
             SpawnGate(secondSide, secondSize, secondTarget, lockdownDuration, telegraphFraction, deployEndFraction, retractStartFraction);
+            Vector3 scanPosition = horizontal
+                ? new Vector3((interiorLeft + interiorRight) * 0.5f, laneCenter, 0f)
+                : new Vector3(laneCenter, (interiorBottom + interiorTop) * 0.5f, 0f);
+            GlitchAudioManager.PlayLabSecurityScan(scanPosition);
             return true;
         }
 

@@ -241,4 +241,4 @@ public class ScoreCollectSparkFx : MonoBehaviour
         }
     }
 
-} 
+}  

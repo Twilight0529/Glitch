@@ -241,6 +241,7 @@ public class RuptureAmbientRiftController : MonoBehaviour
         float radius = Mathf.Max(fragmentRadiusRange.x, fragmentRadiusRange.y);
         anchor.Configure(totalDuration, radius, warningColor, activeColor);
         activeAnchors.Add(anchor);
+        GlitchAudioManager.PlayRuptureRiftOpen(anchorGo.transform.position);
     }
 
     private void SpawnFragment(FragmentSpawnData data, float solidHold)

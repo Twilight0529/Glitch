@@ -22,6 +22,8 @@ public class LabContainmentGateFx : MonoBehaviour
     private float deployEndFraction = 0.42f;
     private float retractStartFraction = 0.78f;
     private float age;
+    private bool lockSfxPlayed;
+    private bool releaseSfxPlayed;
 
     public void Configure(
         Vector2 start,
@@ -43,6 +45,8 @@ public class LabContainmentGateFx : MonoBehaviour
         retractStartFraction = Mathf.Clamp(retractFraction, deployEndFraction + 0.05f, 0.96f);
         warningColor = warning;
         activeColor = active;
+        lockSfxPlayed = false;
+        releaseSfxPlayed = false;
         EnsureVisuals();
         UpdateVisuals(0f);
     }
@@ -142,6 +146,16 @@ public class LabContainmentGateFx : MonoBehaviour
         {
             gateCollider.size = gateSize;
             gateCollider.enabled = visibleT > 0.95f && progress < retractStartFraction;
+        }
+        if (!lockSfxPlayed && visibleT > 0.95f && progress < retractStartFraction)
+        {
+            lockSfxPlayed = true;
+            GlitchAudioManager.PlayLabGateLock(transform.position);
+        }
+        if (!releaseSfxPlayed && progress >= retractStartFraction)
+        {
+            releaseSfxPlayed = true;
+            GlitchAudioManager.PlayLabGateRelease(transform.position);
         }
 
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 8.4f);
