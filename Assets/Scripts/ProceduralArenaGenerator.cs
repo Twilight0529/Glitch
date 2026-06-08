@@ -248,6 +248,11 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     private ArenaTheme SelectTheme()
     {
+        if (DeveloperModeStorage.TryGetArenaOverride(out ArenaTheme overrideTheme))
+        {
+            return overrideTheme;
+        }
+
         if (!randomizeThemeEachRun)
         {
             return fixedTheme;

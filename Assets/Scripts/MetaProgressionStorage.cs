@@ -172,6 +172,30 @@ public static class MetaProgressionStorage
         return LastRunReward;
     }
 
+    public static void AddData(int amount)
+    {
+        if (amount == 0)
+        {
+            return;
+        }
+
+        PlayerPrefs.SetInt(DataKey, Mathf.Max(0, CurrentData + amount));
+        PlayerPrefs.Save();
+    }
+
+    public static void UnlockAll()
+    {
+        for (int i = 0; i < definitions.Length; i++)
+        {
+            if (definitions[i].cost > 0)
+            {
+                PlayerPrefs.SetInt(GetUnlockKey(definitions[i].id), 1);
+            }
+        }
+
+        PlayerPrefs.Save();
+    }
+
     public static int CalculateDataReward(int score, float survivalTime)
     {
         int scoreData = Mathf.FloorToInt(Mathf.Max(0, score) / 18f);

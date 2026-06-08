@@ -1,6 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 public class MainMenuController : MonoBehaviour
 {
@@ -35,6 +38,7 @@ public class MainMenuController : MonoBehaviour
 
     private bool showOptions;
     private bool showUnlocks;
+    private bool showDeveloperMenu;
     private bool queuedGameplayLoad;
     private int selectedUnlockIndex;
     private string selectedUnlockSection = MetaProgressionStorage.SectionRunUpgrades;
@@ -94,6 +98,13 @@ public class MainMenuController : MonoBehaviour
         }
 
         UpdateTransition();
+        if (WasDeveloperTogglePressed())
+        {
+            showDeveloperMenu = !showDeveloperMenu;
+            showOptions = false;
+            showUnlocks = false;
+            GlitchAudioManager.PlayMenuToggle();
+        }
     }
 
     private void OnGUI()
@@ -104,6 +115,10 @@ public class MainMenuController : MonoBehaviour
         if (showOptions)
         {
             DrawOptionsMenu();
+        }
+        else if (showDeveloperMenu)
+        {
+            DrawDeveloperMenu();
         }
         else if (showUnlocks)
         {
@@ -120,6 +135,26 @@ public class MainMenuController : MonoBehaviour
     private static Rect CenterRect(float width, float height)
     {
         return new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
+    }
+
+    private static bool WasDeveloperTogglePressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null)
+        {
+            bool ctrl = keyboard.leftCtrlKey.isPressed || keyboard.rightCtrlKey.isPressed;
+            bool shift = keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed;
+            return ctrl && shift && keyboard.dKey.wasPressedThisFrame;
+        }
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) &&
+               (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) &&
+               Input.GetKeyDown(KeyCode.D);
+#else
+        return false;
+#endif
     }
 
     private void DrawMainMenu()
@@ -408,6 +443,93 @@ public class MainMenuController : MonoBehaviour
         {
             showUnlocks = false;
         }
+    }
+
+    private void DrawDeveloperMenu()
+    {
+        DrawScreenFade(0.52f);
+        Rect panel = CenterRect(Mathf.Min(620f, Screen.width - 42f), Mathf.Min(480f, Screen.height - 42f));
+        DrawPanel(panel, new Color(0.04f, 0.035f, 0.06f, 0.94f), new Color(1f, 0.58f, 0.78f, 0.62f));
+        DrawPanelFx(panel, new Color(1f, 0.48f, 0.86f, 1f), 0.13f);
+
+        Rect area = new Rect(panel.x + 18f, panel.y + 16f, panel.width - 36f, panel.height - 28f);
+        GUILayout.BeginArea(area);
+        GUILayout.Label("Modo Desarrollador", panelTitleStyle);
+        GUILayout.Space(4f);
+        GUILayout.Label("Panel oculto de testing | Ctrl + Shift + D", paragraphStyle);
+        GUILayout.Space(8f);
+
+        GUILayout.Label($"Datos Recuperados: {MetaProgressionStorage.CurrentData}", rankingScoreStyle);
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("+25 Datos", buttonStyle, GUILayout.Height(34f)))
+        {
+            MetaProgressionStorage.AddData(25);
+            GlitchAudioManager.PlayUpgradeSelect();
+        }
+        if (GUILayout.Button("+100 Datos", buttonStyle, GUILayout.Height(34f)))
+        {
+            MetaProgressionStorage.AddData(100);
+            GlitchAudioManager.PlayUpgradeSelect();
+        }
+        if (GUILayout.Button("-25 Datos", buttonStyle, GUILayout.Height(34f)))
+        {
+            MetaProgressionStorage.AddData(-25);
+            GlitchAudioManager.PlayMenuToggle();
+        }
+        GUILayout.EndHorizontal();
+
+        GUILayout.Space(8f);
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Desbloquear todo", buttonStyle, GUILayout.Height(34f)))
+        {
+            MetaProgressionStorage.UnlockAll();
+            GlitchAudioManager.PlayUpgradeSelect();
+        }
+        if (GUILayout.Button("Reset progresion", buttonStyle, GUILayout.Height(34f)))
+        {
+            MetaProgressionStorage.ResetProgress();
+            GlitchAudioManager.PlayMenuBack();
+        }
+        GUILayout.EndHorizontal();
+
+        GUILayout.Space(14f);
+        GUILayout.Label($"Arena override: {DeveloperModeStorage.GetArenaOverrideLabel()}", rankingScoreStyle);
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Lab", buttonStyle, GUILayout.Height(34f)))
+        {
+            DeveloperModeStorage.SetArenaOverride(ProceduralArenaGenerator.ArenaTheme.ContainmentLab);
+            GlitchAudioManager.PlayMenuToggle();
+        }
+        if (GUILayout.Button("Storage", buttonStyle, GUILayout.Height(34f)))
+        {
+            DeveloperModeStorage.SetArenaOverride(ProceduralArenaGenerator.ArenaTheme.StorageBay);
+            GlitchAudioManager.PlayMenuToggle();
+        }
+        if (GUILayout.Button("Rupture", buttonStyle, GUILayout.Height(34f)))
+        {
+            DeveloperModeStorage.SetArenaOverride(ProceduralArenaGenerator.ArenaTheme.RuptureZone);
+            GlitchAudioManager.PlayMenuToggle();
+        }
+        if (GUILayout.Button("Random", buttonStyle, GUILayout.Height(34f)))
+        {
+            DeveloperModeStorage.ClearArenaOverride();
+            GlitchAudioManager.PlayMenuToggle();
+        }
+        GUILayout.EndHorizontal();
+
+        GUILayout.Space(8f);
+        if (GUILayout.Button($"Ejecutar mapa: {DeveloperModeStorage.GetArenaOverrideLabel()}", buttonStyle, GUILayout.Height(42f)))
+        {
+            StartGameplay();
+        }
+
+        GUILayout.FlexibleSpace();
+        if (DrawMenuButton("Cerrar", 38f, true))
+        {
+            showDeveloperMenu = false;
+        }
+
+        GUILayout.EndArea();
     }
 
     private void DrawUnlockList(Rect listRect, IReadOnlyList<MetaProgressionStorage.UnlockDefinition> unlocks)
