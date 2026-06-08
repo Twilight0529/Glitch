@@ -18,6 +18,9 @@ public class SplitAnomalyCloneController : MonoBehaviour
     private float sideOffset = 1.1f;
     private float mergeSpeed = 7.5f;
     private int sideSign = 1;
+    private float parryStunDuration = 0.3f;
+    private float parryKnockbackDuration = 0.14f;
+    private float parryKnockbackSpeedMultiplier = 3.2f;
 
     private bool splitStateActive;
     private bool splitMergeActive;
@@ -46,6 +49,28 @@ public class SplitAnomalyCloneController : MonoBehaviour
     {
         splitStateActive = active;
         splitMergeActive = merging;
+    }
+
+    public void ApplyParryImpact(Vector2 impactPosition, Vector2 pushDirection)
+    {
+        Vector2 direction = pushDirection.sqrMagnitude > 0.0001f
+            ? pushDirection.normalized
+            : ((Vector2)transform.position - impactPosition).normalized;
+
+        if (direction.sqrMagnitude < 0.0001f)
+        {
+            direction = -lastMoveDirection;
+        }
+
+        firewallStunTimer = Mathf.Max(firewallStunTimer, Mathf.Max(0.04f, parryStunDuration));
+        firewallKnockbackTimer = Mathf.Max(firewallKnockbackTimer, Mathf.Max(0.02f, parryKnockbackDuration));
+
+        if (rb != null)
+        {
+            rb.linearVelocity = direction.normalized * Mathf.Max(0.1f, moveSpeed * parryKnockbackSpeedMultiplier);
+        }
+
+        GlitchAudioManager.PlayEnemyParried(transform.position);
     }
 
     public void ApplyFirewallBurst(Vector2 burstOrigin, float burstRadius, float stunSeconds, float knockbackMultiplier)
@@ -293,6 +318,12 @@ public class SplitAnomalyCloneController : MonoBehaviour
         if (collision.collider.GetComponent<PlayerController>() != null)
         {
             PlayerController hitPlayer = collision.collider.GetComponent<PlayerController>();
+            if (hitPlayer != null && hitPlayer.TryParryHit(rb.position, out Vector2 parryDirection))
+            {
+                ApplyParryImpact(hitPlayer.GetPosition(), parryDirection);
+                return;
+            }
+
             if (hitPlayer != null && hitPlayer.TryAbsorbHit())
             {
                 return;
@@ -312,6 +343,12 @@ public class SplitAnomalyCloneController : MonoBehaviour
         if (other.GetComponent<PlayerController>() != null)
         {
             PlayerController hitPlayer = other.GetComponent<PlayerController>();
+            if (hitPlayer != null && hitPlayer.TryParryHit(rb.position, out Vector2 parryDirection))
+            {
+                ApplyParryImpact(hitPlayer.GetPosition(), parryDirection);
+                return;
+            }
+
             if (hitPlayer != null && hitPlayer.TryAbsorbHit())
             {
                 return;

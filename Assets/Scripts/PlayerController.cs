@@ -741,6 +741,13 @@ public class PlayerController : MonoBehaviour
                 enemy.ApplyParryImpact(GetPosition(), parryDirection);
                 return;
             }
+
+            SplitAnomalyCloneController clone = hit.GetComponent<SplitAnomalyCloneController>();
+            if (clone != null && TryParryHit(clone.transform.position, out Vector2 cloneParryDirection))
+            {
+                clone.ApplyParryImpact(GetPosition(), cloneParryDirection);
+                return;
+            }
         }
     }
 
