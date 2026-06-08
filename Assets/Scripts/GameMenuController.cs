@@ -389,6 +389,10 @@ public class GameMenuController : MonoBehaviour
         GUILayout.Label($"Tiempo sobrevivido: {time:F1}s", bodyStyle);
         GUILayout.Label($"Puntuacion final: {score}", bodyStyle);
         GUILayout.Label($"Datos recuperados: +{reward.dataEarned}  |  Total: {reward.totalData}", bodyStyle);
+        if (reward.contractBonusData > 0)
+        {
+            GUILayout.Label($"Bonus por contratos: +{reward.contractBonusData} datos", bodyStyle);
+        }
         GUILayout.Label($"Nivel de amenaza final: x{threat:F2}", bodyStyle);
         GUILayout.Label($"Zona de contencion: {level}", bodyStyle);
 

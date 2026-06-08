@@ -571,6 +571,7 @@ public class PlayerController : MonoBehaviour
 
         SpawnFirewallBurstFx(radius);
         GlitchAudioManager.PlayFirewallBurst(transform.position);
+        FindAnyObjectByType<GameManager>()?.NotifyFirewallBurstActivated();
         return true;
     }
 
@@ -591,6 +592,7 @@ public class PlayerController : MonoBehaviour
         AddFirewallCharge(firewallChargeFromParry);
         SpawnParrySuccessFx(parryDirection);
         GlitchAudioManager.PlayParrySuccess(transform.position);
+        FindAnyObjectByType<GameManager>()?.NotifyParrySuccess();
         return true;
     }
 

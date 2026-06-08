@@ -109,6 +109,7 @@ public class ArenaScorePickup : MonoBehaviour
         if (gameManager != null)
         {
             gameManager.AddScore(scoreValue);
+            gameManager.NotifyScorePickupCollected(scoreValue);
         }
 
         player.AddFirewallChargeFromScore(scoreValue);

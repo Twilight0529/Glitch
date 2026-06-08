@@ -37,6 +37,15 @@ public class GameManager : MonoBehaviour
         HazardFirewallCharge
     }
 
+    private enum RunContractKind
+    {
+        Survive,
+        Score,
+        Pickups,
+        Parry,
+        FirewallBurst
+    }
+
     private struct UpgradeChoice
     {
         public PlayerUpgradeKind kind;
@@ -47,6 +56,20 @@ public class GameManager : MonoBehaviour
         public string icon;
         public string impact;
         public Color accent;
+    }
+
+    private struct RunContract
+    {
+        public RunContractKind kind;
+        public string title;
+        public string hint;
+        public int target;
+        public int progress;
+        public int startScore;
+        public float startedAt;
+        public float duration;
+        public int scoreReward;
+        public int dataReward;
     }
 
     private struct EventPressureReservation
@@ -82,6 +105,14 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float upgradeChoiceLimitSeconds = 10f;
     [SerializeField] private float upgradeEnterDuration = 0.32f;
     [SerializeField] private float upgradeExitDuration = 0.46f;
+
+    [Header("Run Contracts")]
+    [SerializeField] private bool enableRunContracts = true;
+    [SerializeField] private float firstContractTime = 24f;
+    [SerializeField] private float contractInterval = 42f;
+    [SerializeField] private float contractDuration = 55f;
+    [SerializeField] private int contractScoreReward = 24;
+    [SerializeField] private int contractDataReward = 5;
 
     [Header("Progression Gates")]
     [SerializeField] private float bossSpecialStatesUnlockTime = 30f;
@@ -134,6 +165,7 @@ public class GameManager : MonoBehaviour
     public bool IsUpgradeSelectionOpen => upgradeSelectionOpen;
     public MetaProgressionStorage.RunReward LastMetaReward { get; private set; }
     public bool HasAwardedMetaReward { get; private set; }
+    public int ContractDataBonusEarned => contractDataBonusEarned;
     public float SurvivalTime { get; private set; }
     public float DifficultyMultiplier => 1f + (SurvivalTime * difficultyRampPerSecond);
     public int CurrentScore => Mathf.Max(0, Mathf.FloorToInt(SurvivalTime * Mathf.Max(0f, pointsPerSecond)) + bonusScore);
@@ -209,7 +241,13 @@ public class GameManager : MonoBehaviour
     private readonly List<ScorePopup> scorePopups = new List<ScorePopup>();
     private readonly List<UpgradeChoice> currentUpgradeChoices = new List<UpgradeChoice>();
     private readonly List<EventPressureReservation> eventPressureReservations = new List<EventPressureReservation>();
+    private RunContract activeContract;
+    private bool hasActiveContract;
     private float nextUpgradeTime;
+    private float nextContractTime;
+    private float contractCompletePulseTimer;
+    private string lastContractCompletionLabel;
+    private int contractDataBonusEarned;
     private bool upgradeSelectionOpen;
     private bool upgradeSelectionClosing;
     private float upgradeSelectionAge;
@@ -315,6 +353,7 @@ public class GameManager : MonoBehaviour
         }
 
         SurvivalTime += Time.deltaTime;
+        UpdateRunContracts();
         if (ShouldOpenUpgradeSelection())
         {
             OpenUpgradeSelection();
@@ -332,7 +371,7 @@ public class GameManager : MonoBehaviour
         runPhase = RunPhase.Active;
         if (!HasAwardedMetaReward)
         {
-            LastMetaReward = MetaProgressionStorage.AwardRun(CurrentScore, SurvivalTime, levelType);
+            LastMetaReward = MetaProgressionStorage.AwardRun(CurrentScore, SurvivalTime, levelType, contractDataBonusEarned);
             HasAwardedMetaReward = true;
         }
 
@@ -378,6 +417,186 @@ public class GameManager : MonoBehaviour
             };
             scorePopups.Add(popup);
         }
+
+        NotifyContractProgress(RunContractKind.Score, amount);
+    }
+
+    public void NotifyScorePickupCollected(int scoreValue)
+    {
+        NotifyContractProgress(RunContractKind.Pickups, 1);
+    }
+
+    public void NotifyParrySuccess()
+    {
+        NotifyContractProgress(RunContractKind.Parry, 1);
+    }
+
+    public void NotifyFirewallBurstActivated()
+    {
+        NotifyContractProgress(RunContractKind.FirewallBurst, 1);
+    }
+
+    private void UpdateRunContracts()
+    {
+        if (!enableRunContracts || IsGameOver || !IsRunActive)
+        {
+            return;
+        }
+
+        if (contractCompletePulseTimer > 0f)
+        {
+            contractCompletePulseTimer -= Time.deltaTime;
+        }
+
+        if (!hasActiveContract)
+        {
+            if (SurvivalTime >= nextContractTime)
+            {
+                StartRunContract();
+            }
+
+            return;
+        }
+
+        if (activeContract.kind == RunContractKind.Survive)
+        {
+            int progress = Mathf.FloorToInt(Mathf.Max(0f, SurvivalTime - activeContract.startedAt));
+            activeContract.progress = Mathf.Clamp(progress, 0, activeContract.target);
+            if (activeContract.progress >= activeContract.target)
+            {
+                CompleteRunContract();
+                return;
+            }
+        }
+        else if (activeContract.kind == RunContractKind.Score)
+        {
+            activeContract.progress = Mathf.Clamp(CurrentScore - activeContract.startScore, 0, activeContract.target);
+            if (activeContract.progress >= activeContract.target)
+            {
+                CompleteRunContract();
+                return;
+            }
+        }
+
+        float elapsed = SurvivalTime - activeContract.startedAt;
+        if (elapsed >= activeContract.duration)
+        {
+            FailRunContract();
+        }
+    }
+
+    private void StartRunContract()
+    {
+        activeContract = BuildRunContract(PickRunContractKind());
+        activeContract.startedAt = SurvivalTime;
+        activeContract.startScore = CurrentScore;
+        activeContract.duration = Mathf.Max(10f, contractDuration);
+        activeContract.scoreReward = Mathf.Max(0, contractScoreReward);
+        activeContract.dataReward = Mathf.Max(0, contractDataReward);
+        hasActiveContract = true;
+    }
+
+    private RunContractKind PickRunContractKind()
+    {
+        RunContractKind[] options =
+        {
+            RunContractKind.Survive,
+            RunContractKind.Score,
+            RunContractKind.Pickups,
+            RunContractKind.Parry,
+            RunContractKind.FirewallBurst
+        };
+
+        return options[Random.Range(0, options.Length)];
+    }
+
+    private RunContract BuildRunContract(RunContractKind kind)
+    {
+        switch (kind)
+        {
+            case RunContractKind.Score:
+                return new RunContract
+                {
+                    kind = kind,
+                    title = "Recolecta datos",
+                    hint = "Suma puntos antes de que expire",
+                    target = 120
+                };
+            case RunContractKind.Pickups:
+                return new RunContract
+                {
+                    kind = kind,
+                    title = "Barrido de datos",
+                    hint = "Recolecta pickups de score",
+                    target = 7
+                };
+            case RunContractKind.Parry:
+                return new RunContract
+                {
+                    kind = kind,
+                    title = "Rechazo limpio",
+                    hint = "Conecta parries exitosos",
+                    target = 3
+                };
+            case RunContractKind.FirewallBurst:
+                return new RunContract
+                {
+                    kind = kind,
+                    title = "Descarga Firewall",
+                    hint = "Activa un Burst durante el contrato",
+                    target = 1
+                };
+            default:
+                return new RunContract
+                {
+                    kind = RunContractKind.Survive,
+                    title = "Mantener contencion",
+                    hint = "Sobrevive hasta estabilizar la zona",
+                    target = 35
+                };
+        }
+    }
+
+    private void NotifyContractProgress(RunContractKind kind, int amount)
+    {
+        if (!hasActiveContract || amount <= 0 || activeContract.kind != kind)
+        {
+            return;
+        }
+
+        activeContract.progress = Mathf.Clamp(activeContract.progress + amount, 0, activeContract.target);
+        if (activeContract.progress >= activeContract.target)
+        {
+            CompleteRunContract();
+        }
+    }
+
+    private void CompleteRunContract()
+    {
+        if (!hasActiveContract)
+        {
+            return;
+        }
+
+        lastContractCompletionLabel = activeContract.title;
+        contractCompletePulseTimer = 1.8f;
+        contractDataBonusEarned += Mathf.Max(0, activeContract.dataReward);
+        int reward = Mathf.Max(0, activeContract.scoreReward);
+        hasActiveContract = false;
+        nextContractTime = SurvivalTime + Mathf.Max(10f, contractInterval);
+
+        if (reward > 0)
+        {
+            AddScore(reward);
+        }
+
+        GlitchAudioManager.PlayUpgradeSelect();
+    }
+
+    private void FailRunContract()
+    {
+        hasActiveContract = false;
+        nextContractTime = SurvivalTime + Mathf.Max(8f, contractInterval * 0.65f);
     }
 
     public void SuppressBreachSensitiveSystems(float seconds)
@@ -569,6 +788,12 @@ public class GameManager : MonoBehaviour
         smoothedThreat = 0f;
         scorePulseTimer = 0f;
         nextUpgradeTime = Mathf.Max(1f, firstUpgradeTime);
+        nextContractTime = Mathf.Max(1f, firstContractTime);
+        hasActiveContract = false;
+        activeContract = default;
+        contractCompletePulseTimer = 0f;
+        lastContractCompletionLabel = string.Empty;
+        contractDataBonusEarned = 0;
         upgradeSelectionOpen = false;
         upgradeSelectionClosing = false;
         upgradeSelectionAge = 0f;
@@ -1964,10 +2189,46 @@ public class GameManager : MonoBehaviour
             DrawHudChip(new Rect(eventX, (10f * s) + chipH + (6f * s), eventW, chipH), eventLabel, new Color(0.31f, 0.17f, 0.22f, 0.74f));
         }
 
+        DrawRunContractHud(s);
+
         if (enableReactiveHudFx)
         {
             DrawThreatVignette();
         }
+    }
+
+    private void DrawRunContractHud(float s)
+    {
+        if (!hasActiveContract && contractCompletePulseTimer <= 0f)
+        {
+            return;
+        }
+
+        Rect panel = new Rect(12f * s, 164f * s, 320f * s, 62f * s);
+        Color accent = contractCompletePulseTimer > 0f
+            ? new Color(0.56f, 1f, 0.76f, 1f)
+            : new Color(0.48f, 0.90f, 1f, 1f);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 9f);
+        DrawSolidRect(panel, new Color(0.03f, 0.05f, 0.10f, 0.72f));
+        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, (0.55f + pulse * 0.18f)));
+        DrawSolidRect(new Rect(panel.x, panel.yMax - (2f * s), panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, 0.28f));
+
+        if (!hasActiveContract)
+        {
+            GUI.Label(new Rect(panel.x + (12f * s), panel.y + (8f * s), panel.width - (24f * s), 22f * s), "CONTRATO COMPLETADO", hudLabelStyle);
+            GUI.Label(new Rect(panel.x + (12f * s), panel.y + (30f * s), panel.width - (24f * s), 24f * s), lastContractCompletionLabel, hudValueStyle);
+            return;
+        }
+
+        float remaining = Mathf.Max(0f, activeContract.duration - (SurvivalTime - activeContract.startedAt));
+        float normalized = Mathf.Clamp01(activeContract.progress / Mathf.Max(1f, activeContract.target));
+        GUI.Label(new Rect(panel.x + (12f * s), panel.y + (6f * s), panel.width - (84f * s), 18f * s), activeContract.title.ToUpperInvariant(), hudLabelStyle);
+        GUI.Label(new Rect(panel.xMax - (78f * s), panel.y + (6f * s), 66f * s, 18f * s), $"{Mathf.CeilToInt(remaining)}s", hudLabelStyle);
+        GUI.Label(new Rect(panel.x + (12f * s), panel.y + (24f * s), panel.width - (24f * s), 18f * s), $"{activeContract.hint}  {activeContract.progress}/{activeContract.target}", hudLabelStyle);
+
+        Rect bar = new Rect(panel.x + (12f * s), panel.yMax - (14f * s), panel.width - (24f * s), 7f * s);
+        DrawSolidRect(bar, new Color(0.04f, 0.06f, 0.10f, 0.92f));
+        DrawSolidRect(new Rect(bar.x, bar.y, bar.width * normalized, bar.height), new Color(accent.r, accent.g, accent.b, 0.82f));
     }
 
     private void DrawThreatMeter(Rect panel, float s)

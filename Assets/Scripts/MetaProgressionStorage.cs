@@ -22,6 +22,7 @@ public static class MetaProgressionStorage
         public float survivalTime;
         public string levelLabel;
         public int dataEarned;
+        public int contractBonusData;
         public int totalData;
     }
 
@@ -43,6 +44,7 @@ public static class MetaProgressionStorage
     private const string LastTimeKey = "Glitch_Meta_LastTime";
     private const string LastLevelKey = "Glitch_Meta_LastLevel";
     private const string LastEarnedKey = "Glitch_Meta_LastEarned";
+    private const string LastContractBonusKey = "Glitch_Meta_LastContractBonus";
     private const string SelectedSkinKey = "Glitch_Meta_SelectedSkin";
 
     private static readonly UnlockDefinition[] definitions =
@@ -153,13 +155,15 @@ public static class MetaProgressionStorage
         survivalTime = Mathf.Max(0f, PlayerPrefs.GetFloat(LastTimeKey, 0f)),
         levelLabel = PlayerPrefs.GetString(LastLevelKey, "Unknown"),
         dataEarned = Mathf.Max(0, PlayerPrefs.GetInt(LastEarnedKey, 0)),
+        contractBonusData = Mathf.Max(0, PlayerPrefs.GetInt(LastContractBonusKey, 0)),
         totalData = CurrentData
     };
 
-    public static RunReward AwardRun(int score, float survivalTime, string levelLabel)
+    public static RunReward AwardRun(int score, float survivalTime, string levelLabel, int contractBonusData = 0)
     {
         int safeScore = Mathf.Max(0, score);
-        int earned = CalculateDataReward(safeScore, survivalTime);
+        int safeContractBonus = Mathf.Max(0, contractBonusData);
+        int earned = CalculateDataReward(safeScore, survivalTime) + safeContractBonus;
         int total = CurrentData + earned;
 
         PlayerPrefs.SetInt(DataKey, total);
@@ -167,6 +171,7 @@ public static class MetaProgressionStorage
         PlayerPrefs.SetFloat(LastTimeKey, Mathf.Max(0f, survivalTime));
         PlayerPrefs.SetString(LastLevelKey, string.IsNullOrWhiteSpace(levelLabel) ? "Unknown" : levelLabel);
         PlayerPrefs.SetInt(LastEarnedKey, earned);
+        PlayerPrefs.SetInt(LastContractBonusKey, safeContractBonus);
         PlayerPrefs.Save();
 
         return LastRunReward;
@@ -282,6 +287,7 @@ public static class MetaProgressionStorage
         PlayerPrefs.DeleteKey(LastTimeKey);
         PlayerPrefs.DeleteKey(LastLevelKey);
         PlayerPrefs.DeleteKey(LastEarnedKey);
+        PlayerPrefs.DeleteKey(LastContractBonusKey);
         PlayerPrefs.DeleteKey(SelectedSkinKey);
         for (int i = 0; i < definitions.Length; i++)
         {
