@@ -20,10 +20,10 @@ public class LabAmbientSecurityController : MonoBehaviour
     [SerializeField] private int maxActiveGates = 2;
 
     [Header("Gate Timing")]
-    [SerializeField] private Vector2 gateDurationRange = new Vector2(7f, 10f);
-    [SerializeField, Range(0.08f, 0.45f)] private float gateTelegraphFraction = 0.24f;
-    [SerializeField, Range(0.30f, 0.72f)] private float gateDeployEndFraction = 0.43f;
-    [SerializeField, Range(0.55f, 0.92f)] private float gateRetractStartFraction = 0.78f;
+    [SerializeField] private Vector2 gateActiveHoldRange = new Vector2(7f, 10f);
+    [SerializeField] private float gateTelegraphSeconds = 1.2f;
+    [SerializeField] private float gateDeploySeconds = 0.75f;
+    [SerializeField] private float gateRetractSeconds = 0.85f;
 
     [Header("Gate Shape")]
     [SerializeField] private Vector2 gateLengthRange = new Vector2(5.2f, 8.6f);
@@ -116,19 +116,33 @@ public class LabAmbientSecurityController : MonoBehaviour
                 continue;
             }
 
-            float lockdownDuration = Random.Range(
-                Mathf.Min(gateDurationRange.x, gateDurationRange.y),
-                Mathf.Max(gateDurationRange.x, gateDurationRange.y));
-            SpawnScan(horizontal, laneCenter, lockdownDuration);
-            SpawnGate(firstSide, firstSize, firstTarget, lockdownDuration);
-            SpawnGate(secondSide, secondSize, secondTarget, lockdownDuration);
+            float activeHoldSeconds = Random.Range(
+                Mathf.Min(gateActiveHoldRange.x, gateActiveHoldRange.y),
+                Mathf.Max(gateActiveHoldRange.x, gateActiveHoldRange.y));
+            float telegraphSeconds = Mathf.Max(0.1f, gateTelegraphSeconds);
+            float deploySeconds = Mathf.Max(0.1f, gateDeploySeconds);
+            float retractSeconds = Mathf.Max(0.1f, gateRetractSeconds);
+            float lockdownDuration = telegraphSeconds + deploySeconds + Mathf.Max(0.1f, activeHoldSeconds) + retractSeconds;
+            float telegraphFraction = telegraphSeconds / lockdownDuration;
+            float deployEndFraction = (telegraphSeconds + deploySeconds) / lockdownDuration;
+            float retractStartFraction = (telegraphSeconds + deploySeconds + activeHoldSeconds) / lockdownDuration;
+            SpawnScan(horizontal, laneCenter, lockdownDuration, telegraphFraction);
+            SpawnGate(firstSide, firstSize, firstTarget, lockdownDuration, telegraphFraction, deployEndFraction, retractStartFraction);
+            SpawnGate(secondSide, secondSize, secondTarget, lockdownDuration, telegraphFraction, deployEndFraction, retractStartFraction);
             return true;
         }
 
         return false;
     }
 
-    private void SpawnGate(GateSide side, Vector2 size, Vector2 target, float lockdownDuration)
+    private void SpawnGate(
+        GateSide side,
+        Vector2 size,
+        Vector2 target,
+        float lockdownDuration,
+        float telegraphFraction,
+        float deployEndFraction,
+        float retractStartFraction)
     {
         Vector2 start = PickGateStart(side, size, target);
         GameObject gateGo = new GameObject($"LabAmbientGate_{side}");
@@ -140,20 +154,20 @@ public class LabAmbientSecurityController : MonoBehaviour
             target,
             size,
             lockdownDuration,
-            gateTelegraphFraction,
-            gateDeployEndFraction,
-            gateRetractStartFraction,
+            telegraphFraction,
+            deployEndFraction,
+            retractStartFraction,
             warningColor,
             activeColor);
         activeGates.Add(gate);
     }
 
-    private void SpawnScan(bool horizontal, float laneCenter, float lockdownDuration)
+    private void SpawnScan(bool horizontal, float laneCenter, float lockdownDuration, float telegraphFraction)
     {
         GameObject scanGo = new GameObject(horizontal ? "LabSecurityHorizontalScan" : "LabSecurityVerticalScan");
         scanGo.transform.SetParent(centerTransform != null ? centerTransform : transform, false);
         LabSecurityScanFx scan = scanGo.AddComponent<LabSecurityScanFx>();
-        scan.Configure(horizontal, interiorLeft, interiorRight, interiorBottom, interiorTop, laneCenter, lockdownDuration, gateTelegraphFraction, warningColor, activeColor);
+        scan.Configure(horizontal, interiorLeft, interiorRight, interiorBottom, interiorTop, laneCenter, lockdownDuration, telegraphFraction, warningColor, activeColor);
         activeScans.Add(scan);
     }
 
