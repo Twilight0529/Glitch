@@ -44,6 +44,8 @@ public class GameManager : MonoBehaviour
         public string description;
         public string category;
         public string rarity;
+        public string icon;
+        public string impact;
         public Color accent;
     }
 
@@ -185,6 +187,10 @@ public class GameManager : MonoBehaviour
     private GUIStyle upgradeDescriptionStyle;
     private GUIStyle upgradeButtonStyle;
     private GUIStyle upgradeTimerStyle;
+    private GUIStyle upgradeMetaStyle;
+    private GUIStyle upgradeIconStyle;
+    private GUIStyle upgradeImpactStyle;
+    private GUIStyle upgradeCardTitleStyle;
     private Font importantFont;
     private Font secondaryFont;
     private string lastBossStateRaw;
@@ -1319,6 +1325,8 @@ public class GameManager : MonoBehaviour
                     description = "Aumenta la velocidad base del jugador.",
                     category = "MOVIMIENTO",
                     rarity = "COMUN",
+                    icon = ">>",
+                    impact = "VELOCIDAD +",
                     accent = new Color(0.46f, 0.96f, 1f, 1f)
                 };
             case PlayerUpgradeKind.ParryWindow:
@@ -1329,6 +1337,8 @@ public class GameManager : MonoBehaviour
                     description = "El Firewall Parry permanece activo un poco mas.",
                     category = "FIREWALL",
                     rarity = "COMUN",
+                    icon = "[]",
+                    impact = "PARRY DURA MAS",
                     accent = new Color(1f, 0.90f, 0.54f, 1f)
                 };
             case PlayerUpgradeKind.ParryCooldown:
@@ -1339,6 +1349,8 @@ public class GameManager : MonoBehaviour
                     description = "Reduce el tiempo de espera del Firewall Parry.",
                     category = "FIREWALL",
                     rarity = "COMUN",
+                    icon = "<>",
+                    impact = "PARRY RECARGA ANTES",
                     accent = new Color(0.60f, 0.84f, 1f, 1f)
                 };
             case PlayerUpgradeKind.ParryRadius:
@@ -1349,6 +1361,8 @@ public class GameManager : MonoBehaviour
                     description = "Aumenta el radio efectivo del Firewall Parry.",
                     category = "FIREWALL",
                     rarity = "COMUN",
+                    icon = "()",
+                    impact = "PARRY MAS GRANDE",
                     accent = new Color(0.76f, 0.64f, 1f, 1f)
                 };
             case PlayerUpgradeKind.FirewallChargeGain:
@@ -1359,6 +1373,8 @@ public class GameManager : MonoBehaviour
                     description = "Pickups, nodos y parries cargan mas rapido el Firewall Burst.",
                     category = "BUILD",
                     rarity = "INESTABLE",
+                    icon = "+%",
+                    impact = "FIREWALL CARGA +",
                     accent = new Color(0.52f, 1f, 0.78f, 1f)
                 };
             case PlayerUpgradeKind.FirewallBurstRadius:
@@ -1369,6 +1385,8 @@ public class GameManager : MonoBehaviour
                     description = "Aumenta el area del Burst para empujar enemigos y limpiar proyectiles.",
                     category = "CONTROL",
                     rarity = "INESTABLE",
+                    icon = "O+",
+                    impact = "BURST MAS GRANDE",
                     accent = new Color(0.42f, 0.94f, 1f, 1f)
                 };
             case PlayerUpgradeKind.FirewallBurstStun:
@@ -1379,6 +1397,8 @@ public class GameManager : MonoBehaviour
                     description = "El Burst deja a la anomalia vulnerable durante mas tiempo.",
                     category = "CONTROL",
                     rarity = "CRITICO",
+                    icon = "!!",
+                    impact = "STUN MAS LARGO",
                     accent = new Color(1f, 0.54f, 0.72f, 1f)
                 };
             case PlayerUpgradeKind.HazardResistance:
@@ -1389,6 +1409,8 @@ public class GameManager : MonoBehaviour
                     description = "Reduce la duracion e intensidad de slows provocados por la arena.",
                     category = "SUPERVIVENCIA",
                     rarity = "INESTABLE",
+                    icon = "##",
+                    impact = "SLOWS MAS DEBILES",
                     accent = new Color(0.52f, 1f, 0.86f, 1f)
                 };
             case PlayerUpgradeKind.DisplacementStabilizer:
@@ -1399,6 +1421,8 @@ public class GameManager : MonoBehaviour
                     description = "Reduce empujes, corrientes y desplazamientos externos del mapa.",
                     category = "MOVIMIENTO",
                     rarity = "INESTABLE",
+                    icon = "_|",
+                    impact = "MENOS EMPUJE",
                     accent = new Color(0.50f, 0.72f, 1f, 1f)
                 };
             case PlayerUpgradeKind.HazardFirewallCharge:
@@ -1409,6 +1433,8 @@ public class GameManager : MonoBehaviour
                     description = "Los slows y empujes de la arena cargan un poco el Firewall.",
                     category = "BUILD",
                     rarity = "CRITICO",
+                    icon = "x+",
+                    impact = "ARENA CARGA FIREWALL",
                     accent = new Color(1f, 0.72f, 0.40f, 1f)
                 };
             default:
@@ -1419,6 +1445,8 @@ public class GameManager : MonoBehaviour
                     description = "Los escudos duran mas cuando los recolectas.",
                     category = "DEFENSA",
                     rarity = "COMUN",
+                    icon = "[]",
+                    impact = "ESCUDOS DURAN MAS",
                     accent = new Color(1f, 0.66f, 0.86f, 1f)
                 };
         }
@@ -1574,6 +1602,7 @@ public class GameManager : MonoBehaviour
         bool suppressed = upgradeSelectionClosing && index != upgradeSelectedIndex;
         bool hovered = !upgradeSelectionClosing && card.Contains(Event.current.mousePosition);
         float selectedPulse = selected ? 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 22f) : 0f;
+        float hoverPulse = hovered ? 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 9f) : 0f;
         Color fill = hovered
             ? new Color(choice.accent.r * 0.18f, choice.accent.g * 0.18f, choice.accent.b * 0.22f, 0.92f)
             : new Color(0.04f, 0.06f, 0.11f, 0.90f);
@@ -1590,15 +1619,35 @@ public class GameManager : MonoBehaviour
         DrawSolidRect(animatedCard, new Color(fill.r, fill.g, fill.b, fill.a * cardAlpha));
         DrawSolidRect(new Rect(animatedCard.x, animatedCard.y, animatedCard.width, 2f * s), new Color(choice.accent.r, choice.accent.g, choice.accent.b, (0.78f + selectedPulse * 0.18f) * cardAlpha));
         DrawSolidRect(new Rect(animatedCard.x + (14f * s), animatedCard.y + (18f * s), Mathf.Lerp(30f * s, 86f * s, selected ? selectedPulse : enter), 5f * s), new Color(choice.accent.r, choice.accent.g, choice.accent.b, 0.62f * cardAlpha));
+        DrawSolidRect(new Rect(animatedCard.x, animatedCard.yMax - (2f * s), animatedCard.width, 2f * s), new Color(choice.accent.r, choice.accent.g, choice.accent.b, (hovered ? 0.58f : 0.24f) * cardAlpha));
+
+        Rect metaRect = new Rect(animatedCard.x + (16f * s), animatedCard.y + (30f * s), animatedCard.width - (32f * s), 22f * s);
+        Color rarityColor = GetUpgradeRarityColor(choice.rarity, choice.accent);
+        DrawSolidRect(metaRect, new Color(rarityColor.r, rarityColor.g, rarityColor.b, 0.18f * cardAlpha));
+
+        Rect iconRect = new Rect(animatedCard.center.x - (30f * s), animatedCard.y + (66f * s), 60f * s, 58f * s);
+        DrawSolidRect(iconRect, new Color(choice.accent.r, choice.accent.g, choice.accent.b, (0.16f + hoverPulse * 0.08f) * cardAlpha));
+        DrawSolidRect(new Rect(iconRect.x, iconRect.y, iconRect.width, 2f * s), new Color(choice.accent.r, choice.accent.g, choice.accent.b, 0.72f * cardAlpha));
+        DrawSolidRect(new Rect(iconRect.x, iconRect.yMax - (2f * s), iconRect.width, 2f * s), new Color(0.82f, 0.94f, 1f, 0.28f * cardAlpha));
 
         Color old = GUI.color;
         GUI.color = new Color(1f, 1f, 1f, cardAlpha);
         string meta = $"{choice.category} / {choice.rarity}";
-        GUI.Label(new Rect(animatedCard.x + (16f * s), animatedCard.y + (26f * s), animatedCard.width - (32f * s), 22f * s), meta, hudLabelStyle);
-        GUI.Label(new Rect(animatedCard.x + (16f * s), animatedCard.y + (52f * s), animatedCard.width - (32f * s), 54f * s), choice.title.ToUpperInvariant(), upgradeButtonStyle);
-        GUI.Label(new Rect(animatedCard.x + (16f * s), animatedCard.y + (112f * s), animatedCard.width - (32f * s), 78f * s), choice.description, upgradeDescriptionStyle);
+        GUI.Label(metaRect, meta, BuildFittedSingleLineStyle(upgradeMetaStyle, meta, metaRect.width - (10f * s), metaRect.height, Mathf.RoundToInt(8f * s)));
+        GUI.Label(iconRect, choice.icon, upgradeIconStyle);
 
         Rect buttonRect = new Rect(animatedCard.x + (16f * s), animatedCard.yMax - (52f * s), animatedCard.width - (32f * s), 34f * s);
+        Rect impactRect = new Rect(animatedCard.x + (18f * s), buttonRect.y - (38f * s), animatedCard.width - (36f * s), 28f * s);
+        float titleY = animatedCard.y + (140f * s);
+        Rect titleRect = new Rect(
+            animatedCard.x + (16f * s),
+            titleY,
+            animatedCard.width - (32f * s),
+            Mathf.Max(36f * s, impactRect.y - titleY - (8f * s)));
+        GUI.Label(titleRect, choice.title.ToUpperInvariant(), upgradeCardTitleStyle);
+        DrawSolidRect(impactRect, new Color(choice.accent.r, choice.accent.g, choice.accent.b, 0.12f * cardAlpha));
+        GUI.Label(impactRect, choice.impact, BuildFittedSingleLineStyle(upgradeImpactStyle, choice.impact, impactRect.width - (10f * s), impactRect.height, Mathf.RoundToInt(9f * s)));
+
         DrawSolidRect(buttonRect, new Color(choice.accent.r, choice.accent.g, choice.accent.b, (hovered ? 0.46f : 0.28f) * cardAlpha));
         GUI.enabled = !upgradeSelectionClosing;
         if (GUI.Button(buttonRect, selected ? "INSTALANDO" : "INSTALAR", upgradeButtonStyle))
@@ -1657,6 +1706,21 @@ public class GameManager : MonoBehaviour
         DrawSolidRect(new Rect(ring.x, ring.yMax - (3f * s), ring.width, 3f * s), new Color(c.r, c.g, c.b, 0.48f * flash * alpha));
         DrawSolidRect(new Rect(ring.x, ring.y, 3f * s, ring.height), new Color(c.r, c.g, c.b, 0.46f * flash * alpha));
         DrawSolidRect(new Rect(ring.xMax - (3f * s), ring.y, 3f * s, ring.height), new Color(c.r, c.g, c.b, 0.46f * flash * alpha));
+    }
+
+    private static Color GetUpgradeRarityColor(string rarity, Color fallback)
+    {
+        switch (rarity)
+        {
+            case "CRITICO":
+                return new Color(1f, 0.54f, 0.72f, 1f);
+            case "INESTABLE":
+                return new Color(1f, 0.78f, 0.42f, 1f);
+            case "COMUN":
+                return new Color(0.62f, 0.92f, 1f, 1f);
+            default:
+                return fallback;
+        }
     }
 
     private static string ToBossStateLabel(string raw)
@@ -2120,6 +2184,10 @@ public class GameManager : MonoBehaviour
             upgradeDescriptionStyle != null &&
             upgradeButtonStyle != null &&
             upgradeTimerStyle != null &&
+            upgradeMetaStyle != null &&
+            upgradeIconStyle != null &&
+            upgradeImpactStyle != null &&
+            upgradeCardTitleStyle != null &&
             Mathf.Abs(cachedUpgradeHudScaleForStyles - hudScale) < 0.001f)
         {
             return;
@@ -2158,6 +2226,50 @@ public class GameManager : MonoBehaviour
             wordWrap = true
         };
         upgradeDescriptionStyle.normal.textColor = new Color(0.82f, 0.90f, 1f, 0.92f);
+
+        upgradeMetaStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = secondaryFont,
+            fontSize = Mathf.RoundToInt(11f * hudScale),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            clipping = TextClipping.Clip,
+            wordWrap = false
+        };
+        upgradeMetaStyle.normal.textColor = new Color(0.88f, 0.96f, 1f, 0.92f);
+
+        upgradeIconStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = importantFont,
+            fontSize = Mathf.RoundToInt(28f * hudScale),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            clipping = TextClipping.Clip,
+            wordWrap = false
+        };
+        upgradeIconStyle.normal.textColor = new Color(0.96f, 0.99f, 1f, 0.98f);
+
+        upgradeImpactStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = secondaryFont,
+            fontSize = Mathf.RoundToInt(13f * hudScale),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            clipping = TextClipping.Clip,
+            wordWrap = false
+        };
+        upgradeImpactStyle.normal.textColor = new Color(1f, 0.88f, 0.62f, 0.96f);
+
+        upgradeCardTitleStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = importantFont,
+            fontSize = Mathf.RoundToInt(17f * hudScale),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            clipping = TextClipping.Clip,
+            wordWrap = true
+        };
+        upgradeCardTitleStyle.normal.textColor = new Color(0.96f, 0.99f, 1f, 0.98f);
 
         upgradeButtonStyle = new GUIStyle(GUI.skin.button)
         {
