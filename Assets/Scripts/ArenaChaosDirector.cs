@@ -198,21 +198,25 @@ public class ArenaChaosDirector : MonoBehaviour
         if (operation.id == ContainmentOperationStorage.ExtractionId)
         {
             scorePickupIntervalRange = new Vector2(
-                Mathf.Max(0.24f, scorePickupIntervalRange.x * 0.48f),
-                Mathf.Max(0.42f, scorePickupIntervalRange.y * 0.58f));
-            scorePickupMaxAlive = Mathf.Max(scorePickupMaxAlive + 5, 13);
-            scorePickupBurstMin = Mathf.Max(scorePickupBurstMin, 2);
-            scorePickupBurstMax = Mathf.Max(scorePickupBurstMax, 4);
-            scorePickupLifetime = Mathf.Max(4.2f, scorePickupLifetime * 0.72f);
-            dataCoreChance = Mathf.Clamp01(dataCoreChance + 0.22f);
+                Mathf.Max(0.18f, scorePickupIntervalRange.x * 0.38f),
+                Mathf.Max(0.34f, scorePickupIntervalRange.y * 0.48f));
+            scorePickupMaxAlive = Mathf.Max(scorePickupMaxAlive + 8, 16);
+            scorePickupBurstMin = Mathf.Max(scorePickupBurstMin, 3);
+            scorePickupBurstMax = Mathf.Max(scorePickupBurstMax, 5);
+            scorePickupLifetime = Mathf.Max(4.0f, scorePickupLifetime * 0.66f);
+            dataCoreChance = Mathf.Clamp01(dataCoreChance + 0.34f);
+            dataCoreScoreMultiplier = Mathf.Max(dataCoreScoreMultiplier + 1, 5);
+            dataCoreFirewallChargeBonus += 5f;
         }
         else if (operation.id == ContainmentOperationStorage.BreachId)
         {
-            breachEventIntervalRange = new Vector2(20f, 32f);
-            minimumBreachMapAgeSeconds = Mathf.Max(24f, minimumBreachMapAgeSeconds - 24f);
-            breachTelegraphSeconds += 1.6f;
-            breachLifetime += 3.5f;
-            breachScoreBonus += 16;
+            breachEventIntervalRange = new Vector2(16f, 25f);
+            minimumBreachMapAgeSeconds = Mathf.Max(20f, minimumBreachMapAgeSeconds - 30f);
+            breachTelegraphSeconds += 2.0f;
+            breachLifetime += 5.0f;
+            breachScoreBonus += 24;
+            breachGateSize += new Vector2(0.35f, 0.16f);
+            breachEnemyGuideDuration += 1.4f;
         }
     }
 

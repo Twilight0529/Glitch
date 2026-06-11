@@ -17,7 +17,7 @@ public class LabAmbientSecurityController : MonoBehaviour
     [SerializeField] private Vector2 gateIntervalRange = new Vector2(5.8f, 9.4f);
     [SerializeField] private float firstGateDelayMin = 1.1f;
     [SerializeField] private float firstGateDelayMax = 2.2f;
-    [SerializeField] private int maxActiveGates = 2;
+    [SerializeField] private int maxActiveGates = 2; 
 
     [Header("Gate Timing")]
     [SerializeField] private Vector2 gateActiveHoldRange = new Vector2(7f, 10f);

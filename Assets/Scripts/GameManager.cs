@@ -464,7 +464,7 @@ public class GameManager : MonoBehaviour
     {
         if (activeOperation.id == ContainmentOperationStorage.ExtractionId)
         {
-            AddScore(2);
+            AddScore(3);
             AdvanceContainmentOperation(1);
         }
 
@@ -496,7 +496,7 @@ public class GameManager : MonoBehaviour
     {
         if (activeOperation.id == ContainmentOperationStorage.FirewallId)
         {
-            AddScore(15);
+            AddScore(20);
             AdvanceContainmentOperation(1);
         }
 
@@ -1185,11 +1185,11 @@ public class GameManager : MonoBehaviour
         ruptureRunTime = 0f;
         if (activeOperation.id == ContainmentOperationStorage.ContractId)
         {
-            nextContractTime = Mathf.Min(nextContractTime, 14f);
-            contractInterval = Mathf.Max(16f, contractInterval * 0.58f);
-            contractDuration = Mathf.Max(28f, contractDuration * 0.82f);
-            contractScoreReward += 10;
-            contractDataReward += 3;
+            nextContractTime = Mathf.Min(nextContractTime, 10f);
+            contractInterval = Mathf.Max(14f, contractInterval * 0.46f);
+            contractDuration = Mathf.Max(26f, contractDuration * 0.86f);
+            contractScoreReward += 16;
+            contractDataReward += 5;
         }
 
         achievementToastTitle = string.Empty;
@@ -1226,13 +1226,15 @@ public class GameManager : MonoBehaviour
         operationPlayerModifiersApplied = true;
         if (activeOperation.id == ContainmentOperationStorage.FirewallId)
         {
-            playerController.ImproveFirewallChargeGain(1.28f);
-            playerController.ExpandParryRadius(0.18f);
-            playerController.ReduceParryCooldown(0.86f);
+            playerController.ImproveFirewallChargeGain(1.45f);
+            playerController.ExpandParryRadius(0.26f);
+            playerController.ReduceParryCooldown(0.78f);
+            playerController.ExpandFirewallBurstRadius(0.35f);
+            playerController.ImproveFirewallBurstStun(0.25f);
         }
         else if (activeOperation.id == ContainmentOperationStorage.ExtractionId)
         {
-            playerController.ApplySpeedBoost(1.16f, 9999f);
+            playerController.ApplySpeedBoost(1.20f, 9999f);
         }
     }
 
