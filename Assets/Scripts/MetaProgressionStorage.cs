@@ -55,6 +55,11 @@ public static class MetaProgressionStorage
     public const string SkinLabMint = "skin_lab_mint";
     public const string SkinStorageGold = "skin_storage_gold";
     public const string SkinFirewallWhite = "skin_firewall_white";
+    public const string SkinBreachBlack = "skin_breach_black";
+    public const string SkinSignalRed = "skin_signal_red";
+    public const string SkinOverdrivePrism = "skin_overdrive_prism";
+    public const string SkinVoidViolet = "skin_void_violet";
+    public const string SkinContainmentGold = "skin_containment_gold";
 
     private const string DataKey = "Glitch_Meta_Data";
     private const string LastScoreKey = "Glitch_Meta_LastScore";
@@ -175,6 +180,61 @@ public static class MetaProgressionStorage
             skin = true,
             bodyColor = new Color(0.92f, 0.98f, 1f, 1f),
             trailColor = new Color(0.70f, 0.96f, 1f, 0.90f)
+        },
+        new UnlockDefinition
+        {
+            id = SkinBreachBlack,
+            section = SectionSkins,
+            title = "Breach Negro",
+            description = "Cuerpo oscuro con rastro magenta para escapes de alto riesgo.",
+            cost = 75,
+            skin = true,
+            bodyColor = new Color(0.08f, 0.06f, 0.11f, 1f),
+            trailColor = new Color(1f, 0.38f, 0.78f, 0.92f)
+        },
+        new UnlockDefinition
+        {
+            id = SkinSignalRed,
+            section = SectionSkins,
+            title = "Senal Roja",
+            description = "Paleta agresiva inspirada en alertas de contencion.",
+            cost = 85,
+            skin = true,
+            bodyColor = new Color(1f, 0.26f, 0.34f, 1f),
+            trailColor = new Color(1f, 0.64f, 0.42f, 0.88f)
+        },
+        new UnlockDefinition
+        {
+            id = SkinOverdrivePrism,
+            section = SectionSkins,
+            title = "Prisma Overdrive",
+            description = "Color de prestigio para runs con sobrecarga ambiental.",
+            cost = 105,
+            skin = true,
+            bodyColor = new Color(0.78f, 0.56f, 1f, 1f),
+            trailColor = new Color(0.42f, 1f, 0.92f, 0.90f)
+        },
+        new UnlockDefinition
+        {
+            id = SkinVoidViolet,
+            section = SectionSkins,
+            title = "Vacio Violeta",
+            description = "Paleta profunda con rastro frio para persecuciones largas.",
+            cost = 120,
+            skin = true,
+            bodyColor = new Color(0.30f, 0.20f, 0.58f, 1f),
+            trailColor = new Color(0.64f, 0.92f, 1f, 0.88f)
+        },
+        new UnlockDefinition
+        {
+            id = SkinContainmentGold,
+            section = SectionSkins,
+            title = "Contencion Oro",
+            description = "Paleta premium para marcar progreso de largo plazo.",
+            cost = 150,
+            skin = true,
+            bodyColor = new Color(1f, 0.86f, 0.42f, 1f),
+            trailColor = new Color(1f, 0.98f, 0.76f, 0.92f)
         }
     };
 

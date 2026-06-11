@@ -48,6 +48,7 @@ public class MainMenuController : MonoBehaviour
     private int selectedAchievementIndex;
     private int selectedOperationIndex;
     private Vector2 achievementScroll;
+    private Vector2 unlockScroll;
     private string selectedUnlockSection = MetaProgressionStorage.SectionRunUpgrades;
     private Font titleFont;
     private Font uiFont;
@@ -325,29 +326,30 @@ public class MainMenuController : MonoBehaviour
             clipping = TextClipping.Clip
         };
 
-        Rect description = new Rect(detail.x + 18f, detail.y + 104f, detail.width - 36f, 68f);
+        Rect description = new Rect(detail.x + 18f, detail.y + 104f, detail.width - 36f, 58f);
         GUI.Label(description, operation.description, wrapped);
 
         float y = description.yMax + 8f;
-        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 56f), "Objetivo", operation.objective, operation.accent);
-        y += 64f;
-        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 56f), "Riesgo", operation.risk, new Color(1f, 0.58f, 0.72f, 1f));
-        y += 64f;
-        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 56f), "Recompensa", operation.reward, new Color(1f, 0.82f, 0.46f, 1f));
+        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 62f), "Objetivo", operation.objective, operation.accent);
+        y += 68f;
+        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 62f), "Riesgo", operation.risk, new Color(1f, 0.58f, 0.72f, 1f));
+        y += 68f;
+        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 62f), "Recompensa", operation.reward, new Color(1f, 0.82f, 0.46f, 1f));
     }
 
     private void DrawOperationInfoRow(Rect rect, string label, string value, Color accent)
     {
         DrawSolidRect(rect, new Color(0.05f, 0.07f, 0.12f, 0.72f));
         DrawSolidRect(new Rect(rect.x, rect.y, 4f, rect.height), new Color(accent.r, accent.g, accent.b, 0.70f));
-        GUI.Label(new Rect(rect.x + 12f, rect.y + 3f, 118f, 20f), label, rankingScoreStyle);
+        Rect labelRect = new Rect(rect.x + 12f, rect.y + 2f, rect.width - 24f, 25f);
+        GUI.Label(labelRect, label, BuildFittedSingleLineStyle(rankingScoreStyle, label, labelRect.width, labelRect.height, 11));
         GUIStyle wrapped = new GUIStyle(paragraphStyle)
         {
             wordWrap = true,
             alignment = TextAnchor.UpperLeft,
             clipping = TextClipping.Clip
         };
-        GUI.Label(new Rect(rect.x + 12f, rect.y + 22f, rect.width - 24f, rect.height - 25f), value, wrapped);
+        GUI.Label(new Rect(rect.x + 12f, rect.y + 30f, rect.width - 24f, rect.height - 33f), value, wrapped);
     }
 
     private void DrawOperationIcon(Rect rect, ContainmentOperationStorage.OperationDefinition operation)
@@ -657,22 +659,23 @@ public class MainMenuController : MonoBehaviour
         DrawStatLine(records, 94f, "Rupture", MetaProgressionStorage.GetArenaRecordLabel("Rupture"));
 
         DrawStatsSection(right, "Operacion diaria", dailyComplete ? new Color(1f, 0.82f, 0.46f, 1f) : new Color(0.95f, 0.58f, 1f, 1f));
-        GUI.Label(new Rect(right.x + 14f, right.y + 34f, right.width - 28f, 28f), daily.title, rankingTitleStyle);
+        Rect dailyTitleRect = new Rect(right.x + 14f, right.y + 30f, right.width - 28f, 42f);
+        GUI.Label(dailyTitleRect, daily.title, BuildFittedSingleLineStyle(rankingTitleStyle, daily.title, dailyTitleRect.width, dailyTitleRect.height, 12));
         GUIStyle wrapped = new GUIStyle(paragraphStyle)
         {
             wordWrap = true,
             alignment = TextAnchor.UpperLeft,
             clipping = TextClipping.Clip
         };
-        GUI.Label(new Rect(right.x + 14f, right.y + 70f, right.width - 28f, 54f), daily.description, wrapped);
-        DrawStatLine(right, 130f, daily.progressLabel, dailyComplete ? "COMPLETADA" : $"{dailyProgress}/{daily.target}");
+        GUI.Label(new Rect(right.x + 14f, right.y + 76f, right.width - 28f, 48f), daily.description, wrapped);
+        DrawStatLine(right, 132f, daily.progressLabel, dailyComplete ? "COMPLETADA" : $"{dailyProgress}/{daily.target}");
 
-        Rect bar = new Rect(right.x + 14f, right.y + 164f, right.width - 28f, 10f);
+        Rect bar = new Rect(right.x + 14f, right.y + 166f, right.width - 28f, 10f);
         float normalized = dailyComplete ? 1f : Mathf.Clamp01(dailyProgress / Mathf.Max(1f, daily.target));
         DrawSolidRect(bar, new Color(0.04f, 0.06f, 0.10f, 0.92f));
         Color dailyAccent = dailyComplete ? new Color(1f, 0.82f, 0.46f, 0.86f) : new Color(0.95f, 0.58f, 1f, 0.78f);
         DrawSolidRect(new Rect(bar.x, bar.y, bar.width * normalized, bar.height), dailyAccent);
-        DrawStatLine(right, 184f, "Recompensa", dailyComplete ? "Cobrada" : $"+{daily.dataReward} Datos");
+        DrawStatLine(right, 186f, "Recompensa", dailyComplete ? "Cobrada" : $"+{daily.dataReward} Datos");
 
         Rect lastRun = new Rect(right.x, right.y + 218f, right.width, Mathf.Max(146f, right.height - 218f));
         DrawStatsSection(lastRun, "Ultima run", new Color(1f, 0.76f, 0.50f, 1f));
@@ -946,14 +949,20 @@ public class MainMenuController : MonoBehaviour
         DrawSolidRect(new Rect(listRect.x, listRect.y, listRect.width, 2f), new Color(0.48f, 0.86f, 1f, 0.35f));
 
         float rowGap = 7f;
-        float rowHeight = Mathf.Min(54f, (listRect.height - rowGap * (unlocks.Count + 1)) / Mathf.Max(1, unlocks.Count));
-        float y = listRect.y + rowGap;
+        float rowHeight = 54f;
+        float contentHeight = rowGap + unlocks.Count * (rowHeight + rowGap);
+        Rect viewRect = new Rect(listRect.x, listRect.y + 4f, listRect.width, listRect.height - 8f);
+        Rect contentRect = new Rect(0f, 0f, listRect.width - 18f, Mathf.Max(viewRect.height, contentHeight));
+        unlockScroll = GUI.BeginScrollView(viewRect, unlockScroll, contentRect, false, true);
+        float y = rowGap;
         for (int i = 0; i < unlocks.Count; i++)
         {
-            Rect row = new Rect(listRect.x + 8f, y, listRect.width - 16f, rowHeight);
+            Rect row = new Rect(8f, y, contentRect.width - 16f, rowHeight);
             DrawUnlockSelectableRow(row, unlocks[i], i);
             y += rowHeight + rowGap;
         }
+
+        GUI.EndScrollView();
     }
 
     private List<MetaProgressionStorage.UnlockDefinition> GetUnlocksForSection(string section)
@@ -1002,6 +1011,8 @@ public class MainMenuController : MonoBehaviour
             selectedUnlockSection = section;
             selectedUnlockIndex = 0;
             selectedAchievementIndex = 0;
+            unlockScroll = Vector2.zero;
+            achievementScroll = Vector2.zero;
         }
     }
 
