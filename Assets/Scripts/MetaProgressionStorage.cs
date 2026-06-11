@@ -48,6 +48,9 @@ public static class MetaProgressionStorage
     public const string UnlockHazardFirewallCharge = "upgrade_hazard_firewall_charge";
     public const string UnlockFirewallBurstStun = "upgrade_firewall_burst_stun";
     public const string UnlockExtraUpgradeChoice = "upgrade_extra_choice";
+    public const string UnlockVectorCore = "upgrade_vector_core";
+    public const string UnlockEmergencyShield = "upgrade_emergency_shield";
+    public const string UnlockParryCapacitor = "upgrade_parry_capacitor";
     public const string SectionRunUpgrades = "MEJORAS";
     public const string SectionSkins = "COLORES";
     public const string SkinDefault = "skin_default";
@@ -125,6 +128,30 @@ public static class MetaProgressionStorage
             title = "Selector Expandido",
             description = "Una opcion extra en cada seleccion.",
             cost = 95
+        },
+        new UnlockDefinition
+        {
+            id = UnlockVectorCore,
+            section = SectionRunUpgrades,
+            title = "Nucleo Vectorial",
+            description = "Nueva mejora hibrida de velocidad y estabilidad.",
+            cost = 110
+        },
+        new UnlockDefinition
+        {
+            id = UnlockEmergencyShield,
+            section = SectionRunUpgrades,
+            title = "Escudo de Emergencia",
+            description = "Nueva mejora defensiva con escudo inmediato.",
+            cost = 125
+        },
+        new UnlockDefinition
+        {
+            id = UnlockParryCapacitor,
+            section = SectionRunUpgrades,
+            title = "Capacitor Parry",
+            description = "Nueva mejora avanzada para cargar Firewall.",
+            cost = 135
         },
         new UnlockDefinition
         {

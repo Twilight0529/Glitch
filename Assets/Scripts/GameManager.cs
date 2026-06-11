@@ -34,7 +34,10 @@ public class GameManager : MonoBehaviour
         FirewallBurstStun,
         HazardResistance,
         DisplacementStabilizer,
-        HazardFirewallCharge
+        HazardFirewallCharge,
+        VectorCore,
+        EmergencyShield,
+        ParryCapacitor
     }
 
     private enum RunContractKind
@@ -2153,6 +2156,9 @@ public class GameManager : MonoBehaviour
         AddUnlockedUpgrade(pool, PlayerUpgradeKind.HazardResistance, MetaProgressionStorage.UnlockHazardResistance);
         AddUnlockedUpgrade(pool, PlayerUpgradeKind.DisplacementStabilizer, MetaProgressionStorage.UnlockDisplacementStabilizer);
         AddUnlockedUpgrade(pool, PlayerUpgradeKind.HazardFirewallCharge, MetaProgressionStorage.UnlockHazardFirewallCharge);
+        AddUnlockedUpgrade(pool, PlayerUpgradeKind.VectorCore, MetaProgressionStorage.UnlockVectorCore);
+        AddUnlockedUpgrade(pool, PlayerUpgradeKind.EmergencyShield, MetaProgressionStorage.UnlockEmergencyShield);
+        AddUnlockedUpgrade(pool, PlayerUpgradeKind.ParryCapacitor, MetaProgressionStorage.UnlockParryCapacitor);
 
         int optionBonus = MetaProgressionStorage.IsUnlocked(MetaProgressionStorage.UnlockExtraUpgradeChoice) ? 1 : 0;
         int desired = Mathf.Clamp(upgradeOptionsShown + optionBonus, 1, pool.Count);
@@ -2333,6 +2339,42 @@ public class GameManager : MonoBehaviour
                     impact = "ARENA CARGA FIREWALL",
                     accent = new Color(1f, 0.72f, 0.40f, 1f)
                 };
+            case PlayerUpgradeKind.VectorCore:
+                return new UpgradeChoice
+                {
+                    kind = kind,
+                    title = "Nucleo Vectorial",
+                    description = "Aumenta velocidad base y reduce empujes externos del mapa.",
+                    category = "MOVIMIENTO",
+                    rarity = "CRITICO",
+                    icon = ">>",
+                    impact = "RAPIDO Y ESTABLE",
+                    accent = new Color(0.46f, 1f, 0.92f, 1f)
+                };
+            case PlayerUpgradeKind.EmergencyShield:
+                return new UpgradeChoice
+                {
+                    kind = kind,
+                    title = "Escudo de Emergencia",
+                    description = "Activa un escudo inmediato y mejora la duracion de futuros escudos.",
+                    category = "DEFENSA",
+                    rarity = "CRITICO",
+                    icon = "[]",
+                    impact = "ESCUDO AHORA",
+                    accent = new Color(0.78f, 1f, 0.62f, 1f)
+                };
+            case PlayerUpgradeKind.ParryCapacitor:
+                return new UpgradeChoice
+                {
+                    kind = kind,
+                    title = "Capacitor Parry",
+                    description = "Reduce recarga del parry y acelera la carga del Firewall Burst.",
+                    category = "FIREWALL",
+                    rarity = "CRITICO",
+                    icon = "+>",
+                    impact = "PARRY CARGA MAS",
+                    accent = new Color(1f, 0.84f, 0.48f, 1f)
+                };
             default:
                 return new UpgradeChoice
                 {
@@ -2425,6 +2467,18 @@ public class GameManager : MonoBehaviour
                 break;
             case PlayerUpgradeKind.HazardFirewallCharge:
                 playerController.ImproveHazardFirewallCharge(2.4f);
+                break;
+            case PlayerUpgradeKind.VectorCore:
+                playerController.AddPermanentMoveSpeed(0.95f);
+                playerController.ImproveExternalDisplacementResistance(0.84f);
+                break;
+            case PlayerUpgradeKind.EmergencyShield:
+                playerController.ImproveShieldDuration(1.28f);
+                playerController.ApplyShield(4.2f);
+                break;
+            case PlayerUpgradeKind.ParryCapacitor:
+                playerController.ReduceParryCooldown(0.82f);
+                playerController.ImproveFirewallChargeGain(1.20f);
                 break;
         }
     }
