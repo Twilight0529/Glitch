@@ -17,27 +17,39 @@ public static class AchievementStorage
     public const string SectionAchievements = "LOGROS";
     public const string FirstContractId = "achievement_first_contract";
     public const string SurviveThreeMinutesId = "achievement_survive_3min";
+    public const string SurviveFiveMinutesId = "achievement_survive_5min";
+    public const string SurviveEightMinutesId = "achievement_survive_8min";
     public const string FirstFirewallBurstId = "achievement_first_firewall_burst";
     public const string FirewallBurstTenId = "achievement_firewall_burst_10";
     public const string FirewallBurstTwentyFiveId = "achievement_firewall_burst_25";
+    public const string FirewallBurstFiftyId = "achievement_firewall_burst_50";
     public const string ParryFiveId = "achievement_parry_5";
     public const string ParryTwentyFiveId = "achievement_parry_25";
     public const string ParrySeventyFiveId = "achievement_parry_75";
+    public const string ParryOneHundredFiftyId = "achievement_parry_150";
     public const string PickupsTwentyFiveId = "achievement_pickups_25";
     public const string PickupsOneHundredId = "achievement_pickups_100";
     public const string PickupsTwoHundredFiftyId = "achievement_pickups_250";
+    public const string PickupsFiveHundredId = "achievement_pickups_500";
     public const string ContractsFiveId = "achievement_contracts_5";
     public const string ContractsFifteenId = "achievement_contracts_15";
+    public const string ContractsThirtyId = "achievement_contracts_30";
     public const string BreachFirstId = "achievement_breach_1";
     public const string BreachThreeId = "achievement_breach_3";
+    public const string BreachSevenId = "achievement_breach_7";
     public const string OperationFirewallId = "achievement_operation_firewall";
     public const string OperationExtractionId = "achievement_operation_extraction";
     public const string OperationContractId = "achievement_operation_contract";
     public const string OperationBreachId = "achievement_operation_breach";
     public const string OperationAmbientId = "achievement_operation_ambient_overdrive";
+    public const string OperationsThreeId = "achievement_operations_3";
+    public const string OperationsTenId = "achievement_operations_10";
     public const string LabSurviveNinetyId = "achievement_lab_survive_90";
+    public const string LabSurviveThreeMinutesId = "achievement_lab_survive_180";
     public const string StorageSurviveNinetyId = "achievement_storage_survive_90";
+    public const string StorageSurviveThreeMinutesId = "achievement_storage_survive_180";
     public const string RuptureSurviveNinetyId = "achievement_rupture_survive_90";
+    public const string RuptureSurviveThreeMinutesId = "achievement_rupture_survive_180";
     public const string GradeAId = "achievement_grade_a";
     public const string GradeSId = "achievement_grade_s";
     public const string RuptureEchoTrapId = "achievement_rupture_echo_trap";
@@ -74,12 +86,39 @@ public static class AchievementStorage
         },
         new AchievementDefinition
         {
+            id = SurviveFiveMinutesId,
+            title = "Zona Estable",
+            description = "Sobrevive 300 segundos en una misma run.",
+            progressLabel = "Segundos sobrevividos",
+            target = 300,
+            dataReward = 28
+        },
+        new AchievementDefinition
+        {
+            id = SurviveEightMinutesId,
+            title = "Contencion Larga",
+            description = "Sobrevive 480 segundos en una misma run.",
+            progressLabel = "Segundos sobrevividos",
+            target = 480,
+            dataReward = 48
+        },
+        new AchievementDefinition
+        {
             id = LabSurviveNinetyId,
             title = "Lab Bajo Control",
             description = "Sobrevive 90 segundos en Lab.",
             progressLabel = "Segundos en Lab",
             target = 90,
             dataReward = 12
+        },
+        new AchievementDefinition
+        {
+            id = LabSurviveThreeMinutesId,
+            title = "Lab Sellado",
+            description = "Sobrevive 180 segundos acumulados en Lab durante una run.",
+            progressLabel = "Segundos en Lab",
+            target = 180,
+            dataReward = 24
         },
         new AchievementDefinition
         {
@@ -92,12 +131,30 @@ public static class AchievementStorage
         },
         new AchievementDefinition
         {
+            id = StorageSurviveThreeMinutesId,
+            title = "Turno Industrial",
+            description = "Sobrevive 180 segundos acumulados en Storage durante una run.",
+            progressLabel = "Segundos en Storage",
+            target = 180,
+            dataReward = 24
+        },
+        new AchievementDefinition
+        {
             id = RuptureSurviveNinetyId,
             title = "Eco Persistente",
             description = "Sobrevive 90 segundos en Rupture.",
             progressLabel = "Segundos en Rupture",
             target = 90,
             dataReward = 12
+        },
+        new AchievementDefinition
+        {
+            id = RuptureSurviveThreeMinutesId,
+            title = "Ruptura Sostenida",
+            description = "Sobrevive 180 segundos acumulados en Rupture durante una run.",
+            progressLabel = "Segundos en Rupture",
+            target = 180,
+            dataReward = 24
         },
         new AchievementDefinition
         {
@@ -128,6 +185,15 @@ public static class AchievementStorage
         },
         new AchievementDefinition
         {
+            id = FirewallBurstFiftyId,
+            title = "Nucleo Firewall",
+            description = "Activa 50 Firewall Burst entre todas tus runs.",
+            progressLabel = "Bursts activados",
+            target = 50,
+            dataReward = 42
+        },
+        new AchievementDefinition
+        {
             id = ParryFiveId,
             title = "Mano Firme",
             description = "Conecta 5 parries exitosos en total.",
@@ -152,6 +218,15 @@ public static class AchievementStorage
             progressLabel = "Parries exitosos",
             target = 75,
             dataReward = 28
+        },
+        new AchievementDefinition
+        {
+            id = ParryOneHundredFiftyId,
+            title = "Parry Absoluto",
+            description = "Conecta 150 parries exitosos entre todas tus runs.",
+            progressLabel = "Parries exitosos",
+            target = 150,
+            dataReward = 46
         },
         new AchievementDefinition
         {
@@ -182,6 +257,15 @@ public static class AchievementStorage
         },
         new AchievementDefinition
         {
+            id = PickupsFiveHundredId,
+            title = "Banco de Datos",
+            description = "Junta 500 pickups de score entre todas tus runs.",
+            progressLabel = "Pickups recolectados",
+            target = 500,
+            dataReward = 58
+        },
+        new AchievementDefinition
+        {
             id = ContractsFiveId,
             title = "Operador Constante",
             description = "Completa 5 contratos de contencion entre todas tus runs.",
@@ -200,6 +284,15 @@ public static class AchievementStorage
         },
         new AchievementDefinition
         {
+            id = ContractsThirtyId,
+            title = "Director de Campo",
+            description = "Completa 30 contratos de contencion entre todas tus runs.",
+            progressLabel = "Contratos completados",
+            target = 30,
+            dataReward = 52
+        },
+        new AchievementDefinition
+        {
             id = BreachFirstId,
             title = "Primer Salto",
             description = "Escapa por una brecha por primera vez.",
@@ -215,6 +308,15 @@ public static class AchievementStorage
             progressLabel = "Breaches cruzadas",
             target = 3,
             dataReward = 24
+        },
+        new AchievementDefinition
+        {
+            id = BreachSevenId,
+            title = "Ruta de Brechas",
+            description = "Escapa por 7 brechas entre todas tus runs.",
+            progressLabel = "Breaches cruzadas",
+            target = 7,
+            dataReward = 46
         },
         new AchievementDefinition
         {
@@ -260,6 +362,24 @@ public static class AchievementStorage
             progressLabel = "Operacion completada",
             target = 1,
             dataReward = 16
+        },
+        new AchievementDefinition
+        {
+            id = OperationsThreeId,
+            title = "Operador Versatil",
+            description = "Completa 3 operaciones de contencion.",
+            progressLabel = "Operaciones completadas",
+            target = 3,
+            dataReward = 26
+        },
+        new AchievementDefinition
+        {
+            id = OperationsTenId,
+            title = "Jefe de Protocolo",
+            description = "Completa 10 operaciones de contencion.",
+            progressLabel = "Operaciones completadas",
+            target = 10,
+            dataReward = 64
         },
         new AchievementDefinition
         {
@@ -377,29 +497,42 @@ public static class AchievementStorage
         switch (achievement.id)
         {
             case SurviveThreeMinutesId:
+            case SurviveFiveMinutesId:
+            case SurviveEightMinutesId:
             case LabSurviveNinetyId:
+            case LabSurviveThreeMinutesId:
             case StorageSurviveNinetyId:
+            case StorageSurviveThreeMinutesId:
             case RuptureSurviveNinetyId:
+            case RuptureSurviveThreeMinutesId:
                 return Mathf.Clamp(Mathf.FloorToInt(currentRunSurvivalTime), 0, Mathf.Max(1, achievement.target));
             case ParryFiveId:
             case ParryTwentyFiveId:
             case ParrySeventyFiveId:
+            case ParryOneHundredFiftyId:
                 return Mathf.Clamp(GetCounter(CounterParries), 0, Mathf.Max(1, achievement.target));
             case PickupsTwentyFiveId:
             case PickupsOneHundredId:
             case PickupsTwoHundredFiftyId:
+            case PickupsFiveHundredId:
                 return Mathf.Clamp(GetCounter(CounterPickups), 0, Mathf.Max(1, achievement.target));
             case FirstFirewallBurstId:
             case FirewallBurstTenId:
             case FirewallBurstTwentyFiveId:
+            case FirewallBurstFiftyId:
                 return Mathf.Clamp(GetCounter(CounterFirewallBursts), 0, Mathf.Max(1, achievement.target));
             case FirstContractId:
             case ContractsFiveId:
             case ContractsFifteenId:
+            case ContractsThirtyId:
                 return Mathf.Clamp(GetCounter(CounterContracts), 0, Mathf.Max(1, achievement.target));
             case BreachFirstId:
             case BreachThreeId:
+            case BreachSevenId:
                 return Mathf.Clamp(GetCounter(CounterBreaches), 0, Mathf.Max(1, achievement.target));
+            case OperationsThreeId:
+            case OperationsTenId:
+                return Mathf.Clamp(GetCounter(CounterOperations), 0, Mathf.Max(1, achievement.target));
             default:
                 return 0;
         }
@@ -412,12 +545,12 @@ public static class AchievementStorage
             PlayerPrefs.SetInt(GetAchievementKey(definitions[i].id), 1);
         }
 
-        PlayerPrefs.SetInt(GetCounterKey(CounterParries), 75);
-        PlayerPrefs.SetInt(GetCounterKey(CounterPickups), 250);
-        PlayerPrefs.SetInt(GetCounterKey(CounterFirewallBursts), 25);
-        PlayerPrefs.SetInt(GetCounterKey(CounterContracts), 15);
-        PlayerPrefs.SetInt(GetCounterKey(CounterBreaches), 3);
-        PlayerPrefs.SetInt(GetCounterKey(CounterOperations), 7);
+        PlayerPrefs.SetInt(GetCounterKey(CounterParries), 150);
+        PlayerPrefs.SetInt(GetCounterKey(CounterPickups), 500);
+        PlayerPrefs.SetInt(GetCounterKey(CounterFirewallBursts), 50);
+        PlayerPrefs.SetInt(GetCounterKey(CounterContracts), 30);
+        PlayerPrefs.SetInt(GetCounterKey(CounterBreaches), 7);
+        PlayerPrefs.SetInt(GetCounterKey(CounterOperations), 10);
         PlayerPrefs.Save();
     }
 

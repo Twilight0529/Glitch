@@ -474,7 +474,8 @@ public class GameManager : MonoBehaviour
             1,
             AchievementStorage.PickupsTwentyFiveId,
             AchievementStorage.PickupsOneHundredId,
-            AchievementStorage.PickupsTwoHundredFiftyId);
+            AchievementStorage.PickupsTwoHundredFiftyId,
+            AchievementStorage.PickupsFiveHundredId);
         TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Pickups, 1);
     }
 
@@ -486,7 +487,8 @@ public class GameManager : MonoBehaviour
             1,
             AchievementStorage.ParryFiveId,
             AchievementStorage.ParryTwentyFiveId,
-            AchievementStorage.ParrySeventyFiveId);
+            AchievementStorage.ParrySeventyFiveId,
+            AchievementStorage.ParryOneHundredFiftyId);
         TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Parry, 1);
     }
 
@@ -503,7 +505,8 @@ public class GameManager : MonoBehaviour
             1,
             AchievementStorage.FirstFirewallBurstId,
             AchievementStorage.FirewallBurstTenId,
-            AchievementStorage.FirewallBurstTwentyFiveId);
+            AchievementStorage.FirewallBurstTwentyFiveId,
+            AchievementStorage.FirewallBurstFiftyId);
         NotifyContractProgress(RunContractKind.FirewallBurst, 1);
         TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.FirewallBurst, 1);
     }
@@ -519,7 +522,8 @@ public class GameManager : MonoBehaviour
             AchievementStorage.CounterBreaches,
             1,
             AchievementStorage.BreachFirstId,
-            AchievementStorage.BreachThreeId);
+            AchievementStorage.BreachThreeId,
+            AchievementStorage.BreachSevenId);
     }
 
     public void NotifyRuptureEchoTrapSuccess()
@@ -599,7 +603,11 @@ public class GameManager : MonoBehaviour
         operationDataBonusEarned += Mathf.Max(0, activeOperation.dataReward);
         operationCompletePulseTimer = 2.4f;
         TrackOperationAchievement(activeOperation.id);
-        AdvanceCounterAchievements(AchievementStorage.CounterOperations, 1);
+        AdvanceCounterAchievements(
+            AchievementStorage.CounterOperations,
+            1,
+            AchievementStorage.OperationsThreeId,
+            AchievementStorage.OperationsTenId);
         ShowOperationToast();
         GlitchAudioManager.PlayUpgradeSelect();
     }
@@ -772,7 +780,8 @@ public class GameManager : MonoBehaviour
             1,
             AchievementStorage.FirstContractId,
             AchievementStorage.ContractsFiveId,
-            AchievementStorage.ContractsFifteenId);
+            AchievementStorage.ContractsFifteenId,
+            AchievementStorage.ContractsThirtyId);
         TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Contract, 1);
         if (activeOperation.id == ContainmentOperationStorage.ContractId)
         {
@@ -794,18 +803,38 @@ public class GameManager : MonoBehaviour
         {
             TryUnlockAchievement(AchievementStorage.SurviveThreeMinutesId);
         }
+        if (SurvivalTime >= 300f)
+        {
+            TryUnlockAchievement(AchievementStorage.SurviveFiveMinutesId);
+        }
+        if (SurvivalTime >= 480f)
+        {
+            TryUnlockAchievement(AchievementStorage.SurviveEightMinutesId);
+        }
 
         if (labRunTime >= 90f)
         {
             TryUnlockAchievement(AchievementStorage.LabSurviveNinetyId);
         }
+        if (labRunTime >= 180f)
+        {
+            TryUnlockAchievement(AchievementStorage.LabSurviveThreeMinutesId);
+        }
         if (storageRunTime >= 90f)
         {
             TryUnlockAchievement(AchievementStorage.StorageSurviveNinetyId);
         }
+        if (storageRunTime >= 180f)
+        {
+            TryUnlockAchievement(AchievementStorage.StorageSurviveThreeMinutesId);
+        }
         if (ruptureRunTime >= 90f)
         {
             TryUnlockAchievement(AchievementStorage.RuptureSurviveNinetyId);
+        }
+        if (ruptureRunTime >= 180f)
+        {
+            TryUnlockAchievement(AchievementStorage.RuptureSurviveThreeMinutesId);
         }
     }
 
