@@ -76,12 +76,14 @@ public class StorageAmbientCraneController : MonoBehaviour
     private Vector2 operationTargetPosition;
     private StorageCraneHookFx activeHook;
     private bool operationImpactPlayed;
+    private bool operationModifiersApplied;
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
         centerTransform = center != null ? center : transform;
         obstaclesRoot = staticObstaclesRoot;
         dynamicRoot = dynamicObstaclesRoot != null ? dynamicObstaclesRoot : staticObstaclesRoot;
+        ApplyOperationModifiersOnce();
         RefreshReferences();
         BuildInteriorBounds();
         ClearOperation();
@@ -619,6 +621,30 @@ public class StorageAmbientCraneController : MonoBehaviour
     private void ScheduleNextOperation(float minOverride, float maxOverride)
     {
         operationTimer = Random.Range(Mathf.Min(minOverride, maxOverride), Mathf.Max(minOverride, maxOverride));
+    }
+
+    private void ApplyOperationModifiersOnce()
+    {
+        if (operationModifiersApplied)
+        {
+            return;
+        }
+
+        operationModifiersApplied = true;
+        if (ContainmentOperationStorage.SelectedOperation.id != ContainmentOperationStorage.AmbientOverdriveId)
+        {
+            return;
+        }
+
+        operationIntervalRange = new Vector2(1.1f, 2.2f);
+        operationDuration = Mathf.Max(1.35f, operationDuration * 0.62f);
+        telegraphFraction = Mathf.Clamp(telegraphFraction * 0.62f, 0.05f, 0.42f);
+        maxAmbientCargoBlocks += 10;
+        addCargoChance = Mathf.Clamp01(addCargoChance + 0.45f);
+        removeCargoChance = Mathf.Clamp01(removeCargoChance + 0.18f);
+        relocationDistanceRange = new Vector2(
+            Mathf.Max(relocationDistanceRange.x, 2.8f),
+            Mathf.Max(relocationDistanceRange.y, 6.0f));
     }
 
     private Vector2 ClampToInterior(Vector2 position, float radius)

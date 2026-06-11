@@ -49,10 +49,12 @@ public class LabAmbientSecurityController : MonoBehaviour
     private float interiorBottom;
     private float interiorTop;
     private float gateTimer;
+    private bool operationModifiersApplied;
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
         centerTransform = center != null ? center : transform;
+        ApplyOperationModifiersOnce();
         RefreshReferences();
         BuildInteriorBounds();
         ClearGates();
@@ -62,6 +64,31 @@ public class LabAmbientSecurityController : MonoBehaviour
     private void OnDisable()
     {
         ClearGates();
+    }
+
+    private void ApplyOperationModifiersOnce()
+    {
+        if (operationModifiersApplied)
+        {
+            return;
+        }
+
+        operationModifiersApplied = true;
+        if (ContainmentOperationStorage.SelectedOperation.id != ContainmentOperationStorage.AmbientOverdriveId)
+        {
+            return;
+        }
+
+        gateIntervalRange = new Vector2(1.45f, 2.8f);
+        firstGateDelayMin = 0.25f;
+        firstGateDelayMax = 0.65f;
+        maxActiveGates = Mathf.Max(maxActiveGates, 4);
+        gateActiveHoldRange = new Vector2(
+            Mathf.Max(gateActiveHoldRange.x, 10.5f),
+            Mathf.Max(gateActiveHoldRange.y, 14f));
+        gateTelegraphSeconds = Mathf.Max(0.58f, gateTelegraphSeconds * 0.65f);
+        gateDeploySeconds = Mathf.Max(0.28f, gateDeploySeconds * 0.75f);
+        gateRetractSeconds = Mathf.Max(0.24f, gateRetractSeconds * 0.75f);
     }
 
     private void Update()

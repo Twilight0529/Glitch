@@ -47,6 +47,7 @@ public class MainMenuController : MonoBehaviour
     private int selectedUnlockIndex;
     private int selectedAchievementIndex;
     private int selectedOperationIndex;
+    private Vector2 achievementScroll;
     private string selectedUnlockSection = MetaProgressionStorage.SectionRunUpgrades;
     private Font titleFont;
     private Font uiFont;
@@ -249,7 +250,7 @@ public class MainMenuController : MonoBehaviour
     {
         DrawScreenFade(0.48f);
         float bob = Mathf.Sin(Time.unscaledTime * 1.18f + 0.7f) * 4f;
-        Rect panel = CenterRect(Mathf.Min(820f, Screen.width - 40f), Mathf.Min(540f, Screen.height - 36f));
+        Rect panel = CenterRect(Mathf.Min(900f, Screen.width - 34f), Mathf.Min(560f, Screen.height - 34f));
         panel.y += bob;
         DrawPanel(panel, new Color(0.025f, 0.04f, 0.08f, 0.94f), new Color(0.48f, 0.90f, 1f, 0.58f));
         DrawPanelFx(panel, new Color(0.50f, 0.95f, 1f, 1f), 0.11f);
@@ -262,7 +263,7 @@ public class MainMenuController : MonoBehaviour
         selectedOperationIndex = Mathf.Clamp(selectedOperationIndex, 0, Mathf.Max(0, operations.Count - 1));
         ContainmentOperationStorage.OperationDefinition selected = operations[selectedOperationIndex];
 
-        Rect list = new Rect(area.x, area.y + 70f, 270f, area.height - 128f);
+        Rect list = new Rect(area.x, area.y + 70f, Mathf.Min(286f, area.width * 0.35f), area.height - 128f);
         Rect detail = new Rect(list.xMax + 18f, list.y, area.xMax - list.xMax - 18f, list.height);
         DrawSolidRect(list, new Color(0.02f, 0.035f, 0.07f, 0.64f));
         DrawSolidRect(new Rect(list.x, list.y, list.width, 2f), new Color(0.48f, 0.86f, 1f, 0.38f));
@@ -279,7 +280,7 @@ public class MainMenuController : MonoBehaviour
                 : new Color(0.04f, 0.06f, 0.11f, 0.76f);
             DrawSolidRect(row, fill);
             DrawSolidRect(new Rect(row.x, row.y, 4f, row.height), new Color(operation.accent.r, operation.accent.g, operation.accent.b, selectedRow ? 0.92f : 0.44f));
-            GUI.Label(new Rect(row.x + 12f, row.y + 4f, row.width - 24f, 23f), operation.title, BuildFittedSingleLineStyle(rankingRowStyle, operation.title, row.width - 24f, 23f, 11));
+            GUI.Label(new Rect(row.x + 12f, row.y + 4f, row.width - 24f, 23f), operation.title, BuildFittedSingleLineStyle(rankingRowStyle, operation.title, row.width - 24f, 23f, 10));
             string state = stored ? "SELECCIONADA" : operation.subtitle;
             GUI.Label(new Rect(row.x + 12f, row.y + 29f, row.width - 24f, 20f), state, BuildFittedSingleLineStyle(paragraphStyle, state, row.width - 24f, 20f, 9));
             if (GUI.Button(row, GUIContent.none, GUIStyle.none))
@@ -314,31 +315,25 @@ public class MainMenuController : MonoBehaviour
 
         Rect icon = new Rect(detail.x + 18f, detail.y + 20f, 66f, 66f);
         DrawOperationIcon(icon, operation);
-        GUI.Label(new Rect(icon.xMax + 18f, detail.y + 18f, detail.width - icon.width - 54f, 34f), operation.title, BuildFittedSingleLineStyle(panelTitleStyle, operation.title, detail.width - icon.width - 54f, 34f, 18));
+        GUI.Label(new Rect(icon.xMax + 18f, detail.y + 18f, detail.width - icon.width - 54f, 34f), operation.title, BuildFittedSingleLineStyle(panelTitleStyle, operation.title, detail.width - icon.width - 54f, 34f, 16));
         GUI.Label(new Rect(icon.xMax + 18f, detail.y + 54f, detail.width - icon.width - 54f, 22f), operation.subtitle, rankingScoreStyle);
 
         GUIStyle wrapped = new GUIStyle(paragraphStyle)
         {
             wordWrap = true,
-            alignment = TextAnchor.UpperLeft
+            alignment = TextAnchor.UpperLeft,
+            clipping = TextClipping.Clip
         };
 
-        Rect description = new Rect(detail.x + 18f, detail.y + 104f, detail.width - 36f, 62f);
+        Rect description = new Rect(detail.x + 18f, detail.y + 104f, detail.width - 36f, 68f);
         GUI.Label(description, operation.description, wrapped);
 
-        float y = description.yMax + 10f;
-        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 46f), "Objetivo", operation.objective, operation.accent);
-        y += 54f;
-        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 46f), "Riesgo", operation.risk, new Color(1f, 0.58f, 0.72f, 1f));
-        y += 54f;
-        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 46f), "Recompensa", operation.reward, new Color(1f, 0.82f, 0.46f, 1f));
-
-        Rect selectedChip = new Rect(detail.x + 18f, detail.yMax - 42f, detail.width - 36f, 26f);
-        string selectedText = ContainmentOperationStorage.IsSelected(operation.id)
-            ? "Esta operacion quedara activa al iniciar."
-            : "Se seleccionara al iniciar la run.";
-        DrawSolidRect(selectedChip, new Color(operation.accent.r, operation.accent.g, operation.accent.b, 0.10f));
-        GUI.Label(new Rect(selectedChip.x + 10f, selectedChip.y, selectedChip.width - 20f, selectedChip.height), selectedText, paragraphStyle);
+        float y = description.yMax + 8f;
+        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 56f), "Objetivo", operation.objective, operation.accent);
+        y += 64f;
+        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 56f), "Riesgo", operation.risk, new Color(1f, 0.58f, 0.72f, 1f));
+        y += 64f;
+        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 56f), "Recompensa", operation.reward, new Color(1f, 0.82f, 0.46f, 1f));
     }
 
     private void DrawOperationInfoRow(Rect rect, string label, string value, Color accent)
@@ -346,7 +341,13 @@ public class MainMenuController : MonoBehaviour
         DrawSolidRect(rect, new Color(0.05f, 0.07f, 0.12f, 0.72f));
         DrawSolidRect(new Rect(rect.x, rect.y, 4f, rect.height), new Color(accent.r, accent.g, accent.b, 0.70f));
         GUI.Label(new Rect(rect.x + 12f, rect.y + 3f, 118f, 20f), label, rankingScoreStyle);
-        GUI.Label(new Rect(rect.x + 12f, rect.y + 22f, rect.width - 24f, 20f), value, BuildFittedSingleLineStyle(paragraphStyle, value, rect.width - 24f, 20f, 9));
+        GUIStyle wrapped = new GUIStyle(paragraphStyle)
+        {
+            wordWrap = true,
+            alignment = TextAnchor.UpperLeft,
+            clipping = TextClipping.Clip
+        };
+        GUI.Label(new Rect(rect.x + 12f, rect.y + 22f, rect.width - 24f, rect.height - 25f), value, wrapped);
     }
 
     private void DrawOperationIcon(Rect rect, ContainmentOperationStorage.OperationDefinition operation)
@@ -378,6 +379,14 @@ public class MainMenuController : MonoBehaviour
         {
             DrawSolidRect(new Rect(rect.center.x - 7f, rect.y + 8f, 14f, rect.height - 16f), operation.accent);
             DrawSolidRect(new Rect(rect.x + 13f, rect.center.y - 2f, rect.width - 26f, 4f), new Color(0.50f, 0.95f, 1f, 0.86f));
+        }
+        else if (operation.id == ContainmentOperationStorage.AmbientOverdriveId)
+        {
+            DrawSolidRect(new Rect(rect.x + 12f, rect.y + 14f, 16f, 16f), new Color(0.48f, 0.90f, 1f, 0.92f));
+            DrawSolidRect(new Rect(rect.center.x - 8f, rect.center.y - 8f, 16f, 16f), new Color(1f, 0.70f, 0.36f, 0.92f));
+            DrawSolidRect(new Rect(rect.xMax - 28f, rect.yMax - 30f, 16f, 16f), new Color(1f, 0.48f, 0.94f, 0.92f));
+            DrawSolidRect(new Rect(rect.x + 14f, rect.center.y - 1f, rect.width - 28f, 2f), new Color(0.72f, 0.95f, 1f, 0.72f));
+            DrawSolidRect(new Rect(rect.center.x - 1f, rect.y + 14f, 2f, rect.height - 28f), new Color(1f, 0.74f, 0.86f, 0.60f));
         }
         else
         {
@@ -1002,14 +1011,20 @@ public class MainMenuController : MonoBehaviour
         DrawSolidRect(new Rect(listRect.x, listRect.y, listRect.width, 2f), new Color(0.95f, 0.64f, 1f, 0.38f));
 
         float rowGap = 7f;
-        float rowHeight = Mathf.Min(50f, (listRect.height - rowGap * (achievements.Count + 1)) / Mathf.Max(1, achievements.Count));
-        float y = listRect.y + rowGap;
+        float rowHeight = 50f;
+        float contentHeight = rowGap + achievements.Count * (rowHeight + rowGap);
+        Rect viewRect = new Rect(listRect.x, listRect.y + 4f, listRect.width, listRect.height - 8f);
+        Rect contentRect = new Rect(0f, 0f, listRect.width - 18f, Mathf.Max(viewRect.height, contentHeight));
+        achievementScroll = GUI.BeginScrollView(viewRect, achievementScroll, contentRect, false, true);
+        float y = rowGap;
         for (int i = 0; i < achievements.Count; i++)
         {
-            Rect row = new Rect(listRect.x + 8f, y, listRect.width - 16f, rowHeight);
+            Rect row = new Rect(8f, y, contentRect.width - 16f, rowHeight);
             DrawAchievementSelectableRow(row, achievements[i], i);
             y += rowHeight + rowGap;
         }
+
+        GUI.EndScrollView();
     }
 
     private void DrawAchievementSelectableRow(Rect row, AchievementStorage.AchievementDefinition achievement, int index)

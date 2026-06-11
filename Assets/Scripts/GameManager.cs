@@ -278,6 +278,10 @@ public class GameManager : MonoBehaviour
     private float eventPressureCooldownTimer;
     private bool introTutorialOpen;
     private bool introTutorialDontShowAgain;
+    private bool operationPlayerModifiersApplied;
+    private float labRunTime;
+    private float storageRunTime;
+    private float ruptureRunTime;
 
     private void Awake()
     {
@@ -315,6 +319,7 @@ public class GameManager : MonoBehaviour
         {
             playerController = FindAnyObjectByType<PlayerController>();
         }
+        ApplyOperationPlayerModifiersOnce();
         if (chaosDirector == null)
         {
             chaosDirector = FindAnyObjectByType<ArenaChaosDirector>();
@@ -380,6 +385,7 @@ public class GameManager : MonoBehaviour
         }
 
         SurvivalTime += Time.deltaTime;
+        TrackArenaRunTime(Time.deltaTime);
         TrackSurvivalAchievement();
         TrySetDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Survival, Mathf.FloorToInt(SurvivalTime));
         TrySetDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Score, CurrentScore);
@@ -404,6 +410,7 @@ public class GameManager : MonoBehaviour
         {
             LastMetaReward = MetaProgressionStorage.AwardRun(CurrentScore, SurvivalTime, levelType, contractDataBonusEarned + operationDataBonusEarned);
             HasAwardedMetaReward = true;
+            TrackPerformanceAchievements(LastMetaReward.performanceGrade);
         }
 
         Debug.Log($"GAME OVER | Time Survived: {SurvivalTime:F2}s");
@@ -457,19 +464,29 @@ public class GameManager : MonoBehaviour
     {
         if (activeOperation.id == ContainmentOperationStorage.ExtractionId)
         {
-            AddScore(1);
+            AddScore(2);
             AdvanceContainmentOperation(1);
         }
 
         NotifyContractProgress(RunContractKind.Pickups, 1);
-        TryAdvanceAchievementCounter(AchievementStorage.CounterPickups, 1, 25, AchievementStorage.PickupsTwentyFiveId);
+        AdvanceCounterAchievements(
+            AchievementStorage.CounterPickups,
+            1,
+            AchievementStorage.PickupsTwentyFiveId,
+            AchievementStorage.PickupsOneHundredId,
+            AchievementStorage.PickupsTwoHundredFiftyId);
         TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Pickups, 1);
     }
 
     public void NotifyParrySuccess()
     {
         NotifyContractProgress(RunContractKind.Parry, 1);
-        TryAdvanceAchievementCounter(AchievementStorage.CounterParries, 1, 5, AchievementStorage.ParryFiveId);
+        AdvanceCounterAchievements(
+            AchievementStorage.CounterParries,
+            1,
+            AchievementStorage.ParryFiveId,
+            AchievementStorage.ParryTwentyFiveId,
+            AchievementStorage.ParrySeventyFiveId);
         TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Parry, 1);
     }
 
@@ -477,12 +494,17 @@ public class GameManager : MonoBehaviour
     {
         if (activeOperation.id == ContainmentOperationStorage.FirewallId)
         {
-            AddScore(10);
+            AddScore(15);
             AdvanceContainmentOperation(1);
         }
 
+        AdvanceCounterAchievements(
+            AchievementStorage.CounterFirewallBursts,
+            1,
+            AchievementStorage.FirstFirewallBurstId,
+            AchievementStorage.FirewallBurstTenId,
+            AchievementStorage.FirewallBurstTwentyFiveId);
         NotifyContractProgress(RunContractKind.FirewallBurst, 1);
-        TryUnlockAchievement(AchievementStorage.FirstFirewallBurstId);
         TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.FirewallBurst, 1);
     }
 
@@ -492,6 +514,12 @@ public class GameManager : MonoBehaviour
         {
             AdvanceContainmentOperation(1);
         }
+
+        AdvanceCounterAchievements(
+            AchievementStorage.CounterBreaches,
+            1,
+            AchievementStorage.BreachFirstId,
+            AchievementStorage.BreachThreeId);
     }
 
     public void NotifyRuptureEchoTrapSuccess()
@@ -518,6 +546,17 @@ public class GameManager : MonoBehaviour
 
         if (activeOperation.id == ContainmentOperationStorage.ContractId)
         {
+            return;
+        }
+
+        if (activeOperation.id == ContainmentOperationStorage.AmbientOverdriveId)
+        {
+            operationProgress = Mathf.Clamp(Mathf.FloorToInt(SurvivalTime), 0, activeOperation.target);
+            if (operationProgress >= activeOperation.target)
+            {
+                CompleteContainmentOperation();
+            }
+
             return;
         }
 
@@ -559,6 +598,8 @@ public class GameManager : MonoBehaviour
         operationProgress = Mathf.Max(operationProgress, activeOperation.target);
         operationDataBonusEarned += Mathf.Max(0, activeOperation.dataReward);
         operationCompletePulseTimer = 2.4f;
+        TrackOperationAchievement(activeOperation.id);
+        AdvanceCounterAchievements(AchievementStorage.CounterOperations, 1);
         ShowOperationToast();
         GlitchAudioManager.PlayUpgradeSelect();
     }
@@ -726,7 +767,12 @@ public class GameManager : MonoBehaviour
             AddScore(reward);
         }
 
-        TryUnlockAchievement(AchievementStorage.FirstContractId);
+        AdvanceCounterAchievements(
+            AchievementStorage.CounterContracts,
+            1,
+            AchievementStorage.FirstContractId,
+            AchievementStorage.ContractsFiveId,
+            AchievementStorage.ContractsFifteenId);
         TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Contract, 1);
         if (activeOperation.id == ContainmentOperationStorage.ContractId)
         {
@@ -748,6 +794,36 @@ public class GameManager : MonoBehaviour
         {
             TryUnlockAchievement(AchievementStorage.SurviveThreeMinutesId);
         }
+
+        if (labRunTime >= 90f)
+        {
+            TryUnlockAchievement(AchievementStorage.LabSurviveNinetyId);
+        }
+        if (storageRunTime >= 90f)
+        {
+            TryUnlockAchievement(AchievementStorage.StorageSurviveNinetyId);
+        }
+        if (ruptureRunTime >= 90f)
+        {
+            TryUnlockAchievement(AchievementStorage.RuptureSurviveNinetyId);
+        }
+    }
+
+    private void TrackArenaRunTime(float deltaTime)
+    {
+        float dt = Mathf.Max(0f, deltaTime);
+        if (levelType == "Lab")
+        {
+            labRunTime += dt;
+        }
+        else if (levelType == "Storage")
+        {
+            storageRunTime += dt;
+        }
+        else if (levelType == "Rupture")
+        {
+            ruptureRunTime += dt;
+        }
     }
 
     private void TryAdvanceAchievementCounter(string counterId, int amount, int target, string achievementId)
@@ -756,6 +832,68 @@ public class GameManager : MonoBehaviour
         if (AchievementStorage.AddCounterAndTryUnlock(counterId, amount, target, achievementId, out achievement))
         {
             ShowAchievementToast(achievement);
+        }
+    }
+
+    private void AdvanceCounterAchievements(string counterId, int amount, params string[] achievementIds)
+    {
+        if (amount > 0)
+        {
+            AchievementStorage.AddCounter(counterId, amount);
+        }
+
+        if (achievementIds == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < achievementIds.Length; i++)
+        {
+            AchievementStorage.AchievementDefinition achievement;
+            if (AchievementStorage.TryUnlockCounterAchievement(counterId, achievementIds[i], out achievement))
+            {
+                ShowAchievementToast(achievement);
+            }
+        }
+    }
+
+    private void TrackOperationAchievement(string operationId)
+    {
+        switch (operationId)
+        {
+            case ContainmentOperationStorage.FirewallId:
+                TryUnlockAchievement(AchievementStorage.OperationFirewallId);
+                break;
+            case ContainmentOperationStorage.ExtractionId:
+                TryUnlockAchievement(AchievementStorage.OperationExtractionId);
+                break;
+            case ContainmentOperationStorage.ContractId:
+                TryUnlockAchievement(AchievementStorage.OperationContractId);
+                break;
+            case ContainmentOperationStorage.BreachId:
+                TryUnlockAchievement(AchievementStorage.OperationBreachId);
+                break;
+            case ContainmentOperationStorage.AmbientOverdriveId:
+                TryUnlockAchievement(AchievementStorage.OperationAmbientId);
+                break;
+        }
+    }
+
+    private void TrackPerformanceAchievements(string grade)
+    {
+        if (string.IsNullOrWhiteSpace(grade))
+        {
+            return;
+        }
+
+        if (grade == "S")
+        {
+            TryUnlockAchievement(AchievementStorage.GradeSId);
+            TryUnlockAchievement(AchievementStorage.GradeAId);
+        }
+        else if (grade == "A")
+        {
+            TryUnlockAchievement(AchievementStorage.GradeAId);
         }
     }
 
@@ -1012,9 +1150,17 @@ public class GameManager : MonoBehaviour
         operationCompleted = activeOperation.id == ContainmentOperationStorage.NoneId;
         operationDataBonusEarned = 0;
         operationCompletePulseTimer = 0f;
+        operationPlayerModifiersApplied = false;
+        labRunTime = 0f;
+        storageRunTime = 0f;
+        ruptureRunTime = 0f;
         if (activeOperation.id == ContainmentOperationStorage.ContractId)
         {
             nextContractTime = Mathf.Min(nextContractTime, 14f);
+            contractInterval = Mathf.Max(16f, contractInterval * 0.58f);
+            contractDuration = Mathf.Max(28f, contractDuration * 0.82f);
+            contractScoreReward += 10;
+            contractDataReward += 3;
         }
 
         achievementToastTitle = string.Empty;
@@ -1039,6 +1185,26 @@ public class GameManager : MonoBehaviour
         introTutorialOpen = UserSettings.GetShowIntroTutorial();
         introTutorialDontShowAgain = false;
         Time.timeScale = 0f;
+    }
+
+    private void ApplyOperationPlayerModifiersOnce()
+    {
+        if (operationPlayerModifiersApplied || playerController == null)
+        {
+            return;
+        }
+
+        operationPlayerModifiersApplied = true;
+        if (activeOperation.id == ContainmentOperationStorage.FirewallId)
+        {
+            playerController.ImproveFirewallChargeGain(1.28f);
+            playerController.ExpandParryRadius(0.18f);
+            playerController.ReduceParryCooldown(0.86f);
+        }
+        else if (activeOperation.id == ContainmentOperationStorage.ExtractionId)
+        {
+            playerController.ApplySpeedBoost(1.16f, 9999f);
+        }
     }
 
     private void DrawIntroTutorialOverlay()

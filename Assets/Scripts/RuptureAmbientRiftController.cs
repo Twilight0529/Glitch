@@ -44,11 +44,13 @@ public class RuptureAmbientRiftController : MonoBehaviour
     private float interiorBottom;
     private float interiorTop;
     private float riftTimer;
+    private bool operationModifiersApplied;
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
         centerTransform = center != null ? center : transform;
         dynamicRoot = dynamicObstaclesRoot != null ? dynamicObstaclesRoot : centerTransform;
+        ApplyOperationModifiersOnce();
         RefreshReferences();
         BuildInteriorBounds();
         ClearRifts();
@@ -58,6 +60,32 @@ public class RuptureAmbientRiftController : MonoBehaviour
     private void OnDisable()
     {
         ClearRifts();
+    }
+
+    private void ApplyOperationModifiersOnce()
+    {
+        if (operationModifiersApplied)
+        {
+            return;
+        }
+
+        operationModifiersApplied = true;
+        if (ContainmentOperationStorage.SelectedOperation.id != ContainmentOperationStorage.AmbientOverdriveId)
+        {
+            return;
+        }
+
+        riftIntervalRange = new Vector2(1.55f, 3.0f);
+        firstRiftDelayMin = 0.35f;
+        firstRiftDelayMax = 0.75f;
+        maxActiveRiftBursts = Mathf.Max(maxActiveRiftBursts, 3);
+        fragmentCountMin = Mathf.Max(fragmentCountMin, 4);
+        fragmentCountMax = Mathf.Max(fragmentCountMax, 7);
+        solidHoldRange = new Vector2(
+            Mathf.Max(solidHoldRange.x, 6.2f),
+            Mathf.Max(solidHoldRange.y, 9.2f));
+        telegraphSeconds = Mathf.Max(0.42f, telegraphSeconds * 0.75f);
+        materializeSeconds = Mathf.Max(0.26f, materializeSeconds * 0.80f);
     }
 
     private void Update()
