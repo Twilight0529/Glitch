@@ -464,7 +464,7 @@ public class GameMenuController : MonoBehaviour
         DrawDefeatCinematicIntro(defeatElapsed, introT);
         DrawDefeatBackdrop(pulse, hudGlitch, t);
 
-        Rect panel = CenterRect(Mathf.Min(560f, Screen.width - 48f), Mathf.Min(560f, Screen.height - 48f));
+        Rect panel = CenterRect(Mathf.Min(640f, Screen.width - 48f), Mathf.Min(600f, Screen.height - 48f));
         float panelScale = Mathf.Lerp(0.90f, 1f, introEase);
         if (introT < 1f)
         {
@@ -499,25 +499,35 @@ public class GameMenuController : MonoBehaviour
             ? gameManager.LastMetaReward
             : MetaProgressionStorage.LastRunReward;
 
+        GUILayout.BeginHorizontal();
+        GUILayout.BeginVertical(GUILayout.Width(area.width * 0.50f));
         GUILayout.Label($"Tiempo sobrevivido: {time:F1}s", bodyStyle);
         GUILayout.Label($"Puntuacion final: {score}", bodyStyle);
-        GUILayout.Label($"Datos recuperados: +{reward.dataEarned}  |  Total: {reward.totalData}", bodyStyle);
-        if (reward.contractBonusData > 0)
-        {
-            GUILayout.Label($"Bonus contratos/operacion: +{reward.contractBonusData} datos", bodyStyle);
-        }
-        GUILayout.Label($"Rendimiento: {reward.performanceGrade}  |  Runs totales: {reward.totalRuns}", bodyStyle);
+        GUILayout.Label($"Datos recuperados: +{reward.dataEarned} | Total: {reward.totalData}", bodyStyle);
+        GUILayout.Label($"Rendimiento: {reward.performanceGrade} | Runs: {reward.totalRuns}", bodyStyle);
+        GUILayout.Label($"Zona: {level}", bodyStyle);
+        GUILayout.EndVertical();
+
+        GUILayout.BeginVertical();
         string recordLine = GetRunRecordLine(reward);
+        GUIStyle compactStatusStyle = GetFittedSingleLineStyle(rankingStatusStyle, recordLine, area.width * 0.43f, 13, 10);
         if (!string.IsNullOrWhiteSpace(recordLine))
         {
-            GUILayout.Label(recordLine, rankingStatusStyle);
+            GUILayout.Label(recordLine, compactStatusStyle);
         }
-        GUILayout.Label($"Operacion diaria: {DailyChallengeStorage.CurrentSummary}", rankingStatusStyle);
-        GUILayout.Label($"Zona de contencion: {level}", bodyStyle);
+        string dailyLine = $"Diaria: {DailyChallengeStorage.CurrentSummary}";
+        GUILayout.Label(dailyLine, GetFittedSingleLineStyle(rankingStatusStyle, dailyLine, area.width * 0.43f, 13, 10));
+        if (reward.contractBonusData > 0)
+        {
+            GUILayout.Label($"Bonus: +{reward.contractBonusData} datos", bodyStyle);
+        }
         if (gameManager != null && !string.IsNullOrWhiteSpace(gameManager.CurrentOperationTitle))
         {
-            GUILayout.Label($"Operacion: {gameManager.CurrentOperationTitle}", bodyStyle);
+            string operationLine = $"Operacion: {gameManager.CurrentOperationTitle}";
+            GUILayout.Label(operationLine, GetFittedSingleLineStyle(bodyStyle, operationLine, area.width * 0.43f, 15, 11));
         }
+        GUILayout.EndVertical();
+        GUILayout.EndHorizontal();
 
         GUILayout.Space(14f);
         GUILayout.Label("Ingresa tu nombre para el ranking:", bodyStyle);
