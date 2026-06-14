@@ -68,6 +68,7 @@ public class GlitchAudioManager : MonoBehaviour
     }
 
     public static void PlayShieldBreak(Vector3 position) => Play("shield_break", 0.72f, 1f, position);
+    public static void PlayGhostDash(Vector3 position) => Play("ghost_dash", 0.58f, 1f, position);
     public static void PlayParryStart(Vector3 position) => Play("parry_start", 0.52f, 1f, position);
     public static void PlayParrySuccess(Vector3 position) => Play("parry_success", 0.78f, 1f, position);
     public static void PlayProjectileReflect(Vector3 position) => Play("projectile_reflect", 0.48f, 1f, position);
@@ -484,6 +485,8 @@ public class GlitchAudioManager : MonoBehaviour
                 return CreateClip(clipName, 0.72f, FirewallBurst);
             case "shield_break":
                 return CreateClip(clipName, 0.46f, ShieldBreak);
+            case "ghost_dash":
+                return CreateClip(clipName, 0.24f, GhostDash);
             case "player_death":
                 return CreateClip(clipName, 0.9f, PlayerDeath);
             case "upgrade_open":
@@ -721,6 +724,17 @@ public class GlitchAudioManager : MonoBehaviour
         float crack = Mathf.Exp(-t * 16f);
         float tail = Envelope(t, d, 0.002f, 0.22f);
         return SoftClip(Sine(130f, t) * 0.34f * crack + Noise(i, 20.3f) * 0.28f * crack + Sine(780f, t) * 0.12f * tail);
+    }
+
+    private static float GhostDash(float t, int i)
+    {
+        float d = 0.24f;
+        float e = Envelope(t, d, 0.003f, 0.09f);
+        float sweep = Sine(Mathf.Lerp(1380f, 420f, Mathf.Clamp01(t / d)), t) * 0.24f;
+        float air = Noise(i, 23.6f) * 0.16f * Mathf.Exp(-t * 13f);
+        float phaseClick = Crush(Sine(760f + Mathf.Sin(t * 54f) * 220f, t), 6) * 0.10f * Gate(t, 18f, 0.28f);
+        float body = Sine(96f, t) * 0.22f * Mathf.Exp(-t * 18f);
+        return SoftClip((sweep + phaseClick) * e + air + body);
     }
 
     private static float PlayerDeath(float t, int i)

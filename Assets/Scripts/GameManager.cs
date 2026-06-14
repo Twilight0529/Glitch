@@ -40,6 +40,7 @@ public class GameManager : MonoBehaviour
         None,
         Movement,
         Parry,
+        GhostDash,
         Firewall,
         ScorePickup,
         Powerup,
@@ -334,6 +335,7 @@ public class GameManager : MonoBehaviour
     private bool contextMoveDPressed;
     private bool contextMovementShown;
     private bool contextParryShown;
+    private bool contextGhostDashShown;
     private bool contextFirewallShown;
     private bool contextScorePickupShown;
     private bool contextPowerupShown;
@@ -1346,6 +1348,7 @@ public class GameManager : MonoBehaviour
         contextArenaEventTutorialsShown.Clear();
         contextMovementShown = false;
         contextParryShown = false;
+        contextGhostDashShown = false;
         contextFirewallShown = false;
         contextScorePickupShown = false;
         contextPowerupShown = false;
@@ -1535,6 +1538,16 @@ public class GameManager : MonoBehaviour
             }
         }
 
+        if (!contextGhostDashShown && enemyController != null && SurvivalTime >= 3.2f && playerController.IsGhostDashReady)
+        {
+            float distance = Vector2.Distance(playerController.GetPosition(), enemyController.GetCurrentPosition());
+            if (distance <= 3.2f)
+            {
+                TryOpenContextTutorial(ContextTutorialKind.GhostDash);
+                return;
+            }
+        }
+
         if (!contextFirewallShown && playerController.IsFirewallBurstReady)
         {
             TryOpenContextTutorial(ContextTutorialKind.Firewall);
@@ -1657,6 +1670,8 @@ public class GameManager : MonoBehaviour
                 return contextMovementShown;
             case ContextTutorialKind.Parry:
                 return contextParryShown;
+            case ContextTutorialKind.GhostDash:
+                return contextGhostDashShown;
             case ContextTutorialKind.Firewall:
                 return contextFirewallShown;
             case ContextTutorialKind.ScorePickup:
@@ -1685,6 +1700,9 @@ public class GameManager : MonoBehaviour
                 break;
             case ContextTutorialKind.Parry:
                 contextParryShown = true;
+                break;
+            case ContextTutorialKind.GhostDash:
+                contextGhostDashShown = true;
                 break;
             case ContextTutorialKind.Firewall:
                 contextFirewallShown = true;
@@ -1747,6 +1765,17 @@ public class GameManager : MonoBehaviour
                 contextTutorialActionFlash = 0.28f;
                 CloseContextTutorial(playConfirm: false);
                 playerController?.TryStartParryFromTutorial();
+                return;
+            }
+        }
+        else if (contextTutorialKind == ContextTutorialKind.GhostDash)
+        {
+            if (WasTutorialGhostDashPressed())
+            {
+                contextTutorialProgress = 1f;
+                contextTutorialActionFlash = 0.28f;
+                CloseContextTutorial(playConfirm: false);
+                playerController?.TryStartGhostDashFromTutorial();
                 return;
             }
         }
@@ -2000,6 +2029,8 @@ public class GameManager : MonoBehaviour
         {
             case ContextTutorialKind.Parry:
                 return "La anomalia esta encima: usa Parry";
+            case ContextTutorialKind.GhostDash:
+                return "Demasiado cerca: activa Dash Fantasma";
             case ContextTutorialKind.Firewall:
                 return "Firewall cargado: libera el Burst";
             case ContextTutorialKind.ScorePickup:
@@ -2023,6 +2054,8 @@ public class GameManager : MonoBehaviour
         {
             case ContextTutorialKind.Parry:
                 return "El jefe ya esta en rango de contacto. Presiona Parry justo antes del golpe para cortar la persecucion, empujarlo y cargar Firewall.";
+            case ContextTutorialKind.GhostDash:
+                return "El Dash Fantasma te vuelve intangible por un instante y te reposiciona. Usalo para cruzar persecuciones, proyectiles o salidas estrechas.";
             case ContextTutorialKind.Firewall:
                 return "La barra esta completa. El Burst empuja enemigos, afecta clones y limpia proyectiles. Guardarlo demasiado tiempo te quita una salida defensiva.";
             case ContextTutorialKind.ScorePickup:
@@ -2048,6 +2081,8 @@ public class GameManager : MonoBehaviour
         {
             case ContextTutorialKind.Parry:
                 return "Presiona ESPACIO o E para ejecutar el Parry ahora.";
+            case ContextTutorialKind.GhostDash:
+                return "Presiona SHIFT para ejecutar el Dash Fantasma ahora.";
             case ContextTutorialKind.Firewall:
                 return "Presiona Q o R para liberar el Burst ahora.";
             case ContextTutorialKind.Movement:
@@ -2070,6 +2105,8 @@ public class GameManager : MonoBehaviour
         {
             case ContextTutorialKind.Parry:
                 return "Input real: ESPACIO / E";
+            case ContextTutorialKind.GhostDash:
+                return "Input real: SHIFT";
             case ContextTutorialKind.Firewall:
                 return "Input real: Q / R";
             case ContextTutorialKind.Movement:
@@ -2094,6 +2131,8 @@ public class GameManager : MonoBehaviour
         {
             case ContextTutorialKind.Parry:
                 return new Color(1f, 0.62f, 0.78f, 1f);
+            case ContextTutorialKind.GhostDash:
+                return new Color(0.55f, 1f, 0.94f, 1f);
             case ContextTutorialKind.Firewall:
                 return new Color(1f, 0.84f, 0.42f, 1f);
             case ContextTutorialKind.ScorePickup:
@@ -2118,6 +2157,9 @@ public class GameManager : MonoBehaviour
             case ContextTutorialKind.Parry:
                 DrawIntroParryDemo(rect, accent);
                 break;
+            case ContextTutorialKind.GhostDash:
+                DrawContextGhostDashDemo(rect, accent);
+                break;
             case ContextTutorialKind.Firewall:
                 DrawIntroFirewallDemo(rect, accent);
                 break;
@@ -2136,6 +2178,27 @@ public class GameManager : MonoBehaviour
                 DrawIntroMovementDemo(rect, accent);
                 break;
         }
+    }
+
+    private void DrawContextGhostDashDemo(Rect rect, Color accent)
+    {
+        DrawTutorialGrid(rect, accent);
+        Vector2 center = rect.center;
+        float time = Time.unscaledTime;
+        Vector2 dashDir = Vector2.right;
+        for (int i = 0; i < 4; i++)
+        {
+            float t = i / 3f;
+            Vector2 pos = center - dashDir * Mathf.Lerp(68f, 12f, t);
+            Color ghost = new Color(accent.r, accent.g, accent.b, Mathf.Lerp(0.10f, 0.42f, t));
+            DrawSolidRect(new Rect(pos.x - 12f, pos.y - 12f, 24f, 24f), ghost);
+        }
+
+        float pulse = 0.5f + 0.5f * Mathf.Sin(time * 9f);
+        DrawSolidRect(new Rect(center.x + 16f, center.y - 14f, 28f, 28f), new Color(accent.r, accent.g, accent.b, 0.82f));
+        DrawSolidRect(new Rect(center.x - 58f, center.y - 3f, 88f, 6f), new Color(accent.r, accent.g, accent.b, 0.30f + pulse * 0.26f));
+        DrawSolidRect(new Rect(center.x + 60f, center.y - 18f, 30f, 36f), new Color(1f, 0.38f, 0.52f, 0.76f));
+        DrawTutorialLabel(new Rect(rect.x + 20f, rect.yMax - 34f, rect.width - 40f, 24f), "SHIFT = FANTASMA BREVE");
     }
 
     private void DrawContextUpgradeDemo(Rect rect, Color accent)
@@ -2572,6 +2635,22 @@ public class GameManager : MonoBehaviour
 #endif
 #if ENABLE_LEGACY_INPUT_MANAGER
         return Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.E) || Input.GetMouseButtonDown(0);
+#else
+        return false;
+#endif
+    }
+
+    private static bool WasTutorialGhostDashPressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null && (keyboard.leftShiftKey.wasPressedThisFrame || keyboard.rightShiftKey.wasPressedThisFrame))
+        {
+            return true;
+        }
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.RightShift);
 #else
         return false;
 #endif
@@ -4244,6 +4323,7 @@ public class GameManager : MonoBehaviour
 
         DrawRunContractHud(s);
         DrawOperationHud(s);
+        DrawGhostDashDock(s);
         DrawFirewallChargeDock(s);
         DrawAchievementToast(s);
 
@@ -4375,6 +4455,55 @@ public class GameManager : MonoBehaviour
         DrawSolidRect(new Rect(barX, barY, threatFill, barH), new Color(barColor.r, barColor.g, barColor.b, 0.85f + pulse * 0.12f * smoothedThreat));
         DrawSolidRect(new Rect(barX, barY, barW, 1f), new Color(0.85f, 0.92f, 1f, 0.18f));
         DrawSolidRect(new Rect(barX, barY + barH - 1f, barW, 1f), new Color(0.85f, 0.92f, 1f, 0.14f));
+    }
+
+    private void DrawGhostDashDock(float s)
+    {
+        if (playerController == null)
+        {
+            return;
+        }
+
+        bool ready = playerController.IsGhostDashReady;
+        float normalized = playerController.GhostDashCooldownNormalized;
+        float firewallW = Mathf.Clamp(Screen.width * 0.24f, 270f * s, 410f * s);
+        float dockW = 152f * s;
+        float dockH = 46f * s;
+        float gap = 10f * s;
+        float firewallX = (Screen.width - firewallW) * 0.5f;
+        float x = firewallX - dockW - gap;
+        float y = Screen.height - dockH - (18f * s);
+        if (x < 12f * s)
+        {
+            x = (Screen.width - dockW) * 0.5f;
+            y -= dockH + (8f * s);
+        }
+
+        Rect dock = new Rect(x, y, dockW, dockH);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (ready ? 9f : 3.5f));
+        Color accent = ready
+            ? Color.Lerp(new Color(0.55f, 1f, 0.94f, 1f), new Color(0.92f, 1f, 1f, 1f), pulse)
+            : new Color(0.26f, 0.52f, 0.72f, 1f);
+
+        DrawSolidRect(dock, new Color(0.018f, 0.028f, 0.052f, ready ? 0.70f : 0.50f));
+        DrawSolidRect(new Rect(dock.x, dock.y, dock.width, 2f * s), new Color(accent.r, accent.g, accent.b, ready ? 0.82f : 0.38f));
+        DrawSolidRect(new Rect(dock.x, dock.yMax - (2f * s), dock.width, 2f * s), new Color(accent.r, accent.g, accent.b, ready ? 0.42f : 0.22f));
+
+        string label = "DASH";
+        GUI.Label(
+            new Rect(dock.x + (10f * s), dock.y + (5f * s), dock.width - (20f * s), 18f * s),
+            label,
+            BuildFittedSingleLineStyle(hudLabelStyle, label, dock.width - (20f * s), 18f * s, Mathf.RoundToInt(8f * s)));
+
+        string value = ready ? "SHIFT" : $"{Mathf.RoundToInt(normalized * 100f)}%";
+        GUI.Label(
+            new Rect(dock.x + (10f * s), dock.y + (22f * s), dock.width - (20f * s), 18f * s),
+            value,
+            BuildFittedSingleLineStyle(hudChipStyle, value, dock.width - (20f * s), 18f * s, Mathf.RoundToInt(8f * s)));
+
+        Rect bar = new Rect(dock.x + (10f * s), dock.yMax - (6f * s), dock.width - (20f * s), 3f * s);
+        DrawSolidRect(bar, new Color(0.04f, 0.06f, 0.10f, 0.74f));
+        DrawSolidRect(new Rect(bar.x, bar.y, bar.width * normalized, bar.height), new Color(accent.r, accent.g, accent.b, ready ? 0.92f : 0.62f));
     }
 
     private void DrawFirewallChargeDock(float s)

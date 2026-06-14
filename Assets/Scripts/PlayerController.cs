@@ -15,6 +15,13 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float maxBoostMultiplier = 1.9f;
     [SerializeField, Range(0.2f, 1f)] private float minSlowMultiplier = 0.3f;
 
+    [Header("Ghost Dash")]
+    [SerializeField] private float ghostDashSpeed = 24f;
+    [SerializeField] private float ghostDashDuration = 0.18f;
+    [SerializeField] private float ghostDashCooldown = 2.4f;
+    [SerializeField] private Color ghostDashColor = new Color(0.55f, 1f, 0.95f, 0.82f);
+    [SerializeField] private int ghostDashAfterimageCount = 4;
+
     [Header("Shield Visual")]
     [SerializeField] private Color shieldColor = new Color(0.95f, 0.64f, 0.88f, 0.85f);
     [SerializeField] private float shieldPulseSpeed = 7.2f;
@@ -92,6 +99,10 @@ public class PlayerController : MonoBehaviour
     private Collider2D bodyCollider;
     private SpriteRenderer bodyRenderer;
     private Vector2 moveInput;
+    private Vector2 lastMoveDirection = Vector2.right;
+    private Vector2 ghostDashDirection = Vector2.right;
+    private float ghostDashTimer;
+    private float ghostDashCooldownTimer;
     private float speedBoostTimer;
     private float speedBoostMultiplier = 1f;
     private float movementSlowTimer;
@@ -129,6 +140,11 @@ public class PlayerController : MonoBehaviour
     public bool HasSpeedBoost => speedBoostTimer > 0f;
     public bool HasMovementSlow => movementSlowTimer > 0f;
     public bool IsParryActive => parryTimer > 0f;
+    public bool IsGhostDashing => ghostDashTimer > 0f;
+    public bool IsGhostDashReady => ghostDashTimer <= 0f && ghostDashCooldownTimer <= 0f;
+    public float GhostDashCooldownNormalized => IsGhostDashReady
+        ? 1f
+        : Mathf.Clamp01(1f - ghostDashCooldownTimer / Mathf.Max(0.05f, ghostDashCooldown));
     public float ParryRadius => Mathf.Max(0.1f, parryRadius);
     public float FirewallCharge => firewallCharge;
     public float FirewallChargeMax => Mathf.Max(1f, firewallChargeMax);
@@ -235,6 +251,8 @@ public class PlayerController : MonoBehaviour
             UpdateShieldVisual();
             UpdateParryTimers();
             UpdateParryVisual();
+            UpdateGhostDashTimers();
+            UpdateGhostDashVisual();
             UpdateMovementTrail(0f);
             return;
         }
@@ -243,6 +261,8 @@ public class PlayerController : MonoBehaviour
         UpdateShieldVisual();
         UpdateParryTimers();
         UpdateParryVisual();
+        UpdateGhostDashTimers();
+        UpdateGhostDashVisual();
 
         if (WasParryPressed() && parryCooldownTimer <= 0f)
         {
@@ -256,6 +276,16 @@ public class PlayerController : MonoBehaviour
         }
 
         moveInput = ReadMoveInput().normalized;
+        if (moveInput.sqrMagnitude > 0.001f)
+        {
+            lastMoveDirection = moveInput.normalized;
+        }
+
+        if (WasGhostDashPressed())
+        {
+            TryStartGhostDash(moveInput);
+        }
+
         float effectiveSpeed = moveSpeed;
         if (speedBoostTimer > 0f)
         {
@@ -266,8 +296,31 @@ public class PlayerController : MonoBehaviour
             effectiveSpeed *= movementSlowMultiplier;
         }
 
+        if (ghostDashTimer > 0f)
+        {
+            rb.linearVelocity = ghostDashDirection * Mathf.Max(effectiveSpeed, ghostDashSpeed);
+            UpdateMovementTrail(Mathf.Max(effectiveSpeed, ghostDashSpeed));
+            return;
+        }
+
         rb.linearVelocity = moveInput * effectiveSpeed;
         UpdateMovementTrail(Mathf.Max(0.01f, effectiveSpeed));
+    }
+
+    private static bool WasGhostDashPressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null && (keyboard.leftShiftKey.wasPressedThisFrame || keyboard.rightShiftKey.wasPressedThisFrame))
+        {
+            return true;
+        }
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.RightShift);
+#else
+        return false;
+#endif
     }
 
     private static bool WasFirewallBurstPressed()
@@ -350,7 +403,7 @@ public class PlayerController : MonoBehaviour
 
     public void ApplyExternalDisplacement(Vector2 delta)
     {
-        if (deathSequenceActive || breachConsumptionActive || delta.sqrMagnitude <= 0f)
+        if (deathSequenceActive || breachConsumptionActive || ghostDashTimer > 0f || delta.sqrMagnitude <= 0f)
         {
             return;
         }
@@ -403,6 +456,12 @@ public class PlayerController : MonoBehaviour
         if (deathSequenceActive)
         {
             return false;
+        }
+
+        if (ghostDashTimer > 0f)
+        {
+            SpawnGhostDashContactFx();
+            return true;
         }
 
         if (shieldTimer <= 0f)
@@ -527,6 +586,22 @@ public class PlayerController : MonoBehaviour
         StartParry();
         ScanParryWindow();
         return true;
+    }
+
+    public bool TryStartGhostDashFromTutorial()
+    {
+        if (deathSequenceActive || breachConsumptionActive)
+        {
+            return false;
+        }
+
+        Vector2 direction = ReadMoveInput();
+        if (direction.sqrMagnitude <= 0.001f)
+        {
+            direction = lastMoveDirection;
+        }
+
+        return TryStartGhostDash(direction);
     }
 
     public void AddFirewallCharge(float amount)
@@ -658,6 +733,8 @@ public class PlayerController : MonoBehaviour
         shieldTimer = 0f;
         parryTimer = 0f;
         parryCooldownTimer = 0f;
+        ghostDashTimer = 0f;
+        ghostDashCooldownTimer = 0f;
         moveInput = Vector2.zero;
 
         if (rb != null)
@@ -722,6 +799,15 @@ public class PlayerController : MonoBehaviour
             }
         }
 
+        if (ghostDashCooldownTimer > 0f)
+        {
+            ghostDashCooldownTimer -= Time.deltaTime;
+            if (ghostDashCooldownTimer < 0f)
+            {
+                ghostDashCooldownTimer = 0f;
+            }
+        }
+
         if (hazardFirewallChargeTimer > 0f)
         {
             hazardFirewallChargeTimer -= Time.deltaTime;
@@ -730,6 +816,42 @@ public class PlayerController : MonoBehaviour
                 hazardFirewallChargeTimer = 0f;
             }
         }
+    }
+
+    private void UpdateGhostDashTimers()
+    {
+        if (ghostDashTimer <= 0f)
+        {
+            return;
+        }
+
+        ghostDashTimer -= Time.deltaTime;
+        if (ghostDashTimer <= 0f)
+        {
+            ghostDashTimer = 0f;
+        }
+    }
+
+    private bool TryStartGhostDash(Vector2 requestedDirection)
+    {
+        if (deathSequenceActive || breachConsumptionActive || ghostDashTimer > 0f || ghostDashCooldownTimer > 0f)
+        {
+            return false;
+        }
+
+        Vector2 direction = requestedDirection.sqrMagnitude > 0.001f ? requestedDirection.normalized : lastMoveDirection;
+        if (direction.sqrMagnitude <= 0.001f)
+        {
+            direction = Vector2.right;
+        }
+
+        ghostDashDirection = direction.normalized;
+        lastMoveDirection = ghostDashDirection;
+        ghostDashTimer = Mathf.Max(0.05f, ghostDashDuration);
+        ghostDashCooldownTimer = Mathf.Max(0.1f, ghostDashCooldown);
+        SpawnGhostDashStartFx(ghostDashDirection);
+        GlitchAudioManager.PlayGhostDash(transform.position);
+        return true;
     }
 
     private void UpdateParryTimers()
@@ -897,6 +1019,28 @@ public class PlayerController : MonoBehaviour
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 34f);
         parryRenderer.color = new Color(parryReadyColor.r, parryReadyColor.g, parryReadyColor.b, Mathf.Lerp(0.08f, 0.58f, t) * (0.8f + pulse * 0.2f));
         parryVisual.transform.localScale = Vector3.one * Mathf.Lerp(1.2f, 0.88f, t);
+    }
+
+    private void UpdateGhostDashVisual()
+    {
+        if (bodyRenderer == null || deathSequenceActive || breachConsumptionActive)
+        {
+            return;
+        }
+
+        if (ghostDashTimer <= 0f)
+        {
+            bodyRenderer.color = baseBodyColor;
+            transform.localScale = baseBodyScale;
+            return;
+        }
+
+        float t = Mathf.Clamp01(ghostDashTimer / Mathf.Max(0.05f, ghostDashDuration));
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 38f);
+        Color c = Color.Lerp(baseBodyColor, ghostDashColor, 0.68f + pulse * 0.20f);
+        c.a = Mathf.Lerp(0.38f, 0.74f, t);
+        bodyRenderer.color = c;
+        transform.localScale = baseBodyScale * Mathf.Lerp(0.78f, 1.04f, t);
     }
 
     private void EnsureMovementTrail()
@@ -1081,6 +1225,8 @@ public class PlayerController : MonoBehaviour
         shieldTimer = 0f;
         parryTimer = 0f;
         parryCooldownTimer = 0f;
+        ghostDashTimer = 0f;
+        ghostDashCooldownTimer = 0f;
 
         if (rb != null)
         {
@@ -1425,6 +1571,115 @@ public class PlayerController : MonoBehaviour
             ray.transform.localScale = new Vector3(0.34f, 0.08f, 1f);
             ray.AddComponent<PlayerShieldBreakRayFx>().Configure(sr, rayDir, radius, 0.36f);
             Destroy(ray, 0.48f);
+        }
+    }
+
+    private void SpawnGhostDashStartFx(Vector2 direction)
+    {
+        Vector2 dashDir = direction.sqrMagnitude > 0.001f ? direction.normalized : Vector2.right;
+        int count = Mathf.Max(2, ghostDashAfterimageCount);
+        for (int i = 0; i < count; i++)
+        {
+            float delay = i / (float)count;
+            Vector3 offset = -(Vector3)(dashDir * Mathf.Lerp(0.16f, 0.82f, delay));
+            GameObject afterimage = new GameObject($"GhostDashAfterimage_{i}");
+            afterimage.transform.position = transform.position + offset;
+            afterimage.transform.rotation = transform.rotation;
+            afterimage.transform.localScale = baseBodyScale * Mathf.Lerp(0.98f, 0.70f, delay);
+            SpriteRenderer sr = afterimage.AddComponent<SpriteRenderer>();
+            sr.sprite = bodyRenderer != null ? bodyRenderer.sprite : SquareSpriteProvider.Get();
+            sr.drawMode = bodyRenderer != null ? bodyRenderer.drawMode : SpriteDrawMode.Simple;
+            sr.color = new Color(ghostDashColor.r, ghostDashColor.g, ghostDashColor.b, Mathf.Lerp(0.46f, 0.16f, delay));
+            sr.sortingOrder = bodyRenderer != null ? bodyRenderer.sortingOrder - 1 : 7;
+            afterimage.AddComponent<PlayerGhostDashAfterimageFx>().Configure(sr, dashDir, Mathf.Lerp(0.18f, 0.28f, delay), ghostDashColor);
+            Destroy(afterimage, 0.36f);
+        }
+
+        GameObject streak = new GameObject("GhostDashStreakFx");
+        streak.transform.position = transform.position;
+        streak.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(dashDir.y, dashDir.x) * Mathf.Rad2Deg);
+        SpriteRenderer streakRenderer = streak.AddComponent<SpriteRenderer>();
+        streakRenderer.sprite = SquareSpriteProvider.Get();
+        streakRenderer.drawMode = SpriteDrawMode.Sliced;
+        streakRenderer.size = new Vector2(1.15f, 0.12f);
+        streakRenderer.color = new Color(ghostDashColor.r, ghostDashColor.g, ghostDashColor.b, 0.64f);
+        streakRenderer.sortingOrder = 14;
+        streak.AddComponent<PlayerGhostDashStreakFx>().Configure(streakRenderer, dashDir, 0.24f, ghostDashColor);
+        Destroy(streak, 0.32f);
+    }
+
+    private void SpawnGhostDashContactFx()
+    {
+        GameObject ring = new GameObject("GhostDashContactFx");
+        ring.transform.position = transform.position;
+        SpriteRenderer sr = ring.AddComponent<SpriteRenderer>();
+        sr.sprite = CircleSpriteProvider.Get();
+        sr.color = new Color(ghostDashColor.r, ghostDashColor.g, ghostDashColor.b, 0.52f);
+        sr.sortingOrder = 16;
+        ring.transform.localScale = Vector3.one * 0.18f;
+        ring.AddComponent<PlayerParryBurstFx>().Configure(sr, 0.82f, 0.14f, ghostDashColor);
+        Destroy(ring, 0.22f);
+    }
+}
+
+public class PlayerGhostDashAfterimageFx : MonoBehaviour
+{
+    private SpriteRenderer spriteRenderer;
+    private Vector2 driftDirection = Vector2.right;
+    private Color tint = Color.white;
+    private float life = 0.22f;
+    private float age;
+    private Vector3 origin;
+
+    public void Configure(SpriteRenderer rendererRef, Vector2 direction, float duration, Color color)
+    {
+        spriteRenderer = rendererRef;
+        driftDirection = direction.sqrMagnitude > 0.001f ? direction.normalized : Vector2.right;
+        life = Mathf.Max(0.06f, duration);
+        tint = color;
+        origin = transform.position;
+    }
+
+    private void Update()
+    {
+        age += Time.deltaTime;
+        float t = Mathf.Clamp01(age / life);
+        transform.position = origin - (Vector3)(driftDirection * Mathf.Lerp(0f, 0.22f, t));
+        transform.localScale *= 1f - Time.deltaTime * 1.6f;
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.color = new Color(tint.r, tint.g, tint.b, Mathf.Lerp(0.42f, 0f, t));
+        }
+    }
+}
+
+public class PlayerGhostDashStreakFx : MonoBehaviour
+{
+    private SpriteRenderer spriteRenderer;
+    private Vector2 direction = Vector2.right;
+    private Color tint = Color.white;
+    private float life = 0.22f;
+    private float age;
+    private Vector3 origin;
+
+    public void Configure(SpriteRenderer rendererRef, Vector2 dashDirection, float duration, Color color)
+    {
+        spriteRenderer = rendererRef;
+        direction = dashDirection.sqrMagnitude > 0.001f ? dashDirection.normalized : Vector2.right;
+        life = Mathf.Max(0.06f, duration);
+        tint = color;
+        origin = transform.position;
+    }
+
+    private void Update()
+    {
+        age += Time.deltaTime;
+        float t = Mathf.Clamp01(age / life);
+        transform.position = origin - (Vector3)(direction * Mathf.Lerp(0f, 0.55f, t));
+        transform.localScale = new Vector3(Mathf.Lerp(1.15f, 0.12f, t), Mathf.Lerp(0.14f, 0.035f, t), 1f);
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.color = new Color(tint.r, tint.g, tint.b, Mathf.Lerp(0.62f, 0f, t));
         }
     }
 }
