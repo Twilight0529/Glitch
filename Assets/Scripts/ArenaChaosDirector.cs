@@ -828,6 +828,7 @@ public class ArenaChaosDirector : MonoBehaviour
         activeBreachPosition = position;
         activeBreachSweepDirection = sweepDirection;
         SpawnBreachDirectionIndicator(position);
+        gameManager?.NotifyBreachTutorialOpportunity();
         if (enemy != null)
         {
             enemy.GuideTowardBreach(position, Mathf.Max(0.5f, breachEnemyGuideDuration));

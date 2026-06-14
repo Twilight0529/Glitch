@@ -599,15 +599,6 @@ public class MainMenuController : MonoBehaviour
             ResetOptionsToDefault();
         }
 
-        Rect tutorialRect = new Rect(actions.x + 14f, actions.y + 84f, actions.width - 28f, 34f);
-        if (DrawAnimatedMenuButton(tutorialRect, "Mostrar tutorial"))
-        {
-            UserSettings.SetShowIntroTutorial(true);
-            optionsActionMessage = "Tutorial de inicio activado.";
-            optionsActionMessageExpireAt = Time.unscaledTime + 2.2f;
-            GlitchAudioManager.PlayMenuConfirm();
-        }
-
         if (!string.IsNullOrEmpty(optionsActionMessage))
         {
             GUI.Label(new Rect(area.x, area.yMax - 38f, area.width * 0.62f, 28f), optionsActionMessage, paragraphStyle);

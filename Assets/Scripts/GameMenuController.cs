@@ -196,7 +196,8 @@ public class GameMenuController : MonoBehaviour
         bool gameplayActive = state == OverlayState.Playing;
         bool upgradeSelectionOpen = gameManager != null && gameManager.IsUpgradeSelectionOpen;
         bool introTutorialOpen = gameManager != null && gameManager.IsIntroTutorialOpen;
-        Cursor.visible = !gameplayActive || upgradeSelectionOpen || introTutorialOpen;
+        bool contextTutorialNeedsClick = gameManager != null && gameManager.ShouldShowCursorForContextTutorial;
+        Cursor.visible = !gameplayActive || upgradeSelectionOpen || introTutorialOpen || contextTutorialNeedsClick;
     }
 
     private void RestartLevel()
@@ -842,9 +843,9 @@ public class GameMenuController : MonoBehaviour
     private static void DrawSolidRect(Rect rect, Color color)
     {
         Color old = GUI.color;
-        GUI.color = color; 
+        GUI.color = color;
         GUI.DrawTexture(rect, Texture2D.whiteTexture);
-        GUI.color = old;  
+        GUI.color = old;
     }
 
     private static float EaseOutCubic(float t)

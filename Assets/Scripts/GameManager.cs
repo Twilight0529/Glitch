@@ -1,6 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 public class GameManager : MonoBehaviour
 {
@@ -20,6 +23,29 @@ public class GameManager : MonoBehaviour
         Countdown,
         GoFlash,
         Active
+    }
+
+    private enum IntroTutorialStep
+    {
+        Movement,
+        Parry,
+        Firewall,
+        Resources,
+        ArenaEvents,
+        Ready
+    }
+
+    private enum ContextTutorialKind
+    {
+        None,
+        Movement,
+        Parry,
+        Firewall,
+        ScorePickup,
+        Powerup,
+        Upgrade,
+        ArenaEvent,
+        Breach
     }
 
     private enum PlayerUpgradeKind
@@ -82,6 +108,8 @@ public class GameManager : MonoBehaviour
         public float remainingSeconds;
         public float recoveryCooldown;
     }
+
+    private readonly HashSet<string> contextArenaEventTutorialsShown = new HashSet<string>();
 
     [Header("Run State")]
     [SerializeField] private bool autoReloadSceneOnGameOver = false;
@@ -167,6 +195,7 @@ public class GameManager : MonoBehaviour
     public bool IsRunActive => runPhase == RunPhase.Active && !IsGameOver && !playerDefeatSequenceRunning;
     public bool IsUpgradeSelectionOpen => upgradeSelectionOpen;
     public bool IsIntroTutorialOpen => introTutorialOpen;
+    public bool ShouldShowCursorForContextTutorial => contextTutorialOpen && IsClickValidatedContextTutorial(contextTutorialKind);
     public MetaProgressionStorage.RunReward LastMetaReward { get; private set; }
     public bool HasAwardedMetaReward { get; private set; }
     public int ContractDataBonusEarned => contractDataBonusEarned;
@@ -281,6 +310,36 @@ public class GameManager : MonoBehaviour
     private float eventPressureCooldownTimer;
     private bool introTutorialOpen;
     private bool introTutorialDontShowAgain;
+    private IntroTutorialStep introTutorialStep;
+    private float introTutorialStepProgress;
+    private float introTutorialStepTimer;
+    private float introTutorialActionFlash;
+    private Vector2 introTutorialDemoPlayer = new Vector2(0.34f, 0.58f);
+    private bool introMoveWPressed;
+    private bool introMoveAPressed;
+    private bool introMoveSPressed;
+    private bool introMoveDPressed;
+    private bool contextTutorialOpen;
+    private ContextTutorialKind contextTutorialKind;
+    private float contextTutorialProgress;
+    private float contextTutorialTimer;
+    private float contextTutorialActionFlash;
+    private float previousTimeScaleBeforeContext = 1f;
+    private string contextTutorialEventKey;
+    private string contextTutorialEventLabel;
+    private string contextTutorialEventHint;
+    private bool contextMoveWPressed;
+    private bool contextMoveAPressed;
+    private bool contextMoveSPressed;
+    private bool contextMoveDPressed;
+    private bool contextMovementShown;
+    private bool contextParryShown;
+    private bool contextFirewallShown;
+    private bool contextScorePickupShown;
+    private bool contextPowerupShown;
+    private bool contextUpgradeShown;
+    private bool contextArenaEventShown;
+    private bool contextBreachShown;
     private bool operationPlayerModifiersApplied;
     private float labRunTime;
     private float storageRunTime;
@@ -299,6 +358,16 @@ public class GameManager : MonoBehaviour
         RefreshHudScaleSetting();
         RefreshLevelType();
         BeginStartupSequence();
+    }
+
+    private void OnDestroy()
+    {
+        if (introTutorialOpen || contextTutorialOpen)
+        {
+            Time.timeScale = 1f;
+        }
+
+        PlayerController.SetTutorialInputLocked(false);
     }
 
     private void Update()
@@ -334,6 +403,13 @@ public class GameManager : MonoBehaviour
 
         if (introTutorialOpen)
         {
+            UpdateIntroTutorialState();
+            return;
+        }
+
+        if (contextTutorialOpen)
+        {
+            UpdateContextTutorialState();
             return;
         }
 
@@ -386,6 +462,8 @@ public class GameManager : MonoBehaviour
         {
             return;
         }
+
+        UpdateContextTutorialTriggers();
 
         SurvivalTime += Time.deltaTime;
         TrackArenaRunTime(Time.deltaTime);
@@ -465,6 +543,8 @@ public class GameManager : MonoBehaviour
 
     public void NotifyScorePickupCollected(int scoreValue)
     {
+        TryOpenContextTutorial(ContextTutorialKind.ScorePickup);
+
         if (activeOperation.id == ContainmentOperationStorage.ExtractionId)
         {
             AddScore(3);
@@ -480,6 +560,11 @@ public class GameManager : MonoBehaviour
             AchievementStorage.PickupsTwoHundredFiftyId,
             AchievementStorage.PickupsFiveHundredId);
         TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Pickups, 1);
+    }
+
+    public void NotifyPowerupCollected()
+    {
+        TryOpenContextTutorial(ContextTutorialKind.Powerup);
     }
 
     public void NotifyParrySuccess()
@@ -527,6 +612,11 @@ public class GameManager : MonoBehaviour
             AchievementStorage.BreachFirstId,
             AchievementStorage.BreachThreeId,
             AchievementStorage.BreachSevenId);
+    }
+
+    public void NotifyBreachTutorialOpportunity()
+    {
+        TryOpenContextTutorial(ContextTutorialKind.Breach);
     }
 
     public void NotifyRuptureEchoTrapSuccess()
@@ -1133,6 +1223,21 @@ public class GameManager : MonoBehaviour
             return;
         }
 
+        if (contextTutorialOpen)
+        {
+            if (runPhase == RunPhase.Active)
+            {
+                DrawRuntimeHud();
+                DrawBossStateHud();
+                DrawStatePulseOverlay();
+                DrawBossStateBanner();
+                DrawChaosWarningOverlay();
+            }
+
+            DrawContextTutorialOverlay();
+            return;
+        }
+
         if (runPhase == RunPhase.Active)
         {
             DrawRuntimeHud();
@@ -1214,8 +1319,40 @@ public class GameManager : MonoBehaviour
         breachSensitiveSuppressionTimer = 0f;
         eventPressureCooldownTimer = 0f;
         eventPressureReservations.Clear();
-        introTutorialOpen = UserSettings.GetShowIntroTutorial();
+        introTutorialOpen = false;
         introTutorialDontShowAgain = false;
+        introTutorialStep = IntroTutorialStep.Movement;
+        introTutorialStepProgress = 0f;
+        introTutorialStepTimer = 0f;
+        introTutorialActionFlash = 0f;
+        introTutorialDemoPlayer = new Vector2(0.34f, 0.58f);
+        introMoveWPressed = false;
+        introMoveAPressed = false;
+        introMoveSPressed = false;
+        introMoveDPressed = false;
+        contextTutorialOpen = false;
+        contextTutorialKind = ContextTutorialKind.None;
+        contextTutorialProgress = 0f;
+        contextTutorialTimer = 0f;
+        contextTutorialActionFlash = 0f;
+        contextTutorialEventKey = string.Empty;
+        contextTutorialEventLabel = string.Empty;
+        contextTutorialEventHint = string.Empty;
+        contextMoveWPressed = false;
+        contextMoveAPressed = false;
+        contextMoveSPressed = false;
+        contextMoveDPressed = false;
+        previousTimeScaleBeforeContext = 1f;
+        contextArenaEventTutorialsShown.Clear();
+        contextMovementShown = false;
+        contextParryShown = false;
+        contextFirewallShown = false;
+        contextScorePickupShown = false;
+        contextPowerupShown = false;
+        contextUpgradeShown = false;
+        contextArenaEventShown = false;
+        contextBreachShown = false;
+        PlayerController.SetTutorialInputLocked(false);
         Time.timeScale = 0f;
     }
 
@@ -1241,6 +1378,71 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    private void UpdateIntroTutorialState()
+    {
+        float dt = Time.unscaledDeltaTime;
+        bool wasCompleteAtStart = IsIntroStepComplete();
+        introTutorialStepTimer += dt;
+        if (introTutorialActionFlash > 0f)
+        {
+            introTutorialActionFlash -= dt;
+        }
+
+        Vector2 moveInput = ReadTutorialMoveInput();
+        if (introTutorialStep == IntroTutorialStep.Movement)
+        {
+            if (moveInput.sqrMagnitude > 0.01f)
+            {
+                introTutorialDemoPlayer += moveInput.normalized * dt * 0.42f;
+                introTutorialDemoPlayer.x = Mathf.Clamp(introTutorialDemoPlayer.x, 0.14f, 0.86f);
+                introTutorialDemoPlayer.y = Mathf.Clamp(introTutorialDemoPlayer.y, 0.16f, 0.84f);
+            }
+
+            UpdateIntroMovementKeyChecklist();
+            introTutorialStepProgress = GetIntroMovementKeyCount() / 4f;
+            if (WasAnyTutorialMovementKeyPressed())
+            {
+                introTutorialActionFlash = 0.16f;
+            }
+        }
+        else if (introTutorialStep == IntroTutorialStep.Parry)
+        {
+            if (WasTutorialParryPressed())
+            {
+                introTutorialStepProgress = 1f;
+                introTutorialActionFlash = 0.28f;
+                GlitchAudioManager.PlayParryStart(Vector3.zero);
+            }
+        }
+        else if (introTutorialStep == IntroTutorialStep.Firewall)
+        {
+            if (WasTutorialFirewallPressed())
+            {
+                introTutorialStepProgress = 1f;
+                introTutorialActionFlash = 0.34f;
+                GlitchAudioManager.PlayFirewallBurst(Vector3.zero);
+            }
+        }
+        else if (introTutorialStep == IntroTutorialStep.Resources || introTutorialStep == IntroTutorialStep.ArenaEvents)
+        {
+            introTutorialStepProgress = Mathf.Clamp01(introTutorialStepProgress + dt * 0.45f);
+            if (WasTutorialConfirmPressed())
+            {
+                introTutorialStepProgress = 1f;
+                introTutorialActionFlash = 0.22f;
+            }
+        }
+        else
+        {
+            introTutorialStepProgress = 1f;
+        }
+
+        if (wasCompleteAtStart && IsIntroStepComplete() && WasTutorialConfirmPressed())
+        {
+            AdvanceIntroTutorialStep();
+        }
+    }
+
     private void DrawIntroTutorialOverlay()
     {
         EnsureUpgradeStyles();
@@ -1249,8 +1451,8 @@ public class GameManager : MonoBehaviour
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 2.4f);
         DrawSolidRect(new Rect(0f, 0f, Screen.width, Screen.height), new Color(0.005f, 0.01f, 0.02f, 0.82f));
 
-        float panelW = Mathf.Min(980f, Screen.width - 28f);
-        float panelH = Mathf.Min(590f, Screen.height - 26f);
+        float panelW = Mathf.Min(1040f, Screen.width - 28f);
+        float panelH = Mathf.Min(610f, Screen.height - 26f);
         Rect panel = new Rect((Screen.width - panelW) * 0.5f, (Screen.height - panelH) * 0.5f, panelW, panelH);
         DrawTutorialPanel(panel, new Color(0.025f, 0.04f, 0.08f, 0.95f), new Color(0.45f, 0.95f, 1f, 0.62f + pulse * 0.12f));
 
@@ -1258,33 +1460,43 @@ public class GameManager : MonoBehaviour
         GUI.Label(new Rect(area.x, area.y, area.width, 36f), "PROTOCOLO DE CONTENCION", upgradeTitleStyle);
         GUI.Label(
             new Rect(area.x, area.y + 38f, area.width, 24f),
-            "Controles, recursos y senales que vas a usar desde la primera partida.",
-            BuildFittedSingleLineStyle(tutorialHeaderStyle, "Controles, recursos y senales que vas a usar desde la primera partida.", area.width, 24f, 12));
+            "Practica los controles y senales principales antes de entrar a la arena.",
+            BuildFittedSingleLineStyle(tutorialHeaderStyle, "Practica los controles y senales principales antes de entrar a la arena.", area.width, 24f, 12));
         DrawSolidRect(new Rect(area.x, area.y + 70f, area.width, 2f), new Color(0.68f, 0.92f, 1f, 0.26f));
 
-        float gap = 14f;
-        float footerH = 58f;
-        float gridY = area.y + 88f;
-        float gridH = area.height - 88f - footerH;
-        float cardW = (area.width - gap) * 0.5f;
-        float cardH = (gridH - gap) * 0.5f;
+        DrawIntroStepDots(new Rect(area.x, area.y + 82f, area.width, 26f));
 
-        DrawTutorialCard(new Rect(area.x, gridY, cardW, cardH), "1. MOVIMIENTO", "WASD o flechas para esquivar. Puedes mantener dos direcciones para moverte en diagonal.", new Color(0.43f, 0.94f, 1f, 1f), DrawTutorialMovementVisual);
-        DrawTutorialCard(new Rect(area.x + cardW + gap, gridY, cardW, cardH), "2. PARRY Y FIREWALL", "Parry: Espacio/E/click izq. al contacto. Si aciertas, empujas y cargas Firewall. Firewall: Q/R/click der. con barra llena.", new Color(1f, 0.62f, 0.78f, 1f), DrawTutorialDefenseVisual);
-        DrawTutorialCard(new Rect(area.x, gridY + cardH + gap, cardW, cardH), "3. RECURSOS Y MEJORAS", "Los datos suman puntaje y progreso meta. El rayo da velocidad, el escudo absorbe un golpe y las alteraciones mejoran la run.", new Color(1f, 0.78f, 0.36f, 1f), DrawTutorialPowerupVisual);
-        DrawTutorialCard(new Rect(area.x + cardW + gap, gridY + cardH + gap, cardW, cardH), "4. EVENTOS DE ARENA", "Las alertas visuales anticipan reglas temporales: sigue flechas, evita zonas peligrosas y cruza brechas cuando aparezcan.", new Color(0.82f, 0.52f, 1f, 1f), DrawTutorialEventsVisual);
+        Rect content = new Rect(area.x, area.y + 118f, area.width, area.height - 180f);
+        float visualW = Mathf.Clamp(content.width * 0.46f, 330f, 455f);
+        Rect visualRect = new Rect(content.x, content.y, visualW, content.height);
+        Rect textRect = new Rect(visualRect.xMax + 20f, content.y, content.xMax - visualRect.xMax - 20f, content.height);
+        DrawIntroTutorialVisual(visualRect);
+        DrawIntroTutorialText(textRect);
 
-        Rect footer = new Rect(area.x, area.yMax - footerH + 10f, area.width, footerH - 10f);
-        DrawTutorialCheckbox(new Rect(footer.x, footer.y + 8f, 240f, 32f), "No volver a mostrar");
+        Rect progressBar = new Rect(textRect.x, textRect.yMax - 72f, textRect.width, 10f);
+        DrawSolidRect(progressBar, new Color(0.03f, 0.05f, 0.09f, 0.92f));
+        Color stepAccent = GetIntroStepAccent();
+        DrawSolidRect(new Rect(progressBar.x, progressBar.y, progressBar.width * Mathf.Clamp01(introTutorialStepProgress), progressBar.height), new Color(stepAccent.r, stepAccent.g, stepAccent.b, 0.92f));
 
-        Rect startButton = new Rect(footer.xMax - 250f, footer.y + 6f, 250f, 36f);
-        DrawSolidRect(startButton, new Color(0.09f, 0.18f, 0.28f, 0.92f));
-        DrawSolidRect(new Rect(startButton.x, startButton.y, startButton.width, 2f), new Color(0.50f, 0.96f, 1f, 0.70f));
-        DrawSolidRect(new Rect(startButton.x, startButton.yMax - 2f, startButton.width, 2f), new Color(1f, 0.58f, 0.78f, 0.48f));
-        if (GUI.Button(startButton, "INICIAR PROTOCOLO", upgradeButtonStyle))
+        Rect footer = new Rect(area.x, area.yMax - 48f, area.width, 42f);
+        DrawTutorialCheckbox(new Rect(footer.x, footer.y + 4f, 240f, 32f), "No volver a mostrar");
+
+        string buttonLabel = introTutorialStep == IntroTutorialStep.Ready ? "INICIAR PROTOCOLO" : "CONTINUAR";
+        Rect continueButton = new Rect(footer.xMax - 232f, footer.y + 2f, 232f, 36f);
+        bool canContinue = IsIntroStepComplete();
+        Color oldColor = GUI.color;
+        bool oldEnabled = GUI.enabled;
+        GUI.color = canContinue ? Color.white : new Color(1f, 1f, 1f, 0.42f);
+        DrawSolidRect(continueButton, new Color(0.09f, 0.18f, 0.28f, 0.92f));
+        DrawSolidRect(new Rect(continueButton.x, continueButton.y, continueButton.width, 2f), new Color(stepAccent.r, stepAccent.g, stepAccent.b, 0.82f));
+        DrawSolidRect(new Rect(continueButton.x, continueButton.yMax - 2f, continueButton.width, 2f), new Color(1f, 0.58f, 0.78f, 0.48f));
+        GUI.enabled = canContinue;
+        if (GUI.Button(continueButton, buttonLabel, upgradeButtonStyle))
         {
-            CloseIntroTutorial();
+            AdvanceIntroTutorialStep();
         }
+        GUI.enabled = oldEnabled;
+        GUI.color = oldColor;
     }
 
     private void CloseIntroTutorial()
@@ -1295,7 +1507,1134 @@ public class GameManager : MonoBehaviour
         }
 
         introTutorialOpen = false;
+        PlayerController.SetTutorialInputLocked(false);
         GlitchAudioManager.PlayMenuConfirm();
+    }
+
+    private void UpdateContextTutorialTriggers()
+    {
+        if (contextTutorialOpen || !IsRunActive || playerController == null)
+        {
+            return;
+        }
+
+        if (!contextMovementShown && SurvivalTime >= 0.35f)
+        {
+            TryOpenContextTutorial(ContextTutorialKind.Movement);
+            return;
+        }
+
+        if (!contextParryShown && enemyController != null && SurvivalTime >= 1.2f)
+        {
+            float distance = Vector2.Distance(playerController.GetPosition(), enemyController.GetCurrentPosition());
+            float parryTeachDistance = Mathf.Max(0.65f, playerController.ParryRadius + 0.10f);
+            if (distance <= parryTeachDistance)
+            {
+                TryOpenContextTutorial(ContextTutorialKind.Parry);
+                return;
+            }
+        }
+
+        if (!contextFirewallShown && playerController.IsFirewallBurstReady)
+        {
+            TryOpenContextTutorial(ContextTutorialKind.Firewall);
+            return;
+        }
+
+        if (SurvivalTime >= mapEventsUnlockTime && TryGetContextEventTutorialInfo(out string eventLabel, out string eventHint))
+        {
+            string eventKey = $"{levelType}:{eventLabel}:{eventHint}";
+            if (!contextArenaEventTutorialsShown.Contains(eventKey))
+            {
+                TryOpenContextTutorial(ContextTutorialKind.ArenaEvent, eventKey, eventLabel, eventHint);
+            }
+        }
+    }
+
+    private bool TryGetContextEventTutorialInfo(out string label, out string hint)
+    {
+        label = GetThemedEventLabel();
+        hint = GetThemedEventHint();
+        if (!string.IsNullOrWhiteSpace(label))
+        {
+            return true;
+        }
+
+        string warning = chaosDirector != null ? chaosDirector.ActiveWarningLabel : string.Empty;
+        if (!string.IsNullOrWhiteSpace(warning) && ShouldTeachChaosEventLabel(warning))
+        {
+            label = warning;
+            hint = "Aviso critico del mapa: prepara movimiento y lee la zona antes de que se active.";
+            return true;
+        }
+
+        string chaosLabel = chaosDirector != null ? chaosDirector.ActiveEventLabel : string.Empty;
+        if (!string.IsNullOrWhiteSpace(chaosLabel) && chaosLabel.Contains("Sigue las flechas") && contextBreachShown)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(chaosLabel) && ShouldTeachChaosEventLabel(chaosLabel))
+        {
+            label = chaosLabel;
+            hint = GetChaosEventTutorialHint(chaosLabel);
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool ShouldTeachChaosEventLabel(string label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return false;
+        }
+
+        return label.Contains("Mantener nodos") ||
+               label.Contains("Containment Lock") ||
+               label.Contains("Containment Pulse") ||
+               label.Contains("Sigue las flechas");
+    }
+
+    private string GetChaosEventTutorialHint(string label)
+    {
+        if (label.Contains("Mantener nodos"))
+        {
+            return "Objetivo de mapa: mantenete dentro de los nodos hasta sincronizarlos. Te cargan Firewall y dan recompensa si completas la secuencia.";
+        }
+
+        if (label.Contains("Containment Lock") || label.Contains("Containment Pulse"))
+        {
+            return "Pulso de contencion: el mapa va a imponer presion. Mira la zona activa, evita quedar encerrado y usa movimiento para reposicionarte.";
+        }
+
+        if (label.Contains("Sigue las flechas"))
+        {
+            return "Breach detectada: segui los indicadores del mapa hacia la salida antes de que el barrido avance.";
+        }
+
+        return "Evento de mapa activo: lee la alerta visual y responde con movimiento antes de que el mapa te encierre.";
+    }
+
+    private bool TryOpenContextTutorial(ContextTutorialKind kind, string eventKey = null, string eventLabel = null, string eventHint = null)
+    {
+        if (kind == ContextTutorialKind.None || contextTutorialOpen || introTutorialOpen || upgradeSelectionOpen || IsGameOver)
+        {
+            return false;
+        }
+
+        if (HasContextTutorialBeenShown(kind, eventKey))
+        {
+            return false;
+        }
+
+        MarkContextTutorialShown(kind, eventKey);
+        contextTutorialOpen = true;
+        contextTutorialKind = kind;
+        contextTutorialProgress = 0f;
+        contextTutorialTimer = 0f;
+        contextTutorialActionFlash = 0.2f;
+        contextTutorialEventKey = eventKey ?? string.Empty;
+        contextTutorialEventLabel = kind == ContextTutorialKind.ArenaEvent ? eventLabel ?? GetThemedEventLabel() : string.Empty;
+        contextTutorialEventHint = kind == ContextTutorialKind.ArenaEvent ? eventHint ?? GetThemedEventHint() : string.Empty;
+        contextMoveWPressed = false;
+        contextMoveAPressed = false;
+        contextMoveSPressed = false;
+        contextMoveDPressed = false;
+        previousTimeScaleBeforeContext = Time.timeScale;
+        Time.timeScale = 0f;
+        PlayerController.SetTutorialInputLocked(true);
+        GlitchAudioManager.PlayMenuHover();
+        return true;
+    }
+
+    private bool HasContextTutorialBeenShown(ContextTutorialKind kind, string eventKey)
+    {
+        switch (kind)
+        {
+            case ContextTutorialKind.Movement:
+                return contextMovementShown;
+            case ContextTutorialKind.Parry:
+                return contextParryShown;
+            case ContextTutorialKind.Firewall:
+                return contextFirewallShown;
+            case ContextTutorialKind.ScorePickup:
+                return contextScorePickupShown;
+            case ContextTutorialKind.Powerup:
+                return contextPowerupShown;
+            case ContextTutorialKind.Upgrade:
+                return contextUpgradeShown;
+            case ContextTutorialKind.ArenaEvent:
+                return string.IsNullOrWhiteSpace(eventKey)
+                    ? contextArenaEventShown
+                    : contextArenaEventTutorialsShown.Contains(eventKey);
+            case ContextTutorialKind.Breach:
+                return contextBreachShown;
+            default:
+                return true;
+        }
+    }
+
+    private void MarkContextTutorialShown(ContextTutorialKind kind, string eventKey)
+    {
+        switch (kind)
+        {
+            case ContextTutorialKind.Movement:
+                contextMovementShown = true;
+                break;
+            case ContextTutorialKind.Parry:
+                contextParryShown = true;
+                break;
+            case ContextTutorialKind.Firewall:
+                contextFirewallShown = true;
+                break;
+            case ContextTutorialKind.ScorePickup:
+                contextScorePickupShown = true;
+                break;
+            case ContextTutorialKind.Powerup:
+                contextPowerupShown = true;
+                break;
+            case ContextTutorialKind.Upgrade:
+                contextUpgradeShown = true;
+                break;
+            case ContextTutorialKind.ArenaEvent:
+                if (string.IsNullOrWhiteSpace(eventKey))
+                {
+                    contextArenaEventShown = true;
+                }
+                else
+                {
+                    contextArenaEventTutorialsShown.Add(eventKey);
+                }
+                break;
+            case ContextTutorialKind.Breach:
+                contextBreachShown = true;
+                break;
+        }
+    }
+
+    private void UpdateContextTutorialState()
+    {
+        float dt = Time.unscaledDeltaTime;
+        contextTutorialTimer += dt;
+        if (contextTutorialActionFlash > 0f)
+        {
+            contextTutorialActionFlash -= dt;
+        }
+
+        if (contextTutorialKind == ContextTutorialKind.Movement)
+        {
+            UpdateContextMovementKeyChecklist();
+            int pressedCount = GetContextMovementKeyCount();
+            contextTutorialProgress = pressedCount / 4f;
+            if (WasAnyTutorialMovementKeyPressed())
+            {
+                contextTutorialActionFlash = 0.14f;
+            }
+
+            if (pressedCount >= 4)
+            {
+                CloseContextTutorial();
+                return;
+            }
+        }
+        else if (contextTutorialKind == ContextTutorialKind.Parry)
+        {
+            if (WasTutorialParryPressed())
+            {
+                contextTutorialProgress = 1f;
+                contextTutorialActionFlash = 0.28f;
+                CloseContextTutorial(playConfirm: false);
+                playerController?.TryStartParryFromTutorial();
+                return;
+            }
+        }
+        else if (contextTutorialKind == ContextTutorialKind.Firewall)
+        {
+            if (WasTutorialFirewallPressed())
+            {
+                contextTutorialProgress = 1f;
+                contextTutorialActionFlash = 0.34f;
+                CloseContextTutorial(playConfirm: false);
+                playerController?.TryActivateFirewallBurst();
+                return;
+            }
+        }
+        else if (contextTutorialKind == ContextTutorialKind.ArenaEvent || contextTutorialKind == ContextTutorialKind.Breach)
+        {
+            Vector2 move = ReadTutorialMoveInput();
+            contextTutorialProgress = Mathf.Clamp01(contextTutorialProgress + dt * 0.38f);
+            if (move.sqrMagnitude > 0.01f)
+            {
+                contextTutorialProgress = 1f;
+                CloseContextTutorial();
+                return;
+            }
+        }
+        else if (IsClickValidatedContextTutorial(contextTutorialKind))
+        {
+            contextTutorialProgress = Mathf.Clamp01(contextTutorialProgress + dt * 0.65f);
+            if (WasTutorialClickPressed())
+            {
+                contextTutorialProgress = 1f;
+                CloseContextTutorial();
+                return;
+            }
+        }
+    }
+
+    private bool IsContextTutorialComplete()
+    {
+        return contextTutorialProgress >= 0.98f;
+    }
+
+    private static bool IsClickValidatedContextTutorial(ContextTutorialKind kind)
+    {
+        return kind == ContextTutorialKind.ScorePickup ||
+               kind == ContextTutorialKind.Powerup ||
+               kind == ContextTutorialKind.Upgrade;
+    }
+
+    private void CloseContextTutorial(bool playConfirm = true)
+    {
+        contextTutorialOpen = false;
+        contextTutorialKind = ContextTutorialKind.None;
+        contextTutorialProgress = 0f;
+        contextTutorialTimer = 0f;
+        contextTutorialActionFlash = 0f;
+        PlayerController.SetTutorialInputLocked(false);
+
+        if (!IsGameOver && !upgradeSelectionOpen)
+        {
+            Time.timeScale = Mathf.Approximately(previousTimeScaleBeforeContext, 0f) ? 1f : previousTimeScaleBeforeContext;
+        }
+
+        if (playConfirm)
+        {
+            GlitchAudioManager.PlayMenuConfirm();
+        }
+    }
+
+    private void DrawContextTutorialOverlay()
+    {
+        EnsureUpgradeStyles();
+        EnsureTutorialStyles();
+
+        Color accent = GetContextTutorialAccent();
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 3.2f);
+        DrawContextFreezeFrameVignette(accent, pulse);
+        DrawContextWorldMarkers(accent, pulse);
+
+        float panelW = Mathf.Min(540f, Screen.width - 32f);
+        float panelH = Mathf.Min(246f, Screen.height - 32f);
+        Rect panel = GetContextTutorialPanelRect(panelW, panelH);
+        DrawTutorialPanel(panel, new Color(0.018f, 0.028f, 0.054f, 0.94f), new Color(accent.r, accent.g, accent.b, 0.62f + pulse * 0.16f));
+
+        Rect area = new Rect(panel.x + 18f, panel.y + 14f, panel.width - 36f, panel.height - 26f);
+        GUI.Label(new Rect(area.x, area.y, area.width, 20f), "PAUSA CONTEXTUAL", BuildFittedSingleLineStyle(tutorialTinyStyle, "PAUSA CONTEXTUAL", area.width, 20f, 9));
+        GUI.Label(new Rect(area.x, area.y + 22f, area.width, 34f), GetContextTutorialTitle(), BuildFittedSingleLineStyle(upgradeTitleStyle, GetContextTutorialTitle(), area.width, 34f, 14));
+
+        GUIStyle compactBody = new GUIStyle(tutorialBodyStyle)
+        {
+            fontSize = Mathf.Max(11, Mathf.RoundToInt(12f * hudScale)),
+            clipping = TextClipping.Clip,
+            wordWrap = true
+        };
+
+        Rect body = new Rect(area.x, area.y + 64f, area.width, 70f);
+        GUI.Label(body, GetContextTutorialBody(), compactBody);
+
+        Rect hint = new Rect(area.x, area.y + 140f, area.width, 30f);
+        DrawSolidRect(hint, new Color(accent.r, accent.g, accent.b, 0.12f));
+        GUI.Label(new Rect(hint.x + 10f, hint.y + 4f, hint.width - 20f, hint.height - 8f), GetContextTutorialHint(), BuildFittedSingleLineStyle(tutorialHeaderStyle, GetContextTutorialHint(), hint.width - 20f, hint.height - 8f, 10));
+
+        Rect progress = new Rect(area.x, area.y + 176f, area.width, 8f);
+        DrawSolidRect(progress, new Color(0.03f, 0.05f, 0.09f, 0.92f));
+        DrawSolidRect(new Rect(progress.x, progress.y, progress.width * Mathf.Clamp01(contextTutorialProgress), progress.height), new Color(accent.r, accent.g, accent.b, 0.92f));
+
+        Rect footer = new Rect(area.x, area.yMax - 32f, area.width, 30f);
+        DrawSolidRect(footer, new Color(0.03f, 0.05f, 0.09f, 0.74f));
+        GUI.Label(new Rect(footer.x + 10f, footer.y + 4f, footer.width - 20f, footer.height - 8f), GetContextTutorialFooter(), BuildFittedSingleLineStyle(tutorialHeaderStyle, GetContextTutorialFooter(), footer.width - 20f, footer.height - 8f, 10));
+    }
+
+    private void DrawContextFreezeFrameVignette(Color accent, float pulse)
+    {
+        float edge = Mathf.Clamp(Screen.height * 0.09f, 34f, 82f);
+        DrawSolidRect(new Rect(0f, 0f, Screen.width, edge), new Color(0.002f, 0.006f, 0.014f, 0.34f));
+        DrawSolidRect(new Rect(0f, Screen.height - edge, Screen.width, edge), new Color(0.002f, 0.006f, 0.014f, 0.30f));
+        DrawSolidRect(new Rect(0f, 0f, edge * 0.75f, Screen.height), new Color(0.002f, 0.006f, 0.014f, 0.18f));
+        DrawSolidRect(new Rect(Screen.width - edge * 0.75f, 0f, edge * 0.75f, Screen.height), new Color(0.002f, 0.006f, 0.014f, 0.18f));
+        DrawSolidRect(new Rect(0f, 0f, Screen.width, 2f), new Color(accent.r, accent.g, accent.b, 0.32f + pulse * 0.12f));
+        DrawSolidRect(new Rect(0f, Screen.height - 2f, Screen.width, 2f), new Color(accent.r, accent.g, accent.b, 0.26f));
+    }
+
+    private Rect GetContextTutorialPanelRect(float width, float height)
+    {
+        Vector2 focus = GetContextFocusGuiPoint();
+        float margin = 18f;
+        bool placeTop = focus.y > Screen.height * 0.54f;
+        float y = placeTop ? margin : Screen.height - height - margin;
+        float x = focus.x < Screen.width * 0.5f ? Screen.width - width - margin : margin;
+
+        if (contextTutorialKind == ContextTutorialKind.Upgrade)
+        {
+            x = (Screen.width - width) * 0.5f;
+            y = Screen.height - height - margin;
+        }
+
+        return new Rect(
+            Mathf.Clamp(x, margin, Screen.width - width - margin),
+            Mathf.Clamp(y, margin, Screen.height - height - margin),
+            width,
+            height);
+    }
+
+    private Vector2 GetContextFocusGuiPoint()
+    {
+        if (contextTutorialKind == ContextTutorialKind.Parry && enemyController != null)
+        {
+            return WorldToGuiPoint(enemyController.GetCurrentPosition());
+        }
+
+        if (playerController != null)
+        {
+            return WorldToGuiPoint(playerController.GetPosition());
+        }
+
+        return new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+    }
+
+    private Vector2 WorldToGuiPoint(Vector2 worldPosition)
+    {
+        Camera cam = Camera.main;
+        if (cam == null)
+        {
+            return new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+        }
+
+        Vector3 screen = cam.WorldToScreenPoint(worldPosition);
+        return new Vector2(screen.x, Screen.height - screen.y);
+    }
+
+    private void DrawContextWorldMarkers(Color accent, float pulse)
+    {
+        if (playerController != null)
+        {
+            DrawContextTargetMarker(WorldToGuiPoint(playerController.GetPosition()), "VOS", new Color(0.42f, 0.95f, 1f, 1f), pulse);
+        }
+
+        if (enemyController != null && (contextTutorialKind == ContextTutorialKind.Parry || contextTutorialKind == ContextTutorialKind.Movement))
+        {
+            Vector2 enemyPoint = WorldToGuiPoint(enemyController.GetCurrentPosition());
+            DrawContextTargetMarker(enemyPoint, "ANOMALIA", new Color(1f, 0.28f, 0.38f, 1f), pulse);
+
+            if (playerController != null)
+            {
+                Vector2 playerPoint = WorldToGuiPoint(playerController.GetPosition());
+                DrawContextLine(playerPoint, enemyPoint, accent);
+                if (contextTutorialKind == ContextTutorialKind.Parry)
+                {
+                    DrawContextCallout(
+                        Vector2.Lerp(playerPoint, enemyPoint, 0.52f) + new Vector2(0f, -46f),
+                        "Este es el rango peligroso: Parry corta el contacto.",
+                        accent);
+                }
+            }
+        }
+        else if (contextTutorialKind == ContextTutorialKind.Firewall && playerController != null)
+        {
+            DrawContextCallout(WorldToGuiPoint(playerController.GetPosition()) + new Vector2(0f, -58f), "Barra lista: usalo antes de quedar encerrado.", accent);
+        }
+        else if (contextTutorialKind == ContextTutorialKind.Breach)
+        {
+            DrawContextCallout(new Vector2(Screen.width * 0.5f, Screen.height * 0.22f), "Segui la flecha real del mapa hacia la brecha.", accent);
+        }
+    }
+
+    private void DrawContextTargetMarker(Vector2 center, string label, Color color, float pulse)
+    {
+        float size = 54f + pulse * 10f;
+        Rect marker = new Rect(center.x - size * 0.5f, center.y - size * 0.5f, size, size);
+        DrawTutorialFrame(marker, new Color(color.r, color.g, color.b, 0.72f), 3f);
+        DrawSolidRect(new Rect(center.x - 3f, center.y - size * 0.5f - 9f, 6f, 18f), new Color(color.r, color.g, color.b, 0.82f));
+        DrawSolidRect(new Rect(center.x - 3f, center.y + size * 0.5f - 9f, 6f, 18f), new Color(color.r, color.g, color.b, 0.82f));
+        DrawSolidRect(new Rect(center.x - size * 0.5f - 9f, center.y - 3f, 18f, 6f), new Color(color.r, color.g, color.b, 0.82f));
+        DrawSolidRect(new Rect(center.x + size * 0.5f - 9f, center.y - 3f, 18f, 6f), new Color(color.r, color.g, color.b, 0.82f));
+
+        Rect labelRect = new Rect(center.x - 74f, center.y - size * 0.5f - 30f, 148f, 22f);
+        DrawSolidRect(labelRect, new Color(0.01f, 0.02f, 0.04f, 0.78f));
+        GUI.Label(labelRect, label, BuildFittedSingleLineStyle(tutorialTinyStyle, label, labelRect.width, labelRect.height, 8));
+    }
+
+    private void DrawContextLine(Vector2 from, Vector2 to, Color color)
+    {
+        Vector2 delta = to - from;
+        int steps = Mathf.Clamp(Mathf.CeilToInt(delta.magnitude / 18f), 4, 32);
+        for (int i = 0; i <= steps; i++)
+        {
+            if (i % 2 != 0)
+            {
+                continue;
+            }
+
+            Vector2 p = Vector2.Lerp(from, to, i / (float)steps);
+            DrawSolidRect(new Rect(p.x - 5f, p.y - 2f, 10f, 4f), new Color(color.r, color.g, color.b, 0.68f));
+        }
+    }
+
+    private void DrawContextCallout(Vector2 anchor, string text, Color accent)
+    {
+        float width = Mathf.Min(360f, Screen.width - 48f);
+        Rect rect = new Rect(anchor.x - width * 0.5f, anchor.y - 17f, width, 34f);
+        rect.x = Mathf.Clamp(rect.x, 18f, Screen.width - rect.width - 18f);
+        rect.y = Mathf.Clamp(rect.y, 18f, Screen.height - rect.height - 18f);
+        DrawSolidRect(rect, new Color(0.012f, 0.020f, 0.040f, 0.86f));
+        DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 2f), new Color(accent.r, accent.g, accent.b, 0.74f));
+        GUI.Label(new Rect(rect.x + 10f, rect.y + 5f, rect.width - 20f, rect.height - 8f), text, BuildFittedSingleLineStyle(tutorialHeaderStyle, text, rect.width - 20f, rect.height - 8f, 9));
+    }
+
+    private string GetContextTutorialTitle()
+    {
+        switch (contextTutorialKind)
+        {
+            case ContextTutorialKind.Parry:
+                return "La anomalia esta encima: usa Parry";
+            case ContextTutorialKind.Firewall:
+                return "Firewall cargado: libera el Burst";
+            case ContextTutorialKind.ScorePickup:
+                return "Datos recuperados";
+            case ContextTutorialKind.Powerup:
+                return "Powerup instalado";
+            case ContextTutorialKind.Upgrade:
+                return "Alteraciones de run";
+            case ContextTutorialKind.ArenaEvent:
+                return string.IsNullOrWhiteSpace(contextTutorialEventLabel) ? "Regla temporal de arena" : contextTutorialEventLabel;
+            case ContextTutorialKind.Breach:
+                return "Breach activo: busca la salida";
+            default:
+                return "Movimiento bajo presion";
+        }
+    }
+
+    private string GetContextTutorialBody()
+    {
+        switch (contextTutorialKind)
+        {
+            case ContextTutorialKind.Parry:
+                return "El jefe ya esta en rango de contacto. Presiona Parry justo antes del golpe para cortar la persecucion, empujarlo y cargar Firewall.";
+            case ContextTutorialKind.Firewall:
+                return "La barra esta completa. El Burst empuja enemigos, afecta clones y limpia proyectiles. Guardarlo demasiado tiempo te quita una salida defensiva.";
+            case ContextTutorialKind.ScorePickup:
+                return "Los datos suman puntaje, cargan Firewall y alimentan la progresion meta. En runs largas, recolectar bien abre mas opciones.";
+            case ContextTutorialKind.Powerup:
+                return "Los powerups cambian tu estado temporal. El rayo acelera, el escudo absorbe un golpe y ambos cargan Firewall.";
+            case ContextTutorialKind.Upgrade:
+                return "Las alteraciones cambian tu build durante la run. Mira categoria, impacto y rareza: no siempre gana la mejora mas ofensiva.";
+            case ContextTutorialKind.ArenaEvent:
+                return string.IsNullOrWhiteSpace(contextTutorialEventHint)
+                    ? "Las arenas anuncian reglas temporales con color, flechas y zonas activas. Reacciona apenas aparece la alerta."
+                    : contextTutorialEventHint;
+            case ContextTutorialKind.Breach:
+                return "La brecha abre una salida entre arenas. Segui el indicador hacia el portal antes de que el barrido glitch consuma el mapa.";
+            default:
+                return "Podes mantener dos direcciones a la vez. Las diagonales te ayudan a rodear obstaculos y romper persecuciones simples.";
+        }
+    }
+
+    private string GetContextTutorialHint()
+    {
+        switch (contextTutorialKind)
+        {
+            case ContextTutorialKind.Parry:
+                return "Presiona ESPACIO o E para ejecutar el Parry ahora.";
+            case ContextTutorialKind.Firewall:
+                return "Presiona Q o R para liberar el Burst ahora.";
+            case ContextTutorialKind.Movement:
+                return $"Presiona cada direccion: {GetContextMovementChecklistText()}";
+            case ContextTutorialKind.ArenaEvent:
+            case ContextTutorialKind.Breach:
+                return "Usa WASD o flechas para reaccionar y recuperar el control.";
+            case ContextTutorialKind.ScorePickup:
+            case ContextTutorialKind.Powerup:
+            case ContextTutorialKind.Upgrade:
+                return "Lee la senal y haz click para continuar la run.";
+            default:
+                return "Usa el input indicado por la mecanica.";
+        }
+    }
+
+    private string GetContextTutorialFooter()
+    {
+        switch (contextTutorialKind)
+        {
+            case ContextTutorialKind.Parry:
+                return "Input real: ESPACIO / E";
+            case ContextTutorialKind.Firewall:
+                return "Input real: Q / R";
+            case ContextTutorialKind.Movement:
+                return $"Progreso: {GetContextMovementKeyCount()}/4";
+            case ContextTutorialKind.ArenaEvent:
+            case ContextTutorialKind.Breach:
+                return "Input real: WASD / Flechas";
+            case ContextTutorialKind.ScorePickup:
+                return "Click: confirmar lectura";
+            case ContextTutorialKind.Powerup:
+                return "Click: confirmar powerup";
+            case ContextTutorialKind.Upgrade:
+                return "Click: abrir alteraciones";
+            default:
+                return "Entrenamiento contextual";
+        }
+    }
+
+    private Color GetContextTutorialAccent()
+    {
+        switch (contextTutorialKind)
+        {
+            case ContextTutorialKind.Parry:
+                return new Color(1f, 0.62f, 0.78f, 1f);
+            case ContextTutorialKind.Firewall:
+                return new Color(1f, 0.84f, 0.42f, 1f);
+            case ContextTutorialKind.ScorePickup:
+                return new Color(0.88f, 0.98f, 1f, 1f);
+            case ContextTutorialKind.Powerup:
+                return new Color(0.55f, 1f, 0.78f, 1f);
+            case ContextTutorialKind.Upgrade:
+                return new Color(0.72f, 0.58f, 1f, 1f);
+            case ContextTutorialKind.ArenaEvent:
+                return new Color(1f, 0.50f, 0.86f, 1f);
+            case ContextTutorialKind.Breach:
+                return new Color(0.46f, 0.96f, 1f, 1f);
+            default:
+                return new Color(0.43f, 0.94f, 1f, 1f);
+        }
+    }
+
+    private void DrawContextTutorialVisual(Rect rect, Color accent)
+    {
+        switch (contextTutorialKind)
+        {
+            case ContextTutorialKind.Parry:
+                DrawIntroParryDemo(rect, accent);
+                break;
+            case ContextTutorialKind.Firewall:
+                DrawIntroFirewallDemo(rect, accent);
+                break;
+            case ContextTutorialKind.ScorePickup:
+            case ContextTutorialKind.Powerup:
+                DrawIntroResourcesDemo(rect, accent);
+                break;
+            case ContextTutorialKind.Upgrade:
+                DrawContextUpgradeDemo(rect, accent);
+                break;
+            case ContextTutorialKind.ArenaEvent:
+            case ContextTutorialKind.Breach:
+                DrawIntroEventsDemo(rect, accent);
+                break;
+            default:
+                DrawIntroMovementDemo(rect, accent);
+                break;
+        }
+    }
+
+    private void DrawContextUpgradeDemo(Rect rect, Color accent)
+    {
+        DrawTutorialGrid(rect, accent);
+        float cardW = (rect.width - 46f) / 3f;
+        for (int i = 0; i < 3; i++)
+        {
+            Rect card = new Rect(rect.x + 16f + i * (cardW + 7f), rect.y + 42f, cardW, rect.height - 84f);
+            Color c = i == 1 ? accent : new Color(0.56f, 0.72f, 1f, 1f);
+            DrawSolidRect(card, new Color(0.025f, 0.035f, 0.065f, 0.92f));
+            DrawSolidRect(new Rect(card.x, card.y, card.width, 3f), new Color(c.r, c.g, c.b, i == 1 ? 0.92f : 0.38f));
+            DrawSolidRect(new Rect(card.x + 10f, card.y + 22f, card.width - 20f, 22f), new Color(c.r, c.g, c.b, 0.18f));
+            DrawSolidRect(new Rect(card.x + 12f, card.y + 62f, card.width - 24f, 8f), new Color(1f, 0.82f, 0.42f, i == 1 ? 0.92f : 0.42f));
+            DrawSolidRect(new Rect(card.x + 12f, card.yMax - 38f, card.width - 24f, 20f), new Color(0.08f, 0.16f, 0.25f, 0.88f));
+        }
+        DrawTutorialLabel(new Rect(rect.x + 20f, rect.yMax - 34f, rect.width - 40f, 24f), "ELIGE BUILD, NO SOLO BONUS");
+    }
+
+    private void AdvanceIntroTutorialStep()
+    {
+        if (introTutorialStep == IntroTutorialStep.Ready)
+        {
+            CloseIntroTutorial();
+            return;
+        }
+
+        introTutorialStep = (IntroTutorialStep)((int)introTutorialStep + 1);
+        introTutorialStepProgress = introTutorialStep == IntroTutorialStep.Ready ? 1f : 0f;
+        introTutorialStepTimer = 0f;
+        introTutorialActionFlash = 0.24f;
+        GlitchAudioManager.PlayMenuConfirm();
+    }
+
+    private bool IsIntroStepComplete()
+    {
+        return introTutorialStep == IntroTutorialStep.Ready || introTutorialStepProgress >= 0.98f;
+    }
+
+    private Color GetIntroStepAccent()
+    {
+        switch (introTutorialStep)
+        {
+            case IntroTutorialStep.Parry:
+                return new Color(1f, 0.62f, 0.78f, 1f);
+            case IntroTutorialStep.Firewall:
+                return new Color(1f, 0.84f, 0.42f, 1f);
+            case IntroTutorialStep.Resources:
+                return new Color(0.58f, 1f, 0.74f, 1f);
+            case IntroTutorialStep.ArenaEvents:
+                return new Color(0.86f, 0.48f, 1f, 1f);
+            case IntroTutorialStep.Ready:
+                return new Color(0.82f, 0.96f, 1f, 1f);
+            default:
+                return new Color(0.43f, 0.94f, 1f, 1f);
+        }
+    }
+
+    private string GetIntroStepTitle()
+    {
+        switch (introTutorialStep)
+        {
+            case IntroTutorialStep.Parry:
+                return "2. Firewall Parry";
+            case IntroTutorialStep.Firewall:
+                return "3. Firewall Burst";
+            case IntroTutorialStep.Resources:
+                return "4. Datos y mejoras";
+            case IntroTutorialStep.ArenaEvents:
+                return "5. Eventos de arena";
+            case IntroTutorialStep.Ready:
+                return "Protocolo listo";
+            default:
+                return "1. Movimiento base";
+        }
+    }
+
+    private string GetIntroStepInstruction()
+    {
+        switch (introTutorialStep)
+        {
+            case IntroTutorialStep.Parry:
+                return "Presiona ESPACIO, E o click izquierdo para abrir la ventana de parry. Si lo haces al contacto, empujas a la anomalia y cargas Firewall.";
+            case IntroTutorialStep.Firewall:
+                return "Presiona Q, R o click derecho para practicar el Burst. En partida solo se activa cuando la barra de Firewall esta llena.";
+            case IntroTutorialStep.Resources:
+                return "Los datos dan puntaje y progresion meta. Los powerups cambian tu ritmo: rayo para velocidad, escudo para absorber un golpe. Presiona ESPACIO para confirmar.";
+            case IntroTutorialStep.ArenaEvents:
+                return "Cuando aparezcan flechas, barridos o brechas, leelos como ordenes urgentes del mapa. Sigue la direccion segura y evita quedarte dentro del glitch. Presiona ESPACIO para confirmar.";
+            case IntroTutorialStep.Ready:
+                return "Ya conoces lo basico. Ahora empieza la cuenta regresiva real y la anomalia entra en juego.";
+            default:
+                return "Presiona W, A, S y D una vez para registrar las direcciones basicas. Durante la run puedes combinar dos direcciones para moverte en diagonal.";
+        }
+    }
+
+    private string GetIntroStepHint()
+    {
+        switch (introTutorialStep)
+        {
+            case IntroTutorialStep.Parry:
+                return IsIntroStepComplete() ? "Parry registrado." : "Input esperado: ESPACIO / E / click izquierdo.";
+            case IntroTutorialStep.Firewall:
+                return IsIntroStepComplete() ? "Burst registrado." : "Input esperado: Q / R / click derecho.";
+            case IntroTutorialStep.Resources:
+                return IsIntroStepComplete() ? "Lectura confirmada." : "Observa los iconos y confirma con ESPACIO o click.";
+            case IntroTutorialStep.ArenaEvents:
+                return IsIntroStepComplete() ? "Ruta de escape confirmada." : "Observa el barrido y confirma con ESPACIO o click.";
+            case IntroTutorialStep.Ready:
+                return "Pulsa iniciar para entrar a la run.";
+            default:
+                return IsIntroStepComplete() ? "Movimiento registrado." : $"Pendiente: {GetIntroMovementChecklistText()}";
+        }
+    }
+
+    private void DrawIntroStepDots(Rect rect)
+    {
+        int total = 6;
+        float gap = 8f;
+        float dotW = Mathf.Min(112f, (rect.width - gap * (total - 1)) / total);
+        float startX = rect.x + (rect.width - (dotW * total + gap * (total - 1))) * 0.5f;
+        Color accent = GetIntroStepAccent();
+
+        for (int i = 0; i < total; i++)
+        {
+            Rect dot = new Rect(startX + i * (dotW + gap), rect.y + 4f, dotW, rect.height - 8f);
+            bool active = i == (int)introTutorialStep;
+            bool completed = i < (int)introTutorialStep;
+            Color fill = active
+                ? new Color(accent.r, accent.g, accent.b, 0.34f)
+                : completed ? new Color(0.58f, 1f, 0.82f, 0.20f) : new Color(0.04f, 0.07f, 0.12f, 0.76f);
+            DrawSolidRect(dot, fill);
+            DrawTutorialFrame(dot, new Color(accent.r, accent.g, accent.b, active ? 0.64f : 0.20f), 1f);
+        }
+    }
+
+    private void DrawIntroTutorialText(Rect rect)
+    {
+        Color accent = GetIntroStepAccent();
+        DrawSolidRect(rect, new Color(0.012f, 0.020f, 0.040f, 0.76f));
+        DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 2f), new Color(accent.r, accent.g, accent.b, 0.72f));
+
+        Rect kicker = new Rect(rect.x + 18f, rect.y + 18f, rect.width - 36f, 24f);
+        GUI.Label(kicker, "ENTRENAMIENTO INTERACTIVO", BuildFittedSingleLineStyle(tutorialTinyStyle, "ENTRENAMIENTO INTERACTIVO", kicker.width, kicker.height, 9));
+
+        Rect title = new Rect(rect.x + 18f, rect.y + 48f, rect.width - 36f, 42f);
+        GUI.Label(title, GetIntroStepTitle(), BuildFittedSingleLineStyle(upgradeTitleStyle, GetIntroStepTitle(), title.width, title.height, 18));
+
+        Rect body = new Rect(rect.x + 18f, rect.y + 106f, rect.width - 36f, 118f);
+        GUI.Label(body, GetIntroStepInstruction(), tutorialBodyStyle);
+
+        Rect hint = new Rect(rect.x + 18f, rect.yMax - 118f, rect.width - 36f, 34f);
+        DrawSolidRect(hint, new Color(accent.r, accent.g, accent.b, 0.12f));
+        GUI.Label(new Rect(hint.x + 10f, hint.y + 4f, hint.width - 20f, hint.height - 8f), GetIntroStepHint(), BuildFittedSingleLineStyle(tutorialHeaderStyle, GetIntroStepHint(), hint.width - 20f, hint.height - 8f, 10));
+    }
+
+    private void DrawIntroTutorialVisual(Rect rect)
+    {
+        Color accent = GetIntroStepAccent();
+        DrawSolidRect(rect, new Color(0.009f, 0.014f, 0.028f, 0.90f));
+        DrawTutorialFrame(rect, new Color(accent.r, accent.g, accent.b, 0.42f), 2f);
+        DrawSolidRect(new Rect(rect.x + 14f, rect.y + 14f, rect.width - 28f, 2f), new Color(accent.r, accent.g, accent.b, 0.42f));
+        DrawSolidRect(new Rect(rect.x + 14f, rect.yMax - 16f, rect.width - 28f, 2f), new Color(accent.r, accent.g, accent.b, 0.22f));
+
+        Rect demo = new Rect(rect.x + 22f, rect.y + 30f, rect.width - 44f, rect.height - 62f);
+        switch (introTutorialStep)
+        {
+            case IntroTutorialStep.Parry:
+                DrawIntroParryDemo(demo, accent);
+                break;
+            case IntroTutorialStep.Firewall:
+                DrawIntroFirewallDemo(demo, accent);
+                break;
+            case IntroTutorialStep.Resources:
+                DrawIntroResourcesDemo(demo, accent);
+                break;
+            case IntroTutorialStep.ArenaEvents:
+                DrawIntroEventsDemo(demo, accent);
+                break;
+            case IntroTutorialStep.Ready:
+                DrawIntroReadyDemo(demo, accent);
+                break;
+            default:
+                DrawIntroMovementDemo(demo, accent);
+                break;
+        }
+    }
+
+    private void DrawIntroMovementDemo(Rect rect, Color accent)
+    {
+        DrawTutorialGrid(rect, accent);
+        Vector2 player = new Vector2(
+            Mathf.Lerp(rect.x + 38f, rect.xMax - 38f, introTutorialDemoPlayer.x),
+            Mathf.Lerp(rect.yMax - 38f, rect.y + 38f, introTutorialDemoPlayer.y));
+        DrawArrowLine(new Vector2(rect.x + 70f, rect.yMax - 70f), player, accent);
+        DrawSolidRect(new Rect(player.x - 13f, player.y - 13f, 26f, 26f), new Color(0.30f, 0.88f, 1f, 1f));
+        DrawSolidRect(new Rect(player.x - 26f, player.y + 17f, 18f, 4f), new Color(accent.r, accent.g, accent.b, 0.58f));
+        DrawSolidRect(new Rect(player.x + 15f, player.y - 22f, 24f, 4f), new Color(accent.r, accent.g, accent.b, 0.58f));
+
+        float key = 34f;
+        float x = rect.x + 20f;
+        float y = rect.y + 22f;
+        DrawKey(new Rect(x + key + 6f, y, key, key), "W", accent);
+        DrawKey(new Rect(x, y + key + 6f, key, key), "A", accent);
+        DrawKey(new Rect(x + key + 6f, y + key + 6f, key, key), "S", accent);
+        DrawKey(new Rect(x + (key + 6f) * 2f, y + key + 6f, key, key), "D", accent);
+    }
+
+    private void DrawIntroParryDemo(Rect rect, Color accent)
+    {
+        DrawTutorialGrid(rect, accent);
+        Vector2 center = rect.center;
+        float radius = 50f + Mathf.Sin(Time.unscaledTime * 5f) * 6f + introTutorialActionFlash * 44f;
+        DrawTutorialRing(center, radius, accent, 0.58f);
+        DrawTutorialRing(center, radius * 0.68f, new Color(0.48f, 0.96f, 1f, 1f), 0.34f);
+        DrawSolidRect(new Rect(center.x - 13f, center.y - 13f, 26f, 26f), new Color(0.30f, 0.88f, 1f, 1f));
+        DrawSolidRect(new Rect(rect.x + 38f, center.y - 12f, 24f, 24f), new Color(1f, 0.22f, 0.32f, 1f));
+        DrawArrowLine(new Vector2(rect.x + 70f, center.y), new Vector2(center.x - 28f, center.y), new Color(1f, 0.62f, 0.74f, 1f));
+        DrawKey(new Rect(rect.xMax - 132f, rect.yMax - 48f, 58f, 28f), "ESP", accent);
+        DrawKey(new Rect(rect.xMax - 66f, rect.yMax - 48f, 46f, 28f), "E", accent);
+    }
+
+    private void DrawIntroFirewallDemo(Rect rect, Color accent)
+    {
+        DrawTutorialGrid(rect, accent);
+        Vector2 center = rect.center;
+        float burst = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(introTutorialActionFlash / 0.34f));
+        DrawTutorialRing(center, Mathf.Lerp(52f, 126f, 1f - burst), accent, Mathf.Lerp(0.30f, 0.68f, burst));
+        for (int i = 0; i < 12; i++)
+        {
+            float angle = (360f / 12f) * i + Time.unscaledTime * 35f;
+            Vector2 dir = new Vector2(Mathf.Cos(angle * Mathf.Deg2Rad), Mathf.Sin(angle * Mathf.Deg2Rad));
+            Vector2 p = center + dir * (46f + Mathf.Sin(Time.unscaledTime * 3f + i) * 4f);
+            DrawSolidRect(new Rect(p.x - 2f, p.y - 12f, 4f, 24f), new Color(accent.r, accent.g, accent.b, 0.54f));
+        }
+
+        DrawSolidRect(new Rect(center.x - 13f, center.y - 13f, 26f, 26f), new Color(0.30f, 0.88f, 1f, 1f));
+        Rect bar = new Rect(rect.x + 34f, rect.yMax - 44f, rect.width - 68f, 12f);
+        DrawSolidRect(bar, new Color(0.03f, 0.04f, 0.08f, 0.92f));
+        DrawSolidRect(new Rect(bar.x, bar.y, bar.width, bar.height), new Color(1f, 0.84f, 0.42f, 0.88f));
+        DrawKey(new Rect(rect.xMax - 120f, rect.y + 22f, 44f, 30f), "Q", accent);
+        DrawKey(new Rect(rect.xMax - 68f, rect.y + 22f, 44f, 30f), "R", accent);
+    }
+
+    private void DrawIntroResourcesDemo(Rect rect, Color accent)
+    {
+        DrawTutorialGrid(rect, accent);
+        for (int i = 0; i < 8; i++)
+        {
+            float x = rect.x + 38f + i * 26f;
+            float y = rect.y + 42f + Mathf.Sin(Time.unscaledTime * 2.2f + i) * 8f;
+            DrawSolidRect(new Rect(x, y, 13f, 13f), new Color(0.92f, 0.96f, 1f, 0.88f));
+        }
+
+        Rect speed = new Rect(rect.center.x - 54f, rect.center.y - 36f, 44f, 58f);
+        DrawSolidRect(new Rect(speed.x + 15f, speed.y, 14f, 26f), new Color(0.36f, 0.95f, 1f, 1f));
+        DrawSolidRect(new Rect(speed.x + 3f, speed.y + 22f, 34f, 12f), new Color(0.36f, 0.95f, 1f, 1f));
+        DrawSolidRect(new Rect(speed.x + 9f, speed.y + 34f, 14f, 24f), new Color(0.36f, 0.95f, 1f, 1f));
+
+        Rect shield = new Rect(rect.center.x + 28f, rect.center.y - 34f, 46f, 58f);
+        DrawSolidRect(new Rect(shield.x + 7f, shield.y, shield.width - 14f, 15f), new Color(0.52f, 1f, 0.74f, 0.92f));
+        DrawSolidRect(new Rect(shield.x, shield.y + 14f, shield.width, 24f), new Color(0.52f, 1f, 0.74f, 0.92f));
+        DrawSolidRect(new Rect(shield.x + 11f, shield.y + 38f, shield.width - 22f, 15f), new Color(0.52f, 1f, 0.74f, 0.92f));
+        DrawTutorialLabel(new Rect(rect.x + 24f, rect.yMax - 42f, rect.width - 48f, 26f), "DATOS -> SCORE + PROGRESO");
+    }
+
+    private void DrawIntroEventsDemo(Rect rect, Color accent)
+    {
+        DrawTutorialGrid(rect, accent);
+        DrawTutorialFrame(new Rect(rect.x + 26f, rect.y + 24f, rect.width - 52f, rect.height - 48f), new Color(0.62f, 0.78f, 1f, 0.36f), 2f);
+        float sweepX = Mathf.Lerp(rect.x + 42f, rect.xMax - 84f, Mathf.PingPong(Time.unscaledTime * 0.22f, 1f));
+        DrawSolidRect(new Rect(sweepX, rect.y + 24f, 10f, rect.height - 48f), new Color(1f, 0.35f, 0.78f, 0.78f));
+        DrawSolidRect(new Rect(sweepX + 12f, rect.y + 24f, 34f, rect.height - 48f), new Color(1f, 0.35f, 0.78f, 0.18f));
+        DrawSolidRect(new Rect(rect.xMax - 76f, rect.center.y - 34f, 24f, 68f), new Color(0.48f, 0.95f, 1f, 0.78f));
+        DrawSolidRect(new Rect(rect.x + 54f, rect.center.y - 12f, 24f, 24f), new Color(0.30f, 0.88f, 1f, 1f));
+        DrawArrowLine(new Vector2(rect.x + 88f, rect.center.y), new Vector2(rect.xMax - 86f, rect.center.y), accent);
+        DrawTutorialLabel(new Rect(rect.x + 24f, rect.yMax - 42f, rect.width - 48f, 26f), "LEE LA ALERTA -> MUEVETE A LA SALIDA");
+    }
+
+    private void DrawIntroReadyDemo(Rect rect, Color accent)
+    {
+        DrawTutorialGrid(rect, accent);
+        Vector2 center = rect.center;
+        DrawTutorialRing(center, 96f, accent, 0.34f);
+        DrawTutorialRing(center, 58f, new Color(0.48f, 0.96f, 1f, 1f), 0.42f);
+        DrawSolidRect(new Rect(center.x - 18f, center.y - 18f, 36f, 36f), new Color(0.30f, 0.88f, 1f, 1f));
+        GUI.Label(new Rect(rect.x + 24f, rect.yMax - 56f, rect.width - 48f, 34f), "CONTENCION LISTA", BuildFittedSingleLineStyle(upgradeTitleStyle, "CONTENCION LISTA", rect.width - 48f, 34f, 14));
+    }
+
+    private void DrawTutorialGrid(Rect rect, Color accent)
+    {
+        DrawSolidRect(rect, new Color(0.014f, 0.024f, 0.044f, 0.84f));
+        for (float x = rect.x + 28f; x < rect.xMax; x += 44f)
+        {
+            DrawSolidRect(new Rect(x, rect.y + 8f, 1f, rect.height - 16f), new Color(accent.r, accent.g, accent.b, 0.055f));
+        }
+        for (float y = rect.y + 28f; y < rect.yMax; y += 44f)
+        {
+            DrawSolidRect(new Rect(rect.x + 8f, y, rect.width - 16f, 1f), new Color(accent.r, accent.g, accent.b, 0.055f));
+        }
+    }
+
+    private void UpdateContextMovementKeyChecklist()
+    {
+        contextMoveWPressed |= WasTutorialMoveKeyPressed(KeyCode.W, TutorialMoveKey.W);
+        contextMoveAPressed |= WasTutorialMoveKeyPressed(KeyCode.A, TutorialMoveKey.A);
+        contextMoveSPressed |= WasTutorialMoveKeyPressed(KeyCode.S, TutorialMoveKey.S);
+        contextMoveDPressed |= WasTutorialMoveKeyPressed(KeyCode.D, TutorialMoveKey.D);
+    }
+
+    private void UpdateIntroMovementKeyChecklist()
+    {
+        introMoveWPressed |= WasTutorialMoveKeyPressed(KeyCode.W, TutorialMoveKey.W);
+        introMoveAPressed |= WasTutorialMoveKeyPressed(KeyCode.A, TutorialMoveKey.A);
+        introMoveSPressed |= WasTutorialMoveKeyPressed(KeyCode.S, TutorialMoveKey.S);
+        introMoveDPressed |= WasTutorialMoveKeyPressed(KeyCode.D, TutorialMoveKey.D);
+    }
+
+    private bool WasAnyTutorialMovementKeyPressed()
+    {
+        return WasTutorialMoveKeyPressed(KeyCode.W, TutorialMoveKey.W) ||
+               WasTutorialMoveKeyPressed(KeyCode.A, TutorialMoveKey.A) ||
+               WasTutorialMoveKeyPressed(KeyCode.S, TutorialMoveKey.S) ||
+               WasTutorialMoveKeyPressed(KeyCode.D, TutorialMoveKey.D);
+    }
+
+    private int GetContextMovementKeyCount()
+    {
+        int count = 0;
+        if (contextMoveWPressed) count++;
+        if (contextMoveAPressed) count++;
+        if (contextMoveSPressed) count++;
+        if (contextMoveDPressed) count++;
+        return count;
+    }
+
+    private int GetIntroMovementKeyCount()
+    {
+        int count = 0;
+        if (introMoveWPressed) count++;
+        if (introMoveAPressed) count++;
+        if (introMoveSPressed) count++;
+        if (introMoveDPressed) count++;
+        return count;
+    }
+
+    private string GetContextMovementChecklistText()
+    {
+        return $"{FormatContextMoveKey("W", contextMoveWPressed)}  {FormatContextMoveKey("A", contextMoveAPressed)}  {FormatContextMoveKey("S", contextMoveSPressed)}  {FormatContextMoveKey("D", contextMoveDPressed)}";
+    }
+
+    private string GetIntroMovementChecklistText()
+    {
+        return $"{FormatContextMoveKey("W", introMoveWPressed)}  {FormatContextMoveKey("A", introMoveAPressed)}  {FormatContextMoveKey("S", introMoveSPressed)}  {FormatContextMoveKey("D", introMoveDPressed)}";
+    }
+
+    private static string FormatContextMoveKey(string key, bool done)
+    {
+        return done ? $"{key}:OK" : $"{key}:--";
+    }
+
+    private enum TutorialMoveKey
+    {
+        W,
+        A,
+        S,
+        D
+    }
+
+    private static bool WasTutorialMoveKeyPressed(KeyCode legacyKey, TutorialMoveKey key)
+    {
+#if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null)
+        {
+            switch (key)
+            {
+                case TutorialMoveKey.W:
+                    return keyboard.wKey.wasPressedThisFrame;
+                case TutorialMoveKey.A:
+                    return keyboard.aKey.wasPressedThisFrame;
+                case TutorialMoveKey.S:
+                    return keyboard.sKey.wasPressedThisFrame;
+                case TutorialMoveKey.D:
+                    return keyboard.dKey.wasPressedThisFrame;
+            }
+        }
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(legacyKey);
+#else
+        return false;
+#endif
+    }
+
+    private static Vector2 ReadTutorialMoveInput()
+    {
+#if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null)
+        {
+            float horizontal = 0f;
+            float vertical = 0f;
+
+            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed) horizontal -= 1f;
+            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed) horizontal += 1f;
+            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed) vertical -= 1f;
+            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed) vertical += 1f;
+
+            return new Vector2(horizontal, vertical);
+        }
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+#else
+        return Vector2.zero;
+#endif
+    }
+
+    private static bool WasTutorialParryPressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        Mouse mouse = Mouse.current;
+        if (keyboard != null && (keyboard.spaceKey.wasPressedThisFrame || keyboard.eKey.wasPressedThisFrame))
+        {
+            return true;
+        }
+
+        if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+        {
+            return true;
+        }
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.E) || Input.GetMouseButtonDown(0);
+#else
+        return false;
+#endif
+    }
+
+    private static bool WasTutorialFirewallPressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        Mouse mouse = Mouse.current;
+        if (keyboard != null && (keyboard.qKey.wasPressedThisFrame || keyboard.rKey.wasPressedThisFrame))
+        {
+            return true;
+        }
+
+        if (mouse != null && mouse.rightButton.wasPressedThisFrame)
+        {
+            return true;
+        }
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.Q) || Input.GetKeyDown(KeyCode.R) || Input.GetMouseButtonDown(1);
+#else
+        return false;
+#endif
+    }
+
+    private static bool WasTutorialConfirmPressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        Mouse mouse = Mouse.current;
+        if (keyboard != null && keyboard.spaceKey.wasPressedThisFrame)
+        {
+            return true;
+        }
+
+        if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+        {
+            return true;
+        }
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return) || Input.GetMouseButtonDown(0);
+#else
+        return false;
+#endif
+    }
+
+    private static bool WasTutorialClickPressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        Mouse mouse = Mouse.current;
+        if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+        {
+            return true;
+        }
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetMouseButtonDown(0);
+#else
+        return false;
+#endif
     }
 
     private delegate void TutorialVisualDrawer(Rect rect, Color accent);
@@ -2130,6 +3469,16 @@ public class GameManager : MonoBehaviour
 
     private bool ShouldOpenUpgradeSelection()
     {
+        if (enableRunUpgrades &&
+            !upgradeSelectionOpen &&
+            IsRunActive &&
+            SurvivalTime >= nextUpgradeTime &&
+            playerController != null &&
+            TryOpenContextTutorial(ContextTutorialKind.Upgrade))
+        {
+            return false;
+        }
+
         return enableRunUpgrades &&
                !upgradeSelectionOpen &&
                IsRunActive &&

@@ -120,6 +120,8 @@ public class PlayerController : MonoBehaviour
     private Color baseBodyColor = Color.white;
     private Vector3 baseBodyScale = Vector3.one;
 
+    private static bool tutorialInputLocked;
+
     public Vector2 CurrentVelocity => rb != null ? rb.linearVelocity : Vector2.zero;
     public bool IsInDeathSequence => deathSequenceActive;
     public float DeathExplosionDuration => Mathf.Max(0.02f, deathChargeDuration) + Mathf.Max(0.02f, deathFlashDuration) + Mathf.Max(0.02f, deathAfterglowDuration);
@@ -127,6 +129,7 @@ public class PlayerController : MonoBehaviour
     public bool HasSpeedBoost => speedBoostTimer > 0f;
     public bool HasMovementSlow => movementSlowTimer > 0f;
     public bool IsParryActive => parryTimer > 0f;
+    public float ParryRadius => Mathf.Max(0.1f, parryRadius);
     public float FirewallCharge => firewallCharge;
     public float FirewallChargeMax => Mathf.Max(1f, firewallChargeMax);
     public float FirewallChargeNormalized => Mathf.Clamp01(firewallCharge / FirewallChargeMax);
@@ -222,6 +225,17 @@ public class PlayerController : MonoBehaviour
         {
             rb.linearVelocity = Vector2.zero;
             UpdateBreachConsumptionVisual();
+            return;
+        }
+
+        if (tutorialInputLocked)
+        {
+            rb.linearVelocity = Vector2.zero;
+            UpdatePowerupTimers();
+            UpdateShieldVisual();
+            UpdateParryTimers();
+            UpdateParryVisual();
+            UpdateMovementTrail(0f);
             return;
         }
 
@@ -322,6 +336,11 @@ public class PlayerController : MonoBehaviour
 #else
         return Vector2.zero;
 #endif
+    }
+
+    public static void SetTutorialInputLocked(bool locked)
+    {
+        tutorialInputLocked = locked;
     }
 
     public Vector2 GetPosition()
@@ -496,6 +515,18 @@ public class PlayerController : MonoBehaviour
         firewallBurstStunDuration = Mathf.Min(
             Mathf.Max(0.1f, maxFirewallBurstStunDuration),
             firewallBurstStunDuration + Mathf.Max(0f, extraSeconds));
+    }
+
+    public bool TryStartParryFromTutorial()
+    {
+        if (deathSequenceActive || breachConsumptionActive || parryCooldownTimer > 0f)
+        {
+            return false;
+        }
+
+        StartParry();
+        ScanParryWindow();
+        return true;
     }
 
     public void AddFirewallCharge(float amount)

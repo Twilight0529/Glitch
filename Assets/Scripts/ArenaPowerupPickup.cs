@@ -124,6 +124,7 @@ public class ArenaPowerupPickup : MonoBehaviour
         }
 
         player.AddFirewallChargeFromPowerup();
+        FindAnyObjectByType<GameManager>()?.NotifyPowerupCollected();
         GlitchAudioManager.PlayPowerupCollected(kind, transform.position);
         SpawnCollectBurstFx();
         owner?.NotifyPickupConsumed(this);
