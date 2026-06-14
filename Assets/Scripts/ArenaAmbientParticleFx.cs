@@ -14,6 +14,7 @@ public class ArenaAmbientParticleFx : MonoBehaviour
     {
         public Transform Transform;
         public SpriteRenderer Renderer;
+        public Vector2 Position;
         public Vector2 Velocity;
         public Vector2 BaseScale;
         public Color BaseColor;
@@ -45,7 +46,8 @@ public class ArenaAmbientParticleFx : MonoBehaviour
     {
         GameObject particle = new GameObject($"AmbientParticle_{index}");
         particle.transform.SetParent(transform, false);
-        particle.transform.localPosition = GetRandomLocalPosition();
+        Vector3 initialPosition = GetRandomLocalPosition();
+        particle.transform.localPosition = initialPosition;
 
         SpriteRenderer renderer = particle.AddComponent<SpriteRenderer>();
         renderer.sprite = style == ParticleStyle.Storage && index % 5 == 0 ? CircleSpriteProvider.Get() : SquareSpriteProvider.Get();
@@ -64,6 +66,7 @@ public class ArenaAmbientParticleFx : MonoBehaviour
         {
             Transform = particle.transform,
             Renderer = renderer,
+            Position = initialPosition,
             Velocity = velocity,
             BaseScale = scale,
             BaseColor = color,
@@ -93,17 +96,23 @@ public class ArenaAmbientParticleFx : MonoBehaviour
             return;
         }
 
-        Vector3 pos = particle.Transform.localPosition;
-        pos += (Vector3)(particle.Velocity * Time.deltaTime);
+        Vector2 logicalPosition = particle.Position + particle.Velocity * Time.deltaTime;
+        Vector3 wrappedPosition = WrapPosition(new Vector3(logicalPosition.x, logicalPosition.y, 0f));
+        particle.Position = new Vector2(wrappedPosition.x, wrappedPosition.y);
 
+        Vector2 visualOffset = Vector2.zero;
         if (style == ParticleStyle.Rupture)
         {
             float glitchStep = Mathf.Floor((Time.time + particle.Phase) * 7f);
-            pos.x += Mathf.Sin(glitchStep * 3.17f + index) * particle.Jitter;
-            pos.y += Mathf.Cos(glitchStep * 2.41f + index) * particle.Jitter;
+            visualOffset.x = Mathf.Sin(glitchStep * 3.17f + index) * particle.Jitter;
+            visualOffset.y = Mathf.Cos(glitchStep * 2.41f + index) * particle.Jitter;
         }
 
-        particle.Transform.localPosition = WrapPosition(pos);
+        // El jitter de Rupture es solo visual: no se acumula en la posicion logica de la particula.
+        particle.Transform.localPosition = new Vector3(
+            particle.Position.x + visualOffset.x,
+            particle.Position.y + visualOffset.y,
+            0f);
 
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * particle.BlinkSpeed + particle.Phase);
         Color color = particle.BaseColor;

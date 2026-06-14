@@ -4203,7 +4203,7 @@ public class GameManager : MonoBehaviour
         DrawHudAmbientFrame();
 
         float s = hudScale;
-        Rect leftPanel = new Rect(12f * s, 10f * s, 320f * s, 146f * s);
+        Rect leftPanel = new Rect(12f * s, 10f * s, 320f * s, 112f * s);
         DrawSolidRect(leftPanel, new Color(0.03f, 0.05f, 0.10f, 0.58f));
         DrawSolidRect(new Rect(leftPanel.x, leftPanel.y, leftPanel.width, 2f), new Color(0.38f, 0.58f, 0.84f, 0.6f));
         DrawSolidRect(new Rect(leftPanel.x, leftPanel.yMax - 2f, leftPanel.width, 2f), new Color(0.18f, 0.32f, 0.50f, 0.42f));
@@ -4224,7 +4224,6 @@ public class GameManager : MonoBehaviour
         int shownScore = Mathf.Max(0, Mathf.RoundToInt(displayedScore));
         GUI.Label(new Rect(rightColX, valueY, colW, valueH), shownScore.ToString(), hudValueStyle);
 
-        DrawFirewallChargeMeter(leftPanel, s);
         DrawThreatMeter(leftPanel, s);
         DrawScorePopups(rightColX + (colW * 0.45f), valueY - (6f * s), s);
 
@@ -4245,6 +4244,7 @@ public class GameManager : MonoBehaviour
 
         DrawRunContractHud(s);
         DrawOperationHud(s);
+        DrawFirewallChargeDock(s);
         DrawAchievementToast(s);
 
         if (enableReactiveHudFx)
@@ -4377,7 +4377,7 @@ public class GameManager : MonoBehaviour
         DrawSolidRect(new Rect(barX, barY + barH - 1f, barW, 1f), new Color(0.85f, 0.92f, 1f, 0.14f));
     }
 
-    private void DrawFirewallChargeMeter(Rect panel, float s)
+    private void DrawFirewallChargeDock(float s)
     {
         if (playerController == null)
         {
@@ -4386,24 +4386,43 @@ public class GameManager : MonoBehaviour
 
         float normalized = playerController.FirewallChargeNormalized;
         bool ready = playerController.IsFirewallBurstReady;
-        float barH = 9f * s;
-        float barW = panel.width - (28f * s);
-        float barX = panel.x + (14f * s);
-        float barY = panel.yMax - (42f * s);
-        Rect background = new Rect(barX, barY, barW, barH);
-        DrawSolidRect(background, new Color(0.04f, 0.06f, 0.10f, 0.86f));
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (ready ? 11f : 4.2f));
+        float dockW = Mathf.Clamp(Screen.width * 0.24f, 270f * s, 410f * s);
+        float dockH = 46f * s;
+        Rect dock = new Rect((Screen.width - dockW) * 0.5f, Screen.height - dockH - (18f * s), dockW, dockH);
+        Color readyAccent = Color.Lerp(new Color(0.42f, 0.96f, 1f, 1f), new Color(1f, 0.84f, 0.42f, 1f), pulse);
+        Color accent = ready ? readyAccent : Color.Lerp(new Color(0.28f, 0.56f, 0.86f, 1f), new Color(0.48f, 0.94f, 1f, 1f), normalized);
 
-        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (ready ? 13f : 6f));
+        DrawSolidRect(dock, new Color(0.018f, 0.028f, 0.052f, ready ? 0.74f : 0.58f));
+        DrawSolidRect(new Rect(dock.x, dock.y, dock.width, 2f * s), new Color(accent.r, accent.g, accent.b, ready ? 0.88f : 0.54f));
+        DrawSolidRect(new Rect(dock.x, dock.yMax - (2f * s), dock.width, 2f * s), new Color(accent.r, accent.g, accent.b, ready ? 0.54f : 0.28f));
+
+        if (ready)
+        {
+            DrawSolidRect(new Rect(dock.x - (4f * s), dock.y + (7f * s), 2f * s, dock.height - (14f * s)), new Color(accent.r, accent.g, accent.b, 0.42f + pulse * 0.22f));
+            DrawSolidRect(new Rect(dock.xMax + (2f * s), dock.y + (7f * s), 2f * s, dock.height - (14f * s)), new Color(accent.r, accent.g, accent.b, 0.42f + pulse * 0.22f));
+        }
+
+        string label = ready ? "FIREWALL LISTO" : "FIREWALL";
+        GUI.Label(
+            new Rect(dock.x + (12f * s), dock.y + (5f * s), dock.width * 0.52f, 18f * s),
+            label,
+            BuildFittedSingleLineStyle(hudLabelStyle, label, dock.width * 0.52f, 18f * s, Mathf.RoundToInt(9f * s)));
+
+        string input = ready ? "Q / R" : $"{Mathf.RoundToInt(normalized * 100f)}%";
+        Rect inputRect = new Rect(dock.xMax - (76f * s), dock.y + (6f * s), 62f * s, 18f * s);
+        DrawSolidRect(inputRect, new Color(accent.r, accent.g, accent.b, ready ? 0.24f : 0.12f));
+        GUI.Label(inputRect, input, BuildFittedSingleLineStyle(hudChipStyle, input, inputRect.width - (6f * s), inputRect.height, Mathf.RoundToInt(8f * s)));
+
+        float barH = 8f * s;
+        Rect background = new Rect(dock.x + (12f * s), dock.yMax - (15f * s), dock.width - (24f * s), barH);
+        DrawSolidRect(background, new Color(0.04f, 0.06f, 0.10f, 0.88f));
         Color fill = ready
             ? Color.Lerp(new Color(0.45f, 0.95f, 1f, 0.95f), new Color(1f, 0.88f, 0.48f, 1f), pulse)
             : Color.Lerp(new Color(0.22f, 0.48f, 0.74f, 0.82f), new Color(0.45f, 0.95f, 1f, 0.95f), normalized);
-
-        DrawSolidRect(new Rect(barX, barY, barW * normalized, barH), fill);
-        DrawSolidRect(new Rect(barX, barY, barW, 1f), new Color(0.85f, 0.92f, 1f, 0.18f));
-        DrawSolidRect(new Rect(barX, barY + barH - 1f, barW, 1f), new Color(0.85f, 0.92f, 1f, 0.14f));
-
-        string hint = ready ? "FIREWALL READY" : $"FIREWALL {Mathf.RoundToInt(normalized * 100f)}%";
-        GUI.Label(new Rect(barX, barY - (21f * s), barW, 18f * s), hint, hudLabelStyle);
+        DrawSolidRect(new Rect(background.x, background.y, background.width * normalized, background.height), fill);
+        DrawSolidRect(new Rect(background.x, background.y, background.width, 1f), new Color(0.85f, 0.92f, 1f, 0.18f));
+        DrawSolidRect(new Rect(background.x, background.y + background.height - 1f, background.width, 1f), new Color(0.85f, 0.92f, 1f, 0.14f));
     }
 
     private void DrawScorePopups(float anchorX, float anchorY, float s)
