@@ -71,7 +71,7 @@ public class RuptureRiftAnchorFx : MonoBehaviour
     {
         EnsureVisuals();
 
-        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 7.5f);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 4.6f);
         float envelope = Mathf.Sin(progress * Mathf.PI);
         Color color = Color.Lerp(warningColor, activeColor, Mathf.SmoothStep(0f, 1f, progress));
         color = Color.Lerp(color, Color.white, pulse * 0.12f);
@@ -80,14 +80,14 @@ public class RuptureRiftAnchorFx : MonoBehaviour
         coreRenderer.transform.localRotation = Quaternion.identity;
         coreRenderer.size = Vector2.one * Mathf.Lerp(0.24f, 0.46f, pulse);
         Color coreColor = color;
-        coreColor.a = Mathf.Lerp(0.18f, 0.82f, envelope);
+        coreColor.a = Mathf.Lerp(0.12f, 0.56f, envelope);
         coreRenderer.color = coreColor;
 
         haloRenderer.transform.localPosition = Vector3.zero;
         haloRenderer.transform.localRotation = Quaternion.identity;
         haloRenderer.size = Vector2.one * Mathf.Lerp(radius * 0.9f, radius * 1.28f, pulse);
         Color haloColor = color;
-        haloColor.a = Mathf.Lerp(0.03f, 0.18f, envelope);
+        haloColor.a = Mathf.Lerp(0.02f, 0.10f, envelope);
         haloRenderer.color = haloColor;
 
         for (int i = 0; i < shardRenderers.Length; i++)
@@ -104,9 +104,9 @@ public class RuptureRiftAnchorFx : MonoBehaviour
             Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
             shard.transform.localPosition = dir * armRadius;
             shard.transform.localRotation = Quaternion.Euler(0f, 0f, angle * Mathf.Rad2Deg + 90f);
-            shard.size = new Vector2(Mathf.Lerp(0.12f, 0.34f, pulse), 0.045f);
+            shard.size = new Vector2(Mathf.Lerp(0.09f, 0.24f, pulse), 0.035f);
             Color shardColor = color;
-            shardColor.a = Mathf.Lerp(0.08f, 0.62f, envelope) * (0.45f + 0.55f * Mathf.PingPong(t + Time.time * 0.9f, 1f));
+            shardColor.a = Mathf.Lerp(0.05f, 0.38f, envelope) * (0.55f + 0.45f * Mathf.PingPong(t + Time.time * 0.52f, 1f));
             shard.color = shardColor;
         }
     }

@@ -328,39 +328,39 @@ public class ProceduralArenaGenerator : MonoBehaviour
                 return new ThemePalette
                 {
                     background = new Color(0.018f, 0.030f, 0.043f, 1f),
-                    ambientA = new Color(0.28f, 0.95f, 1f, 0.26f),
-                    ambientB = new Color(0.82f, 0.92f, 1f, 0.18f),
+                    ambientA = new Color(0.28f, 0.95f, 1f, 0.19f),
+                    ambientB = new Color(0.82f, 0.92f, 1f, 0.13f),
                     shadow = new Color(0.005f, 0.008f, 0.018f, 0.55f),
                     wall = new Color(0.085f, 0.105f, 0.145f),
                     obstacleBase = new Color(0.24f, 0.31f, 0.42f),
                     obstacleAccent = new Color(0.42f, 0.54f, 0.66f),
-                    detail = new Color(0.42f, 0.86f, 1f, 0.26f),
+                    detail = new Color(0.42f, 0.86f, 1f, 0.20f),
                     dynamic = new Color(0.70f, 0.92f, 1f, 0.92f)
                 };
             case ArenaTheme.StorageBay:
                 return new ThemePalette
                 {
                     background = new Color(0.045f, 0.031f, 0.020f, 1f),
-                    ambientA = new Color(1f, 0.62f, 0.25f, 0.24f),
-                    ambientB = new Color(0.95f, 0.82f, 0.48f, 0.17f),
+                    ambientA = new Color(1f, 0.62f, 0.25f, 0.17f),
+                    ambientB = new Color(0.95f, 0.82f, 0.48f, 0.12f),
                     shadow = new Color(0.010f, 0.007f, 0.004f, 0.62f),
                     wall = new Color(0.16f, 0.105f, 0.065f),
                     obstacleBase = new Color(0.42f, 0.32f, 0.20f),
                     obstacleAccent = new Color(0.67f, 0.50f, 0.28f),
-                    detail = new Color(1f, 0.72f, 0.32f, 0.24f),
+                    detail = new Color(1f, 0.72f, 0.32f, 0.18f),
                     dynamic = new Color(0.98f, 0.78f, 0.38f, 0.92f)
                 };
             default:
                 return new ThemePalette
                 {
                     background = new Color(0.028f, 0.012f, 0.045f, 1f),
-                    ambientA = new Color(1f, 0.30f, 0.78f, 0.27f),
-                    ambientB = new Color(0.58f, 0.30f, 1f, 0.20f),
+                    ambientA = new Color(1f, 0.30f, 0.78f, 0.18f),
+                    ambientB = new Color(0.58f, 0.30f, 1f, 0.13f),
                     shadow = new Color(0.008f, 0.004f, 0.015f, 0.66f),
                     wall = new Color(0.13f, 0.08f, 0.18f),
                     obstacleBase = new Color(0.34f, 0.22f, 0.42f),
                     obstacleAccent = new Color(0.62f, 0.34f, 0.66f),
-                    detail = new Color(1f, 0.42f, 0.82f, 0.24f),
+                    detail = new Color(1f, 0.42f, 0.82f, 0.16f),
                     dynamic = new Color(1f, 0.54f, 0.86f, 0.92f)
                 };
         }
@@ -1669,7 +1669,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     private void CreateBackdropSignalBands(Transform parent)
     {
-        int count = activeTheme == ArenaTheme.RuptureZone ? 18 : activeTheme == ArenaTheme.StorageBay ? 12 : 10;
+        int count = activeTheme == ArenaTheme.RuptureZone ? 12 : activeTheme == ArenaTheme.StorageBay ? 9 : 8;
         for (int i = 0; i < count; i++)
         {
             bool horizontal = activeTheme != ArenaTheme.StorageBay || i % 4 != 0;
@@ -1686,14 +1686,14 @@ public class ProceduralArenaGenerator : MonoBehaviour
             }
 
             Color color = Color.Lerp(palette.ambientA, palette.ambientB, Range(0f, 1f));
-            color.a = Range(0.035f, 0.095f);
+            color.a = Range(0.018f, activeTheme == ArenaTheme.RuptureZone ? 0.052f : 0.066f);
             GameObject band = CreateBlock($"BackdropSignal_{i}", position, new Vector2(width, height), color, parent);
             band.transform.rotation = Quaternion.Euler(0f, 0f, GetBackdropSignalRotation(i));
 
             SpriteRenderer renderer = band.GetComponent<SpriteRenderer>();
             renderer.sortingOrder = -13;
             Vector2 drift = activeTheme == ArenaTheme.RuptureZone ? RandomInsideUnitCircle() : Vector2.zero;
-            band.AddComponent<ArenaAmbientPulseFx>().Configure(renderer, color, color.a * 0.25f, color.a * 1.35f, Range(0.28f, 0.85f), Range(0f, 12f), drift, Range(0.0f, 0.035f));
+            band.AddComponent<ArenaAmbientPulseFx>().Configure(renderer, color, color.a * 0.38f, color.a * 1.08f, Range(0.20f, 0.58f), Range(0f, 12f), drift, Range(0.0f, activeTheme == ArenaTheme.RuptureZone ? 0.014f : 0.022f));
         }
     }
 
@@ -1734,7 +1734,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     private void CreateLabFloorTexture(Transform parent)
     {
-        Color line = new Color(palette.ambientA.r, palette.ambientA.g, palette.ambientA.b, 0.075f);
+        Color line = new Color(palette.ambientA.r, palette.ambientA.g, palette.ambientA.b, 0.052f);
         for (float x = -arenaWidth * 0.5f + 2f; x <= arenaWidth * 0.5f - 2f; x += 2.4f)
         {
             GameObject v = CreateBlock($"LabFloorGrid_V_{x:0.0}", new Vector2(x, 0f), new Vector2(0.035f, arenaHeight - 2.2f), line, parent);
@@ -1751,7 +1751,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
             Vector2 pos = GetRandomInsideArena(new Vector2(0.8f, 0.45f));
             Vector2 size = new Vector2(Range(0.35f, 1.2f), Range(0.08f, 0.22f));
             Color c = Color.Lerp(palette.ambientA, palette.ambientB, Range(0f, 1f));
-            c.a = Range(0.045f, 0.12f);
+            c.a = Range(0.032f, 0.082f);
             GameObject panel = CreateBlock($"LabFloorDiagnostic_{i}", pos, size, c, parent);
             panel.GetComponent<SpriteRenderer>().sortingOrder = -10;
             panel.AddComponent<ArenaAmbientPulseFx>().Configure(panel.GetComponent<SpriteRenderer>(), c, c.a * 0.45f, c.a * 1.2f, Range(0.4f, 1.2f), Range(0f, 8f), Vector2.zero, 0f);
@@ -1760,7 +1760,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     private void CreateStorageFloorTexture(Transform parent)
     {
-        Color seam = new Color(palette.ambientB.r, palette.ambientB.g, palette.ambientB.b, 0.075f);
+        Color seam = new Color(palette.ambientB.r, palette.ambientB.g, palette.ambientB.b, 0.052f);
         for (float x = -arenaWidth * 0.5f + 3f; x <= arenaWidth * 0.5f - 3f; x += 3.8f)
         {
             GameObject seamLine = CreateBlock($"StorageFloorSeam_V_{x:0.0}", new Vector2(x, 0f), new Vector2(0.055f, arenaHeight - 2.0f), seam, parent);
@@ -1771,7 +1771,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
         {
             float y = Mathf.Lerp(-arenaHeight * 0.5f + 2.1f, arenaHeight * 0.5f - 2.1f, i / 10f);
             Color stripeColor = i % 2 == 0 ? palette.ambientA : palette.ambientB;
-            stripeColor.a = 0.07f;
+            stripeColor.a = 0.046f;
             GameObject stripe = CreateBlock($"StorageHazardStripe_{i}", new Vector2(0f, y), new Vector2(arenaWidth - 3.4f, 0.075f), stripeColor, parent);
             stripe.transform.rotation = Quaternion.Euler(0f, 0f, -3.5f);
             stripe.GetComponent<SpriteRenderer>().sortingOrder = -10;
@@ -1781,7 +1781,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
         {
             Vector2 pos = GetRandomInsideArena(new Vector2(0.45f, 0.45f));
             Color c = palette.ambientA;
-            c.a = Range(0.04f, 0.11f);
+            c.a = Range(0.030f, 0.074f);
             GameObject scuff = CreateBlock($"StorageFloorScuff_{i}", pos, new Vector2(Range(0.22f, 0.72f), Range(0.04f, 0.10f)), c, parent);
             scuff.transform.rotation = Quaternion.Euler(0f, 0f, Range(-14f, 14f));
             scuff.GetComponent<SpriteRenderer>().sortingOrder = -9;
@@ -1790,11 +1790,11 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     private void CreateRuptureFloorTexture(Transform parent)
     {
-        for (int i = 0; i < 52; i++)
+        for (int i = 0; i < 34; i++)
         {
             Vector2 pos = GetRandomInsideArena(new Vector2(0.25f, 0.25f));
             Color c = Color.Lerp(palette.ambientA, palette.ambientB, Range(0f, 1f));
-            c.a = Range(0.045f, 0.16f);
+            c.a = Range(0.024f, 0.085f);
             Vector2 size = Range(0f, 1f) < 0.65f
                 ? new Vector2(Range(0.05f, 0.13f), Range(0.05f, 0.13f))
                 : new Vector2(Range(0.24f, 0.68f), Range(0.035f, 0.08f));
@@ -1802,13 +1802,13 @@ public class ProceduralArenaGenerator : MonoBehaviour
             shard.transform.rotation = Quaternion.Euler(0f, 0f, Range(0f, 180f));
             SpriteRenderer sr = shard.GetComponent<SpriteRenderer>();
             sr.sortingOrder = -9;
-            shard.AddComponent<ArenaAmbientPulseFx>().Configure(sr, c, c.a * 0.25f, c.a * 1.35f, Range(0.7f, 1.8f), Range(0f, 9f), RandomInsideUnitCircle(), Range(0.015f, 0.045f));
+            shard.AddComponent<ArenaAmbientPulseFx>().Configure(sr, c, c.a * 0.45f, c.a * 1.08f, Range(0.35f, 0.95f), Range(0f, 9f), RandomInsideUnitCircle(), Range(0.006f, 0.018f));
         }
     }
 
     private void CreateThemeAmbientAccents(Transform parent)
     {
-        int bands = activeTheme == ArenaTheme.RuptureZone ? 14 : 8;
+        int bands = activeTheme == ArenaTheme.RuptureZone ? 8 : 6;
         for (int i = 0; i < bands; i++)
         {
             bool horizontal = activeTheme != ArenaTheme.StorageBay || i % 3 != 0;
@@ -1819,12 +1819,12 @@ public class ProceduralArenaGenerator : MonoBehaviour
                 ? new Vector2(Range(arenaWidth * 0.32f, arenaWidth * 0.74f), Range(0.035f, 0.095f))
                 : new Vector2(Range(0.035f, 0.095f), Range(arenaHeight * 0.30f, arenaHeight * 0.62f));
             Color c = Color.Lerp(palette.ambientA, palette.ambientB, Range(0f, 1f));
-            c.a = Range(0.035f, 0.12f);
+            c.a = Range(0.018f, activeTheme == ArenaTheme.RuptureZone ? 0.056f : 0.078f);
             GameObject band = CreateBlock($"AmbientBand_{i}", pos, size, c, parent);
             band.transform.rotation = Quaternion.Euler(0f, 0f, activeTheme == ArenaTheme.RuptureZone ? Range(-24f, 24f) : Range(-4f, 4f));
             SpriteRenderer sr = band.GetComponent<SpriteRenderer>();
             sr.sortingOrder = -8;
-            band.AddComponent<ArenaAmbientPulseFx>().Configure(sr, c, c.a * 0.35f, c.a * 1.25f, Range(0.25f, 0.9f), Range(0f, 12f), Vector2.zero, 0f);
+            band.AddComponent<ArenaAmbientPulseFx>().Configure(sr, c, c.a * 0.45f, c.a * 1.06f, Range(0.22f, 0.62f), Range(0f, 12f), Vector2.zero, 0f);
         }
     }
 
@@ -1837,13 +1837,13 @@ public class ProceduralArenaGenerator : MonoBehaviour
         switch (activeTheme)
         {
             case ArenaTheme.StorageBay:
-                count = 48;
+                count = 34;
                 break;
             case ArenaTheme.RuptureZone:
-                count = 64;
+                count = 38;
                 break;
             default:
-                count = 38;
+                count = 28;
                 break;
         }
 
@@ -1909,11 +1909,11 @@ public class ProceduralArenaGenerator : MonoBehaviour
                     }
 
                     Vector2 size = new Vector2(segLen, 0.06f);
-                    GameObject segment = CreateBlock($"RuptureGuide_{a}_{ring}_{s}", pos, size, new Color(palette.detail.r, palette.detail.g, palette.detail.b, palette.detail.a * 0.6f), parent);
+                    GameObject segment = CreateBlock($"RuptureGuide_{a}_{ring}_{s}", pos, size, new Color(palette.detail.r, palette.detail.g, palette.detail.b, palette.detail.a * 0.32f), parent);
                     Vector2 tangent = new Vector2(-Mathf.Sin(ang * Mathf.Deg2Rad) * rx, Mathf.Cos(ang * Mathf.Deg2Rad) * ry);
                     float tangentAngle = Mathf.Atan2(tangent.y, tangent.x) * Mathf.Rad2Deg;
                     segment.transform.rotation = Quaternion.Euler(0f, 0f, tangentAngle);
-                    segment.GetComponent<SpriteRenderer>().sortingOrder = -2;
+                    segment.GetComponent<SpriteRenderer>().sortingOrder = -7;
                 }
             }
         }
@@ -1929,7 +1929,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
                 : new Vector2(0.12f, lane.height * 0.96f);
 
             Vector2 center = lane.center;
-            Color tint = new Color(palette.detail.r, palette.detail.g, palette.detail.b, palette.detail.a * 0.8f);
+            Color tint = new Color(palette.detail.r, palette.detail.g, palette.detail.b, palette.detail.a * 0.52f);
             GameObject strip = CreateBlock($"LaneStrip_{i}", center, size, tint, parent);
             strip.GetComponent<SpriteRenderer>().sortingOrder = -1;
         }
@@ -1990,7 +1990,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
     {
         for (int i = 0; i < placedObstacleRects.Count; i++)
         {
-            if (Range(0f, 1f) > 0.55f)
+            if (Range(0f, 1f) > 0.40f)
             {
                 continue;
             }
@@ -2009,7 +2009,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
                 center.x += (Range(0f, 1f) < 0.5f ? -1f : 1f) * (r.width * 0.5f + 0.05f);
             }
 
-            Color tint = new Color(palette.detail.r, palette.detail.g, palette.detail.b, palette.detail.a * 0.9f);
+            Color tint = new Color(palette.detail.r, palette.detail.g, palette.detail.b, palette.detail.a * 0.56f);
             GameObject edge = CreateBlock($"ObstacleLight_{i}", center, size, tint, parent);
             edge.GetComponent<SpriteRenderer>().sortingOrder = 2;
         }

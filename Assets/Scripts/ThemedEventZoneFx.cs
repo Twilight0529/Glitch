@@ -174,8 +174,13 @@ public class ThemedEventZoneFx : MonoBehaviour
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Max(0.1f, pulseSpeed));
         Color baseColor = active ? activeColor : telegraphColor;
         float alpha = active
-            ? Mathf.Lerp(0.34f, 0.76f, pulse)
-            : Mathf.Lerp(0.16f, 0.48f, pulse);
+            ? Mathf.Lerp(0.18f, 0.46f, pulse)
+            : Mathf.Lerp(0.08f, 0.28f, pulse);
+        if (kind == ZoneKind.RuptureRift)
+        {
+            alpha *= active ? 0.72f : 0.62f;
+        }
+
         baseColor.a *= alpha;
         spriteRenderer.color = baseColor;
 
@@ -224,8 +229,8 @@ public class ThemedEventZoneFx : MonoBehaviour
         }
 
         markerCount = circular
-            ? (kind == ZoneKind.RuptureRift ? 14 : 10)
-            : 12;
+            ? (kind == ZoneKind.RuptureRift ? 10 : 8)
+            : 10;
         for (int i = 0; i < markerRenderers.Length; i++)
         {
             if (i >= markerCount)
@@ -268,7 +273,7 @@ public class ThemedEventZoneFx : MonoBehaviour
     {
         Color live = active ? activeColor : telegraphColor;
         Color bright = Color.Lerp(live, Color.white, active ? 0.35f : 0.18f);
-        float edgeAlpha = active ? Mathf.Lerp(0.48f, 0.92f, pulse) : Mathf.Lerp(0.24f, 0.68f, pulse);
+        float edgeAlpha = active ? Mathf.Lerp(0.42f, 0.78f, pulse) : Mathf.Lerp(0.20f, 0.52f, pulse);
         bright.a *= edgeAlpha;
 
         float edgeThickness = active ? 0.09f : 0.055f;
@@ -290,7 +295,7 @@ public class ThemedEventZoneFx : MonoBehaviour
             sweepRenderer.transform.localRotation = horizontal ? Quaternion.identity : Quaternion.Euler(0f, 0f, 90f);
             sweepRenderer.size = new Vector2(Mathf.Max(0.08f, shortAxis * 1.25f), active ? 0.18f : 0.12f);
             Color sweepColor = Color.Lerp(live, Color.white, 0.5f);
-            sweepColor.a *= active ? 0.55f : 0.36f;
+            sweepColor.a *= active ? 0.42f : 0.24f;
             sweepRenderer.color = sweepColor;
         }
 
@@ -301,7 +306,7 @@ public class ThemedEventZoneFx : MonoBehaviour
             coreRenderer.transform.localRotation = horizontal ? Quaternion.identity : Quaternion.Euler(0f, 0f, 90f);
             coreRenderer.size = new Vector2(longAxis, Mathf.Max(0.06f, shortAxis * (active ? 0.22f : 0.12f)));
             Color coreColor = active ? activeColor : telegraphColor;
-            coreColor.a *= active ? 0.24f + pulse * 0.18f : 0.10f + pulse * 0.14f;
+            coreColor.a *= active ? 0.16f + pulse * 0.12f : 0.07f + pulse * 0.08f;
             coreRenderer.color = coreColor;
         }
 
@@ -324,7 +329,7 @@ public class ThemedEventZoneFx : MonoBehaviour
             marker.transform.localRotation = horizontal ? Quaternion.identity : Quaternion.Euler(0f, 0f, 90f);
             marker.size = new Vector2(active ? 0.42f : 0.30f, active ? 0.085f : 0.06f);
             Color markerColor = Color.Lerp(live, Color.white, active ? 0.46f : 0.24f);
-            markerColor.a *= active ? Mathf.Lerp(0.44f, 0.94f, pulse) : Mathf.Lerp(0.22f, 0.62f, pulse);
+            markerColor.a *= active ? Mathf.Lerp(0.34f, 0.74f, pulse) : Mathf.Lerp(0.18f, 0.46f, pulse);
             marker.color = markerColor;
         }
     }
@@ -349,7 +354,7 @@ public class ThemedEventZoneFx : MonoBehaviour
         Color live = active ? activeColor : telegraphColor;
         Color bright = Color.Lerp(live, Color.white, active ? 0.42f : 0.22f);
         float ringScale = kind == ZoneKind.RuptureRift
-            ? Mathf.Lerp(0.58f, 0.92f, active ? pulse : phase)
+            ? Mathf.Lerp(0.50f, 0.76f, active ? pulse : phase)
             : Mathf.Lerp(0.78f, 1.08f, active ? pulse : phase);
 
         if (coreRenderer != null)
@@ -359,11 +364,11 @@ public class ThemedEventZoneFx : MonoBehaviour
             coreRenderer.transform.localRotation = Quaternion.identity;
             coreRenderer.size = Vector2.one * radius * (kind == ZoneKind.RuptureRift ? 0.92f : 0.58f) * ringScale;
             Color coreColor = kind == ZoneKind.RuptureRift
-                ? new Color(0.02f, 0.01f, 0.04f, active ? 0.66f + pulse * 0.18f : 0.32f + pulse * 0.16f)
+                ? new Color(0.01f, 0.005f, 0.025f, active ? 0.38f + pulse * 0.12f : 0.20f + pulse * 0.09f)
                 : live;
             if (kind != ZoneKind.RuptureRift)
             {
-                coreColor.a *= active ? 0.24f + pulse * 0.20f : 0.10f + pulse * 0.12f;
+                coreColor.a *= active ? 0.16f + pulse * 0.12f : 0.07f + pulse * 0.08f;
             }
 
             coreRenderer.color = coreColor;
@@ -375,9 +380,9 @@ public class ThemedEventZoneFx : MonoBehaviour
             float sweepAngle = Time.time * (kind == ZoneKind.RuptureRift ? 110f : 82f);
             sweepRenderer.transform.localRotation = Quaternion.Euler(0f, 0f, sweepAngle);
             sweepRenderer.transform.localPosition = Vector3.zero;
-            sweepRenderer.size = new Vector2(radius * (kind == ZoneKind.RuptureRift ? 1.55f : 1.9f), active ? 0.12f : 0.08f);
+            sweepRenderer.size = new Vector2(radius * (kind == ZoneKind.RuptureRift ? 1.32f : 1.9f), active ? 0.09f : 0.065f);
             Color sweepColor = bright;
-            sweepColor.a *= active ? 0.52f : 0.28f;
+            sweepColor.a *= active ? 0.36f : 0.18f;
             sweepRenderer.color = sweepColor;
         }
 
@@ -392,7 +397,7 @@ public class ThemedEventZoneFx : MonoBehaviour
             float seed = markerSeeds[i];
             float angle = ((Mathf.PI * 2f) * i / Mathf.Max(1, markerCount)) + Time.time * (kind == ZoneKind.RuptureRift ? -0.9f : 0.55f) + seed * 0.5f;
             Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
-            float jitter = kind == ZoneKind.RuptureRift ? Mathf.Sin(Time.time * 18f + seed * 20f) * 0.18f : 0f;
+            float jitter = kind == ZoneKind.RuptureRift ? Mathf.Sin(Time.time * 9f + seed * 20f) * 0.10f : 0f;
             float markerRadius = radius * (kind == ZoneKind.RuptureRift ? 0.76f + jitter : 0.92f);
             marker.transform.localPosition = dir * markerRadius;
 
@@ -422,7 +427,7 @@ public class ThemedEventZoneFx : MonoBehaviour
                 markerColor = bright;
             }
 
-            markerColor.a *= active ? Mathf.Lerp(0.52f, 0.96f, pulse) : Mathf.Lerp(0.24f, 0.70f, pulse);
+            markerColor.a *= active ? Mathf.Lerp(0.36f, 0.76f, pulse) : Mathf.Lerp(0.18f, 0.48f, pulse);
             marker.color = markerColor;
         }
     }
@@ -430,7 +435,7 @@ public class ThemedEventZoneFx : MonoBehaviour
     private void SpawnActivationPulse()
     {
         Color pulseColor = Color.Lerp(activeColor, Color.white, 0.28f);
-        pulseColor.a = 0.92f;
+        pulseColor.a = kind == ZoneKind.RuptureRift ? 0.62f : 0.78f;
 
         GameObject pulse = new GameObject("ZoneActivationPulse");
         pulse.transform.SetParent(transform, false);
@@ -452,7 +457,7 @@ public class ThemedEventZoneFx : MonoBehaviour
 
     private void SpawnRuptureFragments(Color color)
     {
-        int count = 12;
+        int count = kind == ZoneKind.RuptureRift ? 8 : 10;
         for (int i = 0; i < count; i++)
         {
             float angle = ((Mathf.PI * 2f) * i) / count + Random.Range(-0.16f, 0.16f);

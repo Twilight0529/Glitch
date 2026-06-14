@@ -121,8 +121,8 @@ public class RupturePhantomFragmentFx : MonoBehaviour
         float materialize = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(telegraphEndFraction, materializeEndFraction, progress));
         float dissolve = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(dissolveStartFraction, 0.98f, progress));
         float solidAlpha = Mathf.Clamp01(materialize * (1f - dissolve));
-        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 10.5f + jitterSeed);
-        float jitter = Mathf.Sin(Time.time * 15f + jitterSeed) * Mathf.Lerp(2.4f, 0.4f, solidAlpha);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 6.2f + jitterSeed);
+        float jitter = Mathf.Sin(Time.time * 8.5f + jitterSeed) * Mathf.Lerp(1.35f, 0.22f, solidAlpha);
 
         transform.rotation = Quaternion.Euler(0f, 0f, baseRotationZ + jitter);
 
@@ -144,7 +144,7 @@ public class RupturePhantomFragmentFx : MonoBehaviour
 
         Color color = Color.Lerp(warningColor, activeColor, materialize);
         Color bodyColor = Color.Lerp(color, new Color(0.07f, 0.06f, 0.10f, 1f), 0.38f);
-        bodyColor.a = Mathf.Lerp(0.10f, 0.88f, solidAlpha);
+        bodyColor.a = Mathf.Lerp(0.07f, 0.78f, solidAlpha);
         bodyRenderer.size = fragmentSize;
         bodyRenderer.color = bodyColor;
 
@@ -152,7 +152,7 @@ public class RupturePhantomFragmentFx : MonoBehaviour
         echoRenderer.transform.localRotation = Quaternion.identity;
         echoRenderer.size = fragmentSize + Vector2.one * Mathf.Lerp(0.22f, 0.58f, pulse);
         Color echoColor = color;
-        echoColor.a = Mathf.Lerp(0.26f, 0.08f, solidAlpha) * Mathf.Clamp01(1f - dissolve * 0.7f);
+        echoColor.a = Mathf.Lerp(0.16f, 0.045f, solidAlpha) * Mathf.Clamp01(1f - dissolve * 0.7f);
         echoRenderer.color = echoColor;
 
         UpdateTears(color, progress, solidAlpha, pulse);
@@ -174,10 +174,10 @@ public class RupturePhantomFragmentFx : MonoBehaviour
             float y = side * fragmentSize.y * Mathf.Lerp(0.18f, 0.55f, Mathf.PingPong(t + Time.time * 0.45f, 1f));
             tear.transform.localPosition = new Vector3(x, y, 0f);
             tear.transform.localRotation = Quaternion.Euler(0f, 0f, side * 90f + Mathf.Sin(Time.time * 8f + i) * 10f);
-            tear.size = new Vector2(Mathf.Lerp(0.12f, 0.32f, pulse), 0.045f);
+            tear.size = new Vector2(Mathf.Lerp(0.09f, 0.24f, pulse), 0.034f);
             Color tearColor = Color.Lerp(color, Color.white, pulse * 0.28f);
             float edgeEnvelope = Mathf.Max(1f - solidAlpha, Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(dissolveStartFraction, 1f, progress)));
-            tearColor.a = Mathf.Lerp(0.10f, 0.72f, edgeEnvelope) * (0.55f + 0.45f * pulse);
+            tearColor.a = Mathf.Lerp(0.06f, 0.46f, edgeEnvelope) * (0.55f + 0.45f * pulse);
             tear.color = tearColor;
         }
     }

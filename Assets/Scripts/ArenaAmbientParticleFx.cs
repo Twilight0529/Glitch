@@ -32,7 +32,7 @@ public class ArenaAmbientParticleFx : MonoBehaviour
         width = Mathf.Max(1f, arenaWidth);
         height = Mathf.Max(1f, arenaHeight);
         style = particleStyle;
-        count = Mathf.Clamp(count, 0, 96);
+        count = Mathf.Clamp(count, 0, 72);
         particles = new AmbientParticle[count];
 
         for (int i = 0; i < count; i++)
@@ -68,8 +68,8 @@ public class ArenaAmbientParticleFx : MonoBehaviour
             BaseScale = scale,
             BaseColor = color,
             Phase = Random.Range(0f, 12f),
-            BlinkSpeed = Random.Range(0.8f, 2.4f),
-            Jitter = style == ParticleStyle.Rupture ? Random.Range(0.015f, 0.075f) : Random.Range(0f, 0.025f)
+            BlinkSpeed = GetBlinkSpeed(),
+            Jitter = style == ParticleStyle.Rupture ? Random.Range(0.006f, 0.032f) : Random.Range(0f, 0.016f)
         };
     }
 
@@ -98,7 +98,7 @@ public class ArenaAmbientParticleFx : MonoBehaviour
 
         if (style == ParticleStyle.Rupture)
         {
-            float glitchStep = Mathf.Floor((Time.time + particle.Phase) * 12f);
+            float glitchStep = Mathf.Floor((Time.time + particle.Phase) * 7f);
             pos.x += Mathf.Sin(glitchStep * 3.17f + index) * particle.Jitter;
             pos.y += Mathf.Cos(glitchStep * 2.41f + index) * particle.Jitter;
         }
@@ -107,16 +107,17 @@ public class ArenaAmbientParticleFx : MonoBehaviour
 
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * particle.BlinkSpeed + particle.Phase);
         Color color = particle.BaseColor;
-        color.a = Mathf.Lerp(particle.BaseColor.a * 0.25f, particle.BaseColor.a * 1.45f, pulse);
+        float maxPulseAlpha = style == ParticleStyle.Rupture ? 1.08f : 1.22f;
+        color.a = Mathf.Lerp(particle.BaseColor.a * 0.32f, particle.BaseColor.a * maxPulseAlpha, pulse);
         if (style == ParticleStyle.Rupture && pulse > 0.88f)
         {
-            color.a = Mathf.Min(0.72f, color.a * 1.55f);
+            color.a = Mathf.Min(0.34f, color.a * 1.18f);
         }
 
         particle.Renderer.color = color;
 
         float scalePulse = style == ParticleStyle.Rupture
-            ? Mathf.Lerp(0.72f, 1.28f, pulse)
+            ? Mathf.Lerp(0.86f, 1.10f, pulse)
             : Mathf.Lerp(0.88f, 1.08f, pulse);
         particle.Transform.localScale = new Vector3(particle.BaseScale.x * scalePulse, particle.BaseScale.y, 1f);
     }
@@ -179,9 +180,9 @@ public class ArenaAmbientParticleFx : MonoBehaviour
         switch (style)
         {
             case ParticleStyle.Storage:
-                return new Vector2(Random.Range(-0.08f, 0.08f), Random.Range(-0.18f, -0.05f));
+                return new Vector2(Random.Range(-0.045f, 0.045f), Random.Range(-0.12f, -0.035f));
             case ParticleStyle.Rupture:
-                return Random.insideUnitCircle.normalized * Random.Range(0.04f, 0.18f);
+                return Random.insideUnitCircle.normalized * Random.Range(0.025f, 0.09f);
             default:
                 return index % 2 == 0
                     ? new Vector2(Random.Range(0.08f, 0.22f), 0f)
@@ -207,11 +208,24 @@ public class ArenaAmbientParticleFx : MonoBehaviour
         switch (style)
         {
             case ParticleStyle.Storage:
-                return Random.Range(0.12f, 0.28f);
+                return Random.Range(0.08f, 0.18f);
             case ParticleStyle.Rupture:
-                return Random.Range(0.14f, 0.34f);
+                return Random.Range(0.07f, 0.18f);
             default:
-                return Random.Range(0.10f, 0.24f);
+                return Random.Range(0.07f, 0.17f);
+        }
+    }
+
+    private float GetBlinkSpeed()
+    {
+        switch (style)
+        {
+            case ParticleStyle.Rupture:
+                return Random.Range(0.45f, 1.15f);
+            case ParticleStyle.Storage:
+                return Random.Range(0.55f, 1.35f);
+            default:
+                return Random.Range(0.6f, 1.5f);
         }
     }
 
