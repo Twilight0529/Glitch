@@ -4481,12 +4481,9 @@ public class GameManager : MonoBehaviour
 
         bool ready = playerController.IsGhostDashReady;
         float normalized = playerController.GhostDashCooldownNormalized;
-        float firewallW = Mathf.Clamp(Screen.width * 0.24f, 270f * s, 410f * s);
         float dockW = 152f * s;
         float dockH = 46f * s;
-        float gap = 10f * s;
-        float firewallX = (Screen.width - firewallW) * 0.5f;
-        float x = firewallX - dockW - gap;
+        float x = (Screen.width - dockW) * 0.5f;
         float y = Screen.height - dockH - (18f * s);
         if (x < 12f * s)
         {
@@ -4531,42 +4528,90 @@ public class GameManager : MonoBehaviour
         float normalized = playerController.FirewallChargeNormalized;
         bool ready = playerController.IsFirewallBurstReady;
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (ready ? 11f : 4.2f));
-        float dockW = Mathf.Clamp(Screen.width * 0.24f, 270f * s, 410f * s);
-        float dockH = 46f * s;
-        Rect dock = new Rect((Screen.width - dockW) * 0.5f, Screen.height - dockH - (18f * s), dockW, dockH);
         Color readyAccent = Color.Lerp(new Color(0.42f, 0.96f, 1f, 1f), new Color(1f, 0.84f, 0.42f, 1f), pulse);
         Color accent = ready ? readyAccent : Color.Lerp(new Color(0.28f, 0.56f, 0.86f, 1f), new Color(0.48f, 0.94f, 1f, 1f), normalized);
 
-        DrawSolidRect(dock, new Color(0.018f, 0.028f, 0.052f, ready ? 0.74f : 0.58f));
-        DrawSolidRect(new Rect(dock.x, dock.y, dock.width, 2f * s), new Color(accent.r, accent.g, accent.b, ready ? 0.88f : 0.54f));
-        DrawSolidRect(new Rect(dock.x, dock.yMax - (2f * s), dock.width, 2f * s), new Color(accent.r, accent.g, accent.b, ready ? 0.54f : 0.28f));
+        float panelW = 96f * s;
+        float panelH = Mathf.Clamp(Screen.height * 0.27f, 158f * s, 222f * s);
+        float x = 12f * s;
+        float y = GetFirewallRailY(s, panelH);
+        Rect panel = new Rect(x, y, panelW, panelH);
 
+        DrawSolidRect(panel, new Color(0.014f, 0.024f, 0.048f, ready ? 0.82f : 0.62f));
+        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, ready ? 0.95f : 0.58f));
+        DrawSolidRect(new Rect(panel.x, panel.yMax - (2f * s), panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, ready ? 0.58f : 0.28f));
         if (ready)
         {
-            DrawSolidRect(new Rect(dock.x - (4f * s), dock.y + (7f * s), 2f * s, dock.height - (14f * s)), new Color(accent.r, accent.g, accent.b, 0.42f + pulse * 0.22f));
-            DrawSolidRect(new Rect(dock.xMax + (2f * s), dock.y + (7f * s), 2f * s, dock.height - (14f * s)), new Color(accent.r, accent.g, accent.b, 0.42f + pulse * 0.22f));
+            DrawSolidRect(new Rect(panel.x - (3f * s), panel.y + (10f * s), 2f * s, panel.height - (20f * s)), new Color(accent.r, accent.g, accent.b, 0.46f + pulse * 0.26f));
+            DrawSolidRect(new Rect(panel.xMax + (1f * s), panel.y + (10f * s), 2f * s, panel.height - (20f * s)), new Color(accent.r, accent.g, accent.b, 0.46f + pulse * 0.26f));
         }
 
-        string label = ready ? "FIREWALL LISTO" : "FIREWALL";
+        string label = "FIREWALL";
         GUI.Label(
-            new Rect(dock.x + (12f * s), dock.y + (5f * s), dock.width * 0.52f, 18f * s),
+            new Rect(panel.x + (8f * s), panel.y + (7f * s), panel.width - (16f * s), 18f * s),
             label,
-            BuildFittedSingleLineStyle(hudLabelStyle, label, dock.width * 0.52f, 18f * s, Mathf.RoundToInt(9f * s)));
+            BuildFittedSingleLineStyle(hudLabelStyle, label, panel.width - (16f * s), 18f * s, Mathf.RoundToInt(8f * s)));
 
-        string input = ready ? "Q / R" : $"{Mathf.RoundToInt(normalized * 100f)}%";
-        Rect inputRect = new Rect(dock.xMax - (76f * s), dock.y + (6f * s), 62f * s, 18f * s);
-        DrawSolidRect(inputRect, new Color(accent.r, accent.g, accent.b, ready ? 0.24f : 0.12f));
-        GUI.Label(inputRect, input, BuildFittedSingleLineStyle(hudChipStyle, input, inputRect.width - (6f * s), inputRect.height, Mathf.RoundToInt(8f * s)));
+        string percent = $"{Mathf.RoundToInt(normalized * 100f)}%";
+        GUI.Label(
+            new Rect(panel.x + (8f * s), panel.y + (26f * s), panel.width - (16f * s), 26f * s),
+            percent,
+            BuildFittedSingleLineStyle(hudValueStyle, percent, panel.width - (16f * s), 26f * s, Mathf.RoundToInt(13f * s)));
 
-        float barH = 8f * s;
-        Rect background = new Rect(dock.x + (12f * s), dock.yMax - (15f * s), dock.width - (24f * s), barH);
+        float barTop = panel.y + (ready ? 78f * s : 58f * s);
+        float barBottom = panel.yMax - (44f * s);
+        Rect background = new Rect(panel.x + (36f * s), barTop, 24f * s, Mathf.Max(24f * s, barBottom - barTop));
         DrawSolidRect(background, new Color(0.04f, 0.06f, 0.10f, 0.88f));
         Color fill = ready
             ? Color.Lerp(new Color(0.45f, 0.95f, 1f, 0.95f), new Color(1f, 0.88f, 0.48f, 1f), pulse)
             : Color.Lerp(new Color(0.22f, 0.48f, 0.74f, 0.82f), new Color(0.45f, 0.95f, 1f, 0.95f), normalized);
-        DrawSolidRect(new Rect(background.x, background.y, background.width * normalized, background.height), fill);
+        float fillH = background.height * normalized;
+        DrawSolidRect(new Rect(background.x, background.yMax - fillH, background.width, fillH), fill);
         DrawSolidRect(new Rect(background.x, background.y, background.width, 1f), new Color(0.85f, 0.92f, 1f, 0.18f));
         DrawSolidRect(new Rect(background.x, background.y + background.height - 1f, background.width, 1f), new Color(0.85f, 0.92f, 1f, 0.14f));
+
+        for (int i = 1; i < 4; i++)
+        {
+            float tickY = Mathf.Lerp(background.yMax, background.y, i / 4f);
+            DrawSolidRect(new Rect(background.x - (8f * s), tickY, 7f * s, 1f), new Color(0.72f, 0.84f, 1f, 0.22f));
+            DrawSolidRect(new Rect(background.xMax + (1f * s), tickY, 7f * s, 1f), new Color(0.72f, 0.84f, 1f, 0.22f));
+        }
+
+        string input = ready ? "Q / R" : "CARGA";
+        Rect inputRect = new Rect(panel.x + (10f * s), panel.yMax - (34f * s), panel.width - (20f * s), 22f * s);
+        DrawSolidRect(inputRect, new Color(accent.r, accent.g, accent.b, ready ? 0.24f : 0.12f));
+        GUI.Label(inputRect, input, BuildFittedSingleLineStyle(hudChipStyle, input, inputRect.width - (6f * s), inputRect.height, Mathf.RoundToInt(8f * s)));
+
+        if (ready)
+        {
+            string readyText = "LISTO";
+            Rect readyRect = new Rect(panel.x + (10f * s), panel.y + (52f * s), panel.width - (20f * s), 20f * s);
+            DrawSolidRect(readyRect, new Color(1f, 0.82f, 0.42f, 0.18f + pulse * 0.12f));
+            GUI.Label(readyRect, readyText, BuildFittedSingleLineStyle(hudChipStyle, readyText, readyRect.width - (6f * s), readyRect.height, Mathf.RoundToInt(8f * s)));
+        }
+    }
+
+    private float GetFirewallRailY(float s, float panelH)
+    {
+        float afterTopHud = 132f * s;
+        if (hasActiveContract || contractCompletePulseTimer > 0f)
+        {
+            afterTopHud = 238f * s;
+        }
+        if (activeOperation.id != ContainmentOperationStorage.NoneId)
+        {
+            afterTopHud = (hasActiveContract || contractCompletePulseTimer > 0f) ? 304f * s : 230f * s;
+        }
+
+        float preferredY = Mathf.Max(afterTopHud, Screen.height * 0.50f - panelH * 0.50f);
+        float minY = 132f * s;
+        float maxY = Screen.height - panelH - (14f * s);
+        if (maxY < minY)
+        {
+            return Mathf.Max(10f * s, maxY);
+        }
+
+        return Mathf.Clamp(preferredY, minY, maxY);
     }
 
     private void DrawScorePopups(float anchorX, float anchorY, float s)
