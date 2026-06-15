@@ -28,8 +28,8 @@ public class RuptureAmbientRiftController : MonoBehaviour
     [SerializeField] private float dissolveSeconds = 1.05f;
 
     [Header("Visuals")]
-    [SerializeField] private Color warningColor = new Color(1f, 0.38f, 0.96f, 0.76f);
-    [SerializeField] private Color activeColor = new Color(0.44f, 0.96f, 1f, 0.86f);
+    [SerializeField] private Color warningColor = new Color(0.82f, 0.28f, 0.86f, 0.46f);
+    [SerializeField] private Color activeColor = new Color(0.34f, 0.78f, 0.92f, 0.56f);
 
     private Transform centerTransform;
     private Transform dynamicRoot;

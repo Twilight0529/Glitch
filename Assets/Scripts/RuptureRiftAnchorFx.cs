@@ -39,18 +39,18 @@ public class RuptureRiftAnchorFx : MonoBehaviour
     {
         if (coreRenderer == null)
         {
-            coreRenderer = CreateRenderer("RiftCore", CircleSpriteProvider.Get(), 11);
+            coreRenderer = CreateRenderer("RiftCore", CircleSpriteProvider.Get(), 8);
         }
         if (haloRenderer == null)
         {
-            haloRenderer = CreateRenderer("RiftHalo", CircleSpriteProvider.Get(), 10);
+            haloRenderer = CreateRenderer("RiftHalo", CircleSpriteProvider.Get(), 7);
         }
 
         for (int i = 0; i < shardRenderers.Length; i++)
         {
             if (shardRenderers[i] == null)
             {
-                shardRenderers[i] = CreateRenderer($"RiftShard_{i}", SquareSpriteProvider.Get(), 12);
+                shardRenderers[i] = CreateRenderer($"RiftShard_{i}", SquareSpriteProvider.Get(), 9);
             }
         }
     }
@@ -80,14 +80,14 @@ public class RuptureRiftAnchorFx : MonoBehaviour
         coreRenderer.transform.localRotation = Quaternion.identity;
         coreRenderer.size = Vector2.one * Mathf.Lerp(0.24f, 0.46f, pulse);
         Color coreColor = color;
-        coreColor.a = Mathf.Lerp(0.12f, 0.56f, envelope);
+        coreColor.a = Mathf.Lerp(0.08f, 0.34f, envelope);
         coreRenderer.color = coreColor;
 
         haloRenderer.transform.localPosition = Vector3.zero;
         haloRenderer.transform.localRotation = Quaternion.identity;
         haloRenderer.size = Vector2.one * Mathf.Lerp(radius * 0.9f, radius * 1.28f, pulse);
         Color haloColor = color;
-        haloColor.a = Mathf.Lerp(0.02f, 0.10f, envelope);
+        haloColor.a = Mathf.Lerp(0.012f, 0.052f, envelope);
         haloRenderer.color = haloColor;
 
         for (int i = 0; i < shardRenderers.Length; i++)
@@ -104,9 +104,9 @@ public class RuptureRiftAnchorFx : MonoBehaviour
             Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
             shard.transform.localPosition = dir * armRadius;
             shard.transform.localRotation = Quaternion.Euler(0f, 0f, angle * Mathf.Rad2Deg + 90f);
-            shard.size = new Vector2(Mathf.Lerp(0.09f, 0.24f, pulse), 0.035f);
+            shard.size = new Vector2(Mathf.Lerp(0.07f, 0.18f, pulse), 0.028f);
             Color shardColor = color;
-            shardColor.a = Mathf.Lerp(0.05f, 0.38f, envelope) * (0.55f + 0.45f * Mathf.PingPong(t + Time.time * 0.52f, 1f));
+            shardColor.a = Mathf.Lerp(0.025f, 0.18f, envelope) * (0.55f + 0.45f * Mathf.PingPong(t + Time.time * 0.52f, 1f));
             shard.color = shardColor;
         }
     }

@@ -3,7 +3,7 @@ using UnityEngine;
 public class ArenaBreachDirectionIndicatorFx : MonoBehaviour
 {
     // Flechas temporales que guian al jugador hacia la brecha antes del colapso.
-    [SerializeField] private int arrowCount = 6;
+    [SerializeField] private int arrowCount = 7;
 
     private Transform playerTransform;
     private Vector2 breachPosition;
@@ -17,6 +17,7 @@ public class ArenaBreachDirectionIndicatorFx : MonoBehaviour
     private readonly SpriteRenderer[] arrowHeadB = new SpriteRenderer[8];
     private SpriteRenderer beaconRenderer;
     private SpriteRenderer beaconCoreRenderer;
+    private SpriteRenderer beaconBackRenderer;
 
     public void Configure(Transform player, Vector2 target, float lifeSeconds, Color color)
     {
@@ -65,11 +66,19 @@ public class ArenaBreachDirectionIndicatorFx : MonoBehaviour
             arrow.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg);
             arrow.localScale = Vector3.one * Mathf.Lerp(0.82f, 1.2f, pulse);
 
-            Color bodyColor = new Color(tint.r, tint.g, tint.b, Mathf.Lerp(0.12f, 0.52f, pulse) * fade);
-            Color headColor = new Color(1f, 0.86f, 0.98f, Mathf.Lerp(0.34f, 0.9f, pulse) * fade);
+            Color bodyColor = new Color(tint.r, tint.g, tint.b, Mathf.Lerp(0.16f, 0.62f, pulse) * fade);
+            Color headColor = new Color(1f, 0.92f, 1f, Mathf.Lerp(0.46f, 1f, pulse) * fade);
             SetArrowColor(arrowBodies[i], bodyColor);
             SetArrowColor(arrowHeadA[i], headColor);
             SetArrowColor(arrowHeadB[i], headColor);
+        }
+
+        if (beaconBackRenderer != null)
+        {
+            float backPulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 7.5f);
+            beaconBackRenderer.transform.position = breachPosition;
+            beaconBackRenderer.transform.localScale = Vector3.one * Mathf.Lerp(1.20f, 1.48f, backPulse);
+            beaconBackRenderer.color = new Color(0.015f, 0.004f, 0.026f, Mathf.Lerp(0.64f, 0.84f, backPulse) * fade);
         }
 
         if (beaconRenderer != null)
@@ -77,7 +86,7 @@ public class ArenaBreachDirectionIndicatorFx : MonoBehaviour
             float beaconPulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 12f);
             beaconRenderer.transform.position = breachPosition;
             beaconRenderer.transform.localScale = Vector3.one * Mathf.Lerp(0.9f, 1.35f, beaconPulse);
-            beaconRenderer.color = new Color(tint.r, tint.g, tint.b, Mathf.Lerp(0.22f, 0.74f, beaconPulse) * fade);
+            beaconRenderer.color = new Color(tint.r, tint.g, tint.b, Mathf.Lerp(0.34f, 0.86f, beaconPulse) * fade);
         }
 
         if (beaconCoreRenderer != null)
@@ -86,7 +95,7 @@ public class ArenaBreachDirectionIndicatorFx : MonoBehaviour
             beaconCoreRenderer.transform.position = breachPosition;
             beaconCoreRenderer.transform.rotation = Quaternion.Euler(0f, 0f, Time.time * 90f);
             beaconCoreRenderer.transform.localScale = Vector3.one * Mathf.Lerp(0.52f, 0.72f, corePulse);
-            beaconCoreRenderer.color = new Color(1f, 0.88f, 0.99f, Mathf.Lerp(0.42f, 0.92f, corePulse) * fade);
+            beaconCoreRenderer.color = new Color(1f, 0.94f, 1f, Mathf.Lerp(0.58f, 1f, corePulse) * fade);
         }
 
         if (age >= lifetime)
@@ -116,6 +125,14 @@ public class ArenaBreachDirectionIndicatorFx : MonoBehaviour
             arrowHeadA[i] = CreateArrowPart(arrow.transform, "HeadA", new Vector3(0.15f, 0.08f, 0f), Quaternion.Euler(0f, 0f, -42f), new Vector3(0.28f, 0.075f, 1f), 23);
             arrowHeadB[i] = CreateArrowPart(arrow.transform, "HeadB", new Vector3(0.15f, -0.08f, 0f), Quaternion.Euler(0f, 0f, 42f), new Vector3(0.28f, 0.075f, 1f), 23);
         }
+
+        GameObject back = new GameObject("BreachTargetBackplate");
+        back.transform.SetParent(transform, false);
+        beaconBackRenderer = back.AddComponent<SpriteRenderer>();
+        beaconBackRenderer.sprite = CircleSpriteProvider.Get();
+        beaconBackRenderer.drawMode = SpriteDrawMode.Sliced;
+        beaconBackRenderer.size = Vector2.one * 1.45f;
+        beaconBackRenderer.sortingOrder = 20;
 
         GameObject beacon = new GameObject("BreachTargetBeacon");
         beacon.transform.SetParent(transform, false);
