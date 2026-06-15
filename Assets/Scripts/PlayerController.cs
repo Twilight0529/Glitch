@@ -22,6 +22,11 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private Color ghostDashColor = new Color(0.55f, 1f, 0.95f, 0.82f);
     [SerializeField] private int ghostDashAfterimageCount = 4;
 
+    [Header("Compact Mode")]
+    [SerializeField] private float compactScaleMultiplier = 0.58f;
+    [SerializeField, Range(0.25f, 1f)] private float compactMoveMultiplier = 0.76f;
+    [SerializeField] private Color compactColor = new Color(0.76f, 1f, 0.74f, 0.96f);
+
     [Header("Shield Visual")]
     [SerializeField] private Color shieldColor = new Color(0.95f, 0.64f, 0.88f, 0.85f);
     [SerializeField] private float shieldPulseSpeed = 7.2f;
@@ -103,6 +108,8 @@ public class PlayerController : MonoBehaviour
     private Vector2 ghostDashDirection = Vector2.right;
     private float ghostDashTimer;
     private float ghostDashCooldownTimer;
+    private float compactTimer;
+    private float compactPulsePhase;
     private float speedBoostTimer;
     private float speedBoostMultiplier = 1f;
     private float movementSlowTimer;
@@ -139,6 +146,7 @@ public class PlayerController : MonoBehaviour
     public bool HasShield => shieldTimer > 0f;
     public bool HasSpeedBoost => speedBoostTimer > 0f;
     public bool HasMovementSlow => movementSlowTimer > 0f;
+    public bool HasCompactMode => compactTimer > 0f;
     public bool IsParryActive => parryTimer > 0f;
     public bool IsGhostDashing => ghostDashTimer > 0f;
     public bool IsGhostDashReady => ghostDashTimer <= 0f && ghostDashCooldownTimer <= 0f;
@@ -155,42 +163,25 @@ public class PlayerController : MonoBehaviour
     {
         get
         {
-            if (HasMovementSlow && HasShield && HasSpeedBoost)
-            {
-                return "Shield + Speed + Suppressed";
-            }
-
-            if (HasMovementSlow && HasShield)
-            {
-                return "Shield + Suppressed";
-            }
-
-            if (HasMovementSlow && HasSpeedBoost)
-            {
-                return "Speed + Suppressed";
-            }
-
-            if (HasMovementSlow)
-            {
-                return "Suppressed";
-            }
-
-            if (HasShield && HasSpeedBoost)
-            {
-                return "Shield + Speed";
-            }
-
+            List<string> active = new List<string>();
             if (HasShield)
             {
-                return "Shield";
+                active.Add("Shield");
             }
-
             if (HasSpeedBoost)
             {
-                return "Speed";
+                active.Add("Speed");
+            }
+            if (HasCompactMode)
+            {
+                active.Add("Compact");
+            }
+            if (HasMovementSlow)
+            {
+                active.Add("Suppressed");
             }
 
-            return "None";
+            return active.Count > 0 ? string.Join(" + ", active) : "None";
         }
     }
 
@@ -294,6 +285,10 @@ public class PlayerController : MonoBehaviour
         if (movementSlowTimer > 0f)
         {
             effectiveSpeed *= movementSlowMultiplier;
+        }
+        if (compactTimer > 0f)
+        {
+            effectiveSpeed *= Mathf.Clamp(compactMoveMultiplier, 0.25f, 1f);
         }
 
         if (ghostDashTimer > 0f)
@@ -436,6 +431,20 @@ public class PlayerController : MonoBehaviour
     public void ApplyShield(float duration)
     {
         shieldTimer = Mathf.Max(shieldTimer, Mathf.Max(0.1f, duration * shieldDurationMultiplier));
+    }
+
+    public void ApplyCompactMode(float duration, float scaleMultiplier, float moveMultiplier)
+    {
+        if (deathSequenceActive || breachConsumptionActive)
+        {
+            return;
+        }
+
+        compactScaleMultiplier = Mathf.Clamp(scaleMultiplier, 0.35f, 0.88f);
+        compactMoveMultiplier = Mathf.Clamp(moveMultiplier, 0.25f, 1f);
+        compactTimer = Mathf.Max(compactTimer, Mathf.Max(0.25f, duration));
+        compactPulsePhase = Random.Range(0f, Mathf.PI * 2f);
+        SpawnCompactModeFx();
     }
 
     public void ApplyMovementSlow(float multiplier, float duration)
@@ -730,6 +739,7 @@ public class PlayerController : MonoBehaviour
         speedBoostMultiplier = 1f;
         movementSlowTimer = 0f;
         movementSlowMultiplier = 1f;
+        compactTimer = 0f;
         shieldTimer = 0f;
         parryTimer = 0f;
         parryCooldownTimer = 0f;
@@ -796,6 +806,15 @@ public class PlayerController : MonoBehaviour
             {
                 movementSlowTimer = 0f;
                 movementSlowMultiplier = 1f;
+            }
+        }
+
+        if (compactTimer > 0f)
+        {
+            compactTimer -= Time.deltaTime;
+            if (compactTimer < 0f)
+            {
+                compactTimer = 0f;
             }
         }
 
@@ -1028,19 +1047,45 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
+        Vector3 targetScale = GetCurrentBodyScale();
         if (ghostDashTimer <= 0f)
         {
-            bodyRenderer.color = baseBodyColor;
-            transform.localScale = baseBodyScale;
+            bodyRenderer.color = GetCurrentBodyColor();
+            transform.localScale = targetScale;
             return;
         }
 
         float t = Mathf.Clamp01(ghostDashTimer / Mathf.Max(0.05f, ghostDashDuration));
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 38f);
-        Color c = Color.Lerp(baseBodyColor, ghostDashColor, 0.68f + pulse * 0.20f);
+        Color c = Color.Lerp(GetCurrentBodyColor(), ghostDashColor, 0.68f + pulse * 0.20f);
         c.a = Mathf.Lerp(0.38f, 0.74f, t);
         bodyRenderer.color = c;
-        transform.localScale = baseBodyScale * Mathf.Lerp(0.78f, 1.04f, t);
+        transform.localScale = targetScale * Mathf.Lerp(0.78f, 1.04f, t);
+    }
+
+    private Vector3 GetCurrentBodyScale()
+    {
+        if (compactTimer <= 0f)
+        {
+            return baseBodyScale;
+        }
+
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 10f + compactPulsePhase);
+        float compactScale = Mathf.Clamp(compactScaleMultiplier, 0.35f, 0.88f) * Mathf.Lerp(0.96f, 1.05f, pulse);
+        return baseBodyScale * compactScale;
+    }
+
+    private Color GetCurrentBodyColor()
+    {
+        if (compactTimer <= 0f)
+        {
+            return baseBodyColor;
+        }
+
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 12f + compactPulsePhase);
+        Color c = Color.Lerp(baseBodyColor, compactColor, 0.52f + pulse * 0.18f);
+        c.a = Mathf.Lerp(0.76f, 0.96f, pulse);
+        return c;
     }
 
     private void EnsureMovementTrail()
@@ -1222,6 +1267,7 @@ public class PlayerController : MonoBehaviour
         speedBoostMultiplier = 1f;
         movementSlowTimer = 0f;
         movementSlowMultiplier = 1f;
+        compactTimer = 0f;
         shieldTimer = 0f;
         parryTimer = 0f;
         parryCooldownTimer = 0f;
@@ -1620,6 +1666,38 @@ public class PlayerController : MonoBehaviour
         ring.AddComponent<PlayerParryBurstFx>().Configure(sr, 0.82f, 0.14f, ghostDashColor);
         Destroy(ring, 0.22f);
     }
+
+    private void SpawnCompactModeFx()
+    {
+        Color fxColor = compactColor;
+
+        GameObject ring = new GameObject("CompactModeRingFx");
+        ring.transform.position = transform.position;
+        SpriteRenderer ringRenderer = ring.AddComponent<SpriteRenderer>();
+        ringRenderer.sprite = CircleSpriteProvider.Get();
+        ringRenderer.sortingOrder = 14;
+        ringRenderer.color = new Color(fxColor.r, fxColor.g, fxColor.b, 0.82f);
+        ring.transform.localScale = Vector3.one * 1.35f;
+        ring.AddComponent<PlayerParryBurstFx>().Configure(ringRenderer, 0.28f, 0.18f, fxColor);
+        Destroy(ring, 0.28f);
+
+        const int rayCount = 8;
+        for (int i = 0; i < rayCount; i++)
+        {
+            float angle = ((Mathf.PI * 2f) * i) / rayCount;
+            Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+
+            GameObject ray = new GameObject($"CompactModeInRay_{i}");
+            ray.transform.position = transform.position + (Vector3)(dir * 0.95f);
+            SpriteRenderer sr = ray.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.sortingOrder = 14;
+            sr.color = new Color(fxColor.r, fxColor.g, fxColor.b, 0.9f);
+            ray.transform.localScale = new Vector3(0.26f, 0.07f, 1f);
+            ray.AddComponent<PlayerCompactInRayFx>().Configure(sr, -dir, 0.72f, 0.22f);
+            Destroy(ray, 0.28f);
+        }
+    }
 }
 
 public class PlayerGhostDashAfterimageFx : MonoBehaviour
@@ -1649,6 +1727,40 @@ public class PlayerGhostDashAfterimageFx : MonoBehaviour
         if (spriteRenderer != null)
         {
             spriteRenderer.color = new Color(tint.r, tint.g, tint.b, Mathf.Lerp(0.42f, 0f, t));
+        }
+    }
+}
+
+public class PlayerCompactInRayFx : MonoBehaviour
+{
+    private SpriteRenderer spriteRenderer;
+    private Vector2 direction = Vector2.left;
+    private float distance = 0.6f;
+    private float duration = 0.18f;
+    private float age;
+    private Vector3 origin;
+
+    public void Configure(SpriteRenderer rendererRef, Vector2 travelDirection, float travelDistance, float life)
+    {
+        spriteRenderer = rendererRef;
+        direction = travelDirection.sqrMagnitude > 0.001f ? travelDirection.normalized : Vector2.left;
+        distance = Mathf.Max(0.1f, travelDistance);
+        duration = Mathf.Max(0.05f, life);
+        origin = transform.position;
+    }
+
+    private void Update()
+    {
+        age += Time.deltaTime;
+        float t = Mathf.Clamp01(age / duration);
+        transform.position = origin + (Vector3)(direction * distance * Mathf.SmoothStep(0f, 1f, t));
+        transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg);
+        transform.localScale = new Vector3(Mathf.Lerp(0.28f, 0.04f, t), Mathf.Lerp(0.08f, 0.025f, t), 1f);
+        if (spriteRenderer != null)
+        {
+            Color c = spriteRenderer.color;
+            c.a = Mathf.Lerp(0.9f, 0f, t);
+            spriteRenderer.color = c;
         }
     }
 }

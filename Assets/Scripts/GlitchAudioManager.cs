@@ -64,7 +64,18 @@ public class GlitchAudioManager : MonoBehaviour
 
     public static void PlayPowerupCollected(ArenaPowerupPickup.PickupKind kind, Vector3 position)
     {
-        Play(kind == ArenaPowerupPickup.PickupKind.Shield ? "powerup_shield" : "powerup_speed", 0.72f, 1f, position);
+        switch (kind)
+        {
+            case ArenaPowerupPickup.PickupKind.Shield:
+                Play("powerup_shield", 0.72f, 1f, position);
+                break;
+            case ArenaPowerupPickup.PickupKind.Compact:
+                Play("powerup_compact", 0.68f, 1f, position);
+                break;
+            default:
+                Play("powerup_speed", 0.72f, 1f, position);
+                break;
+        }
     }
 
     public static void PlayShieldBreak(Vector3 position) => Play("shield_break", 0.72f, 1f, position);
@@ -473,6 +484,8 @@ public class GlitchAudioManager : MonoBehaviour
                 return CreateClip(clipName, 0.48f, PowerupSpeed);
             case "powerup_shield":
                 return CreateClip(clipName, 0.58f, PowerupShield);
+            case "powerup_compact":
+                return CreateClip(clipName, 0.42f, PowerupCompact);
             case "parry_start":
                 return CreateClip(clipName, 0.24f, ParryStart);
             case "parry_success":
@@ -668,6 +681,18 @@ public class GlitchAudioManager : MonoBehaviour
         float chord = Sine(220f, t) * 0.24f + Sine(330f, t) * 0.18f + Sine(550f, t) * 0.08f;
         float shimmer = Sine(980f + 45f * Mathf.Sin(t * 18f), t) * 0.08f * Gate(t, 18f, 0.5f);
         return SoftClip((chord + shimmer + Noise(i, 11.2f) * 0.018f) * e);
+    }
+
+    private static float PowerupCompact(float t, int i)
+    {
+        float d = 0.42f;
+        float n = Mathf.Clamp01(t / d);
+        float e = Envelope(t, d, 0.006f, 0.14f);
+        float sweep = Sine(Mathf.Lerp(1120f, 260f, Mathf.Pow(n, 0.65f)), t) * 0.25f;
+        float clicks = Crush(Sine(640f + Mathf.Sin(t * 52f) * 180f, t), 6) * 0.16f * Gate(t, 22f, 0.32f);
+        float body = Sine(118f, t) * 0.20f * Mathf.Exp(-t * 12f);
+        float grit = Noise(i, 14.2f) * 0.035f * Mathf.Exp(-t * 7f);
+        return SoftClip((sweep + clicks + body + grit) * e);
     }
 
     private static float ParryStart(float t, int i)

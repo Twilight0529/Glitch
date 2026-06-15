@@ -13,6 +13,10 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private float speedBoostDuration = 3.2f;
     [SerializeField] private float shieldDuration = 5.5f;
     [SerializeField, Range(0f, 1f)] private float shieldPickupChance = 0.35f;
+    [SerializeField, Range(0f, 1f)] private float compactPickupChance = 0.24f;
+    [SerializeField] private float compactDuration = 6.5f;
+    [SerializeField, Range(0.35f, 0.88f)] private float compactScaleMultiplier = 0.58f;
+    [SerializeField, Range(0.25f, 1f)] private float compactMoveMultiplier = 0.76f;
     [SerializeField] private int powerupScorePoints = 3;
 
     [Header("Score Pickups")]
@@ -565,10 +569,7 @@ public class ArenaChaosDirector : MonoBehaviour
             return;
         }
 
-        ArenaPowerupPickup.PickupKind kind =
-            Random.value < Mathf.Clamp01(shieldPickupChance)
-                ? ArenaPowerupPickup.PickupKind.Shield
-                : ArenaPowerupPickup.PickupKind.SpeedBurst;
+        ArenaPowerupPickup.PickupKind kind = RollPowerupKind();
 
         GameObject go = new GameObject($"Powerup_{kind}");
         go.transform.SetParent(runtimeRoot, false);
@@ -576,8 +577,7 @@ public class ArenaChaosDirector : MonoBehaviour
         go.transform.localScale = Vector3.one;
 
         SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
-        bool isSpeedPowerup = kind == ArenaPowerupPickup.PickupKind.SpeedBurst;
-        sr.sprite = isSpeedPowerup ? LightningSpriteProvider.Get() : ShieldSpriteProvider.Get();
+        sr.sprite = GetPowerupSprite(kind);
         sr.drawMode = SpriteDrawMode.Simple;
         sr.size = Vector2.one * 0.62f;
         sr.sortingOrder = 12;
@@ -587,11 +587,63 @@ public class ArenaChaosDirector : MonoBehaviour
         col.radius = 0.34f;
 
         ArenaPowerupPickup pickup = go.AddComponent<ArenaPowerupPickup>();
-        pickup.Configure(this, kind, powerupLifetime, speedBoostMultiplier, speedBoostDuration, shieldDuration);
+        pickup.Configure(this, kind, powerupLifetime, speedBoostMultiplier, speedBoostDuration, shieldDuration, compactDuration, compactScaleMultiplier, compactMoveMultiplier);
         activePickup = pickup;
 
         GlitchAudioManager.PlayPowerupSpawn(position);
-        RaiseEvent(kind == ArenaPowerupPickup.PickupKind.Shield ? "Shield Materialized" : "Speed Core Materialized");
+        RaiseEvent(GetPowerupEventLabel(kind));
+    }
+
+    private ArenaPowerupPickup.PickupKind RollPowerupKind()
+    {
+        float shieldChance = Mathf.Clamp01(shieldPickupChance);
+        float compactChance = Mathf.Clamp01(compactPickupChance);
+        float totalSpecialChance = shieldChance + compactChance;
+        if (totalSpecialChance > 0.92f)
+        {
+            float scale = 0.92f / totalSpecialChance;
+            shieldChance *= scale;
+            compactChance *= scale;
+        }
+
+        float roll = Random.value;
+        if (roll < shieldChance)
+        {
+            return ArenaPowerupPickup.PickupKind.Shield;
+        }
+
+        if (roll < shieldChance + compactChance)
+        {
+            return ArenaPowerupPickup.PickupKind.Compact;
+        }
+
+        return ArenaPowerupPickup.PickupKind.SpeedBurst;
+    }
+
+    private static Sprite GetPowerupSprite(ArenaPowerupPickup.PickupKind kind)
+    {
+        switch (kind)
+        {
+            case ArenaPowerupPickup.PickupKind.Shield:
+                return ShieldSpriteProvider.Get();
+            case ArenaPowerupPickup.PickupKind.Compact:
+                return CompactSpriteProvider.Get();
+            default:
+                return LightningSpriteProvider.Get();
+        }
+    }
+
+    private static string GetPowerupEventLabel(ArenaPowerupPickup.PickupKind kind)
+    {
+        switch (kind)
+        {
+            case ArenaPowerupPickup.PickupKind.Shield:
+                return "Shield Materialized";
+            case ArenaPowerupPickup.PickupKind.Compact:
+                return "Compact Core Materialized";
+            default:
+                return "Speed Core Materialized";
+        }
     }
 
     private void TrySpawnScorePickups()

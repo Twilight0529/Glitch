@@ -8,7 +8,8 @@ public class ArenaPowerupPickup : MonoBehaviour
     public enum PickupKind
     {
         SpeedBurst,
-        Shield
+        Shield,
+        Compact
     }
 
     [SerializeField] private float bobAmplitude = 0.14f;
@@ -27,6 +28,9 @@ public class ArenaPowerupPickup : MonoBehaviour
     private float speedMultiplier;
     private float speedDuration;
     private float shieldDuration;
+    private float compactDuration;
+    private float compactScaleMultiplier;
+    private float compactMoveMultiplier;
     private Vector3 basePosition;
     private SpriteRenderer spriteRenderer;
     private SpriteRenderer auraRenderer;
@@ -40,7 +44,10 @@ public class ArenaPowerupPickup : MonoBehaviour
         float pickupLifetime,
         float boostMultiplier,
         float boostDuration,
-        float shieldSeconds)
+        float shieldSeconds,
+        float compactSeconds,
+        float compactScale,
+        float compactMove)
     {
         owner = ownerController;
         kind = pickupKind;
@@ -48,6 +55,9 @@ public class ArenaPowerupPickup : MonoBehaviour
         speedMultiplier = Mathf.Max(1f, boostMultiplier);
         speedDuration = Mathf.Max(0.1f, boostDuration);
         shieldDuration = Mathf.Max(0.1f, shieldSeconds);
+        compactDuration = Mathf.Max(0.1f, compactSeconds);
+        compactScaleMultiplier = Mathf.Clamp(compactScale, 0.35f, 0.88f);
+        compactMoveMultiplier = Mathf.Clamp(compactMove, 0.25f, 1f);
     }
 
     private void Awake()
@@ -92,6 +102,12 @@ public class ArenaPowerupPickup : MonoBehaviour
                 spriteRenderer.size = Vector2.one * 0.62f;
                 spriteRenderer.color = new Color(1f, 0.66f, 0.86f, 0.95f);
                 break;
+            case PickupKind.Compact:
+                spriteRenderer.sprite = CompactSpriteProvider.Get();
+                spriteRenderer.drawMode = SpriteDrawMode.Simple;
+                spriteRenderer.size = Vector2.one * 0.62f;
+                spriteRenderer.color = new Color(0.74f, 1f, 0.70f, 0.96f);
+                break;
             default:
                 spriteRenderer.sprite = LightningSpriteProvider.Get();
                 spriteRenderer.drawMode = SpriteDrawMode.Simple;
@@ -117,6 +133,10 @@ public class ArenaPowerupPickup : MonoBehaviour
         if (kind == PickupKind.Shield)
         {
             player.ApplyShield(shieldDuration);
+        }
+        else if (kind == PickupKind.Compact)
+        {
+            player.ApplyCompactMode(compactDuration, compactScaleMultiplier, compactMoveMultiplier);
         }
         else
         {
@@ -156,9 +176,7 @@ public class ArenaPowerupPickup : MonoBehaviour
         }
 
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * auraPulseSpeed);
-        Color tint = kind == PickupKind.Shield
-            ? new Color(1f, 0.68f, 0.88f, 1f)
-            : new Color(0.52f, 0.95f, 1f, 1f);
+        Color tint = GetThemeColor();
 
         float lifeN = 1f - Mathf.Clamp01(lifeTimer / Mathf.Max(0.01f, lifetime));
         float warn = lifeN < 0.25f ? 0.45f + 0.55f * Mathf.Sin(Time.time * 18f) : 1f;
@@ -168,9 +186,7 @@ public class ArenaPowerupPickup : MonoBehaviour
 
     private void SpawnCollectBurstFx()
     {
-        Color burstColor = kind == PickupKind.Shield
-            ? new Color(1f, 0.70f, 0.90f, 1f)
-            : new Color(0.54f, 0.96f, 1f, 1f);
+        Color burstColor = GetThemeColor();
 
         GameObject ring = new GameObject("PowerupCollectRingFx");
         ring.transform.position = transform.position;
@@ -197,6 +213,19 @@ public class ArenaPowerupPickup : MonoBehaviour
             ray.transform.localScale = new Vector3(0.22f, 0.08f, 1f);
             ray.AddComponent<PowerupCollectRayFx>().Configure(sr, dir, Mathf.Max(0.45f, collectBurstRadius), Mathf.Max(0.16f, collectBurstDuration));
             Destroy(ray, Mathf.Max(0.24f, collectBurstDuration + 0.12f));
+        }
+    }
+
+    private Color GetThemeColor()
+    {
+        switch (kind)
+        {
+            case PickupKind.Shield:
+                return new Color(1f, 0.70f, 0.90f, 1f);
+            case PickupKind.Compact:
+                return new Color(0.74f, 1f, 0.70f, 1f);
+            default:
+                return new Color(0.54f, 0.96f, 1f, 1f);
         }
     }
 }

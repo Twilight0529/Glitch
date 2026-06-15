@@ -2061,7 +2061,7 @@ public class GameManager : MonoBehaviour
             case ContextTutorialKind.ScorePickup:
                 return "Los datos suman puntaje, cargan Firewall y alimentan la progresion meta. En runs largas, recolectar bien abre mas opciones.";
             case ContextTutorialKind.Powerup:
-                return "Los powerups cambian tu estado temporal. El rayo acelera, el escudo absorbe un golpe y ambos cargan Firewall.";
+                return "Los powerups cambian tu estado temporal. El rayo acelera, el escudo absorbe un golpe y el nucleo compacto te achica, aunque reduce tu velocidad.";
             case ContextTutorialKind.Upgrade:
                 return "Las alteraciones cambian tu build durante la run. Mira categoria, impacto y rareza: no siempre gana la mejora mas ofensiva.";
             case ContextTutorialKind.ArenaEvent:
@@ -2285,7 +2285,7 @@ public class GameManager : MonoBehaviour
             case IntroTutorialStep.Firewall:
                 return "Presiona Q, R o click derecho para practicar el Burst. En partida solo se activa cuando la barra de Firewall esta llena.";
             case IntroTutorialStep.Resources:
-                return "Los datos dan puntaje y progresion meta. Los powerups cambian tu ritmo: rayo para velocidad, escudo para absorber un golpe. Presiona ESPACIO para confirmar.";
+                return "Los datos dan puntaje y progresion meta. Los powerups cambian tu ritmo: rayo para velocidad, escudo para absorber un golpe y nucleo compacto para esquivar mejor a cambio de velocidad. Presiona ESPACIO para confirmar.";
             case IntroTutorialStep.ArenaEvents:
                 return "Cuando aparezcan flechas, barridos o brechas, leelos como ordenes urgentes del mapa. Sigue la direccion segura y evita quedarte dentro del glitch. Presiona ESPACIO para confirmar.";
             case IntroTutorialStep.Ready:
@@ -2453,16 +2453,24 @@ public class GameManager : MonoBehaviour
             DrawSolidRect(new Rect(x, y, 13f, 13f), new Color(0.92f, 0.96f, 1f, 0.88f));
         }
 
-        Rect speed = new Rect(rect.center.x - 54f, rect.center.y - 36f, 44f, 58f);
+        Rect speed = new Rect(rect.center.x - 96f, rect.center.y - 34f, 38f, 54f);
         DrawSolidRect(new Rect(speed.x + 15f, speed.y, 14f, 26f), new Color(0.36f, 0.95f, 1f, 1f));
         DrawSolidRect(new Rect(speed.x + 3f, speed.y + 22f, 34f, 12f), new Color(0.36f, 0.95f, 1f, 1f));
         DrawSolidRect(new Rect(speed.x + 9f, speed.y + 34f, 14f, 24f), new Color(0.36f, 0.95f, 1f, 1f));
 
-        Rect shield = new Rect(rect.center.x + 28f, rect.center.y - 34f, 46f, 58f);
-        DrawSolidRect(new Rect(shield.x + 7f, shield.y, shield.width - 14f, 15f), new Color(0.52f, 1f, 0.74f, 0.92f));
-        DrawSolidRect(new Rect(shield.x, shield.y + 14f, shield.width, 24f), new Color(0.52f, 1f, 0.74f, 0.92f));
-        DrawSolidRect(new Rect(shield.x + 11f, shield.y + 38f, shield.width - 22f, 15f), new Color(0.52f, 1f, 0.74f, 0.92f));
-        DrawTutorialLabel(new Rect(rect.x + 24f, rect.yMax - 42f, rect.width - 48f, 26f), "DATOS -> SCORE + PROGRESO");
+        Rect shield = new Rect(rect.center.x - 18f, rect.center.y - 34f, 42f, 54f);
+        DrawSolidRect(new Rect(shield.x + 7f, shield.y, shield.width - 14f, 14f), new Color(1f, 0.70f, 0.90f, 0.92f));
+        DrawSolidRect(new Rect(shield.x, shield.y + 13f, shield.width, 22f), new Color(1f, 0.70f, 0.90f, 0.92f));
+        DrawSolidRect(new Rect(shield.x + 11f, shield.y + 35f, shield.width - 22f, 14f), new Color(1f, 0.70f, 0.90f, 0.92f));
+
+        Rect compact = new Rect(rect.center.x + 62f, rect.center.y - 31f, 46f, 46f);
+        DrawSolidRect(new Rect(compact.center.x - 8f, compact.center.y - 8f, 16f, 16f), new Color(0.74f, 1f, 0.70f, 0.96f));
+        DrawSolidRect(new Rect(compact.x, compact.center.y - 4f, 14f, 8f), new Color(0.74f, 1f, 0.70f, 0.82f));
+        DrawSolidRect(new Rect(compact.xMax - 14f, compact.center.y - 4f, 14f, 8f), new Color(0.74f, 1f, 0.70f, 0.82f));
+        DrawSolidRect(new Rect(compact.center.x - 4f, compact.y, 8f, 14f), new Color(0.74f, 1f, 0.70f, 0.82f));
+        DrawSolidRect(new Rect(compact.center.x - 4f, compact.yMax - 14f, 8f, 14f), new Color(0.74f, 1f, 0.70f, 0.82f));
+
+        DrawTutorialLabel(new Rect(rect.x + 24f, rect.yMax - 42f, rect.width - 48f, 26f), "DATOS + POWERUPS CON COSTO");
     }
 
     private void DrawIntroEventsDemo(Rect rect, Color accent)
@@ -2789,15 +2797,22 @@ public class GameManager : MonoBehaviour
             DrawSolidRect(new Rect(data.x + i * 22f, data.y + (i % 2) * 8f, data.width, data.height), new Color(0.95f, 0.96f, 1f, 0.88f));
         }
 
-        Rect speed = new Rect(rect.center.x - 18f, rect.center.y - 24f, 36f, 48f);
+        Rect speed = new Rect(rect.center.x - 48f, rect.center.y - 24f, 28f, 44f);
         DrawSolidRect(new Rect(speed.x + 13f, speed.y, 12f, 22f), new Color(0.36f, 0.95f, 1f, 1f));
         DrawSolidRect(new Rect(speed.x + 3f, speed.y + 18f, 30f, 10f), new Color(0.36f, 0.95f, 1f, 1f));
         DrawSolidRect(new Rect(speed.x + 8f, speed.y + 28f, 12f, 20f), new Color(0.36f, 0.95f, 1f, 1f));
 
-        Rect shield = new Rect(rect.xMax - 46f, rect.yMax - 58f, 34f, 42f);
-        DrawSolidRect(new Rect(shield.x + 5f, shield.y, shield.width - 10f, 12f), new Color(0.52f, 1f, 0.74f, 0.92f));
-        DrawSolidRect(new Rect(shield.x, shield.y + 10f, shield.width, 18f), new Color(0.52f, 1f, 0.74f, 0.92f));
-        DrawSolidRect(new Rect(shield.x + 8f, shield.y + 28f, shield.width - 16f, 12f), new Color(0.52f, 1f, 0.74f, 0.92f));
+        Rect shield = new Rect(rect.center.x + 2f, rect.center.y - 23f, 30f, 38f);
+        DrawSolidRect(new Rect(shield.x + 5f, shield.y, shield.width - 10f, 11f), new Color(1f, 0.70f, 0.90f, 0.92f));
+        DrawSolidRect(new Rect(shield.x, shield.y + 10f, shield.width, 17f), new Color(1f, 0.70f, 0.90f, 0.92f));
+        DrawSolidRect(new Rect(shield.x + 8f, shield.y + 27f, shield.width - 16f, 11f), new Color(1f, 0.70f, 0.90f, 0.92f));
+
+        Rect compact = new Rect(rect.xMax - 42f, rect.yMax - 55f, 30f, 30f);
+        DrawSolidRect(new Rect(compact.center.x - 5f, compact.center.y - 5f, 10f, 10f), new Color(0.74f, 1f, 0.70f, 0.96f));
+        DrawSolidRect(new Rect(compact.x, compact.center.y - 3f, 10f, 6f), new Color(0.74f, 1f, 0.70f, 0.82f));
+        DrawSolidRect(new Rect(compact.xMax - 10f, compact.center.y - 3f, 10f, 6f), new Color(0.74f, 1f, 0.70f, 0.82f));
+        DrawSolidRect(new Rect(compact.center.x - 3f, compact.y, 6f, 10f), new Color(0.74f, 1f, 0.70f, 0.82f));
+        DrawSolidRect(new Rect(compact.center.x - 3f, compact.yMax - 10f, 6f, 10f), new Color(0.74f, 1f, 0.70f, 0.82f));
         DrawTutorialLabel(new Rect(rect.x + 10f, rect.yMax - 27f, rect.width - 20f, 20f), "+ DATOS");
     }
 
