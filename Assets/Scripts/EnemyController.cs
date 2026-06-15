@@ -17,7 +17,9 @@ public class EnemyController : MonoBehaviour
         ExpansionShoot,
         SpeedSurge,
         WeaveHunter,
-        Destroyer
+        Destroyer,
+        PhaseBlink,
+        PincerBarrage
     }
 
     private enum BehaviorPattern
@@ -149,6 +151,23 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float weaveHunterSwitchInterval = 0.23f;
     [SerializeField] private float weaveHunterPlayerVelocityBias = 0.75f;
 
+    [Header("Level 2 - Phase Blink")]
+    [SerializeField] private float phaseBlinkInterval = 2.35f;
+    [SerializeField] private float phaseBlinkTelegraphSeconds = 0.62f;
+    [SerializeField] private float phaseBlinkDistanceFromPlayer = 3.0f;
+    [SerializeField] private float phaseBlinkProbeRadius = 0.52f;
+    [SerializeField] private int phaseBlinkPlacementAttempts = 18;
+    [SerializeField] private Color phaseBlinkColor = new Color(0.66f, 1f, 0.92f, 0.92f);
+
+    [Header("Level 2 - Pincer Barrage")]
+    [SerializeField] private float pincerBarrageInterval = 2.2f;
+    [SerializeField] private float pincerBarrageTelegraphSeconds = 0.58f;
+    [SerializeField] private int pincerProjectilePairs = 3;
+    [SerializeField] private float pincerSpawnDistance = 6.2f;
+    [SerializeField] private float pincerVerticalSpread = 2.4f;
+    [SerializeField] private float pincerProjectileSpeedMultiplier = 1.08f;
+    [SerializeField] private Color pincerProjectileColor = new Color(0.92f, 0.62f, 1f, 1f);
+
     [Header("State Weights")]
     [SerializeField, Min(0f)] private float directChaseWeight = 1f;
     [SerializeField, Min(0f)] private float predictiveInterceptWeight = 1f;
@@ -159,6 +178,8 @@ public class EnemyController : MonoBehaviour
     [SerializeField, Min(0f)] private float speedSurgeWeight = 0.9f;
     [SerializeField, Min(0f)] private float weaveHunterWeight = 0.65f;
     [SerializeField, Min(0f)] private float destroyerWeight = 0.75f;
+    [SerializeField, Min(0f)] private float phaseBlinkWeight = 0.72f;
+    [SerializeField, Min(0f)] private float pincerBarrageWeight = 0.68f;
 
     public AnomalyState CurrentState => currentState;
     public string CurrentStateLabel => currentState.ToString();
@@ -245,6 +266,18 @@ public class EnemyController : MonoBehaviour
     private readonly HashSet<int> destroyerPendingRespawnIds = new HashSet<int>();
     private float weaveHunterTimer;
     private float weaveHunterSideSign = 1f;
+    private float phaseBlinkTimer;
+    private bool phaseBlinkCharging;
+    private Vector2 phaseBlinkTarget;
+    private GameObject phaseBlinkTelegraphRoot;
+    private SpriteRenderer phaseBlinkRingRenderer;
+    private SpriteRenderer phaseBlinkCoreRenderer;
+    private float pincerBarrageTimer;
+    private bool pincerBarrageCharging;
+    private Vector2 pincerLeftSpawn;
+    private Vector2 pincerRightSpawn;
+    private GameObject pincerTelegraphRoot;
+    private readonly List<SpriteRenderer> pincerTelegraphRenderers = new List<SpriteRenderer>();
     private PacingPhase pacingPhase = PacingPhase.BuildUp;
     private int pacingMinorStatesRemaining;
     private int pacingMajorStatesRemaining;
@@ -401,6 +434,7 @@ public class EnemyController : MonoBehaviour
     {
         DestroySplitCloneImmediate();
         DestroySplitMergeTelegraphImmediate();
+        DestroyLevelTwoTelegraphsImmediate();
         if (ownRenderer != null)
         {
             ownRenderer.color = baseColor;
@@ -783,7 +817,9 @@ public class EnemyController : MonoBehaviour
         if (state == AnomalyState.Split ||
             state == AnomalyState.ExpansionShoot ||
             state == AnomalyState.Destroyer ||
-            state == AnomalyState.SpeedSurge)
+            state == AnomalyState.SpeedSurge ||
+            state == AnomalyState.PhaseBlink ||
+            state == AnomalyState.PincerBarrage)
         {
             float minMajor = Mathf.Max(0.6f, Mathf.Min(majorStateDurationRange.x, majorStateDurationRange.y));
             float maxMajor = Mathf.Max(minMajor, Mathf.Max(majorStateDurationRange.x, majorStateDurationRange.y));
@@ -951,6 +987,18 @@ public class EnemyController : MonoBehaviour
             weaveHunterTimer = 0f;
             weaveHunterSideSign = Random.value < 0.5f ? -1f : 1f;
         }
+        else if (currentState == AnomalyState.PhaseBlink)
+        {
+            phaseBlinkTimer = Mathf.Max(0.25f, phaseBlinkInterval * 0.45f);
+            phaseBlinkCharging = false;
+            HidePhaseBlinkTelegraph();
+        }
+        else if (currentState == AnomalyState.PincerBarrage)
+        {
+            pincerBarrageTimer = Mathf.Max(0.25f, pincerBarrageInterval * 0.55f);
+            pincerBarrageCharging = false;
+            HidePincerTelegraph();
+        }
 
         if (currentPattern == BehaviorPattern.ErraticBurst)
         {
@@ -967,6 +1015,17 @@ public class EnemyController : MonoBehaviour
 
     private void HandleStateTransition(AnomalyState previous, AnomalyState next)
     {
+        if (previous == AnomalyState.PhaseBlink && next != AnomalyState.PhaseBlink)
+        {
+            phaseBlinkCharging = false;
+            HidePhaseBlinkTelegraph();
+        }
+        if (previous == AnomalyState.PincerBarrage && next != AnomalyState.PincerBarrage)
+        {
+            pincerBarrageCharging = false;
+            HidePincerTelegraph();
+        }
+
         if (previous != AnomalyState.Split && next == AnomalyState.Split)
         {
             BeginSplitState();
@@ -996,6 +1055,8 @@ public class EnemyController : MonoBehaviour
             fullOptions.Add(new StateWeight(AnomalyState.SpeedSurge, speedSurgeWeight));
             fullOptions.Add(new StateWeight(AnomalyState.WeaveHunter, weaveHunterWeight));
             fullOptions.Add(new StateWeight(AnomalyState.Destroyer, destroyerWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.PhaseBlink, phaseBlinkWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.PincerBarrage, pincerBarrageWeight));
         }
 
         ApplyProgressionFilter(fullOptions);
@@ -1068,7 +1129,9 @@ public class EnemyController : MonoBehaviour
         return state == AnomalyState.Split ||
                state == AnomalyState.ExpansionShoot ||
                state == AnomalyState.Destroyer ||
-               state == AnomalyState.SpeedSurge;
+               state == AnomalyState.SpeedSurge ||
+               state == AnomalyState.PhaseBlink ||
+               state == AnomalyState.PincerBarrage;
     }
 
     private static bool IsCalmMinorState(AnomalyState state)
@@ -1088,12 +1151,23 @@ public class EnemyController : MonoBehaviour
         if (!CanUseSpecialStates())
         {
             options.RemoveAll(o => IsPre60SpecialState(o.state));
+            return;
+        }
+
+        if (!CanUseLevelTwoStates())
+        {
+            options.RemoveAll(o => IsLevelTwoState(o.state));
         }
     }
 
     private bool CanUseSpecialStates()
     {
         return gameManager != null && gameManager.AreBossSpecialStatesUnlocked;
+    }
+
+    private bool CanUseLevelTwoStates()
+    {
+        return gameManager != null && gameManager.AreBossLevelTwoStatesUnlocked;
     }
 
     private bool AreSpecialStatesSuppressedForBreach()
@@ -1107,7 +1181,15 @@ public class EnemyController : MonoBehaviour
                state == AnomalyState.ExpansionShoot ||
                state == AnomalyState.SpeedSurge ||
                state == AnomalyState.WeaveHunter ||
-               state == AnomalyState.Destroyer;
+               state == AnomalyState.Destroyer ||
+               state == AnomalyState.PhaseBlink ||
+               state == AnomalyState.PincerBarrage;
+    }
+
+    private static bool IsLevelTwoState(AnomalyState state)
+    {
+        return state == AnomalyState.PhaseBlink ||
+               state == AnomalyState.PincerBarrage;
     }
 
     public bool IsMapEventSuppressed()
@@ -1188,7 +1270,7 @@ public class EnemyController : MonoBehaviour
     {
         if (!statePulseFxEnabled)
         {
-            return; 
+            return;
         }
 
         statePulseTimer = Mathf.Max(0.04f, statePulseDuration);
@@ -1287,6 +1369,10 @@ public class EnemyController : MonoBehaviour
                 return new Color(1f, 0.50f, 0.42f, 1f);
             case AnomalyState.WeaveHunter:
                 return new Color(0.48f, 0.94f, 1f, 1f);
+            case AnomalyState.PhaseBlink:
+                return new Color(0.58f, 1f, 0.92f, 1f);
+            case AnomalyState.PincerBarrage:
+                return new Color(0.92f, 0.62f, 1f, 1f);
             case AnomalyState.ErraticBurst:
                 return new Color(0.74f, 0.76f, 1f, 1f);
             case AnomalyState.CutoffFlank:
@@ -1337,7 +1423,7 @@ public class EnemyController : MonoBehaviour
 
         if (externalSpeedTimer <= 0f)
         {
-            externalSpeedTimer = 0f; 
+            externalSpeedTimer = 0f;
             externalSpeedMultiplier = 1f;
             return;
         }
@@ -1387,6 +1473,10 @@ public class EnemyController : MonoBehaviour
                 return BehaviorPattern.DirectChase;
             case AnomalyState.Destroyer:
                 return BehaviorPattern.DirectChase;
+            case AnomalyState.PhaseBlink:
+                return BehaviorPattern.PredictiveIntercept;
+            case AnomalyState.PincerBarrage:
+                return BehaviorPattern.CutoffFlank;
             default:
                 return BehaviorPattern.DirectChase;
         }
@@ -1420,6 +1510,8 @@ public class EnemyController : MonoBehaviour
         UpdateSplitAbility();
         UpdateDestroyerAbility();
         UpdateWeaveHunterAbility();
+        UpdatePhaseBlinkAbility();
+        UpdatePincerBarrageAbility();
 
         if (currentState != AnomalyState.ExpansionShoot)
         {
@@ -1465,6 +1557,82 @@ public class EnemyController : MonoBehaviour
             weaveHunterTimer = 0f;
             weaveHunterSideSign *= -1f;
         }
+    }
+
+    private void UpdatePhaseBlinkAbility()
+    {
+        if (currentState != AnomalyState.PhaseBlink)
+        {
+            phaseBlinkCharging = false;
+            HidePhaseBlinkTelegraph();
+            return;
+        }
+
+        phaseBlinkTimer += Time.deltaTime;
+        float interval = Mathf.Max(0.35f, phaseBlinkInterval);
+        float lead = Mathf.Clamp(phaseBlinkTelegraphSeconds, 0.08f, interval * 0.85f);
+        float remaining = interval - phaseBlinkTimer;
+
+        if (!phaseBlinkCharging && remaining <= lead)
+        {
+            phaseBlinkCharging = true;
+            phaseBlinkTarget = PickPhaseBlinkTarget();
+            GlitchAudioManager.PlayEnemyPhaseBlinkCharge(transform.position);
+        }
+
+        if (phaseBlinkCharging && remaining > 0f)
+        {
+            float progress = 1f - Mathf.Clamp01(remaining / lead);
+            UpdatePhaseBlinkTelegraph(progress);
+        }
+
+        if (phaseBlinkTimer < interval)
+        {
+            return;
+        }
+
+        phaseBlinkTimer = 0f;
+        phaseBlinkCharging = false;
+        HidePhaseBlinkTelegraph();
+        ExecutePhaseBlink();
+    }
+
+    private void UpdatePincerBarrageAbility()
+    {
+        if (currentState != AnomalyState.PincerBarrage)
+        {
+            pincerBarrageCharging = false;
+            HidePincerTelegraph();
+            return;
+        }
+
+        pincerBarrageTimer += Time.deltaTime;
+        float interval = Mathf.Max(0.45f, pincerBarrageInterval);
+        float lead = Mathf.Clamp(pincerBarrageTelegraphSeconds, 0.08f, interval * 0.85f);
+        float remaining = interval - pincerBarrageTimer;
+
+        if (!pincerBarrageCharging && remaining <= lead)
+        {
+            pincerBarrageCharging = true;
+            ComputePincerSpawnPoints(out pincerLeftSpawn, out pincerRightSpawn);
+            GlitchAudioManager.PlayEnemyPincerCharge(transform.position);
+        }
+
+        if (pincerBarrageCharging && remaining > 0f)
+        {
+            float progress = 1f - Mathf.Clamp01(remaining / lead);
+            UpdatePincerTelegraph(progress);
+        }
+
+        if (pincerBarrageTimer < interval)
+        {
+            return;
+        }
+
+        pincerBarrageTimer = 0f;
+        pincerBarrageCharging = false;
+        HidePincerTelegraph();
+        FirePincerBarrage();
     }
 
     private void UpdateDestroyerAbility()
@@ -2027,27 +2195,300 @@ public class EnemyController : MonoBehaviour
 
     private void CreateProjectile(Vector2 position, Vector2 direction)
     {
+        CreateProjectile(position, direction, expansionShootProjectileColor, expansionShootProjectileSize, 1f);
+    }
+
+    private void CreateProjectile(Vector2 position, Vector2 direction, Color projectileColor, Vector2 projectileSize, float speedMultiplier)
+    {
         GameObject go = new GameObject($"AnomalyProjectile_{projectileSerial++}");
         go.transform.position = new Vector3(position.x, position.y, 0f);
 
         SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = SquareSpriteProvider.Get();
         sr.drawMode = SpriteDrawMode.Sliced;
-        sr.size = expansionShootProjectileSize;
-        sr.color = expansionShootProjectileColor;
+        sr.size = projectileSize;
+        sr.color = projectileColor;
         sr.sortingOrder = 11;
 
         CircleCollider2D col = go.AddComponent<CircleCollider2D>();
         col.isTrigger = true;
-        col.radius = Mathf.Max(0.04f, Mathf.Min(expansionShootProjectileSize.x, expansionShootProjectileSize.y) * 0.48f);
+        col.radius = Mathf.Max(0.04f, Mathf.Min(projectileSize.x, projectileSize.y) * 0.48f);
 
         AnomalyProjectile projectile = go.AddComponent<AnomalyProjectile>();
         projectile.Configure(
             direction,
-            expansionShootProjectileSpeed,
+            expansionShootProjectileSpeed * Mathf.Max(0.1f, speedMultiplier),
             expansionShootProjectileLifetime,
             obstacleMask,
             gameManager);
+    }
+
+    private Vector2 PickPhaseBlinkTarget()
+    {
+        Vector2 playerPos = player != null ? player.GetPosition() : (Vector2)transform.position;
+        Vector2 fromEnemy = rb != null ? playerPos - rb.position : Vector2.right;
+        if (fromEnemy.sqrMagnitude <= 0.01f)
+        {
+            fromEnemy = Random.insideUnitCircle;
+        }
+
+        Vector2 baseDir = fromEnemy.sqrMagnitude > 0.001f ? -fromEnemy.normalized : Vector2.right;
+        float radius = Mathf.Max(0.8f, phaseBlinkDistanceFromPlayer);
+        int attempts = Mathf.Max(3, phaseBlinkPlacementAttempts);
+
+        for (int i = 0; i < attempts; i++)
+        {
+            float angle = Random.Range(-105f, 105f);
+            Vector2 dir = Rotate(baseDir, angle);
+            Vector2 candidate = ClampToArena(playerPos + dir * radius);
+            if (IsBlinkCandidateValid(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        Vector2 fallback = ClampToArena(playerPos + baseDir * radius);
+        return IsBlinkCandidateValid(fallback) ? fallback : ClampToArena(playerPos + Random.insideUnitCircle.normalized * radius);
+    }
+
+    private bool IsBlinkCandidateValid(Vector2 candidate)
+    {
+        if (!IsWalkableWorld(candidate))
+        {
+            return false;
+        }
+
+        float radius = Mathf.Max(0.15f, phaseBlinkProbeRadius);
+        Collider2D[] hits = Physics2D.OverlapCircleAll(candidate, radius, obstacleMask);
+        for (int i = 0; i < hits.Length; i++)
+        {
+            if (IsBlockingCollider(hits[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private void ExecutePhaseBlink()
+    {
+        Vector2 target = phaseBlinkTarget;
+        SpawnPhaseBlinkBurst(rb != null ? rb.position : (Vector2)transform.position, 0.78f);
+        if (rb != null)
+        {
+            rb.position = target;
+            rb.linearVelocity = Vector2.zero;
+        }
+        transform.position = new Vector3(target.x, target.y, transform.position.z);
+        SpawnPhaseBlinkBurst(target, 1f);
+        TriggerStatePulse();
+        GlitchAudioManager.PlayEnemyPhaseBlinkArrive(transform.position);
+    }
+
+    private void UpdatePhaseBlinkTelegraph(float progress)
+    {
+        EnsurePhaseBlinkTelegraph();
+        if (phaseBlinkTelegraphRoot == null)
+        {
+            return;
+        }
+
+        if (!phaseBlinkTelegraphRoot.activeSelf)
+        {
+            phaseBlinkTelegraphRoot.SetActive(true);
+        }
+
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 16f);
+        phaseBlinkTelegraphRoot.transform.position = new Vector3(phaseBlinkTarget.x, phaseBlinkTarget.y, 0f);
+
+        if (phaseBlinkRingRenderer != null)
+        {
+            phaseBlinkRingRenderer.size = Vector2.one * Mathf.Lerp(1.8f, 0.62f, progress);
+            phaseBlinkRingRenderer.color = new Color(phaseBlinkColor.r, phaseBlinkColor.g, phaseBlinkColor.b, Mathf.Lerp(0.16f, 0.72f, progress) * (0.72f + pulse * 0.28f));
+        }
+        if (phaseBlinkCoreRenderer != null)
+        {
+            phaseBlinkCoreRenderer.transform.localRotation = Quaternion.Euler(0f, 0f, Time.time * 220f);
+            phaseBlinkCoreRenderer.size = Vector2.one * Mathf.Lerp(0.18f, 0.40f, pulse);
+            phaseBlinkCoreRenderer.color = new Color(1f, 0.92f, 1f, Mathf.Lerp(0.26f, 0.86f, progress));
+        }
+    }
+
+    private void EnsurePhaseBlinkTelegraph()
+    {
+        if (phaseBlinkTelegraphRoot != null)
+        {
+            return;
+        }
+
+        phaseBlinkTelegraphRoot = new GameObject("PhaseBlinkTelegraph");
+        phaseBlinkTelegraphRoot.SetActive(false);
+
+        GameObject ring = new GameObject("PhaseBlinkRing");
+        ring.transform.SetParent(phaseBlinkTelegraphRoot.transform, false);
+        phaseBlinkRingRenderer = ring.AddComponent<SpriteRenderer>();
+        phaseBlinkRingRenderer.sprite = CircleSpriteProvider.Get();
+        phaseBlinkRingRenderer.drawMode = SpriteDrawMode.Sliced;
+        phaseBlinkRingRenderer.sortingOrder = 15;
+
+        GameObject core = new GameObject("PhaseBlinkCore");
+        core.transform.SetParent(phaseBlinkTelegraphRoot.transform, false);
+        phaseBlinkCoreRenderer = core.AddComponent<SpriteRenderer>();
+        phaseBlinkCoreRenderer.sprite = SquareSpriteProvider.Get();
+        phaseBlinkCoreRenderer.drawMode = SpriteDrawMode.Sliced;
+        phaseBlinkCoreRenderer.sortingOrder = 16;
+    }
+
+    private void HidePhaseBlinkTelegraph()
+    {
+        if (phaseBlinkTelegraphRoot != null && phaseBlinkTelegraphRoot.activeSelf)
+        {
+            phaseBlinkTelegraphRoot.SetActive(false);
+        }
+    }
+
+    private void SpawnPhaseBlinkBurst(Vector2 position, float alpha)
+    {
+        GameObject ring = new GameObject("PhaseBlinkBurst");
+        ring.transform.position = new Vector3(position.x, position.y, 0f);
+        SpriteRenderer sr = ring.AddComponent<SpriteRenderer>();
+        sr.sprite = CircleSpriteProvider.Get();
+        sr.sortingOrder = 16;
+        sr.color = new Color(phaseBlinkColor.r, phaseBlinkColor.g, phaseBlinkColor.b, Mathf.Clamp01(alpha));
+        ring.transform.localScale = Vector3.one * 0.25f;
+        ring.AddComponent<AnomalyStateBurstFx>().Configure(sr, 1.55f, 0.22f, phaseBlinkColor);
+        Destroy(ring, 0.32f);
+    }
+
+    private void ComputePincerSpawnPoints(out Vector2 left, out Vector2 right)
+    {
+        Vector2 playerPos = player != null ? player.GetPosition() : (Vector2)transform.position;
+        Vector2 towardPlayer = rb != null ? playerPos - rb.position : Vector2.right;
+        if (towardPlayer.sqrMagnitude <= 0.01f)
+        {
+            towardPlayer = Vector2.right;
+        }
+
+        Vector2 side = new Vector2(-towardPlayer.y, towardPlayer.x).normalized;
+        float distance = Mathf.Max(2.5f, pincerSpawnDistance);
+        left = ClampToArena(playerPos + side * distance);
+        right = ClampToArena(playerPos - side * distance);
+    }
+
+    private void UpdatePincerTelegraph(float progress)
+    {
+        EnsurePincerTelegraph();
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 14f);
+        for (int i = 0; i < pincerTelegraphRenderers.Count; i++)
+        {
+            SpriteRenderer sr = pincerTelegraphRenderers[i];
+            if (sr == null)
+            {
+                continue;
+            }
+
+            Vector2 pos = (i & 1) == 0 ? pincerLeftSpawn : pincerRightSpawn;
+            float lane = (i / 2) - 1;
+            Vector2 playerPos = player != null ? player.GetPosition() : (Vector2)transform.position;
+            Vector2 dir = (playerPos - pos).sqrMagnitude > 0.001f ? (playerPos - pos).normalized : Vector2.right;
+            Vector2 perp = new Vector2(-dir.y, dir.x);
+            sr.transform.position = pos + perp * lane * Mathf.Max(0.2f, pincerVerticalSpread * 0.34f);
+            sr.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg);
+            sr.size = new Vector2(Mathf.Lerp(0.65f, 1.35f, progress), 0.075f);
+            sr.color = new Color(pincerProjectileColor.r, pincerProjectileColor.g, pincerProjectileColor.b, Mathf.Lerp(0.18f, 0.78f, progress) * (0.75f + pulse * 0.25f));
+        }
+    }
+
+    private void EnsurePincerTelegraph()
+    {
+        int desired = Mathf.Max(2, pincerProjectilePairs * 2);
+        if (pincerTelegraphRoot == null)
+        {
+            pincerTelegraphRoot = new GameObject("PincerBarrageTelegraph");
+        }
+
+        while (pincerTelegraphRenderers.Count < desired)
+        {
+            GameObject go = new GameObject($"PincerWarn_{pincerTelegraphRenderers.Count}");
+            go.transform.SetParent(pincerTelegraphRoot.transform, false);
+            SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.sortingOrder = 15;
+            pincerTelegraphRenderers.Add(sr);
+        }
+
+        while (pincerTelegraphRenderers.Count > desired)
+        {
+            int last = pincerTelegraphRenderers.Count - 1;
+            SpriteRenderer sr = pincerTelegraphRenderers[last];
+            pincerTelegraphRenderers.RemoveAt(last);
+            if (sr != null)
+            {
+                Destroy(sr.gameObject);
+            }
+        }
+    }
+
+    private void HidePincerTelegraph()
+    {
+        for (int i = 0; i < pincerTelegraphRenderers.Count; i++)
+        {
+            if (pincerTelegraphRenderers[i] != null)
+            {
+                pincerTelegraphRenderers[i].color = Color.clear;
+            }
+        }
+    }
+
+    private void DestroyLevelTwoTelegraphsImmediate()
+    {
+        DestroyTelegraphRootImmediate(phaseBlinkTelegraphRoot);
+        phaseBlinkTelegraphRoot = null;
+        phaseBlinkRingRenderer = null;
+        phaseBlinkCoreRenderer = null;
+
+        DestroyTelegraphRootImmediate(pincerTelegraphRoot);
+        pincerTelegraphRoot = null;
+        pincerTelegraphRenderers.Clear();
+    }
+
+    private static void DestroyTelegraphRootImmediate(GameObject root)
+    {
+        if (root == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(root);
+        }
+        else
+        {
+            DestroyImmediate(root);
+        }
+    }
+
+    private void FirePincerBarrage()
+    {
+        int pairs = Mathf.Max(1, pincerProjectilePairs);
+        Vector2 playerPos = player != null ? player.GetPosition() : (Vector2)transform.position;
+        for (int i = 0; i < pairs; i++)
+        {
+            float lane = pairs == 1 ? 0f : Mathf.Lerp(-1f, 1f, i / (float)(pairs - 1));
+            Vector2 leftDir = (playerPos - pincerLeftSpawn).sqrMagnitude > 0.001f ? (playerPos - pincerLeftSpawn).normalized : Vector2.right;
+            Vector2 rightDir = (playerPos - pincerRightSpawn).sqrMagnitude > 0.001f ? (playerPos - pincerRightSpawn).normalized : Vector2.left;
+            Vector2 leftPerp = new Vector2(-leftDir.y, leftDir.x);
+            Vector2 rightPerp = new Vector2(-rightDir.y, rightDir.x);
+            Vector2 leftPos = pincerLeftSpawn + leftPerp * lane * Mathf.Max(0.2f, pincerVerticalSpread);
+            Vector2 rightPos = pincerRightSpawn + rightPerp * lane * Mathf.Max(0.2f, pincerVerticalSpread);
+            CreateProjectile(leftPos, leftDir, pincerProjectileColor, expansionShootProjectileSize * 0.92f, pincerProjectileSpeedMultiplier);
+            CreateProjectile(rightPos, rightDir, pincerProjectileColor, expansionShootProjectileSize * 0.92f, pincerProjectileSpeedMultiplier);
+        }
+
+        GlitchAudioManager.PlayEnemyPincerFire(transform.position);
     }
 
     private void UpdateExpansionShootTelegraphVisual(float chargeProgress)
@@ -2488,7 +2929,7 @@ public class EnemyController : MonoBehaviour
     {
         if (currentState == AnomalyState.Destroyer || AreSpecialStatesSuppressedForBreach())
         {
-            return; 
+            return;
         }
 
         AnomalyState previousState = currentState;
@@ -2581,7 +3022,7 @@ public class EnemyController : MonoBehaviour
         {
             for (int y = 0; y < gridHeight; y++)
             {
-                gCost[x, y] = float.PositiveInfinity; 
+                gCost[x, y] = float.PositiveInfinity;
                 fCost[x, y] = float.PositiveInfinity;
             }
         }

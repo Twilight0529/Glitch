@@ -148,6 +148,7 @@ public class GameManager : MonoBehaviour
 
     [Header("Progression Gates")]
     [SerializeField] private float bossSpecialStatesUnlockTime = 30f;
+    [SerializeField] private float bossLevelTwoUnlockTime = 150f;
     [SerializeField] private float mapEventsUnlockTime = 60f;
     [SerializeField] private float containmentPulseUnlockTime = 90f;
 
@@ -208,6 +209,7 @@ public class GameManager : MonoBehaviour
     public string CurrentLevelTypeLabel => levelType;
     public bool IsBreachSensitiveSuppressionActive => breachSensitiveSuppressionTimer > 0f;
     public bool AreBossSpecialStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && SurvivalTime >= Mathf.Max(0f, bossSpecialStatesUnlockTime);
+    public bool AreBossLevelTwoStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && SurvivalTime >= Mathf.Max(bossSpecialStatesUnlockTime, bossLevelTwoUnlockTime);
     public bool AreMapEventsUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, mapEventsUnlockTime);
     public bool IsContainmentPulseUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && SurvivalTime >= Mathf.Max(0f, containmentPulseUnlockTime);
     public float EventPressureRetryDelay => Mathf.Max(0.25f, eventPressureRetryDelay);
@@ -3504,7 +3506,8 @@ public class GameManager : MonoBehaviour
 
         Color oldValue = bossStateValueStyle.normal.textColor;
         bossStateValueStyle.normal.textColor = Color.Lerp(Color.white, stateColor, 0.42f);
-        GUI.Label(new Rect(x, y + (6f * s), width, lineHeight), "ANOMALIA", bossStateStyle);
+        string header = IsBossLevelTwoState(stateRaw) ? "ANOMALIA NIVEL 2" : "ANOMALIA";
+        GUI.Label(new Rect(x, y + (6f * s), width, lineHeight), header, bossStateStyle);
         GUI.Label(new Rect(x, y + (30f * s), width, lineHeight + (6f * s)), stateValue.ToUpperInvariant(), bossStateValueStyle);
         bossStateValueStyle.normal.textColor = oldValue;
     }
@@ -3553,7 +3556,8 @@ public class GameManager : MonoBehaviour
         bossStateBannerLabelStyle.normal.textColor = new Color(0.88f, 0.94f, 1f, 0.86f * alpha);
         bossStateBannerValueStyle.normal.textColor = Color.Lerp(Color.white, stateColor, 0.36f);
 
-        GUI.Label(new Rect(panel.x, panel.y + (16f * s), panel.width, 26f * s), "CAMBIO DE ESTADO", bossStateBannerLabelStyle);
+        string header = IsBossLevelTwoState(bossStateBannerRaw) ? "ANOMALIA NIVEL 2" : "CAMBIO DE ESTADO";
+        GUI.Label(new Rect(panel.x, panel.y + (16f * s), panel.width, 26f * s), header, bossStateBannerLabelStyle);
         GUI.Label(new Rect(panel.x, panel.y + (42f * s), panel.width, 58f * s), label, bossStateBannerValueStyle);
 
         bossStateBannerLabelStyle.normal.textColor = oldLabel;
@@ -4143,6 +4147,10 @@ public class GameManager : MonoBehaviour
                 return "Weave Hunter";
             case "Destroyer":
                 return "Destroyer";
+            case "PhaseBlink":
+                return "Phase Blink";
+            case "PincerBarrage":
+                return "Pincer Barrage";
             default:
                 return raw;
         }
@@ -4157,10 +4165,17 @@ public class GameManager : MonoBehaviour
             case "SpeedSurge":
             case "WeaveHunter":
             case "Destroyer":
+            case "PhaseBlink":
+            case "PincerBarrage":
                 return true;
             default:
                 return false;
         }
+    }
+
+    private static bool IsBossLevelTwoState(string raw)
+    {
+        return raw == "PhaseBlink" || raw == "PincerBarrage";
     }
 
     private static Color GetBossStateColor(string raw)
@@ -4185,6 +4200,10 @@ public class GameManager : MonoBehaviour
                 return new Color(0.85f, 0.68f, 1f, 1f);
             case "Destroyer":
                 return new Color(1f, 0.86f, 0.88f, 1f);
+            case "PhaseBlink":
+                return new Color(0.58f, 1f, 0.92f, 1f);
+            case "PincerBarrage":
+                return new Color(0.92f, 0.62f, 1f, 1f);
             default:
                 return new Color(1f, 0.76f, 0.82f, 1f);
         }

@@ -158,6 +158,10 @@ public class GlitchAudioManager : MonoBehaviour
     }
     public static void PlayRuptureFragmentMaterialize(Vector3 position) => Play("rupture_fragment_materialize", 0.54f, 1f, position);
     public static void PlayRuptureFragmentDissolve(Vector3 position) => Play("rupture_fragment_dissolve", 0.50f, 1f, position);
+    public static void PlayEnemyPhaseBlinkCharge(Vector3 position) => Play("state_phase_blink_charge", 0.52f, 1f, position);
+    public static void PlayEnemyPhaseBlinkArrive(Vector3 position) => Play("state_phase_blink_arrive", 0.68f, 1f, position);
+    public static void PlayEnemyPincerCharge(Vector3 position) => Play("state_pincer_charge", 0.48f, 1f, position);
+    public static void PlayEnemyPincerFire(Vector3 position) => Play("state_pincer_fire", 0.64f, 1f, position);
 
     public static void PlayEnemyState(EnemyController.AnomalyState state, Vector3 position)
     {
@@ -180,6 +184,12 @@ public class GlitchAudioManager : MonoBehaviour
             case EnemyController.AnomalyState.Destroyer:
                 Play("state_destroyer", 0.76f, 1f, position);
                 break;
+            case EnemyController.AnomalyState.PhaseBlink:
+                Play("state_phase_blink", 0.72f, 1f, position);
+                break;
+            case EnemyController.AnomalyState.PincerBarrage:
+                Play("state_pincer", 0.70f, 1f, position);
+                break;
             default:
                 Play("state_minor", 0.42f, 1f, position);
                 break;
@@ -198,7 +208,9 @@ public class GlitchAudioManager : MonoBehaviour
         return state == EnemyController.AnomalyState.Split ||
                state == EnemyController.AnomalyState.ExpansionShoot ||
                state == EnemyController.AnomalyState.SpeedSurge ||
-               state == EnemyController.AnomalyState.Destroyer;
+               state == EnemyController.AnomalyState.Destroyer ||
+               state == EnemyController.AnomalyState.PhaseBlink ||
+               state == EnemyController.AnomalyState.PincerBarrage;
     }
 
     private static void Play(string clipName, float volume, float pitch, Vector3 position)
@@ -536,6 +548,18 @@ public class GlitchAudioManager : MonoBehaviour
                 return CreateClip(clipName, 0.48f, StateWeave);
             case "state_destroyer":
                 return CreateClip(clipName, 0.62f, StateDestroyer);
+            case "state_phase_blink":
+                return CreateClip(clipName, 0.56f, StatePhaseBlink);
+            case "state_phase_blink_charge":
+                return CreateClip(clipName, 0.34f, StatePhaseBlinkCharge);
+            case "state_phase_blink_arrive":
+                return CreateClip(clipName, 0.38f, StatePhaseBlinkArrive);
+            case "state_pincer":
+                return CreateClip(clipName, 0.52f, StatePincer);
+            case "state_pincer_charge":
+                return CreateClip(clipName, 0.34f, StatePincerCharge);
+            case "state_pincer_fire":
+                return CreateClip(clipName, 0.42f, StatePincerFire);
             case "state_minor":
                 return CreateClip(clipName, 0.25f, StateMinor);
             case "breach_warning":
@@ -920,6 +944,61 @@ public class GlitchAudioManager : MonoBehaviour
         float hit = Mathf.Exp(-t * 7f);
         float metal = Noise(i, 61.6f) * 0.16f * Envelope(t, d, 0.002f, 0.35f);
         return SoftClip(Sine(52f, t) * 0.62f * hit + Square(104f, t) * 0.15f * hit + metal);
+    }
+
+    private static float StatePhaseBlink(float t, int i)
+    {
+        float d = 0.56f;
+        float e = Envelope(t, d, 0.006f, 0.18f);
+        float sweep = Sine(Mathf.Lerp(280f, 1460f, Mathf.Clamp01(t / d)), t) * 0.25f;
+        float fold = Crush(Sine(740f + Mathf.Sin(t * 42f) * 260f, t), 5) * 0.18f * Gate(t, 18f, 0.38f);
+        return SoftClip((sweep + fold + Noise(i, 63.1f) * 0.06f) * e);
+    }
+
+    private static float StatePhaseBlinkCharge(float t, int i)
+    {
+        float d = 0.34f;
+        float n = Mathf.Clamp01(t / d);
+        float e = Envelope(t, d, 0.004f, 0.08f);
+        float tone = Sine(Mathf.Lerp(520f, 1280f, n), t) * 0.18f;
+        float ticks = Crush(Sine(960f, t), 4) * 0.12f * Gate(t, 24f, 0.28f);
+        return SoftClip((tone + ticks + Noise(i, 64.4f) * 0.035f) * e);
+    }
+
+    private static float StatePhaseBlinkArrive(float t, int i)
+    {
+        float d = 0.38f;
+        float hit = Mathf.Exp(-t * 10f);
+        float snap = Sine(86f, t) * 0.42f * hit;
+        float shimmer = Sine(Mathf.Lerp(1500f, 360f, Mathf.Clamp01(t / d)), t) * 0.20f * Envelope(t, d, 0.002f, 0.12f);
+        return SoftClip(snap + shimmer + Noise(i, 65.2f) * 0.08f * hit);
+    }
+
+    private static float StatePincer(float t, int i)
+    {
+        float d = 0.52f;
+        float e = Envelope(t, d, 0.012f, 0.16f);
+        float left = Sine(300f, t) * Gate(t, 9f, 0.36f);
+        float right = Sine(760f, t + 0.04f) * Gate(t + 0.04f, 9f, 0.36f);
+        return SoftClip((left + right + Noise(i, 66.7f) * 0.08f) * 0.30f * e);
+    }
+
+    private static float StatePincerCharge(float t, int i)
+    {
+        float d = 0.34f;
+        float e = Envelope(t, d, 0.006f, 0.08f);
+        float warning = Sine(410f, t) * 0.20f * Gate(t, 13f, 0.44f);
+        float upper = Sine(820f, t) * 0.12f * Gate(t + 0.03f, 13f, 0.44f);
+        return SoftClip((warning + upper + Noise(i, 67.3f) * 0.04f) * e);
+    }
+
+    private static float StatePincerFire(float t, int i)
+    {
+        float d = 0.42f;
+        float e = Envelope(t, d, 0.002f, 0.14f);
+        float hit = Sine(72f, t) * 0.36f * Mathf.Exp(-t * 9f);
+        float rails = Square(520f, t) * 0.16f * Gate(t, 18f, 0.32f);
+        return SoftClip(hit + (rails + Noise(i, 68.5f) * 0.10f) * e);
     }
 
     private static float BreachWarning(float t, int i)
