@@ -19,7 +19,9 @@ public class EnemyController : MonoBehaviour
         WeaveHunter,
         Destroyer,
         PhaseBlink,
-        PincerBarrage
+        PincerBarrage,
+        SignalJam,
+        OrbitBarrage
     }
 
     private enum BehaviorPattern
@@ -168,6 +170,29 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float pincerProjectileSpeedMultiplier = 1.08f;
     [SerializeField] private Color pincerProjectileColor = new Color(0.92f, 0.62f, 1f, 1f);
 
+    [Header("Level 2 - Signal Jam")]
+    [SerializeField] private float signalJamInterval = 2.75f;
+    [SerializeField] private float signalJamTelegraphSeconds = 0.72f;
+    [SerializeField] private float signalJamRadius = 2.55f;
+    [SerializeField] private float signalJamSlowMultiplier = 0.48f;
+    [SerializeField] private float signalJamSlowDuration = 1.05f;
+    [SerializeField] private Color signalJamColor = new Color(1f, 0.78f, 0.42f, 0.94f);
+
+    [Header("Level 2 - Orbit Barrage")]
+    [SerializeField] private float orbitBarrageInterval = 2.55f;
+    [SerializeField] private float orbitBarrageTelegraphSeconds = 0.66f;
+    [SerializeField] private int orbitBarrageProjectileCount = 8;
+    [SerializeField] private float orbitBarrageSpawnRadius = 3.15f;
+    [SerializeField] private float orbitBarrageProjectileSpeedMultiplier = 0.92f;
+    [SerializeField] private Color orbitBarrageProjectileColor = new Color(0.58f, 0.82f, 1f, 1f);
+
+    [Header("Level 2 Awakening FX")]
+    [SerializeField] private float levelTwoAwakeningDuration = 2.35f;
+    [SerializeField] private Color levelTwoAwakenedColor = new Color(0.64f, 1f, 0.94f, 1f);
+    [SerializeField] private Color levelTwoAwakeningBurstColor = new Color(1f, 0.54f, 0.96f, 1f);
+    [SerializeField, Range(0f, 1f)] private float levelTwoPassiveTint = 0.24f;
+    [SerializeField] private float levelTwoAwakeningScaleBoost = 1.28f;
+
     [Header("State Weights")]
     [SerializeField, Min(0f)] private float directChaseWeight = 1f;
     [SerializeField, Min(0f)] private float predictiveInterceptWeight = 1f;
@@ -180,6 +205,8 @@ public class EnemyController : MonoBehaviour
     [SerializeField, Min(0f)] private float destroyerWeight = 0.75f;
     [SerializeField, Min(0f)] private float phaseBlinkWeight = 0.72f;
     [SerializeField, Min(0f)] private float pincerBarrageWeight = 0.68f;
+    [SerializeField, Min(0f)] private float signalJamWeight = 0.66f;
+    [SerializeField, Min(0f)] private float orbitBarrageWeight = 0.64f;
 
     public AnomalyState CurrentState => currentState;
     public string CurrentStateLabel => currentState.ToString();
@@ -278,6 +305,19 @@ public class EnemyController : MonoBehaviour
     private Vector2 pincerRightSpawn;
     private GameObject pincerTelegraphRoot;
     private readonly List<SpriteRenderer> pincerTelegraphRenderers = new List<SpriteRenderer>();
+    private float signalJamTimer;
+    private bool signalJamCharging;
+    private Vector2 signalJamCenter;
+    private GameObject signalJamTelegraphRoot;
+    private SpriteRenderer signalJamRingRenderer;
+    private SpriteRenderer signalJamCoreRenderer;
+    private readonly List<SpriteRenderer> signalJamTickRenderers = new List<SpriteRenderer>();
+    private float orbitBarrageTimer;
+    private bool orbitBarrageCharging;
+    private Vector2 orbitBarrageCenter;
+    private int orbitBarrageDirectionSign = 1;
+    private GameObject orbitBarrageTelegraphRoot;
+    private readonly List<SpriteRenderer> orbitBarrageTickRenderers = new List<SpriteRenderer>();
     private PacingPhase pacingPhase = PacingPhase.BuildUp;
     private int pacingMinorStatesRemaining;
     private int pacingMajorStatesRemaining;
@@ -290,6 +330,8 @@ public class EnemyController : MonoBehaviour
     private float breachLureTimer;
     private Vector2 breachLureTarget;
     private bool breachAbsorbed;
+    private bool levelTwoAwakened;
+    private float levelTwoAwakeningTimer;
     private Vector3 baseScale = Vector3.one;
     private Color baseColor = Color.white;
 
@@ -440,6 +482,8 @@ public class EnemyController : MonoBehaviour
             ownRenderer.color = baseColor;
         }
 
+        levelTwoAwakened = false;
+        levelTwoAwakeningTimer = 0f;
         transform.localScale = baseScale;
     }
 
@@ -819,7 +863,9 @@ public class EnemyController : MonoBehaviour
             state == AnomalyState.Destroyer ||
             state == AnomalyState.SpeedSurge ||
             state == AnomalyState.PhaseBlink ||
-            state == AnomalyState.PincerBarrage)
+            state == AnomalyState.PincerBarrage ||
+            state == AnomalyState.SignalJam ||
+            state == AnomalyState.OrbitBarrage)
         {
             float minMajor = Mathf.Max(0.6f, Mathf.Min(majorStateDurationRange.x, majorStateDurationRange.y));
             float maxMajor = Mathf.Max(minMajor, Mathf.Max(majorStateDurationRange.x, majorStateDurationRange.y));
@@ -999,6 +1045,19 @@ public class EnemyController : MonoBehaviour
             pincerBarrageCharging = false;
             HidePincerTelegraph();
         }
+        else if (currentState == AnomalyState.SignalJam)
+        {
+            signalJamTimer = Mathf.Max(0.25f, signalJamInterval * 0.52f);
+            signalJamCharging = false;
+            HideSignalJamTelegraph();
+        }
+        else if (currentState == AnomalyState.OrbitBarrage)
+        {
+            orbitBarrageTimer = Mathf.Max(0.25f, orbitBarrageInterval * 0.5f);
+            orbitBarrageCharging = false;
+            orbitBarrageDirectionSign = Random.value < 0.5f ? -1 : 1;
+            HideOrbitBarrageTelegraph();
+        }
 
         if (currentPattern == BehaviorPattern.ErraticBurst)
         {
@@ -1024,6 +1083,16 @@ public class EnemyController : MonoBehaviour
         {
             pincerBarrageCharging = false;
             HidePincerTelegraph();
+        }
+        if (previous == AnomalyState.SignalJam && next != AnomalyState.SignalJam)
+        {
+            signalJamCharging = false;
+            HideSignalJamTelegraph();
+        }
+        if (previous == AnomalyState.OrbitBarrage && next != AnomalyState.OrbitBarrage)
+        {
+            orbitBarrageCharging = false;
+            HideOrbitBarrageTelegraph();
         }
 
         if (previous != AnomalyState.Split && next == AnomalyState.Split)
@@ -1057,6 +1126,8 @@ public class EnemyController : MonoBehaviour
             fullOptions.Add(new StateWeight(AnomalyState.Destroyer, destroyerWeight));
             fullOptions.Add(new StateWeight(AnomalyState.PhaseBlink, phaseBlinkWeight));
             fullOptions.Add(new StateWeight(AnomalyState.PincerBarrage, pincerBarrageWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.SignalJam, signalJamWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.OrbitBarrage, orbitBarrageWeight));
         }
 
         ApplyProgressionFilter(fullOptions);
@@ -1131,7 +1202,9 @@ public class EnemyController : MonoBehaviour
                state == AnomalyState.Destroyer ||
                state == AnomalyState.SpeedSurge ||
                state == AnomalyState.PhaseBlink ||
-               state == AnomalyState.PincerBarrage;
+               state == AnomalyState.PincerBarrage ||
+               state == AnomalyState.SignalJam ||
+               state == AnomalyState.OrbitBarrage;
     }
 
     private static bool IsCalmMinorState(AnomalyState state)
@@ -1183,13 +1256,17 @@ public class EnemyController : MonoBehaviour
                state == AnomalyState.WeaveHunter ||
                state == AnomalyState.Destroyer ||
                state == AnomalyState.PhaseBlink ||
-               state == AnomalyState.PincerBarrage;
+               state == AnomalyState.PincerBarrage ||
+               state == AnomalyState.SignalJam ||
+               state == AnomalyState.OrbitBarrage;
     }
 
     private static bool IsLevelTwoState(AnomalyState state)
     {
         return state == AnomalyState.PhaseBlink ||
-               state == AnomalyState.PincerBarrage;
+               state == AnomalyState.PincerBarrage ||
+               state == AnomalyState.SignalJam ||
+               state == AnomalyState.OrbitBarrage;
     }
 
     public bool IsMapEventSuppressed()
@@ -1373,6 +1450,10 @@ public class EnemyController : MonoBehaviour
                 return new Color(0.58f, 1f, 0.92f, 1f);
             case AnomalyState.PincerBarrage:
                 return new Color(0.92f, 0.62f, 1f, 1f);
+            case AnomalyState.SignalJam:
+                return new Color(1f, 0.78f, 0.42f, 1f);
+            case AnomalyState.OrbitBarrage:
+                return new Color(0.58f, 0.82f, 1f, 1f);
             case AnomalyState.ErraticBurst:
                 return new Color(0.74f, 0.76f, 1f, 1f);
             case AnomalyState.CutoffFlank:
@@ -1391,10 +1472,18 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
+        if (levelTwoAwakeningTimer > 0f)
+        {
+            levelTwoAwakeningTimer -= Time.deltaTime;
+        }
+
+        Color visualBaseColor = GetCurrentVisualBaseColor();
+        Vector3 visualBaseScale = GetCurrentVisualBaseScale();
+
         if (!statePulseFxEnabled || statePulseTimer <= 0f)
         {
-            ownRenderer.color = baseColor;
-            transform.localScale = baseScale;
+            ownRenderer.color = visualBaseColor;
+            transform.localScale = visualBaseScale;
             return;
         }
 
@@ -1404,10 +1493,76 @@ public class EnemyController : MonoBehaviour
         float lighten = Mathf.Clamp01(statePulseLighten) * pulse;
         float scale = Mathf.Lerp(1f, Mathf.Max(1f, statePulseScaleBoost), pulse);
 
-        Color boosted = Color.Lerp(baseColor, Color.white, lighten);
-        boosted.a = baseColor.a;
+        Color boosted = Color.Lerp(visualBaseColor, Color.white, lighten);
+        boosted.a = visualBaseColor.a;
         ownRenderer.color = boosted;
-        transform.localScale = baseScale * scale;
+        transform.localScale = visualBaseScale * scale;
+    }
+
+    private Color GetCurrentVisualBaseColor()
+    {
+        if (!levelTwoAwakened && levelTwoAwakeningTimer <= 0f)
+        {
+            return baseColor;
+        }
+
+        float wake = Mathf.Clamp01(levelTwoAwakeningTimer / Mathf.Max(0.05f, levelTwoAwakeningDuration));
+        float pulse = levelTwoAwakeningTimer > 0f ? Mathf.Sin((1f - wake) * Mathf.PI * 6f) * 0.5f + 0.5f : 0f;
+        float tint = Mathf.Clamp01(levelTwoPassiveTint + wake * 0.26f + pulse * 0.18f);
+        Color awakened = Color.Lerp(baseColor, levelTwoAwakenedColor, tint);
+        awakened.a = baseColor.a;
+        return awakened;
+    }
+
+    private Vector3 GetCurrentVisualBaseScale()
+    {
+        if (levelTwoAwakeningTimer <= 0f)
+        {
+            return baseScale;
+        }
+
+        float normalized = 1f - Mathf.Clamp01(levelTwoAwakeningTimer / Mathf.Max(0.05f, levelTwoAwakeningDuration));
+        float pulse = Mathf.Sin(normalized * Mathf.PI) * Mathf.Max(0f, levelTwoAwakeningScaleBoost - 1f);
+        return baseScale * (1f + pulse);
+    }
+
+    public void TriggerLevelTwoAwakeningFx()
+    {
+        levelTwoAwakened = true;
+        levelTwoAwakeningTimer = Mathf.Max(levelTwoAwakeningTimer, Mathf.Max(0.1f, levelTwoAwakeningDuration));
+        TriggerStatePulse();
+        SpawnLevelTwoAwakeningBurst();
+    }
+
+    private void SpawnLevelTwoAwakeningBurst()
+    {
+        Vector3 pos = transform.position;
+        Color burstColor = levelTwoAwakeningBurstColor;
+
+        GameObject ring = new GameObject("LevelTwoAwakeningRing");
+        ring.transform.position = pos;
+        SpriteRenderer ringRenderer = ring.AddComponent<SpriteRenderer>();
+        ringRenderer.sprite = CircleSpriteProvider.Get();
+        ringRenderer.sortingOrder = 18;
+        ringRenderer.color = burstColor;
+        ring.transform.localScale = Vector3.one * 0.22f;
+        ring.AddComponent<AnomalyStateBurstFx>().Configure(ringRenderer, 2.35f, 0.45f, burstColor);
+        Destroy(ring, 0.62f);
+
+        for (int i = 0; i < 16; i++)
+        {
+            float angle = ((Mathf.PI * 2f) * i) / 16f + Random.Range(-0.08f, 0.08f);
+            Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            GameObject ray = new GameObject($"LevelTwoAwakeningRay_{i}");
+            ray.transform.position = pos;
+            SpriteRenderer sr = ray.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.sortingOrder = 18;
+            sr.color = i % 2 == 0 ? burstColor : levelTwoAwakenedColor;
+            ray.transform.localScale = new Vector3(0.28f, 0.07f, 1f);
+            ray.AddComponent<AnomalyStateRayFx>().Configure(sr, dir, 2.8f, 0.38f);
+            Destroy(ray, 0.55f);
+        }
     }
 
     private void UpdateExternalSpeedEffects()
@@ -1477,6 +1632,10 @@ public class EnemyController : MonoBehaviour
                 return BehaviorPattern.PredictiveIntercept;
             case AnomalyState.PincerBarrage:
                 return BehaviorPattern.CutoffFlank;
+            case AnomalyState.SignalJam:
+                return BehaviorPattern.PredictiveIntercept;
+            case AnomalyState.OrbitBarrage:
+                return BehaviorPattern.ErraticBurst;
             default:
                 return BehaviorPattern.DirectChase;
         }
@@ -1512,6 +1671,8 @@ public class EnemyController : MonoBehaviour
         UpdateWeaveHunterAbility();
         UpdatePhaseBlinkAbility();
         UpdatePincerBarrageAbility();
+        UpdateSignalJamAbility();
+        UpdateOrbitBarrageAbility();
 
         if (currentState != AnomalyState.ExpansionShoot)
         {
@@ -1633,6 +1794,83 @@ public class EnemyController : MonoBehaviour
         pincerBarrageCharging = false;
         HidePincerTelegraph();
         FirePincerBarrage();
+    }
+
+    private void UpdateSignalJamAbility()
+    {
+        if (currentState != AnomalyState.SignalJam)
+        {
+            signalJamCharging = false;
+            HideSignalJamTelegraph();
+            return;
+        }
+
+        signalJamTimer += Time.deltaTime;
+        float interval = Mathf.Max(0.45f, signalJamInterval);
+        float lead = Mathf.Clamp(signalJamTelegraphSeconds, 0.1f, interval * 0.85f);
+        float remaining = interval - signalJamTimer;
+
+        if (!signalJamCharging && remaining <= lead)
+        {
+            signalJamCharging = true;
+            signalJamCenter = PickSignalJamCenter();
+            GlitchAudioManager.PlayEnemySignalJamCharge(transform.position);
+        }
+
+        if (signalJamCharging && remaining > 0f)
+        {
+            float progress = 1f - Mathf.Clamp01(remaining / lead);
+            UpdateSignalJamTelegraph(progress);
+        }
+
+        if (signalJamTimer < interval)
+        {
+            return;
+        }
+
+        signalJamTimer = 0f;
+        signalJamCharging = false;
+        HideSignalJamTelegraph();
+        FireSignalJam();
+    }
+
+    private void UpdateOrbitBarrageAbility()
+    {
+        if (currentState != AnomalyState.OrbitBarrage)
+        {
+            orbitBarrageCharging = false;
+            HideOrbitBarrageTelegraph();
+            return;
+        }
+
+        orbitBarrageTimer += Time.deltaTime;
+        float interval = Mathf.Max(0.5f, orbitBarrageInterval);
+        float lead = Mathf.Clamp(orbitBarrageTelegraphSeconds, 0.1f, interval * 0.85f);
+        float remaining = interval - orbitBarrageTimer;
+
+        if (!orbitBarrageCharging && remaining <= lead)
+        {
+            orbitBarrageCharging = true;
+            orbitBarrageCenter = PickOrbitBarrageCenter();
+            orbitBarrageDirectionSign = Random.value < 0.5f ? -1 : 1;
+            GlitchAudioManager.PlayEnemyOrbitBarrageCharge(transform.position);
+        }
+
+        if (orbitBarrageCharging && remaining > 0f)
+        {
+            float progress = 1f - Mathf.Clamp01(remaining / lead);
+            UpdateOrbitBarrageTelegraph(progress);
+        }
+
+        if (orbitBarrageTimer < interval)
+        {
+            return;
+        }
+
+        orbitBarrageTimer = 0f;
+        orbitBarrageCharging = false;
+        HideOrbitBarrageTelegraph();
+        FireOrbitBarrage();
     }
 
     private void UpdateDestroyerAbility()
@@ -2452,6 +2690,16 @@ public class EnemyController : MonoBehaviour
         DestroyTelegraphRootImmediate(pincerTelegraphRoot);
         pincerTelegraphRoot = null;
         pincerTelegraphRenderers.Clear();
+
+        DestroyTelegraphRootImmediate(signalJamTelegraphRoot);
+        signalJamTelegraphRoot = null;
+        signalJamRingRenderer = null;
+        signalJamCoreRenderer = null;
+        signalJamTickRenderers.Clear();
+
+        DestroyTelegraphRootImmediate(orbitBarrageTelegraphRoot);
+        orbitBarrageTelegraphRoot = null;
+        orbitBarrageTickRenderers.Clear();
     }
 
     private static void DestroyTelegraphRootImmediate(GameObject root)
@@ -2489,6 +2737,253 @@ public class EnemyController : MonoBehaviour
         }
 
         GlitchAudioManager.PlayEnemyPincerFire(transform.position);
+    }
+
+    private Vector2 PickSignalJamCenter()
+    {
+        Vector2 playerPos = player != null ? player.GetPosition() : (Vector2)transform.position;
+        Vector2 playerVelocity = player != null ? player.CurrentVelocity : Vector2.zero;
+        Vector2 predicted = playerPos + playerVelocity * 0.18f;
+        return ClampToArena(predicted);
+    }
+
+    private void UpdateSignalJamTelegraph(float progress)
+    {
+        EnsureSignalJamTelegraph();
+        if (signalJamTelegraphRoot == null)
+        {
+            return;
+        }
+
+        if (!signalJamTelegraphRoot.activeSelf)
+        {
+            signalJamTelegraphRoot.SetActive(true);
+        }
+
+        float radius = Mathf.Max(0.35f, signalJamRadius);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 18f);
+        signalJamTelegraphRoot.transform.position = new Vector3(signalJamCenter.x, signalJamCenter.y, 0f);
+
+        if (signalJamRingRenderer != null)
+        {
+            float diameter = Mathf.Lerp(radius * 2.55f, radius * 2f, progress);
+            signalJamRingRenderer.size = Vector2.one * diameter;
+            signalJamRingRenderer.color = new Color(signalJamColor.r, signalJamColor.g, signalJamColor.b, Mathf.Lerp(0.12f, 0.62f, progress) * (0.75f + pulse * 0.25f));
+        }
+
+        if (signalJamCoreRenderer != null)
+        {
+            signalJamCoreRenderer.transform.localRotation = Quaternion.Euler(0f, 0f, -Time.time * 180f);
+            signalJamCoreRenderer.size = Vector2.one * Mathf.Lerp(0.22f, 0.44f, pulse);
+            signalJamCoreRenderer.color = new Color(1f, 0.92f, 0.72f, Mathf.Lerp(0.18f, 0.72f, progress));
+        }
+
+        for (int i = 0; i < signalJamTickRenderers.Count; i++)
+        {
+            SpriteRenderer tick = signalJamTickRenderers[i];
+            if (tick == null)
+            {
+                continue;
+            }
+
+            float angle = ((Mathf.PI * 2f) * i) / signalJamTickRenderers.Count + Time.time * 0.85f;
+            Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            tick.transform.localPosition = dir * radius * Mathf.Lerp(0.75f, 1f, progress);
+            tick.transform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg + 90f);
+            tick.size = new Vector2(0.08f, Mathf.Lerp(0.22f, 0.48f, progress));
+            tick.color = new Color(signalJamColor.r, signalJamColor.g, signalJamColor.b, Mathf.Lerp(0.08f, 0.56f, progress));
+        }
+    }
+
+    private void EnsureSignalJamTelegraph()
+    {
+        if (signalJamTelegraphRoot == null)
+        {
+            signalJamTelegraphRoot = new GameObject("SignalJamTelegraph");
+            signalJamTelegraphRoot.SetActive(false);
+
+            GameObject ring = new GameObject("SignalJamRing");
+            ring.transform.SetParent(signalJamTelegraphRoot.transform, false);
+            signalJamRingRenderer = ring.AddComponent<SpriteRenderer>();
+            signalJamRingRenderer.sprite = CircleSpriteProvider.Get();
+            signalJamRingRenderer.drawMode = SpriteDrawMode.Sliced;
+            signalJamRingRenderer.sortingOrder = 15;
+
+            GameObject core = new GameObject("SignalJamCore");
+            core.transform.SetParent(signalJamTelegraphRoot.transform, false);
+            signalJamCoreRenderer = core.AddComponent<SpriteRenderer>();
+            signalJamCoreRenderer.sprite = SquareSpriteProvider.Get();
+            signalJamCoreRenderer.drawMode = SpriteDrawMode.Sliced;
+            signalJamCoreRenderer.sortingOrder = 16;
+        }
+
+        while (signalJamTickRenderers.Count < 14)
+        {
+            GameObject tickGo = new GameObject($"SignalJamTick_{signalJamTickRenderers.Count}");
+            tickGo.transform.SetParent(signalJamTelegraphRoot.transform, false);
+            SpriteRenderer tick = tickGo.AddComponent<SpriteRenderer>();
+            tick.sprite = SquareSpriteProvider.Get();
+            tick.drawMode = SpriteDrawMode.Sliced;
+            tick.sortingOrder = 16;
+            signalJamTickRenderers.Add(tick);
+        }
+    }
+
+    private void HideSignalJamTelegraph()
+    {
+        if (signalJamTelegraphRoot != null && signalJamTelegraphRoot.activeSelf)
+        {
+            signalJamTelegraphRoot.SetActive(false);
+        }
+    }
+
+    private void FireSignalJam()
+    {
+        float radius = Mathf.Max(0.35f, signalJamRadius);
+        Vector2 playerPos = player != null ? player.GetPosition() : signalJamCenter;
+        if (player != null && Vector2.Distance(playerPos, signalJamCenter) <= radius)
+        {
+            player.ApplyMovementSlow(signalJamSlowMultiplier, signalJamSlowDuration);
+        }
+
+        SpawnSignalJamBurst(signalJamCenter, radius);
+        GlitchAudioManager.PlayEnemySignalJamFire(new Vector3(signalJamCenter.x, signalJamCenter.y, transform.position.z));
+    }
+
+    private void SpawnSignalJamBurst(Vector2 center, float radius)
+    {
+        SpawnLevelTwoRadialBurst(center, radius, signalJamColor, "SignalJam");
+    }
+
+    private void SpawnLevelTwoRadialBurst(Vector2 center, float radius, Color color, string prefix)
+    {
+        GameObject ring = new GameObject($"{prefix}Burst");
+        ring.transform.position = new Vector3(center.x, center.y, 0f);
+        SpriteRenderer sr = ring.AddComponent<SpriteRenderer>();
+        sr.sprite = CircleSpriteProvider.Get();
+        sr.sortingOrder = 16;
+        sr.color = color;
+        ring.transform.localScale = Vector3.one * 0.2f;
+        ring.AddComponent<AnomalyStateBurstFx>().Configure(sr, radius * 1.35f, 0.28f, color);
+        Destroy(ring, 0.42f);
+
+        for (int i = 0; i < 12; i++)
+        {
+            float angle = ((Mathf.PI * 2f) * i) / 12f + Random.Range(-0.12f, 0.12f);
+            Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            GameObject ray = new GameObject($"{prefix}Shard_{i}");
+            ray.transform.position = new Vector3(center.x, center.y, 0f);
+            SpriteRenderer rayRenderer = ray.AddComponent<SpriteRenderer>();
+            rayRenderer.sprite = SquareSpriteProvider.Get();
+            rayRenderer.sortingOrder = 16;
+            rayRenderer.color = color;
+            ray.transform.localScale = new Vector3(0.18f, 0.06f, 1f);
+            ray.AddComponent<AnomalyStateRayFx>().Configure(rayRenderer, dir, radius, 0.24f);
+            Destroy(ray, 0.36f);
+        }
+    }
+
+    private Vector2 PickOrbitBarrageCenter()
+    {
+        Vector2 playerPos = player != null ? player.GetPosition() : (Vector2)transform.position;
+        Vector2 playerVelocity = player != null ? player.CurrentVelocity : Vector2.zero;
+        return ClampToArena(playerPos + playerVelocity * 0.12f);
+    }
+
+    private void UpdateOrbitBarrageTelegraph(float progress)
+    {
+        EnsureOrbitBarrageTelegraph();
+        if (orbitBarrageTelegraphRoot == null)
+        {
+            return;
+        }
+
+        if (!orbitBarrageTelegraphRoot.activeSelf)
+        {
+            orbitBarrageTelegraphRoot.SetActive(true);
+        }
+
+        float radius = Mathf.Max(0.65f, orbitBarrageSpawnRadius);
+        float spin = Time.time * 1.15f * orbitBarrageDirectionSign;
+        int count = Mathf.Max(4, orbitBarrageProjectileCount);
+        orbitBarrageTelegraphRoot.transform.position = new Vector3(orbitBarrageCenter.x, orbitBarrageCenter.y, 0f);
+
+        for (int i = 0; i < orbitBarrageTickRenderers.Count; i++)
+        {
+            SpriteRenderer tick = orbitBarrageTickRenderers[i];
+            if (tick == null)
+            {
+                continue;
+            }
+
+            float angle = ((Mathf.PI * 2f) * i) / count + spin;
+            Vector2 radial = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            Vector2 tangential = new Vector2(-radial.y, radial.x) * orbitBarrageDirectionSign;
+            float lanePulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 15f + i * 0.8f);
+            tick.transform.localPosition = radial * radius * Mathf.Lerp(0.82f, 1f, progress);
+            tick.transform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(tangential.y, tangential.x) * Mathf.Rad2Deg);
+            tick.size = new Vector2(Mathf.Lerp(0.24f, 0.42f, progress), 0.08f + lanePulse * 0.05f);
+            tick.color = new Color(orbitBarrageProjectileColor.r, orbitBarrageProjectileColor.g, orbitBarrageProjectileColor.b, Mathf.Lerp(0.12f, 0.72f, progress));
+        }
+    }
+
+    private void EnsureOrbitBarrageTelegraph()
+    {
+        int desired = Mathf.Max(4, orbitBarrageProjectileCount);
+        if (orbitBarrageTelegraphRoot == null)
+        {
+            orbitBarrageTelegraphRoot = new GameObject("OrbitBarrageTelegraph");
+            orbitBarrageTelegraphRoot.SetActive(false);
+        }
+
+        while (orbitBarrageTickRenderers.Count < desired)
+        {
+            GameObject go = new GameObject($"OrbitBarrageWarn_{orbitBarrageTickRenderers.Count}");
+            go.transform.SetParent(orbitBarrageTelegraphRoot.transform, false);
+            SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.sortingOrder = 15;
+            orbitBarrageTickRenderers.Add(sr);
+        }
+
+        while (orbitBarrageTickRenderers.Count > desired)
+        {
+            int last = orbitBarrageTickRenderers.Count - 1;
+            SpriteRenderer sr = orbitBarrageTickRenderers[last];
+            orbitBarrageTickRenderers.RemoveAt(last);
+            if (sr != null)
+            {
+                Destroy(sr.gameObject);
+            }
+        }
+    }
+
+    private void HideOrbitBarrageTelegraph()
+    {
+        if (orbitBarrageTelegraphRoot != null && orbitBarrageTelegraphRoot.activeSelf)
+        {
+            orbitBarrageTelegraphRoot.SetActive(false);
+        }
+    }
+
+    private void FireOrbitBarrage()
+    {
+        int count = Mathf.Max(4, orbitBarrageProjectileCount);
+        float radius = Mathf.Max(0.65f, orbitBarrageSpawnRadius);
+        float offset = Random.Range(0f, 360f);
+        for (int i = 0; i < count; i++)
+        {
+            float angleDeg = offset + (360f / count) * i;
+            Vector2 radial = new Vector2(Mathf.Cos(angleDeg * Mathf.Deg2Rad), Mathf.Sin(angleDeg * Mathf.Deg2Rad));
+            Vector2 spawn = ClampToArena(orbitBarrageCenter + radial * radius);
+            Vector2 inward = (orbitBarrageCenter - spawn).sqrMagnitude > 0.001f ? (orbitBarrageCenter - spawn).normalized : -radial;
+            Vector2 direction = Rotate(inward, 58f * orbitBarrageDirectionSign);
+            CreateProjectile(spawn, direction, orbitBarrageProjectileColor, expansionShootProjectileSize * 0.86f, orbitBarrageProjectileSpeedMultiplier);
+        }
+
+        SpawnLevelTwoRadialBurst(orbitBarrageCenter, radius * 0.55f, orbitBarrageProjectileColor, "OrbitBarrage");
+        GlitchAudioManager.PlayEnemyOrbitBarrageFire(new Vector3(orbitBarrageCenter.x, orbitBarrageCenter.y, transform.position.z));
     }
 
     private void UpdateExpansionShootTelegraphVisual(float chargeProgress)

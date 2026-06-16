@@ -162,6 +162,15 @@ public class GlitchAudioManager : MonoBehaviour
     public static void PlayEnemyPhaseBlinkArrive(Vector3 position) => Play("state_phase_blink_arrive", 0.68f, 1f, position);
     public static void PlayEnemyPincerCharge(Vector3 position) => Play("state_pincer_charge", 0.48f, 1f, position);
     public static void PlayEnemyPincerFire(Vector3 position) => Play("state_pincer_fire", 0.64f, 1f, position);
+    public static void PlayEnemySignalJamCharge(Vector3 position) => Play("state_signal_jam_charge", 0.50f, 1f, position);
+    public static void PlayEnemySignalJamFire(Vector3 position) => Play("state_signal_jam_fire", 0.68f, 1f, position);
+    public static void PlayEnemyOrbitBarrageCharge(Vector3 position) => Play("state_orbit_charge", 0.48f, 1f, position);
+    public static void PlayEnemyOrbitBarrageFire(Vector3 position) => Play("state_orbit_fire", 0.66f, 1f, position);
+    public static void PlayBossLevelTwoAwaken(Vector3 position)
+    {
+        BoostMusic(0.62f, 2.2f);
+        Play("boss_level_two_awaken", 0.92f, 1f, position);
+    }
 
     public static void PlayEnemyState(EnemyController.AnomalyState state, Vector3 position)
     {
@@ -190,6 +199,12 @@ public class GlitchAudioManager : MonoBehaviour
             case EnemyController.AnomalyState.PincerBarrage:
                 Play("state_pincer", 0.70f, 1f, position);
                 break;
+            case EnemyController.AnomalyState.SignalJam:
+                Play("state_signal_jam", 0.70f, 1f, position);
+                break;
+            case EnemyController.AnomalyState.OrbitBarrage:
+                Play("state_orbit", 0.70f, 1f, position);
+                break;
             default:
                 Play("state_minor", 0.42f, 1f, position);
                 break;
@@ -210,7 +225,9 @@ public class GlitchAudioManager : MonoBehaviour
                state == EnemyController.AnomalyState.SpeedSurge ||
                state == EnemyController.AnomalyState.Destroyer ||
                state == EnemyController.AnomalyState.PhaseBlink ||
-               state == EnemyController.AnomalyState.PincerBarrage;
+               state == EnemyController.AnomalyState.PincerBarrage ||
+               state == EnemyController.AnomalyState.SignalJam ||
+               state == EnemyController.AnomalyState.OrbitBarrage;
     }
 
     private static void Play(string clipName, float volume, float pitch, Vector3 position)
@@ -560,6 +577,20 @@ public class GlitchAudioManager : MonoBehaviour
                 return CreateClip(clipName, 0.34f, StatePincerCharge);
             case "state_pincer_fire":
                 return CreateClip(clipName, 0.42f, StatePincerFire);
+            case "state_signal_jam":
+                return CreateClip(clipName, 0.54f, StateSignalJam);
+            case "state_signal_jam_charge":
+                return CreateClip(clipName, 0.36f, StateSignalJamCharge);
+            case "state_signal_jam_fire":
+                return CreateClip(clipName, 0.46f, StateSignalJamFire);
+            case "state_orbit":
+                return CreateClip(clipName, 0.54f, StateOrbit);
+            case "state_orbit_charge":
+                return CreateClip(clipName, 0.36f, StateOrbitCharge);
+            case "state_orbit_fire":
+                return CreateClip(clipName, 0.46f, StateOrbitFire);
+            case "boss_level_two_awaken":
+                return CreateClip(clipName, 1.18f, BossLevelTwoAwaken);
             case "state_minor":
                 return CreateClip(clipName, 0.25f, StateMinor);
             case "breach_warning":
@@ -999,6 +1030,75 @@ public class GlitchAudioManager : MonoBehaviour
         float hit = Sine(72f, t) * 0.36f * Mathf.Exp(-t * 9f);
         float rails = Square(520f, t) * 0.16f * Gate(t, 18f, 0.32f);
         return SoftClip(hit + (rails + Noise(i, 68.5f) * 0.10f) * e);
+    }
+
+    private static float StateSignalJam(float t, int i)
+    {
+        float d = 0.54f;
+        float e = Envelope(t, d, 0.01f, 0.16f);
+        float carrier = Square(188f + Mathf.Sin(t * 31f) * 34f, t) * 0.20f;
+        float hash = Crush(Noise(i, 69.6f), 4) * 0.16f * Gate(t, 22f, 0.36f);
+        float tone = Sine(420f, t) * 0.12f * Gate(t + 0.02f, 11f, 0.42f);
+        return SoftClip((carrier + hash + tone) * e);
+    }
+
+    private static float StateSignalJamCharge(float t, int i)
+    {
+        float d = 0.36f;
+        float n = Mathf.Clamp01(t / d);
+        float e = Envelope(t, d, 0.004f, 0.08f);
+        float rise = Square(Mathf.Lerp(150f, 640f, n), t) * 0.18f;
+        float ticks = Noise(i, 70.2f) * 0.10f * Gate(t, Mathf.Lerp(8f, 28f, n), 0.28f);
+        return SoftClip((rise + ticks) * e);
+    }
+
+    private static float StateSignalJamFire(float t, int i)
+    {
+        float d = 0.46f;
+        float hit = Mathf.Exp(-t * 8f);
+        float low = Sine(64f, t) * 0.44f * hit;
+        float broken = Crush(Square(260f + Mathf.Sin(t * 60f) * 90f, t), 5) * 0.16f * Envelope(t, d, 0.002f, 0.14f);
+        return SoftClip(low + broken + Noise(i, 71.5f) * 0.09f * hit);
+    }
+
+    private static float StateOrbit(float t, int i)
+    {
+        float d = 0.54f;
+        float e = Envelope(t, d, 0.014f, 0.16f);
+        float spiral = Sine(260f + Mathf.Sin(t * 18f) * 120f, t) * 0.18f;
+        float upper = Sine(720f + Mathf.Sin(t * 32f) * 180f, t) * 0.11f * Gate(t, 13f, 0.48f);
+        return SoftClip((spiral + upper + Noise(i, 72.1f) * 0.045f) * e);
+    }
+
+    private static float StateOrbitCharge(float t, int i)
+    {
+        float d = 0.36f;
+        float n = Mathf.Clamp01(t / d);
+        float e = Envelope(t, d, 0.006f, 0.08f);
+        float chirp = Sine(Mathf.Lerp(340f, 920f, n), t) * 0.16f;
+        float dotted = Sine(1160f, t) * 0.10f * Gate(t, 18f, 0.30f);
+        return SoftClip((chirp + dotted + Noise(i, 73.2f) * 0.035f) * e);
+    }
+
+    private static float StateOrbitFire(float t, int i)
+    {
+        float d = 0.46f;
+        float e = Envelope(t, d, 0.002f, 0.14f);
+        float hit = Sine(82f, t) * 0.32f * Mathf.Exp(-t * 8f);
+        float swarm = Sine(520f + Mathf.Sin(t * 70f) * 220f, t) * 0.16f * Gate(t, 24f, 0.38f);
+        return SoftClip(hit + (swarm + Noise(i, 74.9f) * 0.07f) * e);
+    }
+
+    private static float BossLevelTwoAwaken(float t, int i)
+    {
+        float d = 1.18f;
+        float n = Mathf.Clamp01(t / d);
+        float e = Envelope(t, d, 0.02f, 0.22f);
+        float sub = Sine(Mathf.Lerp(48f, 86f, n), t) * 0.46f;
+        float alarm = Sine(Mathf.Lerp(220f, 520f, n), t) * 0.20f * Gate(t, 5.5f, 0.48f);
+        float shimmer = Crush(Sine(980f + Mathf.Sin(t * 44f) * 260f, t), 5) * 0.14f * Gate(t, 18f, 0.34f);
+        float staticRise = Noise(i, 75.7f) * Mathf.Lerp(0.04f, 0.16f, n) * Gate(t, 28f, 0.26f);
+        return SoftClip((sub + alarm + shimmer + staticRise) * e);
     }
 
     private static float BreachWarning(float t, int i)

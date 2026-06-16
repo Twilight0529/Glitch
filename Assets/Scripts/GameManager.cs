@@ -179,6 +179,12 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Color statePulseOverlayColorB = new Color(0.30f, 0.95f, 1f, 1f);
     [SerializeField] private float bossStateBannerDuration = 1.25f;
 
+    [Header("Boss Level 2 Intro")]
+    [SerializeField] private float bossLevelTwoIntroDuration = 2.45f;
+    [SerializeField, Range(0f, 1f)] private float bossLevelTwoIntroBackdropOpacity = 0.54f;
+    [SerializeField] private Color bossLevelTwoIntroPrimary = new Color(0.58f, 1f, 0.92f, 1f);
+    [SerializeField] private Color bossLevelTwoIntroSecondary = new Color(1f, 0.42f, 0.92f, 1f);
+
     [Header("HUD Atmosphere")]
     [SerializeField] private bool enableAmbientHudFrame = true;
     [SerializeField, Range(0.04f, 0.35f)] private float sideHudOpacity = 0.085f;
@@ -272,6 +278,8 @@ public class GameManager : MonoBehaviour
     private float statePulseOverlayTimer;
     private float bossStateBannerTimer;
     private string bossStateBannerRaw;
+    private bool bossLevelTwoIntroPlayed;
+    private float bossLevelTwoIntroTimer;
     private int bonusScore;
     private float hudScale = 1f;
     private float cachedHudScaleForStyles = -1f;
@@ -420,6 +428,7 @@ public class GameManager : MonoBehaviour
         if (enemyController != null)
         {
             TrackBossTempoPulse();
+            TrackBossLevelTwoIntro();
         }
 
         if (statePulseOverlayTimer > 0f)
@@ -429,6 +438,10 @@ public class GameManager : MonoBehaviour
         if (bossStateBannerTimer > 0f)
         {
             bossStateBannerTimer -= Time.deltaTime;
+        }
+        if (bossLevelTwoIntroTimer > 0f)
+        {
+            bossLevelTwoIntroTimer -= Time.deltaTime;
         }
         if (achievementToastTimer > 0f)
         {
@@ -1234,6 +1247,7 @@ public class GameManager : MonoBehaviour
                 DrawRuntimeHud();
                 DrawBossStateHud();
                 DrawStatePulseOverlay();
+                DrawBossLevelTwoIntroOverlay();
                 DrawBossStateBanner();
                 DrawChaosWarningOverlay();
             }
@@ -1247,6 +1261,7 @@ public class GameManager : MonoBehaviour
             DrawRuntimeHud();
             DrawBossStateHud();
             DrawStatePulseOverlay();
+            DrawBossLevelTwoIntroOverlay();
             DrawBossStateBanner();
             DrawChaosWarningOverlay();
             DrawUpgradeSelectionOverlay();
@@ -1274,6 +1289,8 @@ public class GameManager : MonoBehaviour
         bossStateBannerTimer = 0f;
         bossStateBannerRaw = null;
         lastBossStateRaw = null;
+        bossLevelTwoIntroPlayed = false;
+        bossLevelTwoIntroTimer = 0f;
         scorePopups.Clear();
         currentUpgradeChoices.Clear();
         displayedScore = 0f;
@@ -3445,6 +3462,20 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    private void TrackBossLevelTwoIntro()
+    {
+        if (bossLevelTwoIntroPlayed || !AreBossLevelTwoStatesUnlocked || enemyController == null)
+        {
+            return;
+        }
+
+        bossLevelTwoIntroPlayed = true;
+        bossLevelTwoIntroTimer = Mathf.Max(0.25f, bossLevelTwoIntroDuration);
+        statePulseOverlayTimer = Mathf.Max(statePulseOverlayTimer, Mathf.Max(0.08f, statePulseOverlayDuration) * 1.8f);
+        enemyController.TriggerLevelTwoAwakeningFx();
+        GlitchAudioManager.PlayBossLevelTwoAwaken(enemyController.transform.position);
+    }
+
     private void DrawStatePulseOverlay()
     {
         if (statePulseOverlayTimer <= 0f)
@@ -3469,6 +3500,71 @@ public class GameManager : MonoBehaviour
         float midWidth = Screen.width * Mathf.Lerp(0.2f, 0.65f, pulse);
         float midX = (Screen.width - midWidth) * 0.5f;
         DrawSolidRect(new Rect(midX, midY - 1f, midWidth, 2f), new Color(tintA.r, tintA.g, tintA.b, alpha * 0.8f));
+    }
+
+    private void DrawBossLevelTwoIntroOverlay()
+    {
+        if (bossLevelTwoIntroTimer <= 0f)
+        {
+            return;
+        }
+
+        EnsureBossStateStyles();
+
+        float duration = Mathf.Max(0.25f, bossLevelTwoIntroDuration);
+        float remaining = Mathf.Clamp01(bossLevelTwoIntroTimer / duration);
+        float age = 1f - remaining;
+        float intro = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(age * 4f));
+        float outro = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(remaining * 3f));
+        float alpha = Mathf.Clamp01(Mathf.Min(intro, outro));
+        if (alpha <= 0.01f)
+        {
+            return;
+        }
+
+        float s = hudScale;
+        Color primary = bossLevelTwoIntroPrimary;
+        Color secondary = bossLevelTwoIntroSecondary;
+        float scan = Mathf.Repeat(Time.unscaledTime * 420f, Screen.width + 180f) - 90f;
+        float jitter = Mathf.Sin(Time.unscaledTime * 42f) * 4f * s * alpha;
+
+        DrawSolidRect(new Rect(0f, 0f, Screen.width, Screen.height), new Color(0.004f, 0.010f, 0.018f, bossLevelTwoIntroBackdropOpacity * 0.34f * alpha));
+        DrawSolidRect(new Rect(0f, Screen.height * 0.20f, Screen.width, 5f * s), new Color(primary.r, primary.g, primary.b, 0.48f * alpha));
+        DrawSolidRect(new Rect(0f, Screen.height * 0.80f, Screen.width, 5f * s), new Color(secondary.r, secondary.g, secondary.b, 0.44f * alpha));
+        DrawSolidRect(new Rect(scan, 0f, 20f * s, Screen.height), new Color(primary.r, primary.g, primary.b, 0.18f * alpha));
+        DrawSolidRect(new Rect(scan + 28f * s, 0f, 6f * s, Screen.height), new Color(secondary.r, secondary.g, secondary.b, 0.24f * alpha));
+
+        for (int i = 0; i < 8; i++)
+        {
+            float y = Mathf.Lerp(Screen.height * 0.25f, Screen.height * 0.76f, i / 7f);
+            float w = Mathf.Lerp(80f, 220f, Mathf.PingPong(Time.unscaledTime * 1.7f + i * 0.19f, 1f)) * s;
+            float x = Mathf.Repeat(Time.unscaledTime * (80f + i * 12f) + i * 157f, Screen.width + w) - w;
+            Color c = i % 2 == 0 ? primary : secondary;
+            DrawSolidRect(new Rect(x, y, w, 2f * s), new Color(c.r, c.g, c.b, 0.18f * alpha));
+        }
+
+        float width = Mathf.Min(Screen.width * 0.78f, 820f * s);
+        float height = 138f * s;
+        Rect panel = new Rect((Screen.width - width) * 0.5f + jitter, (Screen.height - height) * 0.5f, width, height);
+        DrawSolidRect(panel, new Color(0.012f, 0.020f, 0.040f, 0.82f * alpha));
+        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 4f * s), new Color(primary.r, primary.g, primary.b, 0.88f * alpha));
+        DrawSolidRect(new Rect(panel.x, panel.yMax - (4f * s), panel.width, 4f * s), new Color(secondary.r, secondary.g, secondary.b, 0.78f * alpha));
+        DrawSolidRect(new Rect(panel.x + (18f * s), panel.y + (18f * s), panel.width - (36f * s), 2f * s), new Color(0.88f, 0.96f, 1f, 0.22f * alpha));
+        DrawSolidRect(new Rect(panel.x + (18f * s), panel.yMax - (20f * s), panel.width - (36f * s), 2f * s), new Color(0.88f, 0.96f, 1f, 0.18f * alpha));
+
+        Color oldGui = GUI.color;
+        Color oldLabel = bossStateBannerLabelStyle.normal.textColor;
+        Color oldValue = bossStateBannerValueStyle.normal.textColor;
+        GUI.color = new Color(1f, 1f, 1f, alpha);
+        bossStateBannerLabelStyle.normal.textColor = new Color(primary.r, primary.g, primary.b, 0.92f);
+        bossStateBannerValueStyle.normal.textColor = Color.Lerp(Color.white, secondary, 0.24f);
+        GUI.Label(new Rect(panel.x, panel.y + (22f * s), panel.width, 28f * s), "PROTOCOLO DE CONTENCION", bossStateBannerLabelStyle);
+        GUI.Label(new Rect(panel.x, panel.y + (50f * s), panel.width, 62f * s), "ANOMALIA NIVEL 2", bossStateBannerValueStyle);
+        bossStateBannerLabelStyle.normal.textColor = new Color(0.82f, 0.94f, 1f, 0.86f);
+        GUI.Label(new Rect(panel.x, panel.y + (104f * s), panel.width, 28f * s), "NUEVOS PATRONES ACTIVOS", bossStateBannerLabelStyle);
+        bossStateBannerLabelStyle.normal.textColor = oldLabel;
+        bossStateBannerValueStyle.normal.textColor = oldValue;
+        GUI.color = oldGui;
     }
 
     private void DrawBossStateHud()
@@ -4151,6 +4247,10 @@ public class GameManager : MonoBehaviour
                 return "Phase Blink";
             case "PincerBarrage":
                 return "Pincer Barrage";
+            case "SignalJam":
+                return "Signal Jam";
+            case "OrbitBarrage":
+                return "Orbit Barrage";
             default:
                 return raw;
         }
@@ -4167,6 +4267,8 @@ public class GameManager : MonoBehaviour
             case "Destroyer":
             case "PhaseBlink":
             case "PincerBarrage":
+            case "SignalJam":
+            case "OrbitBarrage":
                 return true;
             default:
                 return false;
@@ -4175,7 +4277,10 @@ public class GameManager : MonoBehaviour
 
     private static bool IsBossLevelTwoState(string raw)
     {
-        return raw == "PhaseBlink" || raw == "PincerBarrage";
+        return raw == "PhaseBlink" ||
+               raw == "PincerBarrage" ||
+               raw == "SignalJam" ||
+               raw == "OrbitBarrage";
     }
 
     private static Color GetBossStateColor(string raw)
@@ -4204,6 +4309,10 @@ public class GameManager : MonoBehaviour
                 return new Color(0.58f, 1f, 0.92f, 1f);
             case "PincerBarrage":
                 return new Color(0.92f, 0.62f, 1f, 1f);
+            case "SignalJam":
+                return new Color(1f, 0.78f, 0.42f, 1f);
+            case "OrbitBarrage":
+                return new Color(0.58f, 0.82f, 1f, 1f);
             default:
                 return new Color(1f, 0.76f, 0.82f, 1f);
         }
