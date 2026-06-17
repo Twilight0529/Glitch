@@ -299,25 +299,40 @@ public class EnemyController : MonoBehaviour
     private GameObject phaseBlinkTelegraphRoot;
     private SpriteRenderer phaseBlinkRingRenderer;
     private SpriteRenderer phaseBlinkCoreRenderer;
+    private SpriteRenderer phaseBlinkOriginRenderer;
+    private SpriteRenderer phaseBlinkPathRenderer;
+    private SpriteRenderer phaseBlinkCrossHorizontalRenderer;
+    private SpriteRenderer phaseBlinkCrossVerticalRenderer;
     private float pincerBarrageTimer;
     private bool pincerBarrageCharging;
     private Vector2 pincerLeftSpawn;
     private Vector2 pincerRightSpawn;
     private GameObject pincerTelegraphRoot;
+    private SpriteRenderer pincerFocusRingRenderer;
     private readonly List<SpriteRenderer> pincerTelegraphRenderers = new List<SpriteRenderer>();
+    private readonly List<SpriteRenderer> pincerLaneRenderers = new List<SpriteRenderer>();
+    private readonly List<SpriteRenderer> pincerArrowRenderers = new List<SpriteRenderer>();
     private float signalJamTimer;
     private bool signalJamCharging;
     private Vector2 signalJamCenter;
     private GameObject signalJamTelegraphRoot;
     private SpriteRenderer signalJamRingRenderer;
     private SpriteRenderer signalJamCoreRenderer;
+    private SpriteRenderer signalJamInnerRenderer;
+    private SpriteRenderer signalJamCrossHorizontalRenderer;
+    private SpriteRenderer signalJamCrossVerticalRenderer;
+    private SpriteRenderer signalJamWarningRenderer;
     private readonly List<SpriteRenderer> signalJamTickRenderers = new List<SpriteRenderer>();
+    private readonly List<SpriteRenderer> signalJamNoiseRenderers = new List<SpriteRenderer>();
     private float orbitBarrageTimer;
     private bool orbitBarrageCharging;
     private Vector2 orbitBarrageCenter;
     private int orbitBarrageDirectionSign = 1;
     private GameObject orbitBarrageTelegraphRoot;
+    private SpriteRenderer orbitBarrageRingRenderer;
+    private SpriteRenderer orbitBarrageInnerRingRenderer;
     private readonly List<SpriteRenderer> orbitBarrageTickRenderers = new List<SpriteRenderer>();
+    private readonly List<SpriteRenderer> orbitBarrageGuideRenderers = new List<SpriteRenderer>();
     private PacingPhase pacingPhase = PacingPhase.BuildUp;
     private int pacingMinorStatesRemaining;
     private int pacingMajorStatesRemaining;
@@ -2557,6 +2572,27 @@ public class EnemyController : MonoBehaviour
         GlitchAudioManager.PlayEnemyPhaseBlinkArrive(transform.position);
     }
 
+    private static void ConfigureSpriteLine(SpriteRenderer rendererRef, Vector2 start, Vector2 end, float thickness, Color color)
+    {
+        if (rendererRef == null)
+        {
+            return;
+        }
+
+        Vector2 delta = end - start;
+        float length = delta.magnitude;
+        if (length <= 0.01f)
+        {
+            rendererRef.color = Color.clear;
+            return;
+        }
+
+        rendererRef.transform.position = (start + end) * 0.5f;
+        rendererRef.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
+        rendererRef.size = new Vector2(length, Mathf.Max(0.01f, thickness));
+        rendererRef.color = color;
+    }
+
     private void UpdatePhaseBlinkTelegraph(float progress)
     {
         EnsurePhaseBlinkTelegraph();
@@ -2571,18 +2607,43 @@ public class EnemyController : MonoBehaviour
         }
 
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 16f);
+        float warningPulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 8.5f);
+        Vector2 origin = rb != null ? rb.position : (Vector2)transform.position;
         phaseBlinkTelegraphRoot.transform.position = new Vector3(phaseBlinkTarget.x, phaseBlinkTarget.y, 0f);
+
+        if (phaseBlinkPathRenderer != null)
+        {
+            Color pathColor = new Color(phaseBlinkColor.r, phaseBlinkColor.g, phaseBlinkColor.b, Mathf.Lerp(0.10f, 0.54f, progress) * (0.70f + warningPulse * 0.30f));
+            ConfigureSpriteLine(phaseBlinkPathRenderer, origin, phaseBlinkTarget, Mathf.Lerp(0.035f, 0.095f, progress), pathColor);
+        }
+
+        if (phaseBlinkOriginRenderer != null)
+        {
+            phaseBlinkOriginRenderer.transform.position = new Vector3(origin.x, origin.y, 0f);
+            phaseBlinkOriginRenderer.size = Vector2.one * Mathf.Lerp(0.62f, 1.18f, progress);
+            phaseBlinkOriginRenderer.color = new Color(phaseBlinkColor.r, phaseBlinkColor.g, phaseBlinkColor.b, Mathf.Lerp(0.08f, 0.38f, progress));
+        }
 
         if (phaseBlinkRingRenderer != null)
         {
-            phaseBlinkRingRenderer.size = Vector2.one * Mathf.Lerp(1.8f, 0.62f, progress);
-            phaseBlinkRingRenderer.color = new Color(phaseBlinkColor.r, phaseBlinkColor.g, phaseBlinkColor.b, Mathf.Lerp(0.16f, 0.72f, progress) * (0.72f + pulse * 0.28f));
+            phaseBlinkRingRenderer.size = Vector2.one * Mathf.Lerp(2.45f, 0.82f, progress);
+            phaseBlinkRingRenderer.color = new Color(phaseBlinkColor.r, phaseBlinkColor.g, phaseBlinkColor.b, Mathf.Lerp(0.20f, 0.92f, progress) * (0.68f + pulse * 0.32f));
         }
         if (phaseBlinkCoreRenderer != null)
         {
             phaseBlinkCoreRenderer.transform.localRotation = Quaternion.Euler(0f, 0f, Time.time * 220f);
-            phaseBlinkCoreRenderer.size = Vector2.one * Mathf.Lerp(0.18f, 0.40f, pulse);
-            phaseBlinkCoreRenderer.color = new Color(1f, 0.92f, 1f, Mathf.Lerp(0.26f, 0.86f, progress));
+            phaseBlinkCoreRenderer.size = Vector2.one * Mathf.Lerp(0.30f, 0.54f, pulse);
+            phaseBlinkCoreRenderer.color = new Color(1f, 0.92f, 1f, Mathf.Lerp(0.32f, 1f, progress));
+        }
+        if (phaseBlinkCrossHorizontalRenderer != null)
+        {
+            phaseBlinkCrossHorizontalRenderer.size = new Vector2(Mathf.Lerp(0.42f, 1.45f, progress), 0.07f);
+            phaseBlinkCrossHorizontalRenderer.color = new Color(1f, 0.46f, 0.92f, Mathf.Lerp(0.14f, 0.78f, progress) * (0.70f + warningPulse * 0.30f));
+        }
+        if (phaseBlinkCrossVerticalRenderer != null)
+        {
+            phaseBlinkCrossVerticalRenderer.size = new Vector2(0.07f, Mathf.Lerp(0.42f, 1.45f, progress));
+            phaseBlinkCrossVerticalRenderer.color = new Color(0.62f, 1f, 0.94f, Mathf.Lerp(0.14f, 0.72f, progress) * (0.70f + warningPulse * 0.30f));
         }
     }
 
@@ -2596,12 +2657,40 @@ public class EnemyController : MonoBehaviour
         phaseBlinkTelegraphRoot = new GameObject("PhaseBlinkTelegraph");
         phaseBlinkTelegraphRoot.SetActive(false);
 
+        GameObject path = new GameObject("PhaseBlinkPath");
+        path.transform.SetParent(phaseBlinkTelegraphRoot.transform, false);
+        phaseBlinkPathRenderer = path.AddComponent<SpriteRenderer>();
+        phaseBlinkPathRenderer.sprite = SquareSpriteProvider.Get();
+        phaseBlinkPathRenderer.drawMode = SpriteDrawMode.Sliced;
+        phaseBlinkPathRenderer.sortingOrder = 14;
+
+        GameObject origin = new GameObject("PhaseBlinkOrigin");
+        origin.transform.SetParent(phaseBlinkTelegraphRoot.transform, false);
+        phaseBlinkOriginRenderer = origin.AddComponent<SpriteRenderer>();
+        phaseBlinkOriginRenderer.sprite = CircleSpriteProvider.Get();
+        phaseBlinkOriginRenderer.drawMode = SpriteDrawMode.Sliced;
+        phaseBlinkOriginRenderer.sortingOrder = 14;
+
         GameObject ring = new GameObject("PhaseBlinkRing");
         ring.transform.SetParent(phaseBlinkTelegraphRoot.transform, false);
         phaseBlinkRingRenderer = ring.AddComponent<SpriteRenderer>();
         phaseBlinkRingRenderer.sprite = CircleSpriteProvider.Get();
         phaseBlinkRingRenderer.drawMode = SpriteDrawMode.Sliced;
         phaseBlinkRingRenderer.sortingOrder = 15;
+
+        GameObject crossH = new GameObject("PhaseBlinkTargetCrossH");
+        crossH.transform.SetParent(phaseBlinkTelegraphRoot.transform, false);
+        phaseBlinkCrossHorizontalRenderer = crossH.AddComponent<SpriteRenderer>();
+        phaseBlinkCrossHorizontalRenderer.sprite = SquareSpriteProvider.Get();
+        phaseBlinkCrossHorizontalRenderer.drawMode = SpriteDrawMode.Sliced;
+        phaseBlinkCrossHorizontalRenderer.sortingOrder = 16;
+
+        GameObject crossV = new GameObject("PhaseBlinkTargetCrossV");
+        crossV.transform.SetParent(phaseBlinkTelegraphRoot.transform, false);
+        phaseBlinkCrossVerticalRenderer = crossV.AddComponent<SpriteRenderer>();
+        phaseBlinkCrossVerticalRenderer.sprite = SquareSpriteProvider.Get();
+        phaseBlinkCrossVerticalRenderer.drawMode = SpriteDrawMode.Sliced;
+        phaseBlinkCrossVerticalRenderer.sortingOrder = 16;
 
         GameObject core = new GameObject("PhaseBlinkCore");
         core.transform.SetParent(phaseBlinkTelegraphRoot.transform, false);
@@ -2651,6 +2740,15 @@ public class EnemyController : MonoBehaviour
     {
         EnsurePincerTelegraph();
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 14f);
+        Vector2 playerPos = player != null ? player.GetPosition() : (Vector2)transform.position;
+
+        if (pincerFocusRingRenderer != null)
+        {
+            pincerFocusRingRenderer.transform.position = new Vector3(playerPos.x, playerPos.y, 0f);
+            pincerFocusRingRenderer.size = Vector2.one * Mathf.Lerp(1.85f, 0.78f, progress);
+            pincerFocusRingRenderer.color = new Color(1f, 0.46f, 0.78f, Mathf.Lerp(0.10f, 0.62f, progress) * (0.72f + pulse * 0.28f));
+        }
+
         for (int i = 0; i < pincerTelegraphRenderers.Count; i++)
         {
             SpriteRenderer sr = pincerTelegraphRenderers[i];
@@ -2660,14 +2758,33 @@ public class EnemyController : MonoBehaviour
             }
 
             Vector2 pos = (i & 1) == 0 ? pincerLeftSpawn : pincerRightSpawn;
-            float lane = (i / 2) - 1;
-            Vector2 playerPos = player != null ? player.GetPosition() : (Vector2)transform.position;
+            int pairCount = Mathf.Max(1, pincerProjectilePairs);
+            int pairIndex = i / 2;
+            float lane = pairCount == 1 ? 0f : Mathf.Lerp(-1f, 1f, pairIndex / (float)(pairCount - 1));
             Vector2 dir = (playerPos - pos).sqrMagnitude > 0.001f ? (playerPos - pos).normalized : Vector2.right;
             Vector2 perp = new Vector2(-dir.y, dir.x);
-            sr.transform.position = pos + perp * lane * Mathf.Max(0.2f, pincerVerticalSpread * 0.34f);
+            Vector2 laneStart = pos + perp * lane * Mathf.Max(0.2f, pincerVerticalSpread * 0.34f);
+            sr.transform.position = laneStart;
             sr.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg);
-            sr.size = new Vector2(Mathf.Lerp(0.65f, 1.35f, progress), 0.075f);
-            sr.color = new Color(pincerProjectileColor.r, pincerProjectileColor.g, pincerProjectileColor.b, Mathf.Lerp(0.18f, 0.78f, progress) * (0.75f + pulse * 0.25f));
+            sr.size = new Vector2(Mathf.Lerp(0.78f, 1.55f, progress), 0.09f);
+            sr.color = new Color(pincerProjectileColor.r, pincerProjectileColor.g, pincerProjectileColor.b, Mathf.Lerp(0.20f, 0.88f, progress) * (0.75f + pulse * 0.25f));
+
+            if (i < pincerLaneRenderers.Count && pincerLaneRenderers[i] != null)
+            {
+                Color laneColor = new Color(pincerProjectileColor.r, pincerProjectileColor.g, pincerProjectileColor.b, Mathf.Lerp(0.06f, 0.34f, progress));
+                ConfigureSpriteLine(pincerLaneRenderers[i], laneStart, playerPos, Mathf.Lerp(0.035f, 0.075f, progress), laneColor);
+            }
+
+            if (i < pincerArrowRenderers.Count && pincerArrowRenderers[i] != null)
+            {
+                SpriteRenderer arrow = pincerArrowRenderers[i];
+                float arrowTravel = Mathf.Lerp(0.28f, 0.72f, Mathf.PingPong(Time.time * 1.6f + i * 0.17f, 1f));
+                Vector2 arrowPos = Vector2.Lerp(laneStart, playerPos, arrowTravel);
+                arrow.transform.position = arrowPos;
+                arrow.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg);
+                arrow.size = new Vector2(Mathf.Lerp(0.30f, 0.62f, progress), 0.075f);
+                arrow.color = new Color(1f, 0.70f, 0.98f, Mathf.Lerp(0.10f, 0.62f, progress) * (0.55f + pulse * 0.45f));
+            }
         }
     }
 
@@ -2677,6 +2794,13 @@ public class EnemyController : MonoBehaviour
         if (pincerTelegraphRoot == null)
         {
             pincerTelegraphRoot = new GameObject("PincerBarrageTelegraph");
+
+            GameObject focus = new GameObject("PincerFocusRing");
+            focus.transform.SetParent(pincerTelegraphRoot.transform, false);
+            pincerFocusRingRenderer = focus.AddComponent<SpriteRenderer>();
+            pincerFocusRingRenderer.sprite = CircleSpriteProvider.Get();
+            pincerFocusRingRenderer.drawMode = SpriteDrawMode.Sliced;
+            pincerFocusRingRenderer.sortingOrder = 14;
         }
 
         while (pincerTelegraphRenderers.Count < desired)
@@ -2700,6 +2824,50 @@ public class EnemyController : MonoBehaviour
                 Destroy(sr.gameObject);
             }
         }
+
+        while (pincerLaneRenderers.Count < desired)
+        {
+            GameObject go = new GameObject($"PincerLane_{pincerLaneRenderers.Count}");
+            go.transform.SetParent(pincerTelegraphRoot.transform, false);
+            SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.sortingOrder = 13;
+            pincerLaneRenderers.Add(sr);
+        }
+
+        while (pincerLaneRenderers.Count > desired)
+        {
+            int last = pincerLaneRenderers.Count - 1;
+            SpriteRenderer sr = pincerLaneRenderers[last];
+            pincerLaneRenderers.RemoveAt(last);
+            if (sr != null)
+            {
+                Destroy(sr.gameObject);
+            }
+        }
+
+        while (pincerArrowRenderers.Count < desired)
+        {
+            GameObject go = new GameObject($"PincerArrow_{pincerArrowRenderers.Count}");
+            go.transform.SetParent(pincerTelegraphRoot.transform, false);
+            SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.sortingOrder = 16;
+            pincerArrowRenderers.Add(sr);
+        }
+
+        while (pincerArrowRenderers.Count > desired)
+        {
+            int last = pincerArrowRenderers.Count - 1;
+            SpriteRenderer sr = pincerArrowRenderers[last];
+            pincerArrowRenderers.RemoveAt(last);
+            if (sr != null)
+            {
+                Destroy(sr.gameObject);
+            }
+        }
     }
 
     private void HidePincerTelegraph()
@@ -2711,6 +2879,24 @@ public class EnemyController : MonoBehaviour
                 pincerTelegraphRenderers[i].color = Color.clear;
             }
         }
+        for (int i = 0; i < pincerLaneRenderers.Count; i++)
+        {
+            if (pincerLaneRenderers[i] != null)
+            {
+                pincerLaneRenderers[i].color = Color.clear;
+            }
+        }
+        for (int i = 0; i < pincerArrowRenderers.Count; i++)
+        {
+            if (pincerArrowRenderers[i] != null)
+            {
+                pincerArrowRenderers[i].color = Color.clear;
+            }
+        }
+        if (pincerFocusRingRenderer != null)
+        {
+            pincerFocusRingRenderer.color = Color.clear;
+        }
     }
 
     private void DestroyLevelTwoTelegraphsImmediate()
@@ -2719,20 +2905,35 @@ public class EnemyController : MonoBehaviour
         phaseBlinkTelegraphRoot = null;
         phaseBlinkRingRenderer = null;
         phaseBlinkCoreRenderer = null;
+        phaseBlinkOriginRenderer = null;
+        phaseBlinkPathRenderer = null;
+        phaseBlinkCrossHorizontalRenderer = null;
+        phaseBlinkCrossVerticalRenderer = null;
 
         DestroyTelegraphRootImmediate(pincerTelegraphRoot);
         pincerTelegraphRoot = null;
+        pincerFocusRingRenderer = null;
         pincerTelegraphRenderers.Clear();
+        pincerLaneRenderers.Clear();
+        pincerArrowRenderers.Clear();
 
         DestroyTelegraphRootImmediate(signalJamTelegraphRoot);
         signalJamTelegraphRoot = null;
         signalJamRingRenderer = null;
         signalJamCoreRenderer = null;
+        signalJamInnerRenderer = null;
+        signalJamCrossHorizontalRenderer = null;
+        signalJamCrossVerticalRenderer = null;
+        signalJamWarningRenderer = null;
         signalJamTickRenderers.Clear();
+        signalJamNoiseRenderers.Clear();
 
         DestroyTelegraphRootImmediate(orbitBarrageTelegraphRoot);
         orbitBarrageTelegraphRoot = null;
+        orbitBarrageRingRenderer = null;
+        orbitBarrageInnerRingRenderer = null;
         orbitBarrageTickRenderers.Clear();
+        orbitBarrageGuideRenderers.Clear();
     }
 
     private static void DestroyTelegraphRootImmediate(GameObject root)
@@ -2795,20 +2996,46 @@ public class EnemyController : MonoBehaviour
 
         float radius = Mathf.Max(0.35f, signalJamRadius);
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 18f);
+        float warningPulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 7.5f);
         signalJamTelegraphRoot.transform.position = new Vector3(signalJamCenter.x, signalJamCenter.y, 0f);
+
+        if (signalJamInnerRenderer != null)
+        {
+            signalJamInnerRenderer.size = Vector2.one * radius * 2f;
+            signalJamInnerRenderer.color = new Color(0.04f, 0.025f, 0.012f, Mathf.Lerp(0.08f, 0.24f, progress));
+        }
 
         if (signalJamRingRenderer != null)
         {
             float diameter = Mathf.Lerp(radius * 2.55f, radius * 2f, progress);
             signalJamRingRenderer.size = Vector2.one * diameter;
-            signalJamRingRenderer.color = new Color(signalJamColor.r, signalJamColor.g, signalJamColor.b, Mathf.Lerp(0.12f, 0.62f, progress) * (0.75f + pulse * 0.25f));
+            signalJamRingRenderer.color = new Color(signalJamColor.r, signalJamColor.g, signalJamColor.b, Mathf.Lerp(0.20f, 0.82f, progress) * (0.76f + warningPulse * 0.24f));
         }
 
         if (signalJamCoreRenderer != null)
         {
             signalJamCoreRenderer.transform.localRotation = Quaternion.Euler(0f, 0f, -Time.time * 180f);
-            signalJamCoreRenderer.size = Vector2.one * Mathf.Lerp(0.22f, 0.44f, pulse);
-            signalJamCoreRenderer.color = new Color(1f, 0.92f, 0.72f, Mathf.Lerp(0.18f, 0.72f, progress));
+            signalJamCoreRenderer.size = Vector2.one * Mathf.Lerp(0.28f, 0.58f, pulse);
+            signalJamCoreRenderer.color = new Color(1f, 0.94f, 0.70f, Mathf.Lerp(0.26f, 0.92f, progress));
+        }
+
+        if (signalJamCrossHorizontalRenderer != null)
+        {
+            signalJamCrossHorizontalRenderer.size = new Vector2(radius * Mathf.Lerp(0.85f, 1.78f, progress), 0.055f);
+            signalJamCrossHorizontalRenderer.color = new Color(signalJamColor.r, signalJamColor.g, signalJamColor.b, Mathf.Lerp(0.12f, 0.58f, progress) * (0.65f + pulse * 0.35f));
+        }
+
+        if (signalJamCrossVerticalRenderer != null)
+        {
+            signalJamCrossVerticalRenderer.size = new Vector2(0.055f, radius * Mathf.Lerp(0.85f, 1.78f, progress));
+            signalJamCrossVerticalRenderer.color = new Color(0.96f, 0.92f, 0.78f, Mathf.Lerp(0.10f, 0.48f, progress) * (0.65f + pulse * 0.35f));
+        }
+
+        if (signalJamWarningRenderer != null)
+        {
+            signalJamWarningRenderer.size = new Vector2(radius * 1.52f, 0.12f);
+            signalJamWarningRenderer.transform.localPosition = Vector3.up * radius * 0.60f;
+            signalJamWarningRenderer.color = new Color(1f, 0.34f, 0.22f, Mathf.Lerp(0.12f, 0.68f, progress) * warningPulse);
         }
 
         for (int i = 0; i < signalJamTickRenderers.Count; i++)
@@ -2823,8 +3050,26 @@ public class EnemyController : MonoBehaviour
             Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
             tick.transform.localPosition = dir * radius * Mathf.Lerp(0.75f, 1f, progress);
             tick.transform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg + 90f);
-            tick.size = new Vector2(0.08f, Mathf.Lerp(0.22f, 0.48f, progress));
-            tick.color = new Color(signalJamColor.r, signalJamColor.g, signalJamColor.b, Mathf.Lerp(0.08f, 0.56f, progress));
+            tick.size = new Vector2(0.09f, Mathf.Lerp(0.28f, 0.62f, progress));
+            tick.color = new Color(signalJamColor.r, signalJamColor.g, signalJamColor.b, Mathf.Lerp(0.16f, 0.76f, progress));
+        }
+
+        for (int i = 0; i < signalJamNoiseRenderers.Count; i++)
+        {
+            SpriteRenderer noise = signalJamNoiseRenderers[i];
+            if (noise == null)
+            {
+                continue;
+            }
+
+            float seed = i * 1.73f;
+            float angle = seed + Time.time * (1.4f + (i % 3) * 0.22f);
+            float distance = radius * Mathf.Lerp(0.18f, 0.78f, Mathf.PingPong(Time.time * 0.9f + i * 0.19f, 1f));
+            Vector2 pos = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * distance;
+            noise.transform.localPosition = pos;
+            noise.transform.localRotation = Quaternion.Euler(0f, 0f, Random.value * 180f);
+            noise.size = new Vector2(Mathf.Lerp(0.16f, 0.42f, Mathf.PingPong(Time.time * 4f + i, 1f)), 0.035f);
+            noise.color = new Color(1f, 0.92f, 0.64f, Mathf.Lerp(0.05f, 0.32f, progress) * (0.45f + pulse * 0.55f));
         }
     }
 
@@ -2835,12 +3080,40 @@ public class EnemyController : MonoBehaviour
             signalJamTelegraphRoot = new GameObject("SignalJamTelegraph");
             signalJamTelegraphRoot.SetActive(false);
 
+            GameObject inner = new GameObject("SignalJamInnerField");
+            inner.transform.SetParent(signalJamTelegraphRoot.transform, false);
+            signalJamInnerRenderer = inner.AddComponent<SpriteRenderer>();
+            signalJamInnerRenderer.sprite = CircleSpriteProvider.Get();
+            signalJamInnerRenderer.drawMode = SpriteDrawMode.Sliced;
+            signalJamInnerRenderer.sortingOrder = 13;
+
             GameObject ring = new GameObject("SignalJamRing");
             ring.transform.SetParent(signalJamTelegraphRoot.transform, false);
             signalJamRingRenderer = ring.AddComponent<SpriteRenderer>();
             signalJamRingRenderer.sprite = CircleSpriteProvider.Get();
             signalJamRingRenderer.drawMode = SpriteDrawMode.Sliced;
             signalJamRingRenderer.sortingOrder = 15;
+
+            GameObject crossH = new GameObject("SignalJamCrossHorizontal");
+            crossH.transform.SetParent(signalJamTelegraphRoot.transform, false);
+            signalJamCrossHorizontalRenderer = crossH.AddComponent<SpriteRenderer>();
+            signalJamCrossHorizontalRenderer.sprite = SquareSpriteProvider.Get();
+            signalJamCrossHorizontalRenderer.drawMode = SpriteDrawMode.Sliced;
+            signalJamCrossHorizontalRenderer.sortingOrder = 16;
+
+            GameObject crossV = new GameObject("SignalJamCrossVertical");
+            crossV.transform.SetParent(signalJamTelegraphRoot.transform, false);
+            signalJamCrossVerticalRenderer = crossV.AddComponent<SpriteRenderer>();
+            signalJamCrossVerticalRenderer.sprite = SquareSpriteProvider.Get();
+            signalJamCrossVerticalRenderer.drawMode = SpriteDrawMode.Sliced;
+            signalJamCrossVerticalRenderer.sortingOrder = 16;
+
+            GameObject warning = new GameObject("SignalJamWarningBar");
+            warning.transform.SetParent(signalJamTelegraphRoot.transform, false);
+            signalJamWarningRenderer = warning.AddComponent<SpriteRenderer>();
+            signalJamWarningRenderer.sprite = SquareSpriteProvider.Get();
+            signalJamWarningRenderer.drawMode = SpriteDrawMode.Sliced;
+            signalJamWarningRenderer.sortingOrder = 17;
 
             GameObject core = new GameObject("SignalJamCore");
             core.transform.SetParent(signalJamTelegraphRoot.transform, false);
@@ -2860,6 +3133,17 @@ public class EnemyController : MonoBehaviour
             tick.sortingOrder = 16;
             signalJamTickRenderers.Add(tick);
         }
+
+        while (signalJamNoiseRenderers.Count < 18)
+        {
+            GameObject noiseGo = new GameObject($"SignalJamNoise_{signalJamNoiseRenderers.Count}");
+            noiseGo.transform.SetParent(signalJamTelegraphRoot.transform, false);
+            SpriteRenderer noise = noiseGo.AddComponent<SpriteRenderer>();
+            noise.sprite = SquareSpriteProvider.Get();
+            noise.drawMode = SpriteDrawMode.Sliced;
+            noise.sortingOrder = 15;
+            signalJamNoiseRenderers.Add(noise);
+        }
     }
 
     private void HideSignalJamTelegraph()
@@ -2877,10 +3161,41 @@ public class EnemyController : MonoBehaviour
         if (player != null && Vector2.Distance(playerPos, signalJamCenter) <= radius)
         {
             player.ApplyMovementSlow(signalJamSlowMultiplier, signalJamSlowDuration);
+            SpawnSignalJamHitMarker(playerPos);
         }
 
         SpawnSignalJamBurst(signalJamCenter, radius);
         GlitchAudioManager.PlayEnemySignalJamFire(new Vector3(signalJamCenter.x, signalJamCenter.y, transform.position.z));
+    }
+
+    private void SpawnSignalJamHitMarker(Vector2 position)
+    {
+        Color hitColor = new Color(1f, 0.32f, 0.20f, 1f);
+        GameObject ring = new GameObject("SignalJamPlayerHitRing");
+        ring.transform.position = new Vector3(position.x, position.y, 0f);
+        SpriteRenderer ringRenderer = ring.AddComponent<SpriteRenderer>();
+        ringRenderer.sprite = CircleSpriteProvider.Get();
+        ringRenderer.sortingOrder = 21;
+        ringRenderer.color = hitColor;
+        ring.transform.localScale = Vector3.one * 0.2f;
+        ring.AddComponent<AnomalyStateBurstFx>().Configure(ringRenderer, 0.82f, 0.22f, hitColor);
+        Destroy(ring, 0.32f);
+
+        for (int i = 0; i < 4; i++)
+        {
+            float angle = (Mathf.PI * 0.5f) * i + Mathf.PI * 0.25f;
+            Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            GameObject ray = new GameObject($"SignalJamPlayerHitRay_{i}");
+            ray.transform.position = new Vector3(position.x, position.y, 0f);
+            SpriteRenderer sr = ray.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.sortingOrder = 22;
+            sr.color = hitColor;
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.size = new Vector2(0.34f, 0.08f);
+            ray.AddComponent<AnomalyStateRayFx>().Configure(sr, dir, 0.55f, 0.18f);
+            Destroy(ray, 0.28f);
+        }
     }
 
     private void SpawnSignalJamBurst(Vector2 center, float radius)
@@ -2939,7 +3254,20 @@ public class EnemyController : MonoBehaviour
         float radius = Mathf.Max(0.65f, orbitBarrageSpawnRadius);
         float spin = Time.time * 1.15f * orbitBarrageDirectionSign;
         int count = Mathf.Max(4, orbitBarrageProjectileCount);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 8.5f);
         orbitBarrageTelegraphRoot.transform.position = new Vector3(orbitBarrageCenter.x, orbitBarrageCenter.y, 0f);
+
+        if (orbitBarrageRingRenderer != null)
+        {
+            orbitBarrageRingRenderer.size = Vector2.one * radius * Mathf.Lerp(2.32f, 2.02f, progress);
+            orbitBarrageRingRenderer.color = new Color(orbitBarrageProjectileColor.r, orbitBarrageProjectileColor.g, orbitBarrageProjectileColor.b, Mathf.Lerp(0.14f, 0.66f, progress) * (0.72f + pulse * 0.28f));
+        }
+
+        if (orbitBarrageInnerRingRenderer != null)
+        {
+            orbitBarrageInnerRingRenderer.size = Vector2.one * radius * Mathf.Lerp(0.72f, 0.96f, progress);
+            orbitBarrageInnerRingRenderer.color = new Color(1f, 0.62f, 0.96f, Mathf.Lerp(0.06f, 0.36f, progress) * (0.68f + pulse * 0.32f));
+        }
 
         for (int i = 0; i < orbitBarrageTickRenderers.Count; i++)
         {
@@ -2955,8 +3283,36 @@ public class EnemyController : MonoBehaviour
             float lanePulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 15f + i * 0.8f);
             tick.transform.localPosition = radial * radius * Mathf.Lerp(0.82f, 1f, progress);
             tick.transform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(tangential.y, tangential.x) * Mathf.Rad2Deg);
-            tick.size = new Vector2(Mathf.Lerp(0.24f, 0.42f, progress), 0.08f + lanePulse * 0.05f);
-            tick.color = new Color(orbitBarrageProjectileColor.r, orbitBarrageProjectileColor.g, orbitBarrageProjectileColor.b, Mathf.Lerp(0.12f, 0.72f, progress));
+            tick.size = new Vector2(Mathf.Lerp(0.32f, 0.58f, progress), 0.09f + lanePulse * 0.06f);
+            tick.color = new Color(orbitBarrageProjectileColor.r, orbitBarrageProjectileColor.g, orbitBarrageProjectileColor.b, Mathf.Lerp(0.18f, 0.88f, progress));
+        }
+
+        for (int i = 0; i < orbitBarrageGuideRenderers.Count; i++)
+        {
+            SpriteRenderer guide = orbitBarrageGuideRenderers[i];
+            if (guide == null)
+            {
+                continue;
+            }
+
+            float angle = ((Mathf.PI * 2f) * i) / Mathf.Max(1, orbitBarrageGuideRenderers.Count) + spin;
+            Vector2 radial = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            Vector2 tangential = new Vector2(-radial.y, radial.x) * orbitBarrageDirectionSign;
+            bool isArrow = (i & 1) == 0;
+            if (isArrow)
+            {
+                guide.transform.localPosition = radial * radius * 0.62f + tangential * 0.22f;
+                guide.transform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(tangential.y, tangential.x) * Mathf.Rad2Deg);
+                guide.size = new Vector2(Mathf.Lerp(0.28f, 0.72f, progress), 0.055f);
+                guide.color = new Color(1f, 0.62f, 0.96f, Mathf.Lerp(0.08f, 0.48f, progress));
+            }
+            else
+            {
+                guide.transform.localPosition = radial * radius * 0.5f;
+                guide.transform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(radial.y, radial.x) * Mathf.Rad2Deg);
+                guide.size = new Vector2(radius * Mathf.Lerp(0.22f, 0.42f, progress), 0.035f);
+                guide.color = new Color(orbitBarrageProjectileColor.r, orbitBarrageProjectileColor.g, orbitBarrageProjectileColor.b, Mathf.Lerp(0.04f, 0.26f, progress));
+            }
         }
     }
 
@@ -2967,6 +3323,20 @@ public class EnemyController : MonoBehaviour
         {
             orbitBarrageTelegraphRoot = new GameObject("OrbitBarrageTelegraph");
             orbitBarrageTelegraphRoot.SetActive(false);
+
+            GameObject outerRing = new GameObject("OrbitBarrageOuterRing");
+            outerRing.transform.SetParent(orbitBarrageTelegraphRoot.transform, false);
+            orbitBarrageRingRenderer = outerRing.AddComponent<SpriteRenderer>();
+            orbitBarrageRingRenderer.sprite = CircleSpriteProvider.Get();
+            orbitBarrageRingRenderer.drawMode = SpriteDrawMode.Sliced;
+            orbitBarrageRingRenderer.sortingOrder = 14;
+
+            GameObject innerRing = new GameObject("OrbitBarrageInnerRing");
+            innerRing.transform.SetParent(orbitBarrageTelegraphRoot.transform, false);
+            orbitBarrageInnerRingRenderer = innerRing.AddComponent<SpriteRenderer>();
+            orbitBarrageInnerRingRenderer.sprite = CircleSpriteProvider.Get();
+            orbitBarrageInnerRingRenderer.drawMode = SpriteDrawMode.Sliced;
+            orbitBarrageInnerRingRenderer.sortingOrder = 14;
         }
 
         while (orbitBarrageTickRenderers.Count < desired)
@@ -2985,6 +3355,29 @@ public class EnemyController : MonoBehaviour
             int last = orbitBarrageTickRenderers.Count - 1;
             SpriteRenderer sr = orbitBarrageTickRenderers[last];
             orbitBarrageTickRenderers.RemoveAt(last);
+            if (sr != null)
+            {
+                Destroy(sr.gameObject);
+            }
+        }
+
+        int desiredGuides = Mathf.Max(8, desired * 2);
+        while (orbitBarrageGuideRenderers.Count < desiredGuides)
+        {
+            GameObject go = new GameObject($"OrbitBarrageGuide_{orbitBarrageGuideRenderers.Count}");
+            go.transform.SetParent(orbitBarrageTelegraphRoot.transform, false);
+            SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.sortingOrder = 13;
+            orbitBarrageGuideRenderers.Add(sr);
+        }
+
+        while (orbitBarrageGuideRenderers.Count > desiredGuides)
+        {
+            int last = orbitBarrageGuideRenderers.Count - 1;
+            SpriteRenderer sr = orbitBarrageGuideRenderers[last];
+            orbitBarrageGuideRenderers.RemoveAt(last);
             if (sr != null)
             {
                 Destroy(sr.gameObject);
@@ -3012,11 +3405,27 @@ public class EnemyController : MonoBehaviour
             Vector2 spawn = ClampToArena(orbitBarrageCenter + radial * radius);
             Vector2 inward = (orbitBarrageCenter - spawn).sqrMagnitude > 0.001f ? (orbitBarrageCenter - spawn).normalized : -radial;
             Vector2 direction = Rotate(inward, 58f * orbitBarrageDirectionSign);
+            SpawnOrbitBarrageMuzzleCue(spawn, direction, i);
             CreateProjectile(spawn, direction, orbitBarrageProjectileColor, expansionShootProjectileSize * 0.86f, orbitBarrageProjectileSpeedMultiplier);
         }
 
         SpawnLevelTwoRadialBurst(orbitBarrageCenter, radius * 0.55f, orbitBarrageProjectileColor, "OrbitBarrage");
         GlitchAudioManager.PlayEnemyOrbitBarrageFire(new Vector3(orbitBarrageCenter.x, orbitBarrageCenter.y, transform.position.z));
+    }
+
+    private void SpawnOrbitBarrageMuzzleCue(Vector2 position, Vector2 direction, int index)
+    {
+        Color cueColor = index % 2 == 0 ? orbitBarrageProjectileColor : new Color(1f, 0.56f, 0.95f, 1f);
+        GameObject ray = new GameObject($"OrbitBarrageMuzzleCue_{index}");
+        ray.transform.position = new Vector3(position.x, position.y, 0f);
+        SpriteRenderer sr = ray.AddComponent<SpriteRenderer>();
+        sr.sprite = SquareSpriteProvider.Get();
+        sr.drawMode = SpriteDrawMode.Sliced;
+        sr.sortingOrder = 18;
+        sr.color = cueColor;
+        sr.size = new Vector2(0.52f, 0.09f);
+        ray.AddComponent<AnomalyStateRayFx>().Configure(sr, direction, 0.74f, 0.22f);
+        Destroy(ray, 0.32f);
     }
 
     private void UpdateExpansionShootTelegraphVisual(float chargeProgress)
