@@ -94,7 +94,9 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
     [SerializeField] private bool enableContainmentProtocol = true;
     [SerializeField] private int containmentTerminalCount = 2;
     [SerializeField] private float containmentTerminalActivationSeconds = 1.05f;
-    [SerializeField] private float containmentLockDuration = 2.25f;
+    [SerializeField] private float containmentLockDuration = 4.15f;
+    [SerializeField] private float containmentMinimumDuration = 11.5f;
+    [SerializeField, Range(1f, 2.2f)] private float containmentDurationMultiplier = 1.42f;
     [SerializeField] private float containmentFirewallReward = 15f;
     [SerializeField] private float containmentSuccessLabelSeconds = 1.55f;
     [SerializeField] private float containmentTerminalAvoidRadius = 2.35f;
@@ -406,6 +408,14 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
         // El sweep mueve obstaculos y peligro de esterilizacion en ejes opuestos para que se lea mejor.
         eventDuration = Random.Range(Mathf.Min(durationMin, durationMax), Mathf.Max(durationMin, durationMax));
         eventDuration *= Mathf.Max(0.1f, cadenceDurationMultiplier);
+        if (currentVariant == LabEventVariant.ContainmentProtocol)
+        {
+            // El protocolo necesita una ventana mas amplia porque pide recorrer y cargar varios puntos.
+            eventDuration = Mathf.Max(
+                Mathf.Max(2f, containmentMinimumDuration),
+                eventDuration * Mathf.Max(1f, containmentDurationMultiplier));
+        }
+
         if (!TryReserveEventPressure(eventDuration))
         {
             SchedulePressureRetry();
