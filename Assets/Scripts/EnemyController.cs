@@ -1534,6 +1534,39 @@ public class EnemyController : MonoBehaviour
         SpawnLevelTwoAwakeningBurst();
     }
 
+    public void ForceLevelTwoStateForDebug()
+    {
+        if (breachAbsorbed)
+        {
+            return;
+        }
+
+        AnomalyState previous = currentState;
+        AnomalyState[] options =
+        {
+            AnomalyState.PhaseBlink,
+            AnomalyState.PincerBarrage,
+            AnomalyState.SignalJam,
+            AnomalyState.OrbitBarrage
+        };
+
+        currentState = options[Random.Range(0, options.Length)];
+        if (currentState == previous)
+        {
+            currentState = options[(System.Array.IndexOf(options, currentState) + 1) % options.Length];
+        }
+
+        currentPattern = ResolvePatternForState(currentState);
+        stateTimer = 0f;
+        currentStateDuration = GetRandomDurationForState(currentState);
+        HandleStateTransition(previous, currentState);
+        TriggerStatePulse();
+        SpawnStateTransitionBurst(currentState, previous != currentState);
+        OnStateEntered();
+        RegisterStateForPacing(currentState);
+        GlitchAudioManager.PlayEnemyState(currentState, transform.position);
+    }
+
     private void SpawnLevelTwoAwakeningBurst()
     {
         Vector3 pos = transform.position;

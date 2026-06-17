@@ -5,6 +5,10 @@ public static class DeveloperModeStorage
     // Preferencias ocultas de testing: se usan solo desde el panel dev del menu principal.
     private const string ArenaOverrideEnabledKey = "Glitch_Dev_ArenaOverrideEnabled";
     private const string ArenaOverrideThemeKey = "Glitch_Dev_ArenaOverrideTheme";
+    private const string ForceBossLevelTwoKey = "Glitch_Dev_ForceBossLevelTwo";
+    private const string StartTimeSecondsKey = "Glitch_Dev_StartTimeSeconds";
+    private const string FastRunLoopsKey = "Glitch_Dev_FastRunLoops";
+    private const string SkipCountdownKey = "Glitch_Dev_SkipCountdown";
 
     public static bool TryGetArenaOverride(out ProceduralArenaGenerator.ArenaTheme theme)
     {
@@ -49,5 +53,75 @@ public static class DeveloperModeStorage
             default:
                 return "Rupture";
         }
+    }
+
+    public static bool ForceBossLevelTwo
+    {
+        get => PlayerPrefs.GetInt(ForceBossLevelTwoKey, 0) == 1;
+        set
+        {
+            PlayerPrefs.SetInt(ForceBossLevelTwoKey, value ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+    }
+
+    public static bool FastRunLoops
+    {
+        get => PlayerPrefs.GetInt(FastRunLoopsKey, 0) == 1;
+        set
+        {
+            PlayerPrefs.SetInt(FastRunLoopsKey, value ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+    }
+
+    public static bool SkipCountdown
+    {
+        get => PlayerPrefs.GetInt(SkipCountdownKey, 0) == 1;
+        set
+        {
+            PlayerPrefs.SetInt(SkipCountdownKey, value ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+    }
+
+    public static float StartTimeSeconds
+    {
+        get => Mathf.Max(0f, PlayerPrefs.GetFloat(StartTimeSecondsKey, 0f));
+        set
+        {
+            PlayerPrefs.SetFloat(StartTimeSecondsKey, Mathf.Max(0f, value));
+            PlayerPrefs.Save();
+        }
+    }
+
+    public static string GetStartTimeLabel()
+    {
+        float seconds = StartTimeSeconds;
+        if (seconds <= 0.01f)
+        {
+            return "0s";
+        }
+
+        int minutes = Mathf.FloorToInt(seconds / 60f);
+        int remaining = Mathf.FloorToInt(seconds % 60f);
+        return minutes > 0 ? $"{minutes}m {remaining:00}s" : $"{remaining}s";
+    }
+
+    public static string GetDebugSummary()
+    {
+        string levelTwo = ForceBossLevelTwo ? "N2 ON" : "N2 OFF";
+        string fast = FastRunLoops ? "Loops rapidos" : "Loops normales";
+        string countdown = SkipCountdown ? "Sin cuenta" : "Cuenta normal";
+        return $"{levelTwo} | Inicio {GetStartTimeLabel()} | {fast} | {countdown}";
+    }
+
+    public static void ClearRunDebugOptions()
+    {
+        PlayerPrefs.DeleteKey(ForceBossLevelTwoKey);
+        PlayerPrefs.DeleteKey(StartTimeSecondsKey);
+        PlayerPrefs.DeleteKey(FastRunLoopsKey);
+        PlayerPrefs.DeleteKey(SkipCountdownKey);
+        PlayerPrefs.Save();
     }
 }

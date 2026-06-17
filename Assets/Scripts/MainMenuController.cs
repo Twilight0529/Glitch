@@ -47,6 +47,7 @@ public class MainMenuController : MonoBehaviour
     private int selectedUnlockIndex;
     private int selectedAchievementIndex;
     private int selectedOperationIndex;
+    private Vector2 developerScroll;
     private Vector2 achievementScroll;
     private Vector2 unlockScroll;
     private string selectedUnlockSection = MetaProgressionStorage.SectionRunUpgrades;
@@ -78,6 +79,8 @@ public class MainMenuController : MonoBehaviour
     private float unlockActionMessageExpireAt;
     private string optionsActionMessage = string.Empty;
     private float optionsActionMessageExpireAt;
+    private string developerActionMessage = string.Empty;
+    private float developerActionMessageExpireAt;
     private readonly Dictionary<string, bool> buttonHoverFlags = new Dictionary<string, bool>();
 
     private void Awake()
@@ -819,7 +822,7 @@ public class MainMenuController : MonoBehaviour
     private void DrawDeveloperMenu()
     {
         DrawScreenFade(0.52f);
-        Rect panel = CenterRect(Mathf.Min(620f, Screen.width - 42f), Mathf.Min(480f, Screen.height - 42f));
+        Rect panel = CenterRect(Mathf.Min(720f, Screen.width - 42f), Mathf.Min(620f, Screen.height - 42f));
         DrawPanel(panel, new Color(0.04f, 0.035f, 0.06f, 0.94f), new Color(1f, 0.58f, 0.78f, 0.62f));
         DrawPanelFx(panel, new Color(1f, 0.48f, 0.86f, 1f), 0.13f);
 
@@ -828,8 +831,17 @@ public class MainMenuController : MonoBehaviour
         GUILayout.Label("Modo Desarrollador", panelTitleStyle);
         GUILayout.Space(4f);
         GUILayout.Label("Panel oculto de testing | Ctrl + Shift + D", paragraphStyle);
+        GUILayout.Label(DeveloperModeStorage.GetDebugSummary(), rankingRowStyle);
         GUILayout.Space(8f);
 
+        if (!string.IsNullOrEmpty(developerActionMessage) && Time.unscaledTime >= developerActionMessageExpireAt)
+        {
+            developerActionMessage = string.Empty;
+        }
+
+        developerScroll = GUILayout.BeginScrollView(developerScroll, false, true);
+
+        GUILayout.Label("Progresion", rankingScoreStyle);
         GUILayout.Label($"Datos Recuperados: {MetaProgressionStorage.CurrentData}", rankingScoreStyle);
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("+25 Datos", buttonStyle, GUILayout.Height(34f)))
@@ -895,6 +907,65 @@ public class MainMenuController : MonoBehaviour
         GUILayout.EndHorizontal();
 
         GUILayout.Space(14f);
+        GUILayout.Label("Run debug", rankingScoreStyle);
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button(DeveloperModeStorage.ForceBossLevelTwo ? "Jefe Nivel 2: ON" : "Jefe Nivel 2: OFF", buttonStyle, GUILayout.Height(36f)))
+        {
+            DeveloperModeStorage.ForceBossLevelTwo = !DeveloperModeStorage.ForceBossLevelTwo;
+            developerActionMessage = DeveloperModeStorage.ForceBossLevelTwo ? "El jefe entrara en Nivel 2 al iniciar." : "Nivel 2 vuelve a curva normal.";
+            developerActionMessageExpireAt = Time.unscaledTime + 2.4f;
+            GlitchAudioManager.PlayMenuToggle();
+        }
+        if (GUILayout.Button(DeveloperModeStorage.SkipCountdown ? "Sin cuenta: ON" : "Sin cuenta: OFF", buttonStyle, GUILayout.Height(36f)))
+        {
+            DeveloperModeStorage.SkipCountdown = !DeveloperModeStorage.SkipCountdown;
+            developerActionMessage = DeveloperModeStorage.SkipCountdown ? "La run empieza instantaneamente." : "Cuenta regresiva restaurada.";
+            developerActionMessageExpireAt = Time.unscaledTime + 2.4f;
+            GlitchAudioManager.PlayMenuToggle();
+        }
+        GUILayout.EndHorizontal();
+
+        GUILayout.Space(6f);
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button(DeveloperModeStorage.FastRunLoops ? "Loops rapidos: ON" : "Loops rapidos: OFF", buttonStyle, GUILayout.Height(36f)))
+        {
+            DeveloperModeStorage.FastRunLoops = !DeveloperModeStorage.FastRunLoops;
+            developerActionMessage = DeveloperModeStorage.FastRunLoops ? "Mejoras, contratos y eventos apareceran antes." : "Ritmo normal restaurado.";
+            developerActionMessageExpireAt = Time.unscaledTime + 2.4f;
+            GlitchAudioManager.PlayMenuToggle();
+        }
+        if (GUILayout.Button("Reset flags run", buttonStyle, GUILayout.Height(36f)))
+        {
+            DeveloperModeStorage.ClearRunDebugOptions();
+            developerActionMessage = "Flags de run limpiadas.";
+            developerActionMessageExpireAt = Time.unscaledTime + 2.4f;
+            GlitchAudioManager.PlayMenuBack();
+        }
+        GUILayout.EndHorizontal();
+
+        GUILayout.Space(6f);
+        GUILayout.Label($"Tiempo inicial: {DeveloperModeStorage.GetStartTimeLabel()}", paragraphStyle);
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("0s", buttonStyle, GUILayout.Height(34f)))
+        {
+            SetDeveloperStartTime(0f);
+        }
+        if (GUILayout.Button("60s", buttonStyle, GUILayout.Height(34f)))
+        {
+            SetDeveloperStartTime(60f);
+        }
+        if (GUILayout.Button("Nivel 2", buttonStyle, GUILayout.Height(34f)))
+        {
+            SetDeveloperStartTime(151f);
+        }
+        if (GUILayout.Button("5m", buttonStyle, GUILayout.Height(34f)))
+        {
+            SetDeveloperStartTime(300f);
+        }
+        GUILayout.EndHorizontal();
+
+        GUILayout.Space(14f);
+        GUILayout.Label("Arena", rankingScoreStyle);
         GUILayout.Label($"Arena override: {DeveloperModeStorage.GetArenaOverrideLabel()}", rankingScoreStyle);
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("Lab", buttonStyle, GUILayout.Height(34f)))
@@ -920,10 +991,27 @@ public class MainMenuController : MonoBehaviour
         GUILayout.EndHorizontal();
 
         GUILayout.Space(8f);
+        GUILayout.BeginHorizontal();
         if (GUILayout.Button($"Ejecutar mapa: {DeveloperModeStorage.GetArenaOverrideLabel()}", buttonStyle, GUILayout.Height(42f)))
         {
             StartGameplay();
         }
+        if (GUILayout.Button("Ejecutar Nivel 2", buttonStyle, GUILayout.Height(42f)))
+        {
+            DeveloperModeStorage.ForceBossLevelTwo = true;
+            DeveloperModeStorage.StartTimeSeconds = Mathf.Max(DeveloperModeStorage.StartTimeSeconds, 151f);
+            DeveloperModeStorage.SkipCountdown = true;
+            StartGameplay();
+        }
+        GUILayout.EndHorizontal();
+
+        if (!string.IsNullOrEmpty(developerActionMessage))
+        {
+            GUILayout.Space(6f);
+            GUILayout.Label(developerActionMessage, paragraphStyle);
+        }
+
+        GUILayout.EndScrollView();
 
         GUILayout.FlexibleSpace();
         if (DrawMenuButton("Cerrar", 38f, true))
@@ -932,6 +1020,14 @@ public class MainMenuController : MonoBehaviour
         }
 
         GUILayout.EndArea();
+    }
+
+    private void SetDeveloperStartTime(float seconds)
+    {
+        DeveloperModeStorage.StartTimeSeconds = seconds;
+        developerActionMessage = $"Tiempo inicial configurado: {DeveloperModeStorage.GetStartTimeLabel()}.";
+        developerActionMessageExpireAt = Time.unscaledTime + 2.4f;
+        GlitchAudioManager.PlayMenuToggle();
     }
 
     private void DrawUnlockList(Rect listRect, IReadOnlyList<MetaProgressionStorage.UnlockDefinition> unlocks)

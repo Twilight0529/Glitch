@@ -214,8 +214,8 @@ public class GameManager : MonoBehaviour
     public int CurrentScore => Mathf.Max(0, Mathf.FloorToInt(SurvivalTime * Mathf.Max(0f, pointsPerSecond)) + bonusScore);
     public string CurrentLevelTypeLabel => levelType;
     public bool IsBreachSensitiveSuppressionActive => breachSensitiveSuppressionTimer > 0f;
-    public bool AreBossSpecialStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && SurvivalTime >= Mathf.Max(0f, bossSpecialStatesUnlockTime);
-    public bool AreBossLevelTwoStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && SurvivalTime >= Mathf.Max(bossSpecialStatesUnlockTime, bossLevelTwoUnlockTime);
+    public bool AreBossSpecialStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && (devForceBossLevelTwo || SurvivalTime >= Mathf.Max(0f, bossSpecialStatesUnlockTime));
+    public bool AreBossLevelTwoStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && (devForceBossLevelTwo || SurvivalTime >= Mathf.Max(bossSpecialStatesUnlockTime, bossLevelTwoUnlockTime));
     public bool AreMapEventsUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, mapEventsUnlockTime);
     public bool IsContainmentPulseUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && SurvivalTime >= Mathf.Max(0f, containmentPulseUnlockTime);
     public float EventPressureRetryDelay => Mathf.Max(0.25f, eventPressureRetryDelay);
@@ -353,6 +353,9 @@ public class GameManager : MonoBehaviour
     private bool contextArenaEventShown;
     private bool contextBreachShown;
     private bool operationPlayerModifiersApplied;
+    private bool devForceBossLevelTwo;
+    private bool devFastRunLoops;
+    private bool devSkipCountdown;
     private float labRunTime;
     private float storageRunTime;
     private float ruptureRunTime;
@@ -1376,6 +1379,39 @@ public class GameManager : MonoBehaviour
         contextBreachShown = false;
         PlayerController.SetTutorialInputLocked(false);
         Time.timeScale = 0f;
+        ApplyDeveloperRunSettings();
+    }
+
+    private void ApplyDeveloperRunSettings()
+    {
+        devForceBossLevelTwo = DeveloperModeStorage.ForceBossLevelTwo;
+        devFastRunLoops = DeveloperModeStorage.FastRunLoops;
+        devSkipCountdown = DeveloperModeStorage.SkipCountdown;
+
+        float startTime = DeveloperModeStorage.StartTimeSeconds;
+        if (devForceBossLevelTwo)
+        {
+            startTime = Mathf.Max(startTime, Mathf.Max(bossSpecialStatesUnlockTime, bossLevelTwoUnlockTime) + 0.5f);
+        }
+
+        SurvivalTime = Mathf.Max(0f, startTime);
+
+        if (devFastRunLoops)
+        {
+            nextUpgradeTime = Mathf.Min(nextUpgradeTime, SurvivalTime + 8f);
+            nextContractTime = Mathf.Min(nextContractTime, SurvivalTime + 9f);
+            upgradeInterval = Mathf.Max(12f, upgradeInterval * 0.35f);
+            contractInterval = Mathf.Max(14f, contractInterval * 0.35f);
+            contractDuration = Mathf.Max(24f, contractDuration * 0.65f);
+            mapEventsUnlockTime = Mathf.Min(mapEventsUnlockTime, SurvivalTime + 4f);
+            containmentPulseUnlockTime = Mathf.Min(containmentPulseUnlockTime, SurvivalTime + 10f);
+        }
+
+        if (devSkipCountdown)
+        {
+            runPhase = RunPhase.Active;
+            Time.timeScale = 1f;
+        }
     }
 
     private void ApplyOperationPlayerModifiersOnce()
@@ -3473,6 +3509,10 @@ public class GameManager : MonoBehaviour
         bossLevelTwoIntroTimer = Mathf.Max(0.25f, bossLevelTwoIntroDuration);
         statePulseOverlayTimer = Mathf.Max(statePulseOverlayTimer, Mathf.Max(0.08f, statePulseOverlayDuration) * 1.8f);
         enemyController.TriggerLevelTwoAwakeningFx();
+        if (devForceBossLevelTwo)
+        {
+            enemyController.ForceLevelTwoStateForDebug();
+        }
         GlitchAudioManager.PlayBossLevelTwoAwaken(enemyController.transform.position);
     }
 
