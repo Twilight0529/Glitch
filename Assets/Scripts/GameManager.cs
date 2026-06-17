@@ -218,6 +218,7 @@ public class GameManager : MonoBehaviour
     public bool AreBossLevelTwoStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && (devForceBossLevelTwo || SurvivalTime >= Mathf.Max(bossSpecialStatesUnlockTime, bossLevelTwoUnlockTime));
     public bool AreMapEventsUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, mapEventsUnlockTime);
     public bool IsContainmentPulseUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && SurvivalTime >= Mathf.Max(0f, containmentPulseUnlockTime);
+    public bool IsContainmentPulsePressureActive => chaosDirector != null && chaosDirector.IsContainmentPulsePressureActive;
     public float EventPressureRetryDelay => Mathf.Max(0.25f, eventPressureRetryDelay);
     public float CurrentEventPressureLoad => GetCurrentEventPressureLoad();
     public float CurrentEventPressureCap => GetCurrentEventPressureCap();

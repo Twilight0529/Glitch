@@ -208,10 +208,16 @@ public class EnemyController : MonoBehaviour
     [SerializeField, Min(0f)] private float signalJamWeight = 0.66f;
     [SerializeField, Min(0f)] private float orbitBarrageWeight = 0.64f;
 
+    [Header("Level 2 State Priority")]
+    [SerializeField, Range(1f, 5f)] private float levelTwoStatePriorityMultiplier = 2.75f;
+    [SerializeField, Range(0.5f, 2f)] private float levelTwoBaseSpecialPriorityMultiplier = 1.12f;
+    [SerializeField, Range(0.05f, 1f)] private float levelTwoMinorStatePriorityMultiplier = 0.36f;
+
     public AnomalyState CurrentState => currentState;
     public string CurrentStateLabel => currentState.ToString();
     public PacingPhase CurrentPacingPhase => pacingPhase;
     public string CurrentPacingPhaseLabel => pacingPhase.ToString();
+    public bool IsCurrentStateLevelTwo => IsLevelTwoState(currentState);
 
     [Header("Navigation Grid")]
     [SerializeField] private LayerMask obstacleMask = ~0;
@@ -1146,6 +1152,7 @@ public class EnemyController : MonoBehaviour
         }
 
         ApplyProgressionFilter(fullOptions);
+        ApplyLevelTwoPriority(fullOptions);
 
         List<StateWeight> filtered = new List<StateWeight>(fullOptions);
         ApplyPacingFilter(filtered);
@@ -1195,6 +1202,12 @@ public class EnemyController : MonoBehaviour
 
     private void ApplyPacingFilter(List<StateWeight> options)
     {
+        if (CanUseLevelTwoStates())
+        {
+            ApplyLevelTwoPacingFilter(options);
+            return;
+        }
+
         switch (pacingPhase)
         {
             case PacingPhase.SustainPeak:
@@ -1248,6 +1261,28 @@ public class EnemyController : MonoBehaviour
         }
     }
 
+    private void ApplyLevelTwoPacingFilter(List<StateWeight> options)
+    {
+        switch (pacingPhase)
+        {
+            case PacingPhase.SustainPeak:
+                options.RemoveAll(o => !IsLevelTwoState(o.state) && !IsBaseSpecialState(o.state));
+                break;
+            case PacingPhase.BuildUp:
+            case PacingPhase.PeakFade:
+                options.RemoveAll(o => !IsLevelTwoState(o.state) && !IsBaseSpecialState(o.state) && !IsCalmMinorState(o.state));
+                break;
+            case PacingPhase.Relax:
+                options.RemoveAll(o => !IsCalmMinorState(o.state) && !IsBaseSpecialState(o.state) && !IsLevelTwoState(o.state));
+                if (options.Count == 0)
+                {
+                    options.Add(new StateWeight(AnomalyState.DirectChase, directChaseWeight));
+                    options.Add(new StateWeight(AnomalyState.PredictiveIntercept, predictiveInterceptWeight));
+                }
+                break;
+        }
+    }
+
     private bool CanUseSpecialStates()
     {
         return gameManager != null && gameManager.AreBossSpecialStatesUnlocked;
@@ -1255,7 +1290,7 @@ public class EnemyController : MonoBehaviour
 
     private bool CanUseLevelTwoStates()
     {
-        return gameManager != null && gameManager.AreBossLevelTwoStatesUnlocked;
+        return gameManager != null && gameManager.AreBossLevelTwoStatesUnlocked && !gameManager.IsContainmentPulsePressureActive;
     }
 
     private bool AreSpecialStatesSuppressedForBreach()
@@ -1282,6 +1317,42 @@ public class EnemyController : MonoBehaviour
                state == AnomalyState.PincerBarrage ||
                state == AnomalyState.SignalJam ||
                state == AnomalyState.OrbitBarrage;
+    }
+
+    private static bool IsBaseSpecialState(AnomalyState state)
+    {
+        return state == AnomalyState.Split ||
+               state == AnomalyState.ExpansionShoot ||
+               state == AnomalyState.SpeedSurge ||
+               state == AnomalyState.WeaveHunter ||
+               state == AnomalyState.Destroyer;
+    }
+
+    private void ApplyLevelTwoPriority(List<StateWeight> options)
+    {
+        if (!CanUseLevelTwoStates() || options == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < options.Count; i++)
+        {
+            StateWeight option = options[i];
+            if (IsLevelTwoState(option.state))
+            {
+                option.weight *= Mathf.Max(1f, levelTwoStatePriorityMultiplier);
+            }
+            else if (IsBaseSpecialState(option.state))
+            {
+                option.weight *= Mathf.Max(0.1f, levelTwoBaseSpecialPriorityMultiplier);
+            }
+            else
+            {
+                option.weight *= Mathf.Max(0.01f, levelTwoMinorStatePriorityMultiplier);
+            }
+
+            options[i] = option;
+        }
     }
 
     public bool IsMapEventSuppressed()

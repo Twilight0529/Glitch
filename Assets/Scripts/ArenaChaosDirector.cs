@@ -124,6 +124,7 @@ public class ArenaChaosDirector : MonoBehaviour
     private float warningTimer;
     private float warningDuration;
     private bool pulseWasUnlocked;
+    private bool pulseEventActive;
     private bool objectiveWasUnlocked;
     private bool objectiveEventActive;
     private int objectiveNodesActivated;
@@ -150,6 +151,7 @@ public class ArenaChaosDirector : MonoBehaviour
     public string ActiveEventLabel => eventLabelTimer > 0f ? activeEventLabel : string.Empty;
     public string ActiveWarningLabel => warningTimer > 0f ? activeWarningLabel : string.Empty;
     public float ActiveWarningNormalized => warningTimer > 0f ? Mathf.Clamp01(warningTimer / Mathf.Max(0.001f, warningDuration)) : 0f;
+    public bool IsContainmentPulsePressureActive => pulseEventActive;
 
     public void Configure(ProceduralArenaGenerator arenaGenerator)
     {
@@ -159,6 +161,7 @@ public class ArenaChaosDirector : MonoBehaviour
         ApplyOperationModifiersOnce();
         ClearRuntimeObjects();
         pulseWasUnlocked = false;
+        pulseEventActive = false;
         objectiveWasUnlocked = false;
         breachWasUnlocked = false;
         currentArenaPlayableSeconds = 0f;
@@ -180,6 +183,7 @@ public class ArenaChaosDirector : MonoBehaviour
         EnsureRuntimeRoot();
         ApplyOperationModifiersOnce();
         pulseWasUnlocked = false;
+        pulseEventActive = false;
         objectiveWasUnlocked = false;
         breachWasUnlocked = false;
         currentArenaPlayableSeconds = 0f;
@@ -291,7 +295,17 @@ public class ArenaChaosDirector : MonoBehaviour
         objectiveWasUnlocked = objectiveUnlocked;
 
         bool breachBlockingMapEvents = breachEventActive || breachTransitionActive || IsBreachSuppressionWindowActive(breachUnlocked);
-        if (pulseUnlocked && !breachBlockingMapEvents && !IsBreachSuppressionWindowActive(breachUnlocked) && (enemy == null || !enemy.IsMapEventSuppressed()))
+        bool bossLevelTwoBlockingPulse = IsBossLevelTwoStateActive();
+        if (pulseUnlocked && bossLevelTwoBlockingPulse)
+        {
+            pulseEventTimer = Mathf.Max(pulseEventTimer, GetPressureRetryDelay());
+        }
+
+        if (pulseUnlocked &&
+            !bossLevelTwoBlockingPulse &&
+            !breachBlockingMapEvents &&
+            !IsBreachSuppressionWindowActive(breachUnlocked) &&
+            (enemy == null || !enemy.IsMapEventSuppressed()))
         {
             pulseEventTimer -= Time.deltaTime;
             if (pulseEventTimer <= 0f)
@@ -1463,6 +1477,7 @@ public class ArenaChaosDirector : MonoBehaviour
 
     private IEnumerator SpawnPulseEventRoutine()
     {
+        pulseEventActive = true;
         int minCount = Mathf.Max(1, Mathf.Min(pulseHazardsMin, pulseHazardsMax));
         int maxCount = Mathf.Max(minCount, Mathf.Max(pulseHazardsMin, pulseHazardsMax));
         int count = Random.Range(minCount, maxCount + 1);
@@ -1476,12 +1491,14 @@ public class ArenaChaosDirector : MonoBehaviour
 
         if (gameManager == null || !gameManager.IsRunActive || gameManager.IsGameOver)
         {
+            pulseEventActive = false;
             yield break;
         }
-        if (gameManager.IsBreachSensitiveSuppressionActive || breachEventActive || breachTransitionActive)
+        if (gameManager.IsBreachSensitiveSuppressionActive || breachEventActive || breachTransitionActive || IsBossLevelTwoStateActive())
         {
             SchedulePulseEvent();
             ReleaseDirectorEventPressure(PulseEventPressureKey, pulseEventPressureCooldown);
+            pulseEventActive = false;
             yield break;
         }
 
@@ -1490,14 +1507,17 @@ public class ArenaChaosDirector : MonoBehaviour
         Vector2 pulseCenter = GetPulseFocusCenter();
         float clusterRadius = Mathf.Max(0.75f, pulseClusterRadius);
         float basePhase = Random.Range(0f, 360f);
+        float lastHazardSpawnTime = Time.time;
+        int spawnedHazards = 0;
 
         // Distribuye los peligros como un anillo irregular para que el jugador pueda leer un patron.
         for (int i = 0; i < count; i++)
         {
-            if (gameManager.IsBreachSensitiveSuppressionActive || breachEventActive || breachTransitionActive)
+            if (gameManager.IsBreachSensitiveSuppressionActive || breachEventActive || breachTransitionActive || IsBossLevelTwoStateActive())
             {
                 SchedulePulseEvent();
                 ReleaseDirectorEventPressure(PulseEventPressureKey, pulseEventPressureCooldown);
+                pulseEventActive = false;
                 yield break;
             }
 
@@ -1541,12 +1561,28 @@ public class ArenaChaosDirector : MonoBehaviour
                 pulseEnemyBoostDuration,
                 pulseEnemyBoostCooldown);
 
+            spawnedHazards++;
+            lastHazardSpawnTime = Time.time;
+
             float stagger = Mathf.Max(0f, pulseSpawnStagger);
             if (stagger > 0f && i < count - 1)
             {
                 yield return new WaitForSeconds(stagger);
             }
         }
+
+        if (spawnedHazards > 0)
+        {
+            float hazardLifetime = Mathf.Max(0f, pulseTelegraphSeconds) + Mathf.Max(0f, pulseActiveSeconds);
+            float elapsedSinceLastSpawn = Time.time - lastHazardSpawnTime;
+            float remainingLifetime = Mathf.Max(0f, hazardLifetime - elapsedSinceLastSpawn);
+            if (remainingLifetime > 0f)
+            {
+                yield return new WaitForSeconds(remainingLifetime);
+            }
+        }
+
+        pulseEventActive = false;
     }
 
     private bool TryFindSpawnPoint(float probeRadius, out Vector2 result)
@@ -1766,6 +1802,16 @@ public class ArenaChaosDirector : MonoBehaviour
     private bool ShouldRunPulseEvents()
     {
         return enablePulseEvents && gameManager != null && gameManager.IsContainmentPulseUnlocked;
+    }
+
+    private bool IsBossLevelTwoStateActive()
+    {
+        if (enemy == null)
+        {
+            enemy = FindAnyObjectByType<EnemyController>();
+        }
+
+        return enemy != null && enemy.IsCurrentStateLevelTwo;
     }
 
     private bool ShouldRunObjectiveEvents()
