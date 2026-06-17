@@ -29,6 +29,8 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private float hudScale = 1.1f;
     [SerializeField] private bool fullscreen;
     [SerializeField] private bool vSyncEnabled = true;
+    [SerializeField] private bool showIntroTutorial = true;
+    [SerializeField] private bool showContextTutorial = true;
 
     [Header("Scene Fade")]
     [SerializeField] private float introBlackHoldDuration = 0.20f;
@@ -528,7 +530,7 @@ public class MainMenuController : MonoBehaviour
     {
         DrawScreenFade(0.46f);
         float bob = Mathf.Sin(Time.unscaledTime * 1.2f + 1.2f) * 5f;
-        Rect panel = CenterRect(Mathf.Min(640f, Screen.width - 42f), Mathf.Min(500f, Screen.height - 42f));
+        Rect panel = CenterRect(Mathf.Min(640f, Screen.width - 42f), Mathf.Min(540f, Screen.height - 42f));
         panel.y += bob;
         DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.90f), new Color(0.47f, 0.56f, 0.72f, 0.55f));
         DrawPanelFx(panel, new Color(0.58f, 0.82f, 1f, 1f), 0.09f);
@@ -545,7 +547,7 @@ public class MainMenuController : MonoBehaviour
         Rect audio = new Rect(area.x, area.y + 66f, area.width * 0.48f, 124f);
         Rect interfaceBox = new Rect(audio.xMax + 18f, audio.y, area.width - audio.width - 18f, 184f);
         Rect display = new Rect(area.x, audio.yMax + 18f, audio.width, 156f);
-        Rect actions = new Rect(interfaceBox.x, interfaceBox.yMax + 18f, interfaceBox.width, 136f);
+        Rect actions = new Rect(interfaceBox.x, interfaceBox.yMax + 18f, interfaceBox.width, 184f);
 
         DrawStatsSection(audio, "Audio", new Color(0.55f, 0.95f, 1f, 1f));
         float newMaster = DrawOptionSlider(audio, 42f, "Volumen maestro", masterVolume, 0f, 1f);
@@ -595,11 +597,35 @@ public class MainMenuController : MonoBehaviour
             ApplyDisplaySettings();
         }
 
-        DrawStatsSection(actions, "Acciones", new Color(0.95f, 0.58f, 1f, 1f));
-        Rect resetRect = new Rect(actions.x + 14f, actions.y + 42f, actions.width - 28f, 34f);
-        if (DrawAnimatedMenuButton(resetRect, "Restaurar opciones"))
+        DrawStatsSection(actions, "Tutoriales", new Color(0.95f, 0.58f, 1f, 1f));
+        bool newIntroTutorial = DrawOptionToggle(actions, 42f, "Tutorial inicial", showIntroTutorial);
+        if (newIntroTutorial != showIntroTutorial)
+        {
+            showIntroTutorial = newIntroTutorial;
+            UserSettings.SetShowIntroTutorial(showIntroTutorial);
+        }
+
+        bool newContextTutorial = DrawOptionToggle(actions, 84f, "Pausas contextuales", showContextTutorial);
+        if (newContextTutorial != showContextTutorial)
+        {
+            showContextTutorial = newContextTutorial;
+            UserSettings.SetShowContextTutorial(showContextTutorial);
+        }
+
+        float buttonW = (actions.width - 34f) * 0.5f;
+        Rect resetRect = new Rect(actions.x + 14f, actions.y + 132f, buttonW, 34f);
+        Rect resetTutorialRect = new Rect(resetRect.xMax + 6f, resetRect.y, buttonW, 34f);
+        if (DrawAnimatedMenuButton(resetRect, "Reset opciones"))
         {
             ResetOptionsToDefault();
+        }
+        if (DrawAnimatedMenuButton(resetTutorialRect, "Reset tutoriales"))
+        {
+            UserSettings.ResetTutorialProgress();
+            LoadSettings();
+            optionsActionMessage = "Tutoriales reiniciados.";
+            optionsActionMessageExpireAt = Time.unscaledTime + 2.2f;
+            GlitchAudioManager.PlayMenuConfirm();
         }
 
         if (!string.IsNullOrEmpty(optionsActionMessage))
@@ -2095,6 +2121,8 @@ public class MainMenuController : MonoBehaviour
         menuMotionIntensity = UserSettings.GetMenuMotion();
         fullscreen = UserSettings.GetFullscreen();
         vSyncEnabled = UserSettings.GetVSync();
+        showIntroTutorial = UserSettings.GetShowIntroTutorial();
+        showContextTutorial = UserSettings.GetShowContextTutorial();
         AudioListener.volume = masterVolume;
         ApplyDisplaySettings();
     }

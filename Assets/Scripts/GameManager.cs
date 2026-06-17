@@ -320,7 +320,6 @@ public class GameManager : MonoBehaviour
     private float breachSensitiveSuppressionTimer;
     private float eventPressureCooldownTimer;
     private bool introTutorialOpen;
-    private bool introTutorialDontShowAgain;
     private IntroTutorialStep introTutorialStep;
     private float introTutorialStepProgress;
     private float introTutorialStepTimer;
@@ -1344,7 +1343,6 @@ public class GameManager : MonoBehaviour
         eventPressureCooldownTimer = 0f;
         eventPressureReservations.Clear();
         introTutorialOpen = false;
-        introTutorialDontShowAgain = false;
         introTutorialStep = IntroTutorialStep.Movement;
         introTutorialStepProgress = 0f;
         introTutorialStepTimer = 0f;
@@ -1537,7 +1535,11 @@ public class GameManager : MonoBehaviour
         DrawSolidRect(new Rect(progressBar.x, progressBar.y, progressBar.width * Mathf.Clamp01(introTutorialStepProgress), progressBar.height), new Color(stepAccent.r, stepAccent.g, stepAccent.b, 0.92f));
 
         Rect footer = new Rect(area.x, area.yMax - 48f, area.width, 42f);
-        DrawTutorialCheckbox(new Rect(footer.x, footer.y + 4f, 240f, 32f), "No volver a mostrar");
+        string saveHint = "Se guarda al completar. Reinicialo desde Opciones.";
+        GUI.Label(
+            new Rect(footer.x, footer.y + 6f, footer.width - 250f, 30f),
+            saveHint,
+            BuildFittedSingleLineStyle(tutorialBodyStyle, saveHint, footer.width - 250f, 30f, 10));
 
         string buttonLabel = introTutorialStep == IntroTutorialStep.Ready ? "INICIAR PROTOCOLO" : "CONTINUAR";
         Rect continueButton = new Rect(footer.xMax - 232f, footer.y + 2f, 232f, 36f);
@@ -1559,10 +1561,7 @@ public class GameManager : MonoBehaviour
 
     private void CloseIntroTutorial()
     {
-        if (introTutorialDontShowAgain)
-        {
-            UserSettings.SetShowIntroTutorial(false);
-        }
+        UserSettings.SetShowIntroTutorial(false);
 
         introTutorialOpen = false;
         PlayerController.SetTutorialInputLocked(false);
@@ -1692,6 +1691,12 @@ public class GameManager : MonoBehaviour
             return false;
         }
 
+        if (!UserSettings.GetShowContextTutorial())
+        {
+            MarkContextTutorialShown(kind, eventKey);
+            return false;
+        }
+
         if (HasContextTutorialBeenShown(kind, eventKey))
         {
             return false;
@@ -1719,6 +1724,12 @@ public class GameManager : MonoBehaviour
 
     private bool HasContextTutorialBeenShown(ContextTutorialKind kind, string eventKey)
     {
+        string settingsKey = GetContextTutorialSettingsKey(kind);
+        if (UserSettings.HasSeenContextTutorial(settingsKey))
+        {
+            return true;
+        }
+
         switch (kind)
         {
             case ContextTutorialKind.Movement:
@@ -1736,9 +1747,7 @@ public class GameManager : MonoBehaviour
             case ContextTutorialKind.Upgrade:
                 return contextUpgradeShown;
             case ContextTutorialKind.ArenaEvent:
-                return string.IsNullOrWhiteSpace(eventKey)
-                    ? contextArenaEventShown
-                    : contextArenaEventTutorialsShown.Contains(eventKey);
+                return contextArenaEventShown;
             case ContextTutorialKind.Breach:
                 return contextBreachShown;
             default:
@@ -1748,6 +1757,9 @@ public class GameManager : MonoBehaviour
 
     private void MarkContextTutorialShown(ContextTutorialKind kind, string eventKey)
     {
+        string settingsKey = GetContextTutorialSettingsKey(kind);
+        UserSettings.MarkContextTutorialSeen(settingsKey);
+
         switch (kind)
         {
             case ContextTutorialKind.Movement:
@@ -1772,11 +1784,8 @@ public class GameManager : MonoBehaviour
                 contextUpgradeShown = true;
                 break;
             case ContextTutorialKind.ArenaEvent:
-                if (string.IsNullOrWhiteSpace(eventKey))
-                {
-                    contextArenaEventShown = true;
-                }
-                else
+                contextArenaEventShown = true;
+                if (!string.IsNullOrWhiteSpace(eventKey))
                 {
                     contextArenaEventTutorialsShown.Add(eventKey);
                 }
@@ -1784,6 +1793,33 @@ public class GameManager : MonoBehaviour
             case ContextTutorialKind.Breach:
                 contextBreachShown = true;
                 break;
+        }
+    }
+
+    private static string GetContextTutorialSettingsKey(ContextTutorialKind kind)
+    {
+        switch (kind)
+        {
+            case ContextTutorialKind.Movement:
+                return "movement";
+            case ContextTutorialKind.Parry:
+                return "parry";
+            case ContextTutorialKind.GhostDash:
+                return "ghost_dash";
+            case ContextTutorialKind.Firewall:
+                return "firewall";
+            case ContextTutorialKind.ScorePickup:
+                return "score_pickup";
+            case ContextTutorialKind.Powerup:
+                return "powerup";
+            case ContextTutorialKind.Upgrade:
+                return "upgrade";
+            case ContextTutorialKind.ArenaEvent:
+                return "arena_event";
+            case ContextTutorialKind.Breach:
+                return "breach";
+            default:
+                return string.Empty;
         }
     }
 
@@ -2883,26 +2919,6 @@ public class GameManager : MonoBehaviour
         DrawSolidRect(new Rect(arena.x + 28f, arena.center.y - 9f, 18f, 18f), new Color(0.30f, 0.88f, 1f, 1f));
         DrawArrowLine(new Vector2(arena.x + 52f, arena.center.y), new Vector2(arena.xMax - 34f, arena.center.y), accent);
         DrawTutorialLabel(new Rect(rect.x + 10f, rect.yMax - 27f, rect.width - 20f, 20f), "ESCAPA");
-    }
-
-    private void DrawTutorialCheckbox(Rect rect, string label)
-    {
-        if (GUI.Button(rect, GUIContent.none, GUIStyle.none))
-        {
-            introTutorialDontShowAgain = !introTutorialDontShowAgain;
-            GlitchAudioManager.PlayMenuHover();
-        }
-
-        Rect box = new Rect(rect.x, rect.y + 5f, 22f, 22f);
-        DrawSolidRect(box, new Color(0.04f, 0.07f, 0.12f, 0.95f));
-        DrawTutorialFrame(box, new Color(0.65f, 0.92f, 1f, 0.52f), 2f);
-        if (introTutorialDontShowAgain)
-        {
-            DrawSolidRect(new Rect(box.x + 5f, box.y + 9f, 6f, 6f), new Color(1f, 0.78f, 0.42f, 1f));
-            DrawSolidRect(new Rect(box.x + 10f, box.y + 6f, 8f, 10f), new Color(1f, 0.78f, 0.42f, 1f));
-        }
-
-        GUI.Label(new Rect(box.xMax + 10f, rect.y, rect.width - 32f, rect.height), label, tutorialBodyStyle);
     }
 
     private void DrawKey(Rect rect, string text, Color accent)

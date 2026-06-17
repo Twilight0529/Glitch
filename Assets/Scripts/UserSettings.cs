@@ -12,6 +12,8 @@ public static class UserSettings
     public const string FullscreenKey = "glitch_fullscreen";
     public const string VSyncKey = "glitch_vsync";
     public const string IntroTutorialKey = "glitch_intro_tutorial";
+    public const string ContextTutorialKey = "glitch_context_tutorial";
+    private const string ContextTutorialSeenPrefix = "glitch_context_tutorial_seen_";
 
     public const float DefaultMasterVolume = 0.8f;
     public const float DefaultMusicVolume = 0.85f;
@@ -22,6 +24,7 @@ public static class UserSettings
     public const bool DefaultFullscreen = false;
     public const bool DefaultVSync = true;
     public const bool DefaultShowIntroTutorial = true;
+    public const bool DefaultShowContextTutorial = true;
 
     public const float MinMenuUiScale = 0.8f;
     public const float MaxMenuUiScale = 1.25f;
@@ -138,6 +141,64 @@ public static class UserSettings
         PlayerPrefs.Save();
     }
 
+    public static bool GetShowContextTutorial()
+    {
+        return PlayerPrefs.GetInt(ContextTutorialKey, DefaultShowContextTutorial ? 1 : 0) == 1;
+    }
+
+    public static void SetShowContextTutorial(bool value)
+    {
+        PlayerPrefs.SetInt(ContextTutorialKey, value ? 1 : 0);
+        PlayerPrefs.Save();
+    }
+
+    public static bool HasSeenContextTutorial(string tutorialKey)
+    {
+        if (string.IsNullOrWhiteSpace(tutorialKey))
+        {
+            return true;
+        }
+
+        return PlayerPrefs.GetInt(ContextTutorialSeenPrefix + tutorialKey, 0) == 1;
+    }
+
+    public static void MarkContextTutorialSeen(string tutorialKey)
+    {
+        if (string.IsNullOrWhiteSpace(tutorialKey))
+        {
+            return;
+        }
+
+        PlayerPrefs.SetInt(ContextTutorialSeenPrefix + tutorialKey, 1);
+        PlayerPrefs.Save();
+    }
+
+    public static void ResetTutorialProgress()
+    {
+        SetShowIntroTutorial(DefaultShowIntroTutorial);
+        SetShowContextTutorial(DefaultShowContextTutorial);
+
+        string[] keys =
+        {
+            "movement",
+            "parry",
+            "ghost_dash",
+            "firewall",
+            "score_pickup",
+            "powerup",
+            "upgrade",
+            "arena_event",
+            "breach"
+        };
+
+        for (int i = 0; i < keys.Length; i++)
+        {
+            PlayerPrefs.DeleteKey(ContextTutorialSeenPrefix + keys[i]);
+        }
+
+        PlayerPrefs.Save();
+    }
+
     public static void ResetOptions()
     {
         SetMasterVolume(DefaultMasterVolume);
@@ -149,5 +210,6 @@ public static class UserSettings
         SetFullscreen(DefaultFullscreen);
         SetVSync(DefaultVSync);
         SetShowIntroTutorial(DefaultShowIntroTutorial);
+        SetShowContextTutorial(DefaultShowContextTutorial);
     }
 }
