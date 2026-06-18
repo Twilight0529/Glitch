@@ -224,9 +224,15 @@ public class EnemyController : MonoBehaviour
     [Header("Level 2 - Map Recompile")]
     [SerializeField] private float mapRecompileInterval = 5.4f;
     [SerializeField] private float mapRecompileTelegraphSeconds = 1.2f;
-    [SerializeField] private int mapRecompileObstacleCount = 3;
+    [SerializeField] private int mapRecompileMinObstacleCount = 2;
+    [SerializeField] private int mapRecompileMaxObstacleCount = 5;
     [SerializeField] private float mapRecompileMoveDistance = 2.35f;
     [SerializeField] private float mapRecompileMoveSeconds = 0.82f;
+    [SerializeField] private float mapRecompileBlockDistanceFromPlayer = 2.65f;
+    [SerializeField] private float mapRecompileBlockSpacing = 1.1f;
+    [SerializeField] private float mapRecompileMaxObstaclePullDistance = 7.5f;
+    [SerializeField] private float mapRecompileHighSpeedThreshold = 7.5f;
+    [SerializeField] private float mapRecompileFarDistanceThreshold = 6.4f;
     [SerializeField] private Color mapRecompileColor = new Color(0.92f, 0.62f, 1f, 0.92f);
 
     [Header("Level 2 - Signal Possession")]
@@ -4036,42 +4042,37 @@ public class EnemyController : MonoBehaviour
     private void BuildMapRecompileTargets()
     {
         mapRecompileTargets.Clear();
-        Collider2D[] colliders = FindObjectsByType<Collider2D>(FindObjectsSortMode.None);
-        int attempts = 0;
-        int desired = Mathf.Max(1, mapRecompileObstacleCount);
-
-        while (mapRecompileTargets.Count < desired && attempts < colliders.Length * 3)
+        List<Collider2D> candidates = CollectRecompilableObstacles();
+        int desired = DecideMapRecompileObstacleCount(candidates.Count);
+        List<Vector2> tacticalSlots = BuildMapRecompileBlockSlots(desired);
+        if (tacticalSlots.Count <= 0)
         {
-            attempts++;
-            Collider2D col = colliders[Random.Range(0, colliders.Length)];
-            if (!IsRecompilableObstacle(col))
+            return;
+        }
+
+        for (int i = 0; i < tacticalSlots.Count && candidates.Count > 0; i++)
+        {
+            Vector2 slot = tacticalSlots[i];
+            int bestIndex = FindBestRecompileObstacleIndex(candidates, slot);
+            if (bestIndex < 0)
             {
                 continue;
             }
 
+            Collider2D col = candidates[bestIndex];
+            candidates.RemoveAt(bestIndex);
             Transform targetTransform = col.transform;
-            bool alreadyChosen = false;
-            for (int i = 0; i < mapRecompileTargets.Count; i++)
-            {
-                if (mapRecompileTargets[i].transform == targetTransform)
-                {
-                    alreadyChosen = true;
-                    break;
-                }
-            }
-
-            if (alreadyChosen)
+            Vector2 start = targetTransform.position;
+            if (!TryFindValidRecompileSlot(slot, col, mapRecompileTargets, out Vector2 target))
             {
                 continue;
             }
 
-            Vector2 start = targetTransform.position;
-            Vector2 target = PickMapRecompileTarget(start);
             SpriteRenderer[] renderers = targetTransform.GetComponentsInChildren<SpriteRenderer>(true);
             Color[] colors = new Color[renderers.Length];
-            for (int i = 0; i < renderers.Length; i++)
+            for (int r = 0; r < renderers.Length; r++)
             {
-                colors[i] = renderers[i] != null ? renderers[i].color : Color.white;
+                colors[r] = renderers[r] != null ? renderers[r].color : Color.white;
             }
 
             mapRecompileTargets.Add(new RecompileTarget
@@ -4084,6 +4085,254 @@ public class EnemyController : MonoBehaviour
                 colors = colors
             });
         }
+    }
+
+    private int DecideMapRecompileObstacleCount(int availableObstacles)
+    {
+        int min = Mathf.Max(1, Mathf.Min(mapRecompileMinObstacleCount, mapRecompileMaxObstacleCount));
+        int max = Mathf.Max(min, Mathf.Max(mapRecompileMinObstacleCount, mapRecompileMaxObstacleCount));
+        if (player == null || availableObstacles <= 0)
+        {
+            return Mathf.Min(min, Mathf.Max(0, availableObstacles));
+        }
+
+        Vector2 playerPos = player.GetPosition();
+        Vector2 enemyPos = GetCurrentPosition();
+        float distance = Vector2.Distance(playerPos, enemyPos);
+        float playerSpeed = player.CurrentVelocity.magnitude;
+        bool enemyHasDirectLine = HasDirectPath(enemyPos, playerPos);
+        bool playerIsEscapingFast = playerSpeed >= Mathf.Max(1f, mapRecompileHighSpeedThreshold);
+        bool playerFar = distance >= Mathf.Max(2f, mapRecompileFarDistanceThreshold);
+
+        int desired = min;
+        if (enemyHasDirectLine)
+        {
+            desired += 1;
+        }
+        if (playerIsEscapingFast)
+        {
+            desired += 1;
+        }
+        if (playerFar)
+        {
+            desired += 1;
+        }
+        if (!enemyHasDirectLine && playerFar)
+        {
+            desired += 1;
+        }
+
+        float arenaScale = Mathf.Min(navSize.x, navSize.y);
+        if (arenaScale > 16f && availableObstacles >= max)
+        {
+            desired += 1;
+        }
+
+        return Mathf.Clamp(desired, 1, Mathf.Min(max, availableObstacles));
+    }
+
+    private List<Vector2> BuildMapRecompileBlockSlots(int desired)
+    {
+        List<Vector2> slots = new List<Vector2>();
+        if (player == null || rb == null)
+        {
+            return slots;
+        }
+
+        Vector2 playerPos = player.GetPosition();
+        Vector2 enemyPos = GetCurrentPosition();
+        Vector2 enemyToPlayer = playerPos - enemyPos;
+        if (enemyToPlayer.sqrMagnitude < 0.01f)
+        {
+            enemyToPlayer = player.CurrentVelocity.sqrMagnitude > 0.01f ? -player.CurrentVelocity : lastMoveDirection;
+        }
+
+        Vector2 approach = enemyToPlayer.sqrMagnitude > 0.001f ? enemyToPlayer.normalized : Vector2.right;
+        Vector2 playerVelocity = player.CurrentVelocity;
+        Vector2 escapeBias = playerVelocity.sqrMagnitude > 0.1f ? playerVelocity.normalized * 0.9f : Vector2.zero;
+        Vector2 barrierCenter = playerPos - approach * Mathf.Max(1.1f, mapRecompileBlockDistanceFromPlayer) + escapeBias;
+        Vector2 side = new Vector2(-approach.y, approach.x);
+        int count = Mathf.Max(1, desired);
+        float spacing = Mathf.Max(0.45f, mapRecompileBlockSpacing) * Mathf.Lerp(0.9f, 1.18f, Mathf.Clamp01((count - 2f) / 3f));
+
+        for (int i = 0; i < count; i++)
+        {
+            float lane = count == 1 ? 0f : i - (count - 1) * 0.5f;
+            bool secondRow = count >= 4 && (i == 1 || i == count - 2);
+            float rowOffset = secondRow ? -0.82f : 0f;
+            Vector2 candidate = ClampPointToArenaWithMargin(
+                barrierCenter + side * lane * spacing + approach * rowOffset,
+                agentRadius + 0.35f);
+
+            if (Vector2.Distance(candidate, playerPos) < 1.15f)
+            {
+                candidate = ClampPointToArenaWithMargin(candidate - approach * 1.15f, agentRadius + 0.35f);
+            }
+
+            if (Vector2.Distance(candidate, enemyPos) < 1.0f)
+            {
+                candidate = ClampPointToArenaWithMargin(candidate + side * Mathf.Sign(lane == 0f ? Random.Range(-1f, 1f) : lane) * spacing, agentRadius + 0.35f);
+            }
+
+            slots.Add(candidate);
+        }
+
+        return slots;
+    }
+
+    private List<Collider2D> CollectRecompilableObstacles()
+    {
+        Collider2D[] colliders = FindObjectsByType<Collider2D>(FindObjectsSortMode.None);
+        List<Collider2D> result = new List<Collider2D>();
+        for (int i = 0; i < colliders.Length; i++)
+        {
+            if (IsRecompilableObstacle(colliders[i]))
+            {
+                result.Add(colliders[i]);
+            }
+        }
+
+        return result;
+    }
+
+    private int FindBestRecompileObstacleIndex(List<Collider2D> candidates, Vector2 target)
+    {
+        int bestIndex = -1;
+        float bestScore = float.NegativeInfinity;
+        Vector2 playerPos = player != null ? player.GetPosition() : target;
+        Vector2 enemyPos = GetCurrentPosition();
+        float maxPull = Mathf.Max(1.5f, mapRecompileMaxObstaclePullDistance);
+
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            Collider2D col = candidates[i];
+            if (col == null)
+            {
+                continue;
+            }
+
+            Vector2 pos = col.transform.position;
+            float pullDistance = Vector2.Distance(pos, target);
+            if (pullDistance > maxPull)
+            {
+                continue;
+            }
+
+            float playerSafety = Vector2.Distance(pos, playerPos);
+            float enemySafety = Vector2.Distance(pos, enemyPos);
+            float corridorAlignment = DistancePointToSegment(pos, enemyPos, playerPos);
+            float size = Mathf.Max(col.bounds.size.x, col.bounds.size.y);
+            float score = 0f;
+            score -= pullDistance * 1.35f;
+            score -= corridorAlignment * 0.28f;
+            score += Mathf.Clamp(playerSafety, 0f, 7f) * 0.25f;
+            score += Mathf.Clamp(enemySafety, 0f, 7f) * 0.12f;
+            score += size * 0.55f;
+            if (playerSafety < 2.2f)
+            {
+                score -= 2.4f;
+            }
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    }
+
+    private static float DistancePointToSegment(Vector2 point, Vector2 a, Vector2 b)
+    {
+        Vector2 segment = b - a;
+        float lenSq = segment.sqrMagnitude;
+        if (lenSq <= 0.0001f)
+        {
+            return Vector2.Distance(point, a);
+        }
+
+        float t = Mathf.Clamp01(Vector2.Dot(point - a, segment) / lenSq);
+        Vector2 projection = a + segment * t;
+        return Vector2.Distance(point, projection);
+    }
+
+    private bool TryFindValidRecompileSlot(Vector2 desiredSlot, Collider2D movingCollider, List<RecompileTarget> alreadyPlanned, out Vector2 slot)
+    {
+        slot = ClampObstacleCenterToArena(desiredSlot, movingCollider.bounds.extents);
+        Vector2 playerPos = player != null ? player.GetPosition() : desiredSlot;
+        Vector2 enemyPos = GetCurrentPosition();
+        Vector2 fromEnemy = playerPos - enemyPos;
+        Vector2 approach = fromEnemy.sqrMagnitude > 0.001f ? fromEnemy.normalized : Vector2.right;
+        Vector2 side = new Vector2(-approach.y, approach.x);
+        Vector2[] offsets =
+        {
+            Vector2.zero,
+            side * 0.55f,
+            -side * 0.55f,
+            side * 1.1f,
+            -side * 1.1f,
+            -approach * 0.65f,
+            approach * 0.65f
+        };
+
+        for (int i = 0; i < offsets.Length; i++)
+        {
+            Vector2 candidate = ClampObstacleCenterToArena(desiredSlot + offsets[i], movingCollider.bounds.extents);
+            if (IsValidRecompileSlot(candidate, movingCollider, alreadyPlanned))
+            {
+                slot = candidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsValidRecompileSlot(Vector2 candidate, Collider2D movingCollider, List<RecompileTarget> alreadyPlanned)
+    {
+        if (player != null && Vector2.Distance(candidate, player.GetPosition()) < 1.2f)
+        {
+            return false;
+        }
+
+        if (Vector2.Distance(candidate, GetCurrentPosition()) < 1.0f)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < alreadyPlanned.Count; i++)
+        {
+            if (Vector2.Distance(candidate, alreadyPlanned[i].target) < Mathf.Max(0.45f, mapRecompileBlockSpacing * 0.72f))
+            {
+                return false;
+            }
+        }
+
+        Bounds bounds = movingCollider.bounds;
+        Vector2 size = new Vector2(
+            Mathf.Max(0.35f, bounds.size.x * 0.82f),
+            Mathf.Max(0.35f, bounds.size.y * 0.82f));
+        Collider2D[] hits = Physics2D.OverlapBoxAll(candidate, size, movingCollider.transform.eulerAngles.z, obstacleMask);
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider2D hit = hits[i];
+            if (hit == null || hit.isTrigger || hit == movingCollider || hit.transform.IsChildOf(movingCollider.transform))
+            {
+                continue;
+            }
+
+            if (hit.GetComponent<PlayerController>() != null ||
+                hit.GetComponent<EnemyController>() != null ||
+                hit.GetComponent<SplitAnomalyCloneController>() != null)
+            {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     private bool IsRecompilableObstacle(Collider2D col)
@@ -4102,26 +4351,26 @@ public class EnemyController : MonoBehaviour
         return Mathf.Max(b.size.x, b.size.y) <= Mathf.Min(navSize.x, navSize.y) * 0.45f;
     }
 
-    private Vector2 PickMapRecompileTarget(Vector2 start)
+    private Vector2 ClampObstacleCenterToArena(Vector2 point, Vector3 extents)
     {
-        Vector2 playerPos = player != null ? player.GetPosition() : start;
-        Vector2 away = start - playerPos;
-        if (away.sqrMagnitude < 0.01f)
-        {
-            away = Random.insideUnitCircle;
-        }
+        float marginX = Mathf.Max(agentRadius + 0.15f, extents.x + 0.18f);
+        float marginY = Mathf.Max(agentRadius + 0.15f, extents.y + 0.18f);
+        float minX = navOrigin.x + marginX;
+        float maxX = navOrigin.x + navSize.x - marginX;
+        float minY = navOrigin.y + marginY;
+        float maxY = navOrigin.y + navSize.y - marginY;
 
-        for (int i = 0; i < 10; i++)
-        {
-            Vector2 dir = Rotate(away.normalized, Random.Range(-80f, 80f));
-            Vector2 candidate = ClampToArena(start + dir * Random.Range(mapRecompileMoveDistance * 0.55f, mapRecompileMoveDistance));
-            if (player == null || Vector2.Distance(candidate, player.GetPosition()) > 1.8f)
-            {
-                return candidate;
-            }
-        }
+        return new Vector2(
+            Mathf.Clamp(point.x, minX, maxX),
+            Mathf.Clamp(point.y, minY, maxY));
+    }
 
-        return ClampToArena(start + away.normalized * Mathf.Max(0.6f, mapRecompileMoveDistance));
+    private Vector2 ClampPointToArenaWithMargin(Vector2 point, float margin)
+    {
+        float safeMargin = Mathf.Max(0.1f, margin);
+        return new Vector2(
+            Mathf.Clamp(point.x, navOrigin.x + safeMargin, navOrigin.x + navSize.x - safeMargin),
+            Mathf.Clamp(point.y, navOrigin.y + safeMargin, navOrigin.y + navSize.y - safeMargin));
     }
 
     private void UpdateMapRecompileTelegraph(float progress)
