@@ -4308,6 +4308,18 @@ public class GameManager : MonoBehaviour
                 return "Signal Jam";
             case "OrbitBarrage":
                 return "Orbit Barrage";
+            case "ReplayPredator":
+                return "Replay Predator";
+            case "FalseSafeZone":
+                return "False Safe Zone";
+            case "InputDesync":
+                return "Input Desync";
+            case "MapRecompile":
+                return "Map Recompile";
+            case "SignalPossession":
+                return "Signal Possession";
+            case "PhaseContract":
+                return "Phase Contract";
             default:
                 return raw;
         }
@@ -4326,6 +4338,12 @@ public class GameManager : MonoBehaviour
             case "PincerBarrage":
             case "SignalJam":
             case "OrbitBarrage":
+            case "ReplayPredator":
+            case "FalseSafeZone":
+            case "InputDesync":
+            case "MapRecompile":
+            case "SignalPossession":
+            case "PhaseContract":
                 return true;
             default:
                 return false;
@@ -4337,7 +4355,13 @@ public class GameManager : MonoBehaviour
         return raw == "PhaseBlink" ||
                raw == "PincerBarrage" ||
                raw == "SignalJam" ||
-               raw == "OrbitBarrage";
+               raw == "OrbitBarrage" ||
+               raw == "ReplayPredator" ||
+               raw == "FalseSafeZone" ||
+               raw == "InputDesync" ||
+               raw == "MapRecompile" ||
+               raw == "SignalPossession" ||
+               raw == "PhaseContract";
     }
 
     private static Color GetBossStateColor(string raw)
@@ -4370,6 +4394,18 @@ public class GameManager : MonoBehaviour
                 return new Color(1f, 0.78f, 0.42f, 1f);
             case "OrbitBarrage":
                 return new Color(0.58f, 0.82f, 1f, 1f);
+            case "ReplayPredator":
+                return new Color(1f, 0.42f, 0.76f, 1f);
+            case "FalseSafeZone":
+                return new Color(0.44f, 1f, 0.88f, 1f);
+            case "InputDesync":
+                return new Color(0.66f, 0.74f, 1f, 1f);
+            case "MapRecompile":
+                return new Color(0.92f, 0.62f, 1f, 1f);
+            case "SignalPossession":
+                return new Color(0.76f, 1f, 0.54f, 1f);
+            case "PhaseContract":
+                return new Color(1f, 0.84f, 0.46f, 1f);
             default:
                 return new Color(1f, 0.76f, 0.82f, 1f);
         }

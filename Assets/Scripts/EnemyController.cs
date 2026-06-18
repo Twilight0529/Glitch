@@ -21,7 +21,13 @@ public class EnemyController : MonoBehaviour
         PhaseBlink,
         PincerBarrage,
         SignalJam,
-        OrbitBarrage
+        OrbitBarrage,
+        ReplayPredator,
+        FalseSafeZone,
+        InputDesync,
+        MapRecompile,
+        SignalPossession,
+        PhaseContract
     }
 
     private enum BehaviorPattern
@@ -180,11 +186,67 @@ public class EnemyController : MonoBehaviour
 
     [Header("Level 2 - Orbit Barrage")]
     [SerializeField] private float orbitBarrageInterval = 2.55f;
-    [SerializeField] private float orbitBarrageTelegraphSeconds = 0.66f;
+    [SerializeField] private float orbitBarrageTelegraphSeconds = 0.95f;
     [SerializeField] private int orbitBarrageProjectileCount = 8;
-    [SerializeField] private float orbitBarrageSpawnRadius = 3.15f;
+    [SerializeField] private float orbitBarrageSpawnRadius = 2.55f;
     [SerializeField] private float orbitBarrageProjectileSpeedMultiplier = 0.92f;
     [SerializeField] private Color orbitBarrageProjectileColor = new Color(0.58f, 0.82f, 1f, 1f);
+
+    [Header("Level 2 - Replay Predator")]
+    [SerializeField] private float replaySampleInterval = 0.12f;
+    [SerializeField] private float replayMemorySeconds = 4.2f;
+    [SerializeField] private float replayPredatorInterval = 3.1f;
+    [SerializeField] private float replayPredatorTelegraphSeconds = 0.85f;
+    [SerializeField] private int replayPredatorEchoCount = 8;
+    [SerializeField] private float replayPredatorEchoRadius = 0.48f;
+    [SerializeField] private float replayPredatorGhostTravelSeconds = 1.35f;
+    [SerializeField] private Color replayPredatorColor = new Color(1f, 0.42f, 0.76f, 0.92f);
+
+    [Header("Level 2 - False Safe Zone")]
+    [SerializeField] private float falseSafeZoneInterval = 4.1f;
+    [SerializeField] private float falseSafeZoneTelegraphSeconds = 1.45f;
+    [SerializeField] private int falseSafeZoneCount = 4;
+    [SerializeField] private float falseSafeZoneRadius = 1.25f;
+    [SerializeField] private float falseSafeZonePenaltySlow = 0.42f;
+    [SerializeField] private float falseSafeZonePenaltyDuration = 1.15f;
+    [SerializeField] private float falseSafeZonePushDistance = 1.35f;
+    [SerializeField] private Color falseSafeZoneTrueColor = new Color(0.44f, 1f, 0.88f, 0.9f);
+    [SerializeField] private Color falseSafeZoneTrapColor = new Color(1f, 0.38f, 0.78f, 0.92f);
+
+    [Header("Level 2 - Input Desync")]
+    [SerializeField] private float inputDesyncInterval = 1.25f;
+    [SerializeField] private float inputDesyncDelay = 0.48f;
+    [SerializeField] private float inputDesyncDisplacement = 1.15f;
+    [SerializeField] private float inputDesyncSlowMultiplier = 0.82f;
+    [SerializeField] private float inputDesyncSlowDuration = 0.36f;
+    [SerializeField] private Color inputDesyncColor = new Color(0.66f, 0.74f, 1f, 0.88f);
+
+    [Header("Level 2 - Map Recompile")]
+    [SerializeField] private float mapRecompileInterval = 5.4f;
+    [SerializeField] private float mapRecompileTelegraphSeconds = 1.2f;
+    [SerializeField] private int mapRecompileObstacleCount = 3;
+    [SerializeField] private float mapRecompileMoveDistance = 2.35f;
+    [SerializeField] private float mapRecompileMoveSeconds = 0.82f;
+    [SerializeField] private Color mapRecompileColor = new Color(0.92f, 0.62f, 1f, 0.92f);
+
+    [Header("Level 2 - Signal Possession")]
+    [SerializeField] private float signalPossessionInterval = 4.8f;
+    [SerializeField] private float signalPossessionLifetime = 3.4f;
+    [SerializeField] private float signalPossessionArmSeconds = 0.7f;
+    [SerializeField] private float signalPossessionRadius = 1.55f;
+    [SerializeField] private int signalPossessionProjectileCount = 7;
+    [SerializeField] private Color signalPossessionColor = new Color(0.76f, 1f, 0.54f, 0.95f);
+
+    [Header("Level 2 - Phase Contract")]
+    [SerializeField] private float phaseContractInterval = 5.6f;
+    [SerializeField] private float phaseContractDuration = 4.6f;
+    [SerializeField] private float phaseContractGraceSeconds = 1.35f;
+    [SerializeField] private float phaseContractMinMoveSpeed = 2.5f;
+    [SerializeField] private float phaseContractMinEnemyDistance = 3.1f;
+    [SerializeField] private float phaseContractRewardStun = 1.1f;
+    [SerializeField] private float phaseContractPenaltySlow = 0.48f;
+    [SerializeField] private float phaseContractPenaltyDuration = 1.3f;
+    [SerializeField] private Color phaseContractColor = new Color(1f, 0.84f, 0.46f, 0.92f);
 
     [Header("Level 2 Awakening FX")]
     [SerializeField] private float levelTwoAwakeningDuration = 2.35f;
@@ -207,6 +269,12 @@ public class EnemyController : MonoBehaviour
     [SerializeField, Min(0f)] private float pincerBarrageWeight = 0.68f;
     [SerializeField, Min(0f)] private float signalJamWeight = 0.66f;
     [SerializeField, Min(0f)] private float orbitBarrageWeight = 0.64f;
+    [SerializeField, Min(0f)] private float replayPredatorWeight = 0.62f;
+    [SerializeField, Min(0f)] private float falseSafeZoneWeight = 0.58f;
+    [SerializeField, Min(0f)] private float inputDesyncWeight = 0.52f;
+    [SerializeField, Min(0f)] private float mapRecompileWeight = 0.56f;
+    [SerializeField, Min(0f)] private float signalPossessionWeight = 0.54f;
+    [SerializeField, Min(0f)] private float phaseContractWeight = 0.50f;
 
     [Header("Level 2 State Priority")]
     [SerializeField, Range(1f, 5f)] private float levelTwoStatePriorityMultiplier = 2.75f;
@@ -339,6 +407,26 @@ public class EnemyController : MonoBehaviour
     private SpriteRenderer orbitBarrageInnerRingRenderer;
     private readonly List<SpriteRenderer> orbitBarrageTickRenderers = new List<SpriteRenderer>();
     private readonly List<SpriteRenderer> orbitBarrageGuideRenderers = new List<SpriteRenderer>();
+    private readonly List<ReplaySample> replaySamples = new List<ReplaySample>();
+    private float replaySampleTimer;
+    private float replayPredatorTimer;
+    private float falseSafeZoneTimer;
+    private float inputDesyncTimer;
+    private float mapRecompileTimer;
+    private bool mapRecompileCharging;
+    private GameObject mapRecompileTelegraphRoot;
+    private readonly List<SpriteRenderer> mapRecompileTelegraphRenderers = new List<SpriteRenderer>();
+    private readonly List<RecompileTarget> mapRecompileTargets = new List<RecompileTarget>();
+    private float signalPossessionTimer;
+    private SignalPossessionLure activeSignalPossessionLure;
+    private float phaseContractTimer;
+    private bool phaseContractActive;
+    private float phaseContractActiveTimer;
+    private int phaseContractRuleIndex;
+    private GameObject phaseContractRoot;
+    private TextMesh phaseContractText;
+    private SpriteRenderer phaseContractRingRenderer;
+    private SpriteRenderer phaseContractLineRenderer;
     private PacingPhase pacingPhase = PacingPhase.BuildUp;
     private int pacingMinorStatesRemaining;
     private int pacingMajorStatesRemaining;
@@ -416,6 +504,22 @@ public class EnemyController : MonoBehaviour
             this.state = state;
             this.weight = weight;
         }
+    }
+
+    private struct ReplaySample
+    {
+        public Vector2 position;
+        public float time;
+    }
+
+    private struct RecompileTarget
+    {
+        public Transform transform;
+        public Rigidbody2D rigidbody;
+        public Vector2 start;
+        public Vector2 target;
+        public SpriteRenderer[] renderers;
+        public Color[] colors;
     }
 
     private sealed class DestroyerRespawnSnapshot
@@ -523,6 +627,7 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
+        RecordReplaySample();
         HandleStateSwitch();
         UpdatePatternInternals();
         UpdateStateAbilities();
@@ -886,7 +991,13 @@ public class EnemyController : MonoBehaviour
             state == AnomalyState.PhaseBlink ||
             state == AnomalyState.PincerBarrage ||
             state == AnomalyState.SignalJam ||
-            state == AnomalyState.OrbitBarrage)
+            state == AnomalyState.OrbitBarrage ||
+            state == AnomalyState.ReplayPredator ||
+            state == AnomalyState.FalseSafeZone ||
+            state == AnomalyState.InputDesync ||
+            state == AnomalyState.MapRecompile ||
+            state == AnomalyState.SignalPossession ||
+            state == AnomalyState.PhaseContract)
         {
             float minMajor = Mathf.Max(0.6f, Mathf.Min(majorStateDurationRange.x, majorStateDurationRange.y));
             float maxMajor = Mathf.Max(minMajor, Mathf.Max(majorStateDurationRange.x, majorStateDurationRange.y));
@@ -1079,6 +1190,34 @@ public class EnemyController : MonoBehaviour
             orbitBarrageDirectionSign = Random.value < 0.5f ? -1 : 1;
             HideOrbitBarrageTelegraph();
         }
+        else if (currentState == AnomalyState.ReplayPredator)
+        {
+            replayPredatorTimer = Mathf.Max(0.25f, replayPredatorInterval * 0.45f);
+        }
+        else if (currentState == AnomalyState.FalseSafeZone)
+        {
+            falseSafeZoneTimer = Mathf.Max(0.25f, falseSafeZoneInterval * 0.35f);
+        }
+        else if (currentState == AnomalyState.InputDesync)
+        {
+            inputDesyncTimer = Mathf.Max(0.15f, inputDesyncInterval * 0.45f);
+        }
+        else if (currentState == AnomalyState.MapRecompile)
+        {
+            mapRecompileTimer = Mathf.Max(0.35f, mapRecompileInterval * 0.35f);
+            mapRecompileCharging = false;
+            HideMapRecompileTelegraph();
+        }
+        else if (currentState == AnomalyState.SignalPossession)
+        {
+            signalPossessionTimer = Mathf.Max(0.35f, signalPossessionInterval * 0.35f);
+        }
+        else if (currentState == AnomalyState.PhaseContract)
+        {
+            phaseContractTimer = Mathf.Max(0.4f, phaseContractInterval * 0.35f);
+            phaseContractActive = false;
+            HidePhaseContractVisual();
+        }
 
         if (currentPattern == BehaviorPattern.ErraticBurst)
         {
@@ -1115,6 +1254,24 @@ public class EnemyController : MonoBehaviour
             orbitBarrageCharging = false;
             HideOrbitBarrageTelegraph();
         }
+        if (previous == AnomalyState.MapRecompile && next != AnomalyState.MapRecompile)
+        {
+            mapRecompileCharging = false;
+            HideMapRecompileTelegraph();
+        }
+        if (previous == AnomalyState.PhaseContract && next != AnomalyState.PhaseContract)
+        {
+            phaseContractActive = false;
+            HidePhaseContractVisual();
+        }
+        if (previous == AnomalyState.SignalPossession && next != AnomalyState.SignalPossession)
+        {
+            if (activeSignalPossessionLure != null)
+            {
+                Destroy(activeSignalPossessionLure.gameObject);
+                activeSignalPossessionLure = null;
+            }
+        }
 
         if (previous != AnomalyState.Split && next == AnomalyState.Split)
         {
@@ -1149,6 +1306,12 @@ public class EnemyController : MonoBehaviour
             fullOptions.Add(new StateWeight(AnomalyState.PincerBarrage, pincerBarrageWeight));
             fullOptions.Add(new StateWeight(AnomalyState.SignalJam, signalJamWeight));
             fullOptions.Add(new StateWeight(AnomalyState.OrbitBarrage, orbitBarrageWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.ReplayPredator, replayPredatorWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.FalseSafeZone, falseSafeZoneWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.InputDesync, inputDesyncWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.MapRecompile, mapRecompileWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.SignalPossession, signalPossessionWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.PhaseContract, phaseContractWeight));
         }
 
         ApplyProgressionFilter(fullOptions);
@@ -1232,7 +1395,13 @@ public class EnemyController : MonoBehaviour
                state == AnomalyState.PhaseBlink ||
                state == AnomalyState.PincerBarrage ||
                state == AnomalyState.SignalJam ||
-               state == AnomalyState.OrbitBarrage;
+               state == AnomalyState.OrbitBarrage ||
+               state == AnomalyState.ReplayPredator ||
+               state == AnomalyState.FalseSafeZone ||
+               state == AnomalyState.InputDesync ||
+               state == AnomalyState.MapRecompile ||
+               state == AnomalyState.SignalPossession ||
+               state == AnomalyState.PhaseContract;
     }
 
     private static bool IsCalmMinorState(AnomalyState state)
@@ -1308,7 +1477,13 @@ public class EnemyController : MonoBehaviour
                state == AnomalyState.PhaseBlink ||
                state == AnomalyState.PincerBarrage ||
                state == AnomalyState.SignalJam ||
-               state == AnomalyState.OrbitBarrage;
+               state == AnomalyState.OrbitBarrage ||
+               state == AnomalyState.ReplayPredator ||
+               state == AnomalyState.FalseSafeZone ||
+               state == AnomalyState.InputDesync ||
+               state == AnomalyState.MapRecompile ||
+               state == AnomalyState.SignalPossession ||
+               state == AnomalyState.PhaseContract;
     }
 
     private static bool IsLevelTwoState(AnomalyState state)
@@ -1316,7 +1491,13 @@ public class EnemyController : MonoBehaviour
         return state == AnomalyState.PhaseBlink ||
                state == AnomalyState.PincerBarrage ||
                state == AnomalyState.SignalJam ||
-               state == AnomalyState.OrbitBarrage;
+               state == AnomalyState.OrbitBarrage ||
+               state == AnomalyState.ReplayPredator ||
+               state == AnomalyState.FalseSafeZone ||
+               state == AnomalyState.InputDesync ||
+               state == AnomalyState.MapRecompile ||
+               state == AnomalyState.SignalPossession ||
+               state == AnomalyState.PhaseContract;
     }
 
     private static bool IsBaseSpecialState(AnomalyState state)
@@ -1540,6 +1721,18 @@ public class EnemyController : MonoBehaviour
                 return new Color(1f, 0.78f, 0.42f, 1f);
             case AnomalyState.OrbitBarrage:
                 return new Color(0.58f, 0.82f, 1f, 1f);
+            case AnomalyState.ReplayPredator:
+                return new Color(1f, 0.42f, 0.76f, 1f);
+            case AnomalyState.FalseSafeZone:
+                return new Color(0.44f, 1f, 0.88f, 1f);
+            case AnomalyState.InputDesync:
+                return new Color(0.66f, 0.74f, 1f, 1f);
+            case AnomalyState.MapRecompile:
+                return new Color(0.92f, 0.62f, 1f, 1f);
+            case AnomalyState.SignalPossession:
+                return new Color(0.76f, 1f, 0.54f, 1f);
+            case AnomalyState.PhaseContract:
+                return new Color(1f, 0.84f, 0.46f, 1f);
             case AnomalyState.ErraticBurst:
                 return new Color(0.74f, 0.76f, 1f, 1f);
             case AnomalyState.CutoffFlank:
@@ -1633,7 +1826,13 @@ public class EnemyController : MonoBehaviour
             AnomalyState.PhaseBlink,
             AnomalyState.PincerBarrage,
             AnomalyState.SignalJam,
-            AnomalyState.OrbitBarrage
+            AnomalyState.OrbitBarrage,
+            AnomalyState.ReplayPredator,
+            AnomalyState.FalseSafeZone,
+            AnomalyState.InputDesync,
+            AnomalyState.MapRecompile,
+            AnomalyState.SignalPossession,
+            AnomalyState.PhaseContract
         };
 
         currentState = options[Random.Range(0, options.Length)];
@@ -1755,6 +1954,18 @@ public class EnemyController : MonoBehaviour
                 return BehaviorPattern.PredictiveIntercept;
             case AnomalyState.OrbitBarrage:
                 return BehaviorPattern.ErraticBurst;
+            case AnomalyState.ReplayPredator:
+                return BehaviorPattern.CutoffFlank;
+            case AnomalyState.FalseSafeZone:
+                return BehaviorPattern.PredictiveIntercept;
+            case AnomalyState.InputDesync:
+                return BehaviorPattern.ErraticBurst;
+            case AnomalyState.MapRecompile:
+                return BehaviorPattern.CutoffFlank;
+            case AnomalyState.SignalPossession:
+                return BehaviorPattern.PredictiveIntercept;
+            case AnomalyState.PhaseContract:
+                return BehaviorPattern.DirectChase;
             default:
                 return BehaviorPattern.DirectChase;
         }
@@ -1792,6 +2003,12 @@ public class EnemyController : MonoBehaviour
         UpdatePincerBarrageAbility();
         UpdateSignalJamAbility();
         UpdateOrbitBarrageAbility();
+        UpdateReplayPredatorAbility();
+        UpdateFalseSafeZoneAbility();
+        UpdateInputDesyncAbility();
+        UpdateMapRecompileAbility();
+        UpdateSignalPossessionAbility();
+        UpdatePhaseContractAbility();
 
         if (currentState != AnomalyState.ExpansionShoot)
         {
@@ -1990,6 +2207,136 @@ public class EnemyController : MonoBehaviour
         orbitBarrageCharging = false;
         HideOrbitBarrageTelegraph();
         FireOrbitBarrage();
+    }
+
+    private void UpdateReplayPredatorAbility()
+    {
+        if (currentState != AnomalyState.ReplayPredator)
+        {
+            return;
+        }
+
+        replayPredatorTimer += Time.deltaTime;
+        if (replayPredatorTimer < Mathf.Max(0.8f, replayPredatorInterval))
+        {
+            return;
+        }
+
+        replayPredatorTimer = 0f;
+        SpawnReplayPredatorEchoes();
+    }
+
+    private void UpdateFalseSafeZoneAbility()
+    {
+        if (currentState != AnomalyState.FalseSafeZone)
+        {
+            return;
+        }
+
+        falseSafeZoneTimer += Time.deltaTime;
+        if (falseSafeZoneTimer < Mathf.Max(1.2f, falseSafeZoneInterval))
+        {
+            return;
+        }
+
+        falseSafeZoneTimer = 0f;
+        SpawnFalseSafeZones();
+    }
+
+    private void UpdateInputDesyncAbility()
+    {
+        if (currentState != AnomalyState.InputDesync)
+        {
+            return;
+        }
+
+        inputDesyncTimer += Time.deltaTime;
+        if (inputDesyncTimer < Mathf.Max(0.35f, inputDesyncInterval))
+        {
+            return;
+        }
+
+        inputDesyncTimer = 0f;
+        QueueInputDesyncEcho();
+    }
+
+    private void UpdateMapRecompileAbility()
+    {
+        if (currentState != AnomalyState.MapRecompile)
+        {
+            mapRecompileCharging = false;
+            HideMapRecompileTelegraph();
+            return;
+        }
+
+        mapRecompileTimer += Time.deltaTime;
+        float interval = Mathf.Max(1.4f, mapRecompileInterval);
+        float lead = Mathf.Clamp(mapRecompileTelegraphSeconds, 0.25f, interval * 0.75f);
+        float remaining = interval - mapRecompileTimer;
+
+        if (!mapRecompileCharging && remaining <= lead)
+        {
+            mapRecompileCharging = true;
+            BuildMapRecompileTargets();
+        }
+
+        if (mapRecompileCharging && remaining > 0f)
+        {
+            float progress = 1f - Mathf.Clamp01(remaining / lead);
+            UpdateMapRecompileTelegraph(progress);
+        }
+
+        if (mapRecompileTimer < interval)
+        {
+            return;
+        }
+
+        mapRecompileTimer = 0f;
+        mapRecompileCharging = false;
+        HideMapRecompileTelegraph();
+        StartCoroutine(ExecuteMapRecompileRoutine());
+    }
+
+    private void UpdateSignalPossessionAbility()
+    {
+        if (currentState != AnomalyState.SignalPossession)
+        {
+            return;
+        }
+
+        signalPossessionTimer += Time.deltaTime;
+        if (signalPossessionTimer < Mathf.Max(1.2f, signalPossessionInterval))
+        {
+            return;
+        }
+
+        signalPossessionTimer = 0f;
+        SpawnSignalPossessionLure();
+    }
+
+    private void UpdatePhaseContractAbility()
+    {
+        if (currentState != AnomalyState.PhaseContract)
+        {
+            phaseContractActive = false;
+            HidePhaseContractVisual();
+            return;
+        }
+
+        if (phaseContractActive)
+        {
+            TickPhaseContract();
+            return;
+        }
+
+        phaseContractTimer += Time.deltaTime;
+        if (phaseContractTimer < Mathf.Max(1.6f, phaseContractInterval))
+        {
+            return;
+        }
+
+        phaseContractTimer = 0f;
+        BeginPhaseContract();
     }
 
     private void UpdateDestroyerAbility()
@@ -3005,6 +3352,22 @@ public class EnemyController : MonoBehaviour
         orbitBarrageInnerRingRenderer = null;
         orbitBarrageTickRenderers.Clear();
         orbitBarrageGuideRenderers.Clear();
+
+        DestroyTelegraphRootImmediate(mapRecompileTelegraphRoot);
+        mapRecompileTelegraphRoot = null;
+        mapRecompileTelegraphRenderers.Clear();
+
+        DestroyTelegraphRootImmediate(phaseContractRoot);
+        phaseContractRoot = null;
+        phaseContractText = null;
+        phaseContractRingRenderer = null;
+        phaseContractLineRenderer = null;
+
+        if (activeSignalPossessionLure != null)
+        {
+            DestroyTelegraphRootImmediate(activeSignalPossessionLure.gameObject);
+            activeSignalPossessionLure = null;
+        }
     }
 
     private static void DestroyTelegraphRootImmediate(GameObject root)
@@ -3497,6 +3860,633 @@ public class EnemyController : MonoBehaviour
         sr.size = new Vector2(0.52f, 0.09f);
         ray.AddComponent<AnomalyStateRayFx>().Configure(sr, direction, 0.74f, 0.22f);
         Destroy(ray, 0.32f);
+    }
+
+    private void RecordReplaySample()
+    {
+        if (player == null)
+        {
+            return;
+        }
+
+        replaySampleTimer += Time.deltaTime;
+        if (replaySampleTimer < Mathf.Max(0.03f, replaySampleInterval))
+        {
+            return;
+        }
+
+        replaySampleTimer = 0f;
+        replaySamples.Add(new ReplaySample
+        {
+            position = player.GetPosition(),
+            time = Time.time
+        });
+
+        float cutoff = Time.time - Mathf.Max(0.5f, replayMemorySeconds);
+        while (replaySamples.Count > 0 && replaySamples[0].time < cutoff)
+        {
+            replaySamples.RemoveAt(0);
+        }
+    }
+
+    private void SpawnReplayPredatorEchoes()
+    {
+        if (replaySamples.Count <= 1 || player == null)
+        {
+            return;
+        }
+
+        int count = Mathf.Clamp(replayPredatorEchoCount, 3, replaySamples.Count);
+        List<Vector2> ghostPath = new List<Vector2>(count);
+        for (int i = 0; i < count; i++)
+        {
+            int index = Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(0, replaySamples.Count - 1, i / Mathf.Max(1f, count - 1f))), 0, replaySamples.Count - 1);
+            ghostPath.Add(ClampToArena(replaySamples[index].position));
+        }
+
+        GameObject ghost = new GameObject("ReplayPredatorGhost");
+        ReplayPredatorGhostFx fx = ghost.AddComponent<ReplayPredatorGhostFx>();
+        fx.Configure(
+            player,
+            gameManager,
+            ghostPath,
+            Mathf.Max(0.15f, replayPredatorEchoRadius),
+            Mathf.Max(0.2f, replayPredatorTelegraphSeconds),
+            Mathf.Max(0.35f, replayPredatorGhostTravelSeconds),
+            replayPredatorColor);
+
+        SpawnLevelTwoRadialBurst(ghostPath[0], 1.1f, replayPredatorColor, "ReplayPredator");
+    }
+
+    private void SpawnFalseSafeZones()
+    {
+        if (player == null)
+        {
+            return;
+        }
+
+        int count = Mathf.Max(3, falseSafeZoneCount);
+        int safeIndex = Random.Range(0, count);
+        Vector2 center = player.GetPosition();
+        float spacing = Mathf.Max(2.2f, falseSafeZoneRadius * 2.35f);
+        float startAngle = Random.Range(0f, Mathf.PI * 2f);
+
+        for (int i = 0; i < count; i++)
+        {
+            float angle = startAngle + (Mathf.PI * 2f * i / count);
+            Vector2 offset = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * spacing;
+            Vector2 position = ClampToArena(center + offset);
+            bool realSafe = i == safeIndex;
+            GameObject zone = new GameObject(realSafe ? "FalseSafeZone_Real" : "FalseSafeZone_Trap");
+            zone.transform.position = new Vector3(position.x, position.y, 0f);
+            SpriteRenderer sr = zone.AddComponent<SpriteRenderer>();
+            sr.sprite = CircleSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.sortingOrder = realSafe ? 15 : 14;
+            FalseSafeZoneFx fx = zone.AddComponent<FalseSafeZoneFx>();
+            fx.Configure(
+                this,
+                sr,
+                position,
+                Mathf.Max(0.35f, falseSafeZoneRadius),
+                Mathf.Max(0.35f, falseSafeZoneTelegraphSeconds),
+                realSafe,
+                realSafe ? falseSafeZoneTrueColor : falseSafeZoneTrapColor);
+        }
+    }
+
+    public void ResolveFalseSafeZone(Vector2 center, float radius, bool realSafe)
+    {
+        if (player == null || gameManager == null || gameManager.IsGameOver)
+        {
+            return;
+        }
+
+        bool playerInside = Vector2.Distance(player.GetPosition(), center) <= Mathf.Max(0.2f, radius);
+        if (realSafe)
+        {
+            SpawnLevelTwoRadialBurst(center, radius, falseSafeZoneTrueColor, "TrueSafeZone");
+            if (playerInside)
+            {
+                ApplyContainmentLock(GetCurrentPosition(), 0.85f);
+                player.AddFirewallCharge(7f);
+            }
+
+            return;
+        }
+
+        SpawnLevelTwoRadialBurst(center, radius * 1.15f, falseSafeZoneTrapColor, "FalseSafeZone");
+        if (playerInside)
+        {
+            player.ApplyMovementSlow(falseSafeZonePenaltySlow, falseSafeZonePenaltyDuration);
+            Vector2 push = player.GetPosition() - center;
+            if (push.sqrMagnitude < 0.001f)
+            {
+                push = Random.insideUnitCircle;
+            }
+
+            player.ApplyExternalDisplacement(push.normalized * Mathf.Max(0.1f, falseSafeZonePushDistance));
+        }
+    }
+
+    private void QueueInputDesyncEcho()
+    {
+        if (player == null)
+        {
+            return;
+        }
+
+        Vector2 velocity = player.CurrentVelocity;
+        Vector2 direction = velocity.sqrMagnitude > 0.05f ? velocity.normalized : lastMoveDirection;
+        Vector2 origin = player.GetPosition();
+        SpawnInputDesyncMarker(origin, direction, Mathf.Max(0.08f, inputDesyncDelay));
+        StartCoroutine(InputDesyncEchoRoutine(direction));
+    }
+
+    private IEnumerator InputDesyncEchoRoutine(Vector2 direction)
+    {
+        float delay = Mathf.Max(0.05f, inputDesyncDelay);
+        yield return new WaitForSeconds(delay);
+
+        if (currentState != AnomalyState.InputDesync || player == null || gameManager == null || gameManager.IsGameOver)
+        {
+            yield break;
+        }
+
+        Vector2 push = direction.sqrMagnitude > 0.001f ? direction.normalized : Vector2.right;
+        player.ApplyExternalDisplacement(push * Mathf.Max(0.1f, inputDesyncDisplacement));
+        player.ApplyMovementSlow(inputDesyncSlowMultiplier, inputDesyncSlowDuration);
+        SpawnLevelTwoRadialBurst(player.GetPosition(), 0.9f, inputDesyncColor, "InputDesync");
+    }
+
+    private void SpawnInputDesyncMarker(Vector2 origin, Vector2 direction, float duration)
+    {
+        GameObject marker = new GameObject("InputDesyncGhostInput");
+        marker.transform.position = new Vector3(origin.x, origin.y, 0f);
+        SpriteRenderer sr = marker.AddComponent<SpriteRenderer>();
+        sr.sprite = SquareSpriteProvider.Get();
+        sr.drawMode = SpriteDrawMode.Sliced;
+        sr.sortingOrder = 18;
+        sr.size = new Vector2(0.72f, 0.08f);
+        sr.color = inputDesyncColor;
+        marker.AddComponent<AnomalyStateRayFx>().Configure(sr, direction, 1.1f, duration);
+        Destroy(marker, duration + 0.08f);
+    }
+
+    private void BuildMapRecompileTargets()
+    {
+        mapRecompileTargets.Clear();
+        Collider2D[] colliders = FindObjectsByType<Collider2D>(FindObjectsSortMode.None);
+        int attempts = 0;
+        int desired = Mathf.Max(1, mapRecompileObstacleCount);
+
+        while (mapRecompileTargets.Count < desired && attempts < colliders.Length * 3)
+        {
+            attempts++;
+            Collider2D col = colliders[Random.Range(0, colliders.Length)];
+            if (!IsRecompilableObstacle(col))
+            {
+                continue;
+            }
+
+            Transform targetTransform = col.transform;
+            bool alreadyChosen = false;
+            for (int i = 0; i < mapRecompileTargets.Count; i++)
+            {
+                if (mapRecompileTargets[i].transform == targetTransform)
+                {
+                    alreadyChosen = true;
+                    break;
+                }
+            }
+
+            if (alreadyChosen)
+            {
+                continue;
+            }
+
+            Vector2 start = targetTransform.position;
+            Vector2 target = PickMapRecompileTarget(start);
+            SpriteRenderer[] renderers = targetTransform.GetComponentsInChildren<SpriteRenderer>(true);
+            Color[] colors = new Color[renderers.Length];
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                colors[i] = renderers[i] != null ? renderers[i].color : Color.white;
+            }
+
+            mapRecompileTargets.Add(new RecompileTarget
+            {
+                transform = targetTransform,
+                rigidbody = targetTransform.GetComponent<Rigidbody2D>(),
+                start = start,
+                target = target,
+                renderers = renderers,
+                colors = colors
+            });
+        }
+    }
+
+    private bool IsRecompilableObstacle(Collider2D col)
+    {
+        if (!IsBlockingCollider(col) || !CanDestroyThisCollider(col))
+        {
+            return false;
+        }
+
+        if (((1 << col.gameObject.layer) & obstacleMask.value) == 0)
+        {
+            return false;
+        }
+
+        Bounds b = col.bounds;
+        return Mathf.Max(b.size.x, b.size.y) <= Mathf.Min(navSize.x, navSize.y) * 0.45f;
+    }
+
+    private Vector2 PickMapRecompileTarget(Vector2 start)
+    {
+        Vector2 playerPos = player != null ? player.GetPosition() : start;
+        Vector2 away = start - playerPos;
+        if (away.sqrMagnitude < 0.01f)
+        {
+            away = Random.insideUnitCircle;
+        }
+
+        for (int i = 0; i < 10; i++)
+        {
+            Vector2 dir = Rotate(away.normalized, Random.Range(-80f, 80f));
+            Vector2 candidate = ClampToArena(start + dir * Random.Range(mapRecompileMoveDistance * 0.55f, mapRecompileMoveDistance));
+            if (player == null || Vector2.Distance(candidate, player.GetPosition()) > 1.8f)
+            {
+                return candidate;
+            }
+        }
+
+        return ClampToArena(start + away.normalized * Mathf.Max(0.6f, mapRecompileMoveDistance));
+    }
+
+    private void UpdateMapRecompileTelegraph(float progress)
+    {
+        EnsureMapRecompileTelegraph();
+        for (int i = 0; i < mapRecompileTelegraphRenderers.Count; i++)
+        {
+            SpriteRenderer sr = mapRecompileTelegraphRenderers[i];
+            if (sr == null)
+            {
+                continue;
+            }
+
+            if (i >= mapRecompileTargets.Count)
+            {
+                sr.color = Color.clear;
+                continue;
+            }
+
+            RecompileTarget target = mapRecompileTargets[i];
+            Vector2 start = target.start;
+            Vector2 end = target.target;
+            Vector2 mid = (start + end) * 0.5f;
+            Vector2 delta = end - start;
+            float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 12f + i);
+            sr.transform.position = new Vector3(mid.x, mid.y, 0f);
+            sr.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
+            sr.size = new Vector2(Mathf.Max(0.2f, delta.magnitude), Mathf.Lerp(0.06f, 0.16f, progress));
+            sr.color = new Color(mapRecompileColor.r, mapRecompileColor.g, mapRecompileColor.b, Mathf.Lerp(0.12f, 0.82f, progress) * (0.7f + pulse * 0.3f));
+        }
+    }
+
+    private void EnsureMapRecompileTelegraph()
+    {
+        if (mapRecompileTelegraphRoot == null)
+        {
+            mapRecompileTelegraphRoot = new GameObject("MapRecompileTelegraph");
+        }
+
+        while (mapRecompileTelegraphRenderers.Count < mapRecompileTargets.Count)
+        {
+            GameObject go = new GameObject($"MapRecompileLine_{mapRecompileTelegraphRenderers.Count}");
+            go.transform.SetParent(mapRecompileTelegraphRoot.transform, false);
+            SpriteRenderer sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.sortingOrder = 18;
+            mapRecompileTelegraphRenderers.Add(sr);
+        }
+    }
+
+    private void HideMapRecompileTelegraph()
+    {
+        for (int i = 0; i < mapRecompileTelegraphRenderers.Count; i++)
+        {
+            if (mapRecompileTelegraphRenderers[i] != null)
+            {
+                mapRecompileTelegraphRenderers[i].color = Color.clear;
+            }
+        }
+    }
+
+    private IEnumerator ExecuteMapRecompileRoutine()
+    {
+        if (mapRecompileTargets.Count <= 0)
+        {
+            yield break;
+        }
+
+        float duration = Mathf.Max(0.08f, mapRecompileMoveSeconds);
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / duration));
+            for (int i = 0; i < mapRecompileTargets.Count; i++)
+            {
+                RecompileTarget target = mapRecompileTargets[i];
+                if (target.transform == null)
+                {
+                    continue;
+                }
+
+                Vector2 pos = Vector2.Lerp(target.start, target.target, t);
+                if (target.rigidbody != null)
+                {
+                    target.rigidbody.linearVelocity = Vector2.zero;
+                    target.rigidbody.MovePosition(pos);
+                }
+                else
+                {
+                    target.transform.position = new Vector3(pos.x, pos.y, target.transform.position.z);
+                }
+
+                for (int r = 0; r < target.renderers.Length; r++)
+                {
+                    if (target.renderers[r] != null)
+                    {
+                        target.renderers[r].color = Color.Lerp(target.colors[r], mapRecompileColor, Mathf.Sin(t * Mathf.PI) * 0.78f);
+                    }
+                }
+            }
+
+            yield return null;
+        }
+
+        for (int i = 0; i < mapRecompileTargets.Count; i++)
+        {
+            RecompileTarget target = mapRecompileTargets[i];
+            for (int r = 0; r < target.renderers.Length; r++)
+            {
+                if (target.renderers[r] != null)
+                {
+                    target.renderers[r].color = target.colors[r];
+                }
+            }
+        }
+
+        BuildNavigationGrid();
+        pathWorld.Clear();
+        pathIndex = 0;
+        mapRecompileTargets.Clear();
+    }
+
+    private void SpawnSignalPossessionLure()
+    {
+        if (player == null || activeSignalPossessionLure != null)
+        {
+            return;
+        }
+
+        Vector2 playerPos = player.GetPosition();
+        Vector2 dir = Random.insideUnitCircle;
+        if (dir.sqrMagnitude < 0.01f)
+        {
+            dir = Vector2.right;
+        }
+
+        Vector2 position = ClampToArena(playerPos + dir.normalized * Random.Range(2.0f, 3.3f));
+        GameObject lure = new GameObject("SignalPossessionLure");
+        lure.transform.position = new Vector3(position.x, position.y, 0f);
+        SpriteRenderer sr = lure.AddComponent<SpriteRenderer>();
+        sr.sprite = CircleSpriteProvider.Get();
+        sr.drawMode = SpriteDrawMode.Sliced;
+        sr.sortingOrder = 18;
+        activeSignalPossessionLure = lure.AddComponent<SignalPossessionLure>();
+        activeSignalPossessionLure.Configure(
+            this,
+            player,
+            sr,
+            Mathf.Max(0.25f, signalPossessionArmSeconds),
+            Mathf.Max(0.5f, signalPossessionLifetime),
+            Mathf.Max(0.4f, signalPossessionRadius),
+            signalPossessionColor);
+    }
+
+    public void DetonateSignalPossession(Vector2 position)
+    {
+        activeSignalPossessionLure = null;
+        if (currentState != AnomalyState.SignalPossession)
+        {
+            return;
+        }
+
+        SpawnLevelTwoRadialBurst(position, signalPossessionRadius, signalPossessionColor, "SignalPossession");
+
+        if (player != null && Vector2.Distance(player.GetPosition(), position) <= signalPossessionRadius)
+        {
+            player.ApplyMovementSlow(0.45f, 1.1f);
+        }
+
+        int count = Mathf.Max(4, signalPossessionProjectileCount);
+        for (int i = 0; i < count; i++)
+        {
+            float angle = (Mathf.PI * 2f * i / count) + Random.Range(-0.08f, 0.08f);
+            Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            CreateProjectile(position + dir * 0.35f, dir, signalPossessionColor, expansionShootProjectileSize * 0.86f, 0.86f);
+        }
+
+        Vector2 blinkDir = player != null ? ((Vector2)position - player.GetPosition()) : Random.insideUnitCircle;
+        if (blinkDir.sqrMagnitude < 0.01f)
+        {
+            blinkDir = Random.insideUnitCircle.normalized;
+        }
+
+        Vector2 enemyTarget = ClampToArena(position + blinkDir.normalized * 1.6f);
+        rb.position = enemyTarget;
+        transform.position = new Vector3(enemyTarget.x, enemyTarget.y, transform.position.z);
+        TriggerStatePulse();
+    }
+
+    private void BeginPhaseContract()
+    {
+        phaseContractActive = true;
+        phaseContractActiveTimer = Mathf.Max(0.8f, phaseContractDuration);
+        phaseContractRuleIndex = Random.Range(0, 3);
+        ApplyContainmentLock(GetCurrentPosition(), Mathf.Max(0.2f, phaseContractGraceSeconds + 0.45f));
+        EnsurePhaseContractVisual();
+        UpdatePhaseContractVisual();
+    }
+
+    private void TickPhaseContract()
+    {
+        phaseContractActiveTimer -= Time.deltaTime;
+        UpdatePhaseContractVisual();
+
+        if (HasFailedPhaseContract())
+        {
+            ResolvePhaseContract(false);
+            return;
+        }
+
+        if (phaseContractActiveTimer <= 0f)
+        {
+            ResolvePhaseContract(true);
+        }
+    }
+
+    private bool HasFailedPhaseContract()
+    {
+        if (player == null)
+        {
+            return false;
+        }
+
+        float elapsed = Mathf.Max(0f, phaseContractDuration - phaseContractActiveTimer);
+        if (elapsed < Mathf.Max(0.05f, phaseContractGraceSeconds))
+        {
+            return false;
+        }
+
+        switch (phaseContractRuleIndex)
+        {
+            case 0:
+                return player.CurrentVelocity.magnitude < Mathf.Max(0.1f, phaseContractMinMoveSpeed);
+            case 1:
+                return Vector2.Distance(player.GetPosition(), GetCurrentPosition()) < Mathf.Max(0.5f, phaseContractMinEnemyDistance);
+            case 2:
+                Vector2 center = navOrigin + navSize * 0.5f;
+                float forbiddenRadius = Mathf.Min(navSize.x, navSize.y) * 0.18f;
+                return Vector2.Distance(player.GetPosition(), center) < Mathf.Max(1.2f, forbiddenRadius);
+            default:
+                return false;
+        }
+    }
+
+    private void ResolvePhaseContract(bool success)
+    {
+        phaseContractActive = false;
+        HidePhaseContractVisual();
+        Vector2 position = player != null ? player.GetPosition() : GetCurrentPosition();
+
+        if (success)
+        {
+            ApplyContainmentLock(GetCurrentPosition(), phaseContractRewardStun);
+            if (player != null)
+            {
+                player.AddFirewallCharge(8f);
+            }
+
+            SpawnLevelTwoRadialBurst(position, 1.4f, falseSafeZoneTrueColor, "PhaseContractSuccess");
+            return;
+        }
+
+        if (player != null)
+        {
+            player.ApplyMovementSlow(phaseContractPenaltySlow, phaseContractPenaltyDuration);
+        }
+
+        SpawnLevelTwoRadialBurst(position, 1.65f, phaseContractColor, "PhaseContractFail");
+    }
+
+    private void EnsurePhaseContractVisual()
+    {
+        if (phaseContractRoot == null)
+        {
+            phaseContractRoot = new GameObject("PhaseContractVisual");
+            GameObject textGo = new GameObject("PhaseContractText");
+            textGo.transform.SetParent(phaseContractRoot.transform, false);
+            phaseContractText = textGo.AddComponent<TextMesh>();
+            phaseContractText.anchor = TextAnchor.MiddleCenter;
+            phaseContractText.alignment = TextAlignment.Center;
+            phaseContractText.characterSize = 0.22f;
+            phaseContractText.fontSize = 36;
+
+            GameObject ringGo = new GameObject("PhaseContractRing");
+            ringGo.transform.SetParent(phaseContractRoot.transform, false);
+            phaseContractRingRenderer = ringGo.AddComponent<SpriteRenderer>();
+            phaseContractRingRenderer.sprite = CircleSpriteProvider.Get();
+            phaseContractRingRenderer.drawMode = SpriteDrawMode.Sliced;
+            phaseContractRingRenderer.sortingOrder = 18;
+
+            GameObject lineGo = new GameObject("PhaseContractRuleLine");
+            lineGo.transform.SetParent(phaseContractRoot.transform, false);
+            phaseContractLineRenderer = lineGo.AddComponent<SpriteRenderer>();
+            phaseContractLineRenderer.sprite = SquareSpriteProvider.Get();
+            phaseContractLineRenderer.drawMode = SpriteDrawMode.Sliced;
+            phaseContractLineRenderer.sortingOrder = 17;
+        }
+
+        if (!phaseContractRoot.activeSelf)
+        {
+            phaseContractRoot.SetActive(true);
+        }
+    }
+
+    private void UpdatePhaseContractVisual()
+    {
+        EnsurePhaseContractVisual();
+        if (phaseContractRoot == null || player == null)
+        {
+            return;
+        }
+
+        Vector2 playerPos = player.GetPosition();
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 9f);
+        phaseContractRoot.transform.position = new Vector3(playerPos.x, playerPos.y + 1.75f, 0f);
+
+        if (phaseContractText != null)
+        {
+            phaseContractText.text = GetPhaseContractLabel();
+            phaseContractText.color = Color.Lerp(phaseContractColor, Color.white, pulse * 0.32f);
+        }
+
+        if (phaseContractRingRenderer != null)
+        {
+            phaseContractRingRenderer.transform.localPosition = Vector3.down * 1.75f;
+            phaseContractRingRenderer.size = Vector2.one * Mathf.Lerp(1.1f, 1.45f, pulse);
+            phaseContractRingRenderer.color = new Color(phaseContractColor.r, phaseContractColor.g, phaseContractColor.b, 0.24f + pulse * 0.28f);
+        }
+
+        if (phaseContractLineRenderer != null)
+        {
+            phaseContractLineRenderer.transform.localPosition = Vector3.down * 1.75f;
+            phaseContractLineRenderer.transform.localRotation = Quaternion.Euler(0f, 0f, Time.time * 70f);
+            phaseContractLineRenderer.size = new Vector2(1.8f, 0.06f);
+            phaseContractLineRenderer.color = new Color(phaseContractColor.r, phaseContractColor.g, phaseContractColor.b, 0.22f + pulse * 0.36f);
+        }
+    }
+
+    private string GetPhaseContractLabel()
+    {
+        int seconds = Mathf.CeilToInt(Mathf.Max(0f, phaseContractActiveTimer));
+        float elapsed = Mathf.Max(0f, phaseContractDuration - phaseContractActiveTimer);
+        bool preparing = elapsed < Mathf.Max(0.05f, phaseContractGraceSeconds);
+        string prefix = preparing ? "PREPARATE" : "CONTRATO";
+        switch (phaseContractRuleIndex)
+        {
+            case 0:
+                return $"{prefix}: NO TE DETENGAS\n{seconds}s";
+            case 1:
+                return $"{prefix}: MANTEN DISTANCIA\n{seconds}s";
+            case 2:
+                return $"{prefix}: EVITA EL CENTRO\n{seconds}s";
+            default:
+                return $"{prefix}\n{seconds}s";
+        }
+    }
+
+    private void HidePhaseContractVisual()
+    {
+        if (phaseContractRoot != null)
+        {
+            phaseContractRoot.SetActive(false);
+        }
     }
 
     private void UpdateExpansionShootTelegraphVisual(float chargeProgress)
@@ -4638,6 +5628,289 @@ public class AnomalyStateRayFx : MonoBehaviour
             Color c = spriteRenderer.color;
             c.a = Mathf.Lerp(0.95f, 0f, t);
             spriteRenderer.color = c;
+        }
+    }
+}
+
+public class ReplayPredatorGhostFx : MonoBehaviour
+{
+    private PlayerController player;
+    private GameManager gameManager;
+    private readonly List<Vector2> path = new List<Vector2>();
+    private readonly List<SpriteRenderer> afterimages = new List<SpriteRenderer>();
+    private SpriteRenderer bodyRenderer;
+    private SpriteRenderer coreRenderer;
+    private float radius = 0.5f;
+    private float telegraphSeconds = 0.8f;
+    private float travelSeconds = 1.35f;
+    private float age;
+    private float hitCooldown;
+    private bool active;
+    private Color color = Color.magenta;
+
+    public void Configure(PlayerController playerRef, GameManager managerRef, List<Vector2> ghostPath, float hazardRadius, float warningSeconds, float travelDuration, Color tint)
+    {
+        player = playerRef;
+        gameManager = managerRef;
+        path.Clear();
+        if (ghostPath != null)
+        {
+            path.AddRange(ghostPath);
+        }
+
+        radius = Mathf.Max(0.12f, hazardRadius);
+        telegraphSeconds = Mathf.Max(0.08f, warningSeconds);
+        travelSeconds = Mathf.Max(0.1f, travelDuration);
+        color = tint;
+        EnsureVisuals();
+
+        if (path.Count > 0)
+        {
+            transform.position = new Vector3(path[0].x, path[0].y, 0f);
+        }
+    }
+
+    private void Update()
+    {
+        if (path.Count <= 0 || gameManager == null || !gameManager.IsRunActive || gameManager.IsGameOver)
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        age += Time.deltaTime;
+        if (hitCooldown > 0f)
+        {
+            hitCooldown -= Time.deltaTime;
+        }
+
+        if (!active && age >= telegraphSeconds)
+        {
+            active = true;
+            age = 0f;
+        }
+
+        float progress = active
+            ? Mathf.Clamp01(age / travelSeconds)
+            : Mathf.Clamp01(age / telegraphSeconds);
+        Vector2 position = active ? EvaluatePath(progress) : path[0];
+        transform.position = new Vector3(position.x, position.y, 0f);
+        UpdateVisuals(progress);
+
+        if (active)
+        {
+            TryHitPlayer(position);
+        }
+
+        if (active && age >= travelSeconds)
+        {
+            Destroy(gameObject);
+        }
+    }
+
+    private void EnsureVisuals()
+    {
+        if (bodyRenderer == null)
+        {
+            bodyRenderer = gameObject.AddComponent<SpriteRenderer>();
+            bodyRenderer.sprite = SquareSpriteProvider.Get();
+            bodyRenderer.drawMode = SpriteDrawMode.Sliced;
+            bodyRenderer.sortingOrder = 19;
+            bodyRenderer.size = Vector2.one * radius * 1.35f;
+        }
+
+        if (coreRenderer == null)
+        {
+            GameObject core = new GameObject("ReplayPredatorGhostCore");
+            core.transform.SetParent(transform, false);
+            coreRenderer = core.AddComponent<SpriteRenderer>();
+            coreRenderer.sprite = SquareSpriteProvider.Get();
+            coreRenderer.drawMode = SpriteDrawMode.Sliced;
+            coreRenderer.sortingOrder = 20;
+            coreRenderer.size = Vector2.one * radius * 0.62f;
+        }
+
+        while (afterimages.Count < 7)
+        {
+            GameObject afterimage = new GameObject($"ReplayPredatorAfterimage_{afterimages.Count}");
+            afterimage.transform.SetParent(transform.parent, false);
+            SpriteRenderer sr = afterimage.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.sortingOrder = 18;
+            sr.size = Vector2.one * radius * 1.05f;
+            afterimages.Add(sr);
+        }
+    }
+
+    private Vector2 EvaluatePath(float t)
+    {
+        if (path.Count == 1)
+        {
+            return path[0];
+        }
+
+        float scaled = Mathf.Clamp01(t) * (path.Count - 1);
+        int index = Mathf.Clamp(Mathf.FloorToInt(scaled), 0, path.Count - 2);
+        float local = scaled - index;
+        return Vector2.Lerp(path[index], path[index + 1], local);
+    }
+
+    private void UpdateVisuals(float progress)
+    {
+        EnsureVisuals();
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * (active ? 18f : 7f));
+        float alpha = active ? Mathf.Lerp(0.95f, 0.48f, progress) : Mathf.Lerp(0.16f, 0.72f, progress);
+
+        if (bodyRenderer != null)
+        {
+            bodyRenderer.size = Vector2.one * radius * Mathf.Lerp(1.15f, 1.55f, pulse);
+            bodyRenderer.color = new Color(color.r, color.g, color.b, alpha);
+        }
+
+        if (coreRenderer != null)
+        {
+            coreRenderer.transform.localRotation = Quaternion.Euler(0f, 0f, Time.time * 180f);
+            coreRenderer.color = new Color(0.42f, 0.96f, 1f, Mathf.Lerp(0.28f, 0.82f, pulse) * alpha);
+        }
+
+        for (int i = 0; i < afterimages.Count; i++)
+        {
+            SpriteRenderer sr = afterimages[i];
+            if (sr == null)
+            {
+                continue;
+            }
+
+            float offset = (i + 1) / (float)(afterimages.Count + 1);
+            float pathT = active ? Mathf.Clamp01(progress - offset * 0.12f) : Mathf.Clamp01(progress * offset);
+            Vector2 pos = EvaluatePath(pathT);
+            sr.transform.position = new Vector3(pos.x, pos.y, 0f);
+            sr.transform.rotation = Quaternion.Euler(0f, 0f, Time.time * 90f + i * 11f);
+            sr.color = new Color(color.r, color.g, color.b, alpha * Mathf.Lerp(0.34f, 0.06f, offset));
+        }
+    }
+
+    private void TryHitPlayer(Vector2 currentPosition)
+    {
+        if (player == null || hitCooldown > 0f || Vector2.Distance(player.GetPosition(), currentPosition) > radius)
+        {
+            return;
+        }
+
+        hitCooldown = 0.18f;
+        if (player.TryAbsorbHit())
+        {
+            Destroy(gameObject);
+            return;
+        }
+
+        gameManager.RequestPlayerDefeat(player);
+        Destroy(gameObject);
+    }
+
+    private void OnDestroy()
+    {
+        for (int i = 0; i < afterimages.Count; i++)
+        {
+            if (afterimages[i] != null)
+            {
+                Destroy(afterimages[i].gameObject);
+            }
+        }
+    }
+}
+
+public class FalseSafeZoneFx : MonoBehaviour
+{
+    private EnemyController owner;
+    private SpriteRenderer spriteRenderer;
+    private Vector2 center;
+    private float radius = 1.1f;
+    private float telegraphSeconds = 1.2f;
+    private float age;
+    private bool realSafe;
+    private Color color = Color.cyan;
+
+    public void Configure(EnemyController ownerRef, SpriteRenderer rendererRef, Vector2 zoneCenter, float zoneRadius, float warningSeconds, bool isRealSafe, Color tint)
+    {
+        owner = ownerRef;
+        spriteRenderer = rendererRef;
+        center = zoneCenter;
+        radius = Mathf.Max(0.25f, zoneRadius);
+        telegraphSeconds = Mathf.Max(0.1f, warningSeconds);
+        realSafe = isRealSafe;
+        color = tint;
+    }
+
+    private void Update()
+    {
+        age += Time.deltaTime;
+        float t = Mathf.Clamp01(age / telegraphSeconds);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * (realSafe ? 5.5f : 13f));
+
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.size = Vector2.one * radius * Mathf.Lerp(realSafe ? 2.25f : 2.65f, 2f, t);
+            spriteRenderer.color = new Color(color.r, color.g, color.b, Mathf.Lerp(0.12f, realSafe ? 0.74f : 0.62f, t) * (0.78f + pulse * 0.22f));
+        }
+
+        if (age >= telegraphSeconds)
+        {
+            owner?.ResolveFalseSafeZone(center, radius, realSafe);
+            Destroy(gameObject);
+        }
+    }
+}
+
+public class SignalPossessionLure : MonoBehaviour
+{
+    private EnemyController owner;
+    private PlayerController player;
+    private SpriteRenderer spriteRenderer;
+    private float armSeconds = 0.6f;
+    private float lifetime = 3f;
+    private float radius = 1.4f;
+    private float age;
+    private bool detonated;
+    private Color color = Color.green;
+
+    public void Configure(EnemyController ownerRef, PlayerController playerRef, SpriteRenderer rendererRef, float armDelay, float lifeSeconds, float triggerRadius, Color tint)
+    {
+        owner = ownerRef;
+        player = playerRef;
+        spriteRenderer = rendererRef;
+        armSeconds = Mathf.Max(0.05f, armDelay);
+        lifetime = Mathf.Max(armSeconds + 0.1f, lifeSeconds);
+        radius = Mathf.Max(0.25f, triggerRadius);
+        color = tint;
+    }
+
+    private void Update()
+    {
+        age += Time.deltaTime;
+        float armed = age >= armSeconds ? 1f : Mathf.Clamp01(age / armSeconds);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Lerp(6f, 16f, armed));
+
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.size = Vector2.one * Mathf.Lerp(0.5f, 0.88f, pulse);
+            Color c = Color.Lerp(color, new Color(1f, 0.25f, 0.68f, 1f), armed * pulse);
+            c.a = Mathf.Lerp(0.5f, 0.96f, armed);
+            spriteRenderer.color = c;
+        }
+
+        if (!detonated && age >= armSeconds && player != null && Vector2.Distance(player.GetPosition(), transform.position) <= radius)
+        {
+            detonated = true;
+            owner?.DetonateSignalPossession(transform.position);
+            Destroy(gameObject);
+            return;
+        }
+
+        if (age >= lifetime)
+        {
+            Destroy(gameObject);
         }
     }
 }

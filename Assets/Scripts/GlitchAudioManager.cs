@@ -205,6 +205,24 @@ public class GlitchAudioManager : MonoBehaviour
             case EnemyController.AnomalyState.OrbitBarrage:
                 Play("state_orbit", 0.70f, 1f, position);
                 break;
+            case EnemyController.AnomalyState.ReplayPredator:
+                Play("state_signal_jam", 0.72f, 0.92f, position);
+                break;
+            case EnemyController.AnomalyState.FalseSafeZone:
+                Play("state_phase_blink", 0.68f, 0.86f, position);
+                break;
+            case EnemyController.AnomalyState.InputDesync:
+                Play("state_orbit", 0.64f, 1.12f, position);
+                break;
+            case EnemyController.AnomalyState.MapRecompile:
+                Play("state_pincer", 0.70f, 0.82f, position);
+                break;
+            case EnemyController.AnomalyState.SignalPossession:
+                Play("state_weave", 0.66f, 0.78f, position);
+                break;
+            case EnemyController.AnomalyState.PhaseContract:
+                Play("state_destroyer", 0.70f, 1.18f, position);
+                break;
             default:
                 Play("state_minor", 0.42f, 1f, position);
                 break;
@@ -227,7 +245,13 @@ public class GlitchAudioManager : MonoBehaviour
                state == EnemyController.AnomalyState.PhaseBlink ||
                state == EnemyController.AnomalyState.PincerBarrage ||
                state == EnemyController.AnomalyState.SignalJam ||
-               state == EnemyController.AnomalyState.OrbitBarrage;
+               state == EnemyController.AnomalyState.OrbitBarrage ||
+               state == EnemyController.AnomalyState.ReplayPredator ||
+               state == EnemyController.AnomalyState.FalseSafeZone ||
+               state == EnemyController.AnomalyState.InputDesync ||
+               state == EnemyController.AnomalyState.MapRecompile ||
+               state == EnemyController.AnomalyState.SignalPossession ||
+               state == EnemyController.AnomalyState.PhaseContract;
     }
 
     private static void Play(string clipName, float volume, float pitch, Vector3 position)
