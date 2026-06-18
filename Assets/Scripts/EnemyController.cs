@@ -482,7 +482,6 @@ public class EnemyController : MonoBehaviour
     private float blockedPathCommitTimer;
     private int blockedOscillationCounter;
     private float blockedOscillationTimer;
-
     private float agentRadius;
     private static PhysicsMaterial2D noFrictionMaterial;
 
@@ -5323,7 +5322,7 @@ public class EnemyController : MonoBehaviour
 
         Vector2 repulsed = ApplyObstacleRepulsion(desired.normalized);
         Vector2 jitter = Random.insideUnitCircle * 0.45f;
-        Vector2 escapeDir = (repulsed + jitter);
+        Vector2 escapeDir = repulsed + jitter;
         if (escapeDir.sqrMagnitude < 0.0001f)
         {
             escapeDir = desired.normalized;

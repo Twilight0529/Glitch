@@ -8,6 +8,23 @@ using UnityEngine.InputSystem;
 public class MainMenuController : MonoBehaviour
 {
     // Menu principal: muestra opciones, ranking, fondo animado y transicion hacia el juego.
+    [System.Serializable]
+    private class CreditLink
+    {
+        public string section;
+        public string title;
+        [TextArea(1, 2)] public string description;
+        public string url;
+
+        public CreditLink(string section, string title, string description, string url)
+        {
+            this.section = section;
+            this.title = title;
+            this.description = description;
+            this.url = url;
+        }
+    }
+
     private enum MenuTransitionState
     {
         IntroHold,
@@ -40,10 +57,22 @@ public class MainMenuController : MonoBehaviour
     [Header("Menu Visuals")]
     [SerializeField] private float menuMotionIntensity = 1f;
 
+    [Header("Credits")]
+    [SerializeField] private CreditLink[] creditLinks =
+    {
+        new CreditLink("Proyecto", "Desarrollo y diseño", "GLITCH: Containment Breach - Franco.", string.Empty),
+        new CreditLink("Motor y herramientas", "Unity", "Motor utilizado para desarrollo, editor y runtime.", "https://unity.com/"),
+        new CreditLink("Tipografias", "Pixelmax", "Fuente pixel art utilizada en la interfaz.", "https://www.dafont.com/"),
+        new CreditLink("Tipografias", "Pixelout", "Fuente pixel art utilizada como recurso tipografico.", "https://www.dafont.com/"),
+        new CreditLink("Musica", "Glitch Stairs", "Tema incorporado para el menu principal.", "https://opengameart.org/"),
+        new CreditLink("Musica", "A Flawless Getaway", "Loop musical incorporado para gameplay.", "https://opengameart.org/")
+    };
+
     private bool showOptions;
     private bool showUnlocks;
     private bool showStats;
     private bool showOperations;
+    private bool showCredits;
     private bool showDeveloperMenu;
     private bool queuedGameplayLoad;
     private int selectedUnlockIndex;
@@ -52,6 +81,7 @@ public class MainMenuController : MonoBehaviour
     private Vector2 developerScroll;
     private Vector2 achievementScroll;
     private Vector2 unlockScroll;
+    private Vector2 creditsScroll;
     private string selectedUnlockSection = MetaProgressionStorage.SectionRunUpgrades;
     private Font titleFont;
     private Font uiFont;
@@ -65,6 +95,7 @@ public class MainMenuController : MonoBehaviour
     private GUIStyle rankingRowStyle;
     private GUIStyle rankingScoreStyle;
     private GUIStyle menuButtonLabelStyle;
+    private GUIStyle creditLinkStyle;
     private int cachedScreenWidth;
     private int cachedScreenHeight;
     private float cachedUiScale = -1f;
@@ -120,6 +151,7 @@ public class MainMenuController : MonoBehaviour
             showUnlocks = false;
             showStats = false;
             showOperations = false;
+            showCredits = false;
             GlitchAudioManager.PlayMenuToggle();
         }
     }
@@ -148,6 +180,10 @@ public class MainMenuController : MonoBehaviour
         else if (showUnlocks)
         {
             DrawUnlocksMenu();
+        }
+        else if (showCredits)
+        {
+            DrawCreditsMenu();
         }
         else
         {
@@ -208,11 +244,12 @@ public class MainMenuController : MonoBehaviour
         string operationLine = $"Operacion: {ContainmentOperationStorage.SelectedOperation.title}";
         GUI.Label(new Rect(panel.x + 18f, panel.y + 134f, panel.width - 36f, 20f), operationLine, BuildFittedSingleLineStyle(paragraphStyle, operationLine, panel.width - 36f, 20f, 9));
         float buttonY = panel.y + 158f;
-        Rect playRect = new Rect(panel.x + 18f, buttonY, panel.width - 36f, 44f);
-        Rect unlocksRect = new Rect(panel.x + 18f, buttonY + 54f, panel.width - 36f, 38f);
-        Rect statsRect = new Rect(panel.x + 18f, buttonY + 102f, panel.width - 36f, 38f);
-        Rect optionsRect = new Rect(panel.x + 18f, buttonY + 150f, panel.width - 36f, 38f);
-        Rect exitRect = new Rect(panel.x + 18f, buttonY + 198f, panel.width - 36f, 38f);
+        Rect playRect = new Rect(panel.x + 18f, buttonY, panel.width - 36f, 42f);
+        Rect unlocksRect = new Rect(panel.x + 18f, buttonY + 50f, panel.width - 36f, 36f);
+        Rect statsRect = new Rect(panel.x + 18f, buttonY + 94f, panel.width - 36f, 36f);
+        Rect optionsRect = new Rect(panel.x + 18f, buttonY + 138f, panel.width - 36f, 36f);
+        Rect creditsRect = new Rect(panel.x + 18f, buttonY + 182f, panel.width - 36f, 36f);
+        Rect exitRect = new Rect(panel.x + 18f, buttonY + 226f, panel.width - 36f, 36f);
 
         if (DrawAnimatedMenuButton(playRect, "Jugar", true))
         {
@@ -220,6 +257,7 @@ public class MainMenuController : MonoBehaviour
             showOptions = false;
             showUnlocks = false;
             showStats = false;
+            showCredits = false;
             showOperations = true;
             GlitchAudioManager.PlayMenuConfirm();
         }
@@ -228,6 +266,7 @@ public class MainMenuController : MonoBehaviour
             showOptions = false;
             showStats = false;
             showOperations = false;
+            showCredits = false;
             showUnlocks = true;
         }
         if (DrawAnimatedMenuButton(statsRect, "Estadisticas"))
@@ -235,6 +274,7 @@ public class MainMenuController : MonoBehaviour
             showOptions = false;
             showUnlocks = false;
             showOperations = false;
+            showCredits = false;
             showStats = true;
         }
         if (DrawAnimatedMenuButton(optionsRect, "Opciones"))
@@ -242,7 +282,16 @@ public class MainMenuController : MonoBehaviour
             showUnlocks = false;
             showStats = false;
             showOperations = false;
+            showCredits = false;
             showOptions = true;
+        }
+        if (DrawAnimatedMenuButton(creditsRect, "Creditos"))
+        {
+            showOptions = false;
+            showUnlocks = false;
+            showStats = false;
+            showOperations = false;
+            showCredits = true;
         }
         if (DrawAnimatedMenuButton(exitRect, "Salir"))
         {
@@ -497,7 +546,7 @@ public class MainMenuController : MonoBehaviour
     private void GetMainMenuLayout(out Rect mainPanel, out Rect rankingPanel, out bool sideBySide)
     {
         float mainW = 390f;
-        float mainH = 400f;
+        float mainH = 448f;
         float rankW = 400f;
         float rankH = 320f;
         float gap = 22f;
@@ -712,6 +761,128 @@ public class MainMenuController : MonoBehaviour
         {
             showStats = false;
         }
+    }
+
+    private void DrawCreditsMenu()
+    {
+        DrawScreenFade(0.48f);
+        float bob = Mathf.Sin(Time.unscaledTime * 1.05f + 0.95f) * 5f;
+        Rect panel = CenterRect(Mathf.Min(760f, Screen.width - 42f), Mathf.Min(540f, Screen.height - 42f));
+        panel.y += bob;
+        DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.92f), new Color(0.72f, 0.62f, 1f, 0.58f));
+        DrawPanelFx(panel, new Color(0.82f, 0.64f, 1f, 1f), 0.10f);
+
+        Rect area = new Rect(panel.x + 18f, panel.y + 16f, panel.width - 36f, panel.height - 28f);
+        GUI.Label(new Rect(area.x, area.y, area.width, 42f), "Creditos", panelTitleStyle);
+        DrawSolidRect(new Rect(area.x, area.y + 50f, area.width, 1f), new Color(0.86f, 0.72f, 1f, 0.28f));
+
+        Rect intro = new Rect(area.x, area.y + 62f, area.width, 46f);
+        GUIStyle wrappedIntro = new GUIStyle(paragraphStyle)
+        {
+            wordWrap = true,
+            clipping = TextClipping.Clip
+        };
+        GUI.Label(intro, "Reconocimiento a los recursos y herramientas utilizados. Los enlaces se abren en el navegador.", wrappedIntro);
+
+        Rect listRect = new Rect(area.x, area.y + 116f, area.width, area.height - 174f);
+        DrawSolidRect(listRect, new Color(0.02f, 0.035f, 0.07f, 0.66f));
+        DrawSolidRect(new Rect(listRect.x, listRect.y, listRect.width, 2f), new Color(0.86f, 0.72f, 1f, 0.36f));
+
+        GUILayout.BeginArea(new Rect(listRect.x + 12f, listRect.y + 10f, listRect.width - 24f, listRect.height - 20f));
+        creditsScroll = GUILayout.BeginScrollView(creditsScroll, false, true);
+        DrawCreditSection("Proyecto", new Color(0.48f, 0.94f, 1f, 1f));
+        DrawCreditSection("Motor y herramientas", new Color(0.82f, 0.74f, 1f, 1f));
+        DrawCreditSection("Tipografias", new Color(1f, 0.82f, 0.46f, 1f));
+        DrawCreditSection("Musica", new Color(1f, 0.56f, 0.82f, 1f));
+        GUILayout.EndScrollView();
+        GUILayout.EndArea();
+
+        Rect backRect = new Rect(area.xMax - 132f, area.yMax - 36f, 132f, 34f);
+        if (DrawAnimatedMenuButton(backRect, "Volver", true))
+        {
+            showCredits = false;
+        }
+    }
+
+    private void DrawCreditSection(string section, Color accent)
+    {
+        int count = CountCreditLinks(section);
+        if (count <= 0)
+        {
+            return;
+        }
+
+        Rect header = GUILayoutUtility.GetRect(1f, 28f, GUILayout.ExpandWidth(true));
+        DrawSolidRect(new Rect(header.x, header.y + 7f, header.width, 2f), new Color(accent.r, accent.g, accent.b, 0.42f));
+        GUI.Label(new Rect(header.x + 8f, header.y, header.width - 16f, header.height), section, rankingScoreStyle);
+
+        for (int i = 0; i < creditLinks.Length; i++)
+        {
+            CreditLink link = creditLinks[i];
+            if (link == null || link.section != section)
+            {
+                continue;
+            }
+
+            DrawCreditEntry(link, accent);
+        }
+
+        GUILayout.Space(8f);
+    }
+
+    private void DrawCreditEntry(CreditLink link, Color accent)
+    {
+        Rect row = GUILayoutUtility.GetRect(1f, 74f, GUILayout.ExpandWidth(true));
+        bool hasUrl = !string.IsNullOrWhiteSpace(link.url);
+        bool hovered = hasUrl && row.Contains(Event.current.mousePosition);
+        Color fill = hovered ? new Color(0.10f, 0.16f, 0.25f, 0.92f) : new Color(0.05f, 0.08f, 0.14f, 0.82f);
+        DrawSolidRect(row, fill);
+        DrawSolidRect(new Rect(row.x, row.y, 3f, row.height), new Color(accent.r, accent.g, accent.b, hovered ? 0.76f : 0.42f));
+
+        Rect titleRect = new Rect(row.x + 12f, row.y + 6f, row.width * 0.48f, 24f);
+        Rect descriptionRect = new Rect(row.x + 12f, row.y + 30f, row.width * 0.58f, 34f);
+        Rect linkRect = new Rect(row.x + row.width * 0.62f, row.y + 12f, row.width * 0.36f, 24f);
+        Rect buttonRect = new Rect(linkRect.x, row.y + 40f, linkRect.width, 26f);
+
+        GUI.Label(titleRect, link.title, BuildFittedSingleLineStyle(rankingRowStyle, link.title, titleRect.width, titleRect.height, 10));
+        GUIStyle wrapped = new GUIStyle(paragraphStyle)
+        {
+            wordWrap = true,
+            clipping = TextClipping.Clip,
+            fontSize = Mathf.Max(10, paragraphStyle.fontSize - 1)
+        };
+        GUI.Label(descriptionRect, link.description, wrapped);
+
+        string urlLabel = hasUrl ? link.url : "Credito interno";
+        GUI.Label(linkRect, urlLabel, BuildFittedSingleLineStyle(hasUrl ? creditLinkStyle : paragraphStyle, urlLabel, linkRect.width, linkRect.height, 9));
+
+        bool oldEnabled = GUI.enabled;
+        GUI.enabled = hasUrl && transitionState == MenuTransitionState.Idle;
+        if (GUI.Button(buttonRect, hasUrl ? "Abrir enlace" : "Sin enlace", buttonStyle))
+        {
+            GlitchAudioManager.PlayMenuConfirm();
+            Application.OpenURL(link.url);
+        }
+        GUI.enabled = oldEnabled;
+    }
+
+    private int CountCreditLinks(string section)
+    {
+        if (creditLinks == null)
+        {
+            return 0;
+        }
+
+        int count = 0;
+        for (int i = 0; i < creditLinks.Length; i++)
+        {
+            if (creditLinks[i] != null && creditLinks[i].section == section)
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     private void DrawStatsSection(Rect rect, string title, Color accent)
@@ -2105,6 +2276,18 @@ public class MainMenuController : MonoBehaviour
         };
         menuButtonLabelStyle.normal.textColor = new Color(0.92f, 0.96f, 1f, 0.98f);
         menuButtonLabelStyle.hover.textColor = new Color(1f, 1f, 1f, 1f);
+
+        creditLinkStyle = new GUIStyle(paragraphStyle)
+        {
+            font = uiFont,
+            fontSize = Mathf.RoundToInt(13f * uiScale),
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleLeft,
+            clipping = TextClipping.Clip,
+            wordWrap = false
+        };
+        creditLinkStyle.normal.textColor = new Color(0.48f, 0.94f, 1f, 0.96f);
+        creditLinkStyle.hover.textColor = Color.white;
     }
 
     private void ResolveFonts()
