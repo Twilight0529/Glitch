@@ -208,8 +208,8 @@ public class GlitchAudioManager : MonoBehaviour
             case EnemyController.AnomalyState.ReplayPredator:
                 Play("state_signal_jam", 0.72f, 0.92f, position);
                 break;
-            case EnemyController.AnomalyState.FalseSafeZone:
-                Play("state_phase_blink", 0.68f, 0.86f, position);
+            case EnemyController.AnomalyState.ChecksumLattice:
+                Play("state_signal_jam", 0.72f, 1.05f, position);
                 break;
             case EnemyController.AnomalyState.InputDesync:
                 Play("state_orbit", 0.64f, 1.12f, position);
@@ -247,7 +247,7 @@ public class GlitchAudioManager : MonoBehaviour
                state == EnemyController.AnomalyState.SignalJam ||
                state == EnemyController.AnomalyState.OrbitBarrage ||
                state == EnemyController.AnomalyState.ReplayPredator ||
-               state == EnemyController.AnomalyState.FalseSafeZone ||
+               state == EnemyController.AnomalyState.ChecksumLattice ||
                state == EnemyController.AnomalyState.InputDesync ||
                state == EnemyController.AnomalyState.MapRecompile ||
                state == EnemyController.AnomalyState.SignalPossession ||

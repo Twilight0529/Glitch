@@ -4310,8 +4310,8 @@ public class GameManager : MonoBehaviour
                 return "Orbit Barrage";
             case "ReplayPredator":
                 return "Replay Predator";
-            case "FalseSafeZone":
-                return "False Safe Zone";
+            case "ChecksumLattice":
+                return "Checksum Lattice";
             case "InputDesync":
                 return "Input Desync";
             case "MapRecompile":
@@ -4339,7 +4339,7 @@ public class GameManager : MonoBehaviour
             case "SignalJam":
             case "OrbitBarrage":
             case "ReplayPredator":
-            case "FalseSafeZone":
+            case "ChecksumLattice":
             case "InputDesync":
             case "MapRecompile":
             case "SignalPossession":
@@ -4357,7 +4357,7 @@ public class GameManager : MonoBehaviour
                raw == "SignalJam" ||
                raw == "OrbitBarrage" ||
                raw == "ReplayPredator" ||
-               raw == "FalseSafeZone" ||
+               raw == "ChecksumLattice" ||
                raw == "InputDesync" ||
                raw == "MapRecompile" ||
                raw == "SignalPossession" ||
@@ -4396,8 +4396,8 @@ public class GameManager : MonoBehaviour
                 return new Color(0.58f, 0.82f, 1f, 1f);
             case "ReplayPredator":
                 return new Color(1f, 0.42f, 0.76f, 1f);
-            case "FalseSafeZone":
-                return new Color(0.44f, 1f, 0.88f, 1f);
+            case "ChecksumLattice":
+                return new Color(1f, 0.82f, 0.34f, 1f);
             case "InputDesync":
                 return new Color(0.66f, 0.74f, 1f, 1f);
             case "MapRecompile":

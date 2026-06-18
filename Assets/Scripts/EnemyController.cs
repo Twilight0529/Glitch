@@ -23,7 +23,7 @@ public class EnemyController : MonoBehaviour
         SignalJam,
         OrbitBarrage,
         ReplayPredator,
-        FalseSafeZone,
+        ChecksumLattice,
         InputDesync,
         MapRecompile,
         SignalPossession,
@@ -202,16 +202,21 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float replayPredatorGhostTravelSeconds = 1.35f;
     [SerializeField] private Color replayPredatorColor = new Color(1f, 0.42f, 0.76f, 0.92f);
 
-    [Header("Level 2 - False Safe Zone")]
-    [SerializeField] private float falseSafeZoneInterval = 4.1f;
-    [SerializeField] private float falseSafeZoneTelegraphSeconds = 1.45f;
-    [SerializeField] private int falseSafeZoneCount = 4;
-    [SerializeField] private float falseSafeZoneRadius = 1.25f;
-    [SerializeField] private float falseSafeZonePenaltySlow = 0.42f;
-    [SerializeField] private float falseSafeZonePenaltyDuration = 1.15f;
-    [SerializeField] private float falseSafeZonePushDistance = 1.35f;
-    [SerializeField] private Color falseSafeZoneTrueColor = new Color(0.44f, 1f, 0.88f, 0.9f);
-    [SerializeField] private Color falseSafeZoneTrapColor = new Color(1f, 0.38f, 0.78f, 0.92f);
+    [Header("Level 2 - Checksum Lattice")]
+    [SerializeField] private float checksumLatticeInterval = 6.2f;
+    [SerializeField] private float checksumLatticePrepSeconds = 1.35f;
+    [SerializeField] private float checksumLatticeDuration = 7.2f;
+    [SerializeField] private int checksumLatticeNodeCount = 4;
+    [SerializeField] private int checksumLatticeProbeCount = 18;
+    [SerializeField] private float checksumLatticeSearchRadius = 4.5f;
+    [SerializeField] private float checksumLatticeNodeRadius = 0.5f;
+    [SerializeField] private float checksumLatticeRewardStun = 1.8f;
+    [SerializeField] private float checksumLatticePenaltySlowMultiplier = 0.46f;
+    [SerializeField] private float checksumLatticePenaltyDuration = 1.3f;
+    [SerializeField] private float checksumLatticePenaltyPull = 1.2f;
+    [SerializeField] private Color checksumLatticeNodeColor = new Color(0.36f, 0.86f, 1f, 0.88f);
+    [SerializeField] private Color checksumLatticeActiveColor = new Color(1f, 0.82f, 0.34f, 1f);
+    [SerializeField] private Color checksumLatticeFailColor = new Color(1f, 0.34f, 0.72f, 0.95f);
 
     [Header("Level 2 - Input Desync")]
     [SerializeField] private float inputDesyncInterval = 1.25f;
@@ -276,7 +281,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField, Min(0f)] private float signalJamWeight = 0.66f;
     [SerializeField, Min(0f)] private float orbitBarrageWeight = 0.64f;
     [SerializeField, Min(0f)] private float replayPredatorWeight = 0.62f;
-    [SerializeField, Min(0f)] private float falseSafeZoneWeight = 0.58f;
+    [SerializeField, Min(0f)] private float checksumLatticeWeight = 0.58f;
     [SerializeField, Min(0f)] private float inputDesyncWeight = 0.52f;
     [SerializeField, Min(0f)] private float mapRecompileWeight = 0.56f;
     [SerializeField, Min(0f)] private float signalPossessionWeight = 0.54f;
@@ -416,7 +421,8 @@ public class EnemyController : MonoBehaviour
     private readonly List<ReplaySample> replaySamples = new List<ReplaySample>();
     private float replaySampleTimer;
     private float replayPredatorTimer;
-    private float falseSafeZoneTimer;
+    private float checksumLatticeTimer;
+    private ChecksumLatticeFx checksumLatticeFx;
     private float inputDesyncTimer;
     private float mapRecompileTimer;
     private bool mapRecompileCharging;
@@ -526,6 +532,13 @@ public class EnemyController : MonoBehaviour
         public Vector2 target;
         public SpriteRenderer[] renderers;
         public Color[] colors;
+    }
+
+    private struct ChecksumNodePlan
+    {
+        public Vector2 position;
+        public float score;
+        public int checksum;
     }
 
     private sealed class DestroyerRespawnSnapshot
@@ -999,7 +1012,7 @@ public class EnemyController : MonoBehaviour
             state == AnomalyState.SignalJam ||
             state == AnomalyState.OrbitBarrage ||
             state == AnomalyState.ReplayPredator ||
-            state == AnomalyState.FalseSafeZone ||
+            state == AnomalyState.ChecksumLattice ||
             state == AnomalyState.InputDesync ||
             state == AnomalyState.MapRecompile ||
             state == AnomalyState.SignalPossession ||
@@ -1200,9 +1213,9 @@ public class EnemyController : MonoBehaviour
         {
             replayPredatorTimer = Mathf.Max(0.25f, replayPredatorInterval * 0.45f);
         }
-        else if (currentState == AnomalyState.FalseSafeZone)
+        else if (currentState == AnomalyState.ChecksumLattice)
         {
-            falseSafeZoneTimer = Mathf.Max(0.25f, falseSafeZoneInterval * 0.35f);
+            checksumLatticeTimer = Mathf.Max(0.25f, checksumLatticeInterval * 0.35f);
         }
         else if (currentState == AnomalyState.InputDesync)
         {
@@ -1313,7 +1326,7 @@ public class EnemyController : MonoBehaviour
             fullOptions.Add(new StateWeight(AnomalyState.SignalJam, signalJamWeight));
             fullOptions.Add(new StateWeight(AnomalyState.OrbitBarrage, orbitBarrageWeight));
             fullOptions.Add(new StateWeight(AnomalyState.ReplayPredator, replayPredatorWeight));
-            fullOptions.Add(new StateWeight(AnomalyState.FalseSafeZone, falseSafeZoneWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.ChecksumLattice, checksumLatticeWeight));
             fullOptions.Add(new StateWeight(AnomalyState.InputDesync, inputDesyncWeight));
             fullOptions.Add(new StateWeight(AnomalyState.MapRecompile, mapRecompileWeight));
             fullOptions.Add(new StateWeight(AnomalyState.SignalPossession, signalPossessionWeight));
@@ -1403,7 +1416,7 @@ public class EnemyController : MonoBehaviour
                state == AnomalyState.SignalJam ||
                state == AnomalyState.OrbitBarrage ||
                state == AnomalyState.ReplayPredator ||
-               state == AnomalyState.FalseSafeZone ||
+               state == AnomalyState.ChecksumLattice ||
                state == AnomalyState.InputDesync ||
                state == AnomalyState.MapRecompile ||
                state == AnomalyState.SignalPossession ||
@@ -1485,7 +1498,7 @@ public class EnemyController : MonoBehaviour
                state == AnomalyState.SignalJam ||
                state == AnomalyState.OrbitBarrage ||
                state == AnomalyState.ReplayPredator ||
-               state == AnomalyState.FalseSafeZone ||
+               state == AnomalyState.ChecksumLattice ||
                state == AnomalyState.InputDesync ||
                state == AnomalyState.MapRecompile ||
                state == AnomalyState.SignalPossession ||
@@ -1499,7 +1512,7 @@ public class EnemyController : MonoBehaviour
                state == AnomalyState.SignalJam ||
                state == AnomalyState.OrbitBarrage ||
                state == AnomalyState.ReplayPredator ||
-               state == AnomalyState.FalseSafeZone ||
+               state == AnomalyState.ChecksumLattice ||
                state == AnomalyState.InputDesync ||
                state == AnomalyState.MapRecompile ||
                state == AnomalyState.SignalPossession ||
@@ -1729,7 +1742,7 @@ public class EnemyController : MonoBehaviour
                 return new Color(0.58f, 0.82f, 1f, 1f);
             case AnomalyState.ReplayPredator:
                 return new Color(1f, 0.42f, 0.76f, 1f);
-            case AnomalyState.FalseSafeZone:
+            case AnomalyState.ChecksumLattice:
                 return new Color(0.44f, 1f, 0.88f, 1f);
             case AnomalyState.InputDesync:
                 return new Color(0.66f, 0.74f, 1f, 1f);
@@ -1834,7 +1847,7 @@ public class EnemyController : MonoBehaviour
             AnomalyState.SignalJam,
             AnomalyState.OrbitBarrage,
             AnomalyState.ReplayPredator,
-            AnomalyState.FalseSafeZone,
+            AnomalyState.ChecksumLattice,
             AnomalyState.InputDesync,
             AnomalyState.MapRecompile,
             AnomalyState.SignalPossession,
@@ -1962,7 +1975,7 @@ public class EnemyController : MonoBehaviour
                 return BehaviorPattern.ErraticBurst;
             case AnomalyState.ReplayPredator:
                 return BehaviorPattern.CutoffFlank;
-            case AnomalyState.FalseSafeZone:
+            case AnomalyState.ChecksumLattice:
                 return BehaviorPattern.PredictiveIntercept;
             case AnomalyState.InputDesync:
                 return BehaviorPattern.ErraticBurst;
@@ -2010,7 +2023,7 @@ public class EnemyController : MonoBehaviour
         UpdateSignalJamAbility();
         UpdateOrbitBarrageAbility();
         UpdateReplayPredatorAbility();
-        UpdateFalseSafeZoneAbility();
+        UpdateChecksumLatticeAbility();
         UpdateInputDesyncAbility();
         UpdateMapRecompileAbility();
         UpdateSignalPossessionAbility();
@@ -2232,21 +2245,26 @@ public class EnemyController : MonoBehaviour
         SpawnReplayPredatorEchoes();
     }
 
-    private void UpdateFalseSafeZoneAbility()
+    private void UpdateChecksumLatticeAbility()
     {
-        if (currentState != AnomalyState.FalseSafeZone)
+        if (currentState != AnomalyState.ChecksumLattice)
         {
             return;
         }
 
-        falseSafeZoneTimer += Time.deltaTime;
-        if (falseSafeZoneTimer < Mathf.Max(1.2f, falseSafeZoneInterval))
+        if (checksumLatticeFx != null)
         {
             return;
         }
 
-        falseSafeZoneTimer = 0f;
-        SpawnFalseSafeZones();
+        checksumLatticeTimer += Time.deltaTime;
+        if (checksumLatticeTimer < Mathf.Max(2.4f, checksumLatticeInterval))
+        {
+            return;
+        }
+
+        checksumLatticeTimer = 0f;
+        SpawnChecksumLattice();
     }
 
     private void UpdateInputDesyncAbility()
@@ -3924,75 +3942,224 @@ public class EnemyController : MonoBehaviour
         SpawnLevelTwoRadialBurst(ghostPath[0], 1.1f, replayPredatorColor, "ReplayPredator");
     }
 
-    private void SpawnFalseSafeZones()
+    private void SpawnChecksumLattice()
     {
+        if (player == null || gameManager == null || gameManager.IsGameOver || checksumLatticeFx != null)
+        {
+            return;
+        }
+
+        List<ChecksumNodePlan> plans = BuildChecksumLatticePlans();
+        int desiredCount = Mathf.Clamp(checksumLatticeNodeCount, 3, 6);
+        if (plans.Count < desiredCount)
+        {
+            plans = CreateFallbackChecksumNodes(desiredCount);
+        }
+
+        int count = Mathf.Min(desiredCount, plans.Count);
+        if (count < 3)
+        {
+            return;
+        }
+
+        Vector2[] nodes = new Vector2[count];
+        for (int i = 0; i < count; i++)
+        {
+            nodes[i] = plans[i].position;
+        }
+
+        int[] sequence = BuildChecksumSequence(plans, count);
+        GameObject root = new GameObject("ChecksumLattice");
+        checksumLatticeFx = root.AddComponent<ChecksumLatticeFx>();
+        checksumLatticeFx.Configure(
+            this,
+            player,
+            gameManager,
+            nodes,
+            sequence,
+            checksumLatticePrepSeconds,
+            checksumLatticeDuration,
+            checksumLatticeNodeRadius,
+            checksumLatticeNodeColor,
+            checksumLatticeActiveColor,
+            checksumLatticeFailColor,
+            navOrigin,
+            navSize);
+
+        SpawnLevelTwoRadialBurst(player.GetPosition(), 1.1f, checksumLatticeActiveColor, "ChecksumLattice");
+    }
+
+    private List<ChecksumNodePlan> BuildChecksumLatticePlans()
+    {
+        List<ChecksumNodePlan> plans = new List<ChecksumNodePlan>();
+        if (player == null)
+        {
+            return plans;
+        }
+
+        Vector2 playerPos = player.GetPosition();
+        Vector2 enemyPos = GetCurrentPosition();
+        Vector2 velocity = player.CurrentVelocity;
+        Vector2 awayFromEnemy = (playerPos - enemyPos).sqrMagnitude > 0.001f ? (playerPos - enemyPos).normalized : lastMoveDirection;
+        Vector2 movementDir = velocity.sqrMagnitude > 0.05f ? velocity.normalized : awayFromEnemy;
+        int probes = Mathf.Max(8, checksumLatticeProbeCount);
+        float radius = Mathf.Max(2f, checksumLatticeSearchRadius);
+
+        for (int i = 0; i < probes; i++)
+        {
+            float angle = (360f / probes) * i + Random.Range(-7f, 7f);
+            Vector2 direction = Rotate(Vector2.right, angle).normalized;
+            float ring = i % 3 == 0 ? 0.72f : i % 3 == 1 ? 0.92f : 1.12f;
+            Vector2 candidate = ClampPointToArenaWithMargin(playerPos + direction * radius * ring, agentRadius + 0.5f);
+            if (!IsWalkableWorld(candidate) || Vector2.Distance(candidate, playerPos) < 1.4f)
+            {
+                continue;
+            }
+
+            float directFromPlayer = HasDirectPath(playerPos, candidate) ? 1f : 0.25f;
+            float directFromEnemy = HasDirectPath(enemyPos, candidate) ? 0.3f : 1f;
+            float movementAlignment = Mathf.Max(0f, Vector2.Dot(direction, movementDir));
+            float escapeAlignment = Mathf.Max(0f, Vector2.Dot(direction, awayFromEnemy));
+            float enemyDistance = Mathf.Clamp01(Vector2.Distance(candidate, enemyPos) / Mathf.Max(1f, radius + 2f));
+            float playerDistance = Mathf.Abs(Vector2.Distance(candidate, playerPos) - radius) * 0.12f;
+            float score = directFromPlayer * 2.1f + directFromEnemy * 0.9f + movementAlignment * 1.15f + escapeAlignment * 0.85f + enemyDistance - playerDistance;
+
+            plans.Add(new ChecksumNodePlan
+            {
+                position = candidate,
+                score = score,
+                checksum = Mathf.Abs(Mathf.RoundToInt(candidate.x * 31f) ^ Mathf.RoundToInt(candidate.y * 47f) ^ (i * 193))
+            });
+        }
+
+        plans.Sort((a, b) => b.score.CompareTo(a.score));
+        return FilterChecksumNodePlans(plans);
+    }
+
+    private List<ChecksumNodePlan> FilterChecksumNodePlans(List<ChecksumNodePlan> sortedPlans)
+    {
+        List<ChecksumNodePlan> filtered = new List<ChecksumNodePlan>();
+        float minDistance = Mathf.Max(1.2f, checksumLatticeNodeRadius * 3.2f);
+        for (int i = 0; i < sortedPlans.Count; i++)
+        {
+            ChecksumNodePlan plan = sortedPlans[i];
+            bool tooClose = false;
+            for (int j = 0; j < filtered.Count; j++)
+            {
+                if (Vector2.Distance(plan.position, filtered[j].position) < minDistance)
+                {
+                    tooClose = true;
+                    break;
+                }
+            }
+
+            if (!tooClose)
+            {
+                filtered.Add(plan);
+            }
+        }
+
+        return filtered;
+    }
+
+    private List<ChecksumNodePlan> CreateFallbackChecksumNodes(int count)
+    {
+        List<ChecksumNodePlan> fallback = new List<ChecksumNodePlan>();
+        if (player == null)
+        {
+            return fallback;
+        }
+
+        Vector2 playerPos = player.GetPosition();
+        Vector2 enemyPos = GetCurrentPosition();
+        Vector2 baseDir = (playerPos - enemyPos).sqrMagnitude > 0.001f ? (playerPos - enemyPos).normalized : lastMoveDirection;
+        float radius = Mathf.Max(2.2f, checksumLatticeSearchRadius * 0.82f);
+        for (int i = 0; i < count; i++)
+        {
+            float angle = (360f / count) * i + 25f;
+            Vector2 pos = ClampPointToArenaWithMargin(playerPos + Rotate(baseDir, angle) * radius, agentRadius + 0.5f);
+            fallback.Add(new ChecksumNodePlan
+            {
+                position = pos,
+                score = count - i,
+                checksum = Mathf.Abs(Mathf.RoundToInt(pos.x * 37f) ^ Mathf.RoundToInt(pos.y * 53f) ^ (i * 211))
+            });
+        }
+
+        return fallback;
+    }
+
+    private int[] BuildChecksumSequence(List<ChecksumNodePlan> plans, int count)
+    {
+        int[] sequence = new int[count];
+        bool[] used = new bool[count];
+        int current = 0;
+        int bestChecksum = -1;
+        for (int i = 0; i < count; i++)
+        {
+            int checksum = plans[i].checksum % 997;
+            if (checksum > bestChecksum)
+            {
+                bestChecksum = checksum;
+                current = i;
+            }
+        }
+
+        for (int step = 0; step < count; step++)
+        {
+            sequence[step] = current;
+            used[current] = true;
+
+            int next = -1;
+            float bestScore = float.MinValue;
+            for (int i = 0; i < count; i++)
+            {
+                if (used[i])
+                {
+                    continue;
+                }
+
+                float distance = Vector2.Distance(plans[current].position, plans[i].position);
+                float checksumDelta = Mathf.Abs((plans[current].checksum % 17) - (plans[i].checksum % 17));
+                float score = distance * 0.7f + checksumDelta * 0.18f + plans[i].score * 0.35f;
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    next = i;
+                }
+            }
+
+            if (next >= 0)
+            {
+                current = next;
+            }
+        }
+
+        return sequence;
+    }
+
+    public void ResolveChecksumLattice(bool success, int solvedNodes, Vector2 resolvePosition)
+    {
+        checksumLatticeFx = null;
         if (player == null)
         {
             return;
         }
 
-        int count = Mathf.Max(3, falseSafeZoneCount);
-        int safeIndex = Random.Range(0, count);
-        Vector2 center = player.GetPosition();
-        float spacing = Mathf.Max(2.2f, falseSafeZoneRadius * 2.35f);
-        float startAngle = Random.Range(0f, Mathf.PI * 2f);
-
-        for (int i = 0; i < count; i++)
+        if (success)
         {
-            float angle = startAngle + (Mathf.PI * 2f * i / count);
-            Vector2 offset = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * spacing;
-            Vector2 position = ClampToArena(center + offset);
-            bool realSafe = i == safeIndex;
-            GameObject zone = new GameObject(realSafe ? "FalseSafeZone_Real" : "FalseSafeZone_Trap");
-            zone.transform.position = new Vector3(position.x, position.y, 0f);
-            SpriteRenderer sr = zone.AddComponent<SpriteRenderer>();
-            sr.sprite = CircleSpriteProvider.Get();
-            sr.drawMode = SpriteDrawMode.Sliced;
-            sr.sortingOrder = realSafe ? 15 : 14;
-            FalseSafeZoneFx fx = zone.AddComponent<FalseSafeZoneFx>();
-            fx.Configure(
-                this,
-                sr,
-                position,
-                Mathf.Max(0.35f, falseSafeZoneRadius),
-                Mathf.Max(0.35f, falseSafeZoneTelegraphSeconds),
-                realSafe,
-                realSafe ? falseSafeZoneTrueColor : falseSafeZoneTrapColor);
-        }
-    }
-
-    public void ResolveFalseSafeZone(Vector2 center, float radius, bool realSafe)
-    {
-        if (player == null || gameManager == null || gameManager.IsGameOver)
-        {
+            ApplyContainmentLock(GetCurrentPosition(), Mathf.Max(0.2f, checksumLatticeRewardStun));
+            player.AddFirewallCharge(10f);
+            SpawnLevelTwoRadialBurst(resolvePosition, 1.45f, checksumLatticeActiveColor, "ChecksumLatticeSolved");
             return;
         }
 
-        bool playerInside = Vector2.Distance(player.GetPosition(), center) <= Mathf.Max(0.2f, radius);
-        if (realSafe)
-        {
-            SpawnLevelTwoRadialBurst(center, radius, falseSafeZoneTrueColor, "TrueSafeZone");
-            if (playerInside)
-            {
-                ApplyContainmentLock(GetCurrentPosition(), 0.85f);
-                player.AddFirewallCharge(7f);
-            }
-
-            return;
-        }
-
-        SpawnLevelTwoRadialBurst(center, radius * 1.15f, falseSafeZoneTrapColor, "FalseSafeZone");
-        if (playerInside)
-        {
-            player.ApplyMovementSlow(falseSafeZonePenaltySlow, falseSafeZonePenaltyDuration);
-            Vector2 push = player.GetPosition() - center;
-            if (push.sqrMagnitude < 0.001f)
-            {
-                push = Random.insideUnitCircle;
-            }
-
-            player.ApplyExternalDisplacement(push.normalized * Mathf.Max(0.1f, falseSafeZonePushDistance));
-        }
+        Vector2 pull = (GetCurrentPosition() - player.GetPosition()).sqrMagnitude > 0.001f
+            ? (GetCurrentPosition() - player.GetPosition()).normalized
+            : Vector2.zero;
+        player.ApplyMovementSlow(checksumLatticePenaltySlowMultiplier, checksumLatticePenaltyDuration);
+        player.ApplyExternalDisplacement(pull * checksumLatticePenaltyPull);
+        SpawnLevelTwoRadialBurst(player.GetPosition(), 1.65f, checksumLatticeFailColor, "ChecksumLatticeFail");
     }
 
     private void QueueInputDesyncEcho()
@@ -4631,7 +4798,7 @@ public class EnemyController : MonoBehaviour
                 player.AddFirewallCharge(8f);
             }
 
-            SpawnLevelTwoRadialBurst(position, 1.4f, falseSafeZoneTrueColor, "PhaseContractSuccess");
+            SpawnLevelTwoRadialBurst(position, 1.4f, checksumLatticeActiveColor, "PhaseContractSuccess");
             return;
         }
 
@@ -6070,45 +6237,500 @@ public class ReplayPredatorGhostFx : MonoBehaviour
     }
 }
 
-public class FalseSafeZoneFx : MonoBehaviour
+public class ChecksumLatticeFx : MonoBehaviour
 {
     private EnemyController owner;
-    private SpriteRenderer spriteRenderer;
-    private Vector2 center;
-    private float radius = 1.1f;
-    private float telegraphSeconds = 1.2f;
+    private PlayerController player;
+    private GameManager gameManager;
+    private Vector2[] nodes;
+    private int[] sequence;
+    private SpriteRenderer[] nodeRenderers;
+    private SpriteRenderer[] lineRenderers;
+    private SpriteRenderer[] dataMoteRenderers;
+    private SpriteRenderer activeGuideRenderer;
+    private SpriteRenderer activeRingRenderer;
+    private SpriteRenderer activeArrowHeadRenderer;
+    private TextMesh[] labels;
+    private TextMesh orderHintLabel;
+    private readonly List<RendererColorSnapshot> grayscaleSnapshots = new List<RendererColorSnapshot>();
+    private Vector2 arenaOrigin;
+    private Vector2 arenaSize;
+    private float prepSeconds = 1.2f;
+    private float activeSeconds = 7f;
+    private float nodeRadius = 0.5f;
     private float age;
-    private bool realSafe;
-    private Color color = Color.cyan;
+    private float grayscaleRefreshTimer;
+    private int sequenceStep;
+    private bool resolved;
+    private bool sceneColorsRestored;
+    private Color nodeColor = Color.cyan;
+    private Color activeColor = Color.yellow;
+    private Color failColor = Color.magenta;
 
-    public void Configure(EnemyController ownerRef, SpriteRenderer rendererRef, Vector2 zoneCenter, float zoneRadius, float warningSeconds, bool isRealSafe, Color tint)
+    private struct RendererColorSnapshot
+    {
+        public SpriteRenderer renderer;
+        public Color color;
+    }
+
+    public void Configure(EnemyController ownerRef, PlayerController playerRef, GameManager managerRef, Vector2[] nodePositions, int[] nodeSequence, float prep, float duration, float radius, Color baseTint, Color activeTint, Color failTint, Vector2 arenaStart, Vector2 arenaDimensions)
     {
         owner = ownerRef;
-        spriteRenderer = rendererRef;
-        center = zoneCenter;
-        radius = Mathf.Max(0.25f, zoneRadius);
-        telegraphSeconds = Mathf.Max(0.1f, warningSeconds);
-        realSafe = isRealSafe;
-        color = tint;
+        player = playerRef;
+        gameManager = managerRef;
+        nodes = nodePositions;
+        sequence = nodeSequence;
+        prepSeconds = Mathf.Max(0.2f, prep);
+        activeSeconds = Mathf.Max(1.5f, duration);
+        nodeRadius = Mathf.Max(0.18f, radius);
+        nodeColor = baseTint;
+        activeColor = activeTint;
+        failColor = failTint;
+        arenaOrigin = arenaStart;
+        arenaSize = arenaDimensions;
+
+        BuildVisuals();
+        ApplySceneGrayscale();
+    }
+
+    private void BuildVisuals()
+    {
+        int count = nodes != null ? nodes.Length : 0;
+        nodeRenderers = new SpriteRenderer[count];
+        labels = new TextMesh[count];
+        lineRenderers = new SpriteRenderer[Mathf.Max(0, count - 1)];
+        dataMoteRenderers = new SpriteRenderer[12];
+
+        for (int i = 0; i < count; i++)
+        {
+            GameObject node = new GameObject($"ChecksumNode_{i}");
+            node.transform.SetParent(transform, false);
+            node.transform.position = new Vector3(nodes[i].x, nodes[i].y, 0f);
+
+            SpriteRenderer sr = node.AddComponent<SpriteRenderer>();
+            sr.sprite = CircleSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.sortingOrder = 19;
+            sr.size = Vector2.one * nodeRadius * 2f;
+            nodeRenderers[i] = sr;
+
+            GameObject labelGo = new GameObject($"ChecksumNodeLabel_{i}");
+            labelGo.transform.SetParent(node.transform, false);
+            labelGo.transform.localPosition = new Vector3(0f, -nodeRadius * 0.08f, 0f);
+            TextMesh label = labelGo.AddComponent<TextMesh>();
+            label.anchor = TextAnchor.MiddleCenter;
+            label.alignment = TextAlignment.Center;
+            label.characterSize = nodeRadius * 0.42f;
+            label.fontSize = 32;
+            label.text = "?";
+            MeshRenderer labelRenderer = labelGo.GetComponent<MeshRenderer>();
+            if (labelRenderer != null)
+            {
+                labelRenderer.sortingOrder = 21;
+            }
+
+            labels[i] = label;
+        }
+
+        if (sequence == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < lineRenderers.Length; i++)
+        {
+            int a = Mathf.Clamp(sequence[i], 0, count - 1);
+            int b = Mathf.Clamp(sequence[i + 1], 0, count - 1);
+            GameObject line = new GameObject($"ChecksumLink_{i}");
+            line.transform.SetParent(transform, false);
+            SpriteRenderer sr = line.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.sortingOrder = 18;
+            lineRenderers[i] = sr;
+            PositionLine(line.transform, sr, nodes[a], nodes[b], 0.055f);
+        }
+
+        BuildGuidanceVisuals();
+    }
+
+    private void BuildGuidanceVisuals()
+    {
+        GameObject guide = new GameObject("ChecksumActiveGuide");
+        guide.transform.SetParent(transform, false);
+        activeGuideRenderer = guide.AddComponent<SpriteRenderer>();
+        activeGuideRenderer.sprite = SquareSpriteProvider.Get();
+        activeGuideRenderer.drawMode = SpriteDrawMode.Sliced;
+        activeGuideRenderer.sortingOrder = 20;
+        activeGuideRenderer.color = Color.clear;
+
+        GameObject arrowHead = new GameObject("ChecksumActiveArrowHead");
+        arrowHead.transform.SetParent(transform, false);
+        activeArrowHeadRenderer = arrowHead.AddComponent<SpriteRenderer>();
+        activeArrowHeadRenderer.sprite = SquareSpriteProvider.Get();
+        activeArrowHeadRenderer.drawMode = SpriteDrawMode.Sliced;
+        activeArrowHeadRenderer.sortingOrder = 21;
+        activeArrowHeadRenderer.size = new Vector2(nodeRadius * 0.62f, nodeRadius * 0.22f);
+        activeArrowHeadRenderer.color = Color.clear;
+
+        GameObject ring = new GameObject("ChecksumActiveRing");
+        ring.transform.SetParent(transform, false);
+        activeRingRenderer = ring.AddComponent<SpriteRenderer>();
+        activeRingRenderer.sprite = CircleSpriteProvider.Get();
+        activeRingRenderer.drawMode = SpriteDrawMode.Sliced;
+        activeRingRenderer.sortingOrder = 20;
+        activeRingRenderer.color = Color.clear;
+
+        GameObject hint = new GameObject("ChecksumOrderHint");
+        hint.transform.SetParent(transform, false);
+        Vector2 hintPos = arenaOrigin + new Vector2(arenaSize.x * 0.5f, arenaSize.y - 0.72f);
+        hint.transform.position = new Vector3(hintPos.x, hintPos.y, 0f);
+        orderHintLabel = hint.AddComponent<TextMesh>();
+        orderHintLabel.anchor = TextAnchor.MiddleCenter;
+        orderHintLabel.alignment = TextAlignment.Center;
+        orderHintLabel.characterSize = 0.22f;
+        orderHintLabel.fontSize = 38;
+        orderHintLabel.text = BuildOrderHintText();
+        MeshRenderer hintRenderer = hint.GetComponent<MeshRenderer>();
+        if (hintRenderer != null)
+        {
+            hintRenderer.sortingOrder = 22;
+        }
+
+        for (int i = 0; i < dataMoteRenderers.Length; i++)
+        {
+            GameObject mote = new GameObject($"ChecksumDataMote_{i}");
+            mote.transform.SetParent(transform, false);
+            SpriteRenderer sr = mote.AddComponent<SpriteRenderer>();
+            sr.sprite = SquareSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.sortingOrder = 21;
+            sr.size = Vector2.one * Mathf.Lerp(0.045f, 0.085f, (i % 4) / 3f);
+            sr.color = Color.clear;
+            dataMoteRenderers[i] = sr;
+        }
     }
 
     private void Update()
     {
+        if (resolved)
+        {
+            return;
+        }
+
+        if (gameManager != null && (!gameManager.IsRunActive || gameManager.IsGameOver))
+        {
+            Resolve(false);
+            return;
+        }
+
         age += Time.deltaTime;
-        float t = Mathf.Clamp01(age / telegraphSeconds);
-        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * (realSafe ? 5.5f : 13f));
-
-        if (spriteRenderer != null)
+        grayscaleRefreshTimer -= Time.deltaTime;
+        if (grayscaleRefreshTimer <= 0f)
         {
-            spriteRenderer.size = Vector2.one * radius * Mathf.Lerp(realSafe ? 2.25f : 2.65f, 2f, t);
-            spriteRenderer.color = new Color(color.r, color.g, color.b, Mathf.Lerp(0.12f, realSafe ? 0.74f : 0.62f, t) * (0.78f + pulse * 0.22f));
+            grayscaleRefreshTimer = 0.16f;
+            ApplySceneGrayscale();
         }
 
-        if (age >= telegraphSeconds)
+        bool armed = age >= prepSeconds;
+        UpdateVisuals(armed);
+
+        if (armed && player != null && sequence != null && sequenceStep < sequence.Length)
         {
-            owner?.ResolveFalseSafeZone(center, radius, realSafe);
-            Destroy(gameObject);
+            int activeIndex = Mathf.Clamp(sequence[sequenceStep], 0, nodes.Length - 1);
+            if (Vector2.Distance(player.GetPosition(), nodes[activeIndex]) <= nodeRadius)
+            {
+                sequenceStep++;
+                if (sequenceStep >= sequence.Length)
+                {
+                    Resolve(true);
+                    return;
+                }
+            }
         }
+
+        if (age >= prepSeconds + activeSeconds)
+        {
+            Resolve(false);
+        }
+    }
+
+    private void UpdateVisuals(bool armed)
+    {
+        if (nodes == null || sequence == null)
+        {
+            return;
+        }
+
+        float prepT = Mathf.Clamp01(age / prepSeconds);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * (armed ? 10f : 6f));
+
+        for (int i = 0; i < nodeRenderers.Length; i++)
+        {
+            int order = GetSequenceOrder(i);
+            bool solved = order >= 0 && order < sequenceStep;
+            bool active = order == sequenceStep;
+            Color color = solved ? nodeColor : active ? activeColor : Color.Lerp(failColor, nodeColor, 0.45f);
+            color.a = solved ? 0.48f : active ? Mathf.Lerp(0.72f, 1f, pulse) : Mathf.Lerp(0.22f, 0.48f, prepT);
+
+            if (nodeRenderers[i] != null)
+            {
+                nodeRenderers[i].color = color;
+                float scale = active ? Mathf.Lerp(1.04f, 1.34f, pulse) : Mathf.Lerp(0.72f, 1f, prepT);
+                nodeRenderers[i].size = Vector2.one * nodeRadius * 2f * scale;
+            }
+
+            if (labels[i] != null)
+            {
+                labels[i].text = armed && order >= 0 ? (order + 1).ToString() : "?";
+                labels[i].color = active ? Color.white : solved ? nodeColor : new Color(0.82f, 0.9f, 1f, 0.74f);
+            }
+        }
+
+        for (int i = 0; i < lineRenderers.Length; i++)
+        {
+            SpriteRenderer sr = lineRenderers[i];
+            if (sr == null)
+            {
+                continue;
+            }
+
+            Color color = i < sequenceStep ? nodeColor : i == sequenceStep ? activeColor : failColor;
+            color.a = Mathf.Lerp(0.08f, i <= sequenceStep ? 0.5f : 0.22f, armed ? 1f : prepT) * Mathf.Lerp(0.82f, 1.18f, pulse);
+            sr.color = color;
+        }
+
+        UpdateActiveGuide(armed, prepT, pulse);
+        UpdateDataMotes(armed, prepT, pulse);
+        UpdateOrderHint(armed, prepT, pulse);
+    }
+
+    private void UpdateActiveGuide(bool armed, float prepT, float pulse)
+    {
+        if (sequence == null || nodes == null || sequenceStep >= sequence.Length || player == null)
+        {
+            SetGuideVisible(false);
+            return;
+        }
+
+        int activeIndex = Mathf.Clamp(sequence[sequenceStep], 0, nodes.Length - 1);
+        Vector2 target = nodes[activeIndex];
+        Vector2 playerPos = player.GetPosition();
+        float alpha = armed ? Mathf.Lerp(0.5f, 0.86f, pulse) : Mathf.Lerp(0.08f, 0.34f, prepT);
+        Color guideColor = Color.Lerp(nodeColor, activeColor, armed ? 0.85f : 0.35f);
+        guideColor.a = alpha;
+
+        if (activeGuideRenderer != null)
+        {
+            PositionLine(activeGuideRenderer.transform, activeGuideRenderer, playerPos, target, Mathf.Lerp(0.045f, 0.09f, pulse));
+            activeGuideRenderer.color = guideColor;
+        }
+
+        if (activeArrowHeadRenderer != null)
+        {
+            Vector2 delta = target - playerPos;
+            Vector2 dir = delta.sqrMagnitude > 0.001f ? delta.normalized : Vector2.right;
+            Vector2 arrowPos = target - dir * Mathf.Max(0.18f, nodeRadius * 0.72f);
+            activeArrowHeadRenderer.transform.position = new Vector3(arrowPos.x, arrowPos.y, 0f);
+            activeArrowHeadRenderer.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg);
+            activeArrowHeadRenderer.size = new Vector2(nodeRadius * Mathf.Lerp(0.5f, 0.8f, pulse), nodeRadius * 0.22f);
+            activeArrowHeadRenderer.color = guideColor;
+        }
+
+        if (activeRingRenderer != null)
+        {
+            activeRingRenderer.transform.position = new Vector3(target.x, target.y, 0f);
+            activeRingRenderer.size = Vector2.one * nodeRadius * Mathf.Lerp(2.45f, 3.3f, pulse);
+            Color ringColor = activeColor;
+            ringColor.a = Mathf.Lerp(0.38f, 0.78f, pulse);
+            activeRingRenderer.color = ringColor;
+        }
+    }
+
+    private void SetGuideVisible(bool visible)
+    {
+        Color clear = Color.clear;
+        if (!visible && activeGuideRenderer != null)
+        {
+            activeGuideRenderer.color = clear;
+        }
+        if (!visible && activeArrowHeadRenderer != null)
+        {
+            activeArrowHeadRenderer.color = clear;
+        }
+        if (!visible && activeRingRenderer != null)
+        {
+            activeRingRenderer.color = clear;
+        }
+    }
+
+    private void UpdateDataMotes(bool armed, float prepT, float pulse)
+    {
+        if (dataMoteRenderers == null || sequence == null || nodes == null || sequenceStep >= sequence.Length)
+        {
+            return;
+        }
+
+        int activeIndex = Mathf.Clamp(sequence[sequenceStep], 0, nodes.Length - 1);
+        Vector2 center = nodes[activeIndex];
+        float alpha = armed ? 0.72f : Mathf.Lerp(0.08f, 0.38f, prepT);
+        for (int i = 0; i < dataMoteRenderers.Length; i++)
+        {
+            SpriteRenderer sr = dataMoteRenderers[i];
+            if (sr == null)
+            {
+                continue;
+            }
+
+            float offset = i / Mathf.Max(1f, dataMoteRenderers.Length);
+            float angle = Time.time * Mathf.Lerp(95f, 145f, offset) + offset * Mathf.PI * 2f;
+            float radius = nodeRadius * Mathf.Lerp(1.45f, 2.25f, (i % 5) / 4f) * Mathf.Lerp(0.86f, 1.16f, pulse);
+            Vector2 pos = center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+            sr.transform.position = new Vector3(pos.x, pos.y, 0f);
+            sr.transform.rotation = Quaternion.Euler(0f, 0f, -angle * Mathf.Rad2Deg);
+            Color c = i % 3 == 0 ? activeColor : nodeColor;
+            c.a = alpha * Mathf.Lerp(0.42f, 0.94f, (i % 4) / 3f);
+            sr.color = c;
+        }
+    }
+
+    private void UpdateOrderHint(bool armed, float prepT, float pulse)
+    {
+        if (orderHintLabel == null)
+        {
+            return;
+        }
+
+        orderHintLabel.text = BuildOrderHintText();
+        Color color = armed ? activeColor : nodeColor;
+        color.a = Mathf.Lerp(0.18f, armed ? 0.92f : 0.54f, armed ? pulse : prepT);
+        orderHintLabel.color = color;
+    }
+
+    private void ApplySceneGrayscale()
+    {
+        SpriteRenderer[] renderers = Object.FindObjectsOfType<SpriteRenderer>();
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            SpriteRenderer sr = renderers[i];
+            if (sr == null || sr.transform == null || sr.transform.IsChildOf(transform))
+            {
+                continue;
+            }
+
+            if (!IsRendererTracked(sr))
+            {
+                grayscaleSnapshots.Add(new RendererColorSnapshot
+                {
+                    renderer = sr,
+                    color = sr.color
+                });
+            }
+
+            sr.color = ToGrayscale(sr.color);
+        }
+    }
+
+    private bool IsRendererTracked(SpriteRenderer renderer)
+    {
+        for (int i = 0; i < grayscaleSnapshots.Count; i++)
+        {
+            if (grayscaleSnapshots[i].renderer == renderer)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void RestoreSceneColors()
+    {
+        if (sceneColorsRestored)
+        {
+            return;
+        }
+
+        sceneColorsRestored = true;
+        for (int i = 0; i < grayscaleSnapshots.Count; i++)
+        {
+            RendererColorSnapshot snapshot = grayscaleSnapshots[i];
+            if (snapshot.renderer != null)
+            {
+                snapshot.renderer.color = snapshot.color;
+            }
+        }
+
+        grayscaleSnapshots.Clear();
+    }
+
+    private static Color ToGrayscale(Color color)
+    {
+        float gray = color.r * 0.299f + color.g * 0.587f + color.b * 0.114f;
+        return new Color(gray, gray, gray, color.a);
+    }
+
+    private string BuildOrderHintText()
+    {
+        if (sequence == null || sequence.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        string text = string.Empty;
+        for (int i = 0; i < sequence.Length; i++)
+        {
+            if (i > 0)
+            {
+                text += " > ";
+            }
+
+            text += (i + 1).ToString();
+        }
+
+        return text;
+    }
+
+    private int GetSequenceOrder(int nodeIndex)
+    {
+        for (int i = 0; i < sequence.Length; i++)
+        {
+            if (sequence[i] == nodeIndex)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private void Resolve(bool success)
+    {
+        if (resolved)
+        {
+            return;
+        }
+
+        resolved = true;
+        Vector2 pos = player != null ? player.GetPosition() : (Vector2)transform.position;
+        RestoreSceneColors();
+        owner?.ResolveChecksumLattice(success, sequenceStep, pos);
+        Destroy(gameObject);
+    }
+
+    private void OnDestroy()
+    {
+        RestoreSceneColors();
+    }
+
+    private static void PositionLine(Transform lineTransform, SpriteRenderer renderer, Vector2 from, Vector2 to, float thickness)
+    {
+        Vector2 delta = to - from;
+        float distance = delta.magnitude;
+        Vector2 center = (from + to) * 0.5f;
+        lineTransform.position = new Vector3(center.x, center.y, 0f);
+        lineTransform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
+        renderer.size = new Vector2(Mathf.Max(0.05f, distance), Mathf.Max(0.02f, thickness));
     }
 }
 
