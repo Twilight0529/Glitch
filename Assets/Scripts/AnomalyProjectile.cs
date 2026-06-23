@@ -15,6 +15,8 @@ public class AnomalyProjectile : MonoBehaviour
     private bool reflected;
     private SpriteRenderer spriteRenderer;
 
+    public Vector2 CurrentVelocity => direction * speed;
+
     public void Configure(Vector2 travelDirection, float projectileSpeed, float projectileLifetime, LayerMask obstacles, GameManager manager)
     {
         direction = travelDirection.sqrMagnitude > 0.0001f ? travelDirection.normalized : Vector2.right;
@@ -34,6 +36,44 @@ public class AnomalyProjectile : MonoBehaviour
         Vector2 reflectedDirection = ((Vector2)transform.position - parryOrigin);
         Reflect(reflectedDirection.sqrMagnitude > 0.0001f ? reflectedDirection.normalized : -direction);
         return true;
+    }
+
+    public void ApplyExternalDisplacement(Vector2 delta, float steeringStrength = 0f)
+    {
+        if (delta.sqrMagnitude <= 0.000001f)
+        {
+            return;
+        }
+
+        transform.position += (Vector3)delta;
+        if (steeringStrength > 0f)
+        {
+            Vector2 steered = Vector2.Lerp(direction, delta.normalized, Mathf.Clamp01(steeringStrength));
+            if (steered.sqrMagnitude > 0.0001f)
+            {
+                direction = steered.normalized;
+                transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg);
+            }
+        }
+    }
+
+    public void ApplyOrbitalAcceleration(Vector2 acceleration, float deltaTime, float maxTurnRate)
+    {
+        if (acceleration.sqrMagnitude <= 0.000001f || deltaTime <= 0f)
+        {
+            return;
+        }
+
+        Vector2 currentVelocity = direction * speed;
+        Vector2 desiredVelocity = currentVelocity + acceleration * deltaTime;
+        if (desiredVelocity.sqrMagnitude <= 0.0001f)
+        {
+            return;
+        }
+
+        float maxRadians = Mathf.Max(1f, maxTurnRate) * Mathf.Deg2Rad * deltaTime;
+        direction = Vector3.RotateTowards(direction, desiredVelocity.normalized, maxRadians, 0f).normalized;
+        transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg);
     }
 
     private void Awake()

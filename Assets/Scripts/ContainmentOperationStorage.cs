@@ -108,7 +108,7 @@ public static class ContainmentOperationStorage
             id = AmbientOverdriveId,
             title = "Sobrecarga Ambiental",
             subtitle = "Arena hiperactiva",
-            description = "Lab, Storage y Rupture fuerzan sus sistemas pasivos: gruas, compuertas y fisuras aparecen con mucha mas presencia.",
+            description = "Cada arena fuerza su sistema pasivo: gruas, compuertas, fisuras, gates y campos nulos aparecen con mucha mas presencia.",
             objective = "Sobrevive 120s con la arena alterada.",
             risk = "Cada zona cambia de forma mas rapido y exige leer el espacio.",
             reward = "+30 Datos al estabilizar la sobrecarga.",

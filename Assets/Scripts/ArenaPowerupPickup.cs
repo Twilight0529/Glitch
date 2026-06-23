@@ -38,6 +38,16 @@ public class ArenaPowerupPickup : MonoBehaviour
 
     public PickupKind Kind => kind;
 
+    public void ApplyExternalDisplacement(Vector2 delta)
+    {
+        if (delta.sqrMagnitude <= 0.000001f)
+        {
+            return;
+        }
+
+        basePosition += (Vector3)delta;
+    }
+
     public void Configure(
         ArenaChaosDirector ownerController,
         PickupKind pickupKind,

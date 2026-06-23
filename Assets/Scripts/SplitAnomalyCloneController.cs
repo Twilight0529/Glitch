@@ -28,6 +28,23 @@ public class SplitAnomalyCloneController : MonoBehaviour
     private float firewallKnockbackTimer;
     private Vector2 lastMoveDirection = Vector2.right;
 
+    public Vector2 GetCurrentPosition()
+    {
+        return rb != null ? rb.position : (Vector2)transform.position;
+    }
+
+    public void ApplyExternalDisplacement(Vector2 delta)
+    {
+        if (rb == null || delta.sqrMagnitude <= 0.000001f)
+        {
+            return;
+        }
+
+        Vector2 target = rb.position + delta;
+        rb.position = target;
+        transform.position = new Vector3(target.x, target.y, transform.position.z);
+    }
+
     public void ConfigureMovement(float speed, float responsiveness, float flankOffset, float mergeMoveSpeed, int sign)
     {
         moveSpeed = Mathf.Max(0.1f, speed);

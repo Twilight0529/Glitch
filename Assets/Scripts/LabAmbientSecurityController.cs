@@ -23,7 +23,7 @@ public class LabAmbientSecurityController : MonoBehaviour
     [SerializeField] private Vector2 gateActiveHoldRange = new Vector2(7f, 10f);
     [SerializeField] private float gateTelegraphSeconds = 1.2f;
     [SerializeField] private float gateDeploySeconds = 0.75f;
-    [SerializeField] private float gateRetractSeconds = 0.85f;
+    [SerializeField] private float gateRetractSeconds = 0.85f; 
 
     [Header("Gate Shape")]
     [SerializeField] private Vector2 gateLengthRange = new Vector2(5.2f, 8.6f);

@@ -726,6 +726,8 @@ public class MainMenuController : MonoBehaviour
         DrawStatLine(records, 34f, "Lab", MetaProgressionStorage.GetArenaRecordLabel("Lab"));
         DrawStatLine(records, 64f, "Storage", MetaProgressionStorage.GetArenaRecordLabel("Storage"));
         DrawStatLine(records, 94f, "Rupture", MetaProgressionStorage.GetArenaRecordLabel("Rupture"));
+        DrawStatLine(records, 124f, "Core", MetaProgressionStorage.GetArenaRecordLabel("Core"));
+        DrawStatLine(records, 154f, "Archive", MetaProgressionStorage.GetArenaRecordLabel("Archive"));
 
         DrawStatsSection(right, "Operacion diaria", dailyComplete ? new Color(1f, 0.82f, 0.46f, 1f) : new Color(0.95f, 0.58f, 1f, 1f));
         Rect dailyTitleRect = new Rect(right.x + 14f, right.y + 30f, right.width - 28f, 42f);
@@ -1178,6 +1180,19 @@ public class MainMenuController : MonoBehaviour
         if (GUILayout.Button("Rupture", buttonStyle, GUILayout.Height(34f)))
         {
             DeveloperModeStorage.SetArenaOverride(ProceduralArenaGenerator.ArenaTheme.RuptureZone);
+            GlitchAudioManager.PlayMenuToggle();
+        }
+        GUILayout.EndHorizontal();
+
+        GUILayout.BeginHorizontal();
+        if (GUILayout.Button("Core", buttonStyle, GUILayout.Height(34f)))
+        {
+            DeveloperModeStorage.SetArenaOverride(ProceduralArenaGenerator.ArenaTheme.DataCore);
+            GlitchAudioManager.PlayMenuToggle();
+        }
+        if (GUILayout.Button("Archive", buttonStyle, GUILayout.Height(34f)))
+        {
+            DeveloperModeStorage.SetArenaOverride(ProceduralArenaGenerator.ArenaTheme.NullArchive);
             GlitchAudioManager.PlayMenuToggle();
         }
         if (GUILayout.Button("Random", buttonStyle, GUILayout.Height(34f)))

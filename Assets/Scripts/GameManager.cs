@@ -4972,6 +4972,14 @@ public class GameManager : MonoBehaviour
                 baseTint = new Color(0.16f, 0.08f, 0.18f, 1f);
                 accentTint = new Color(1f, 0.43f, 0.75f, 1f);
                 break;
+            case "Core":
+                baseTint = new Color(0.04f, 0.15f, 0.12f, 1f);
+                accentTint = new Color(0.44f, 1f, 0.58f, 1f);
+                break;
+            case "Archive":
+                baseTint = new Color(0.08f, 0.08f, 0.16f, 1f);
+                accentTint = new Color(0.55f, 0.92f, 1f, 1f);
+                break;
             default:
                 baseTint = new Color(0.10f, 0.12f, 0.18f, 1f);
                 accentTint = new Color(0.68f, 0.78f, 0.96f, 1f);

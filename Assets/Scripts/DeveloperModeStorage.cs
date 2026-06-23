@@ -19,7 +19,8 @@ public static class DeveloperModeStorage
         }
 
         int raw = PlayerPrefs.GetInt(ArenaOverrideThemeKey, 0);
-        theme = (ProceduralArenaGenerator.ArenaTheme)Mathf.Clamp(raw, 0, 2);
+        int max = System.Enum.GetValues(typeof(ProceduralArenaGenerator.ArenaTheme)).Length - 1;
+        theme = (ProceduralArenaGenerator.ArenaTheme)Mathf.Clamp(raw, 0, Mathf.Max(0, max));
         return true;
     }
 
@@ -50,8 +51,12 @@ public static class DeveloperModeStorage
                 return "Lab";
             case ProceduralArenaGenerator.ArenaTheme.StorageBay:
                 return "Storage";
-            default:
+            case ProceduralArenaGenerator.ArenaTheme.RuptureZone:
                 return "Rupture";
+            case ProceduralArenaGenerator.ArenaTheme.DataCore:
+                return "Core";
+            default:
+                return "Archive";
         }
     }
 

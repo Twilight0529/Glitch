@@ -10,7 +10,9 @@ public class ProceduralArenaGenerator : MonoBehaviour
     {
         ContainmentLab,
         StorageBay,
-        RuptureZone
+        RuptureZone,
+        DataCore,
+        NullArchive
     }
 
     private struct ThemePalette
@@ -104,6 +106,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
     private static bool hasLastGeneratedTheme;
     private static ArenaTheme lastGeneratedTheme;
     private static readonly List<ArenaTheme> themeBag = new List<ArenaTheme>();
+    private static bool themeBagIncludesAdvancedThemes;
 
     private readonly List<Rect> blockedAreas = new List<Rect>();
     private readonly List<Rect> placedObstacleRects = new List<Rect>();
@@ -201,8 +204,8 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     private ArenaTheme SelectDifferentTheme(ArenaTheme current)
     {
-        Array values = Enum.GetValues(typeof(ArenaTheme));
-        int count = values.Length;
+        List<ArenaTheme> values = BuildSelectableThemeList(ShouldIncludeAdvancedThemes());
+        int count = values.Count;
         if (count <= 1)
         {
             return current;
@@ -212,15 +215,15 @@ public class ProceduralArenaGenerator : MonoBehaviour
         int safety = 0;
         while (selected == current && safety < 16)
         {
-            selected = (ArenaTheme)values.GetValue(rng.Next(0, count));
+            selected = values[rng.Next(0, count)];
             safety++;
         }
 
         if (selected == current)
         {
-            int currentIndex = Array.IndexOf(values, current);
+            int currentIndex = values.IndexOf(current);
             int fallbackIndex = (currentIndex + 1) % count;
-            selected = (ArenaTheme)values.GetValue(fallbackIndex);
+            selected = values[fallbackIndex];
         }
 
         return selected;
@@ -240,8 +243,12 @@ public class ProceduralArenaGenerator : MonoBehaviour
                 return "Lab";
             case ArenaTheme.StorageBay:
                 return "Storage";
-            default:
+            case ArenaTheme.RuptureZone:
                 return "Rupture";
+            case ArenaTheme.DataCore:
+                return "Core";
+            default:
+                return "Archive";
         }
     }
 
@@ -270,14 +277,14 @@ public class ProceduralArenaGenerator : MonoBehaviour
             return (ArenaTheme)values.GetValue(0);
         }
 
-        return DrawThemeFromBag();
+        return DrawThemeFromBag(ShouldIncludeAdvancedThemes());
     }
 
-    private ArenaTheme DrawThemeFromBag()
+    private ArenaTheme DrawThemeFromBag(bool includeAdvancedThemes)
     {
-        if (themeBag.Count == 0)
+        if (themeBag.Count == 0 || themeBagIncludesAdvancedThemes != includeAdvancedThemes)
         {
-            RefillThemeBag();
+            RefillThemeBag(includeAdvancedThemes);
         }
 
         if (themeBag.Count == 0)
@@ -310,14 +317,50 @@ public class ProceduralArenaGenerator : MonoBehaviour
         return selectedTheme;
     }
 
-    private static void RefillThemeBag()
+    private static void RefillThemeBag(bool includeAdvancedThemes)
     {
         themeBag.Clear();
+        List<ArenaTheme> values = BuildSelectableThemeList(includeAdvancedThemes);
+        for (int i = 0; i < values.Count; i++)
+        {
+            themeBag.Add(values[i]);
+        }
+
+        themeBagIncludesAdvancedThemes = includeAdvancedThemes;
+    }
+
+    private static List<ArenaTheme> BuildSelectableThemeList(bool includeAdvancedThemes)
+    {
+        List<ArenaTheme> result = new List<ArenaTheme>();
         Array values = Enum.GetValues(typeof(ArenaTheme));
         for (int i = 0; i < values.Length; i++)
         {
-            themeBag.Add((ArenaTheme)values.GetValue(i));
+            ArenaTheme theme = (ArenaTheme)values.GetValue(i);
+            if (!includeAdvancedThemes && IsAdvancedTheme(theme))
+            {
+                continue;
+            }
+
+            result.Add(theme);
         }
+
+        return result;
+    }
+
+    private static bool IsAdvancedTheme(ArenaTheme theme)
+    {
+        return theme == ArenaTheme.DataCore || theme == ArenaTheme.NullArchive;
+    }
+
+    private static bool ShouldIncludeAdvancedThemes()
+    {
+        if (DeveloperModeStorage.ForceBossLevelTwo || DeveloperModeStorage.StartTimeSeconds >= 150f)
+        {
+            return true;
+        }
+
+        GameManager manager = UnityEngine.Object.FindAnyObjectByType<GameManager>();
+        return manager != null && (manager.AreBossLevelTwoStatesUnlocked || manager.SurvivalTime >= 150f);
     }
 
     private static ThemePalette GetPalette(ArenaTheme theme)
@@ -350,7 +393,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
                     detail = new Color(1f, 0.72f, 0.32f, 0.18f),
                     dynamic = new Color(0.98f, 0.78f, 0.38f, 0.92f)
                 };
-            default:
+            case ArenaTheme.RuptureZone:
                 return new ThemePalette
                 {
                     background = new Color(0.028f, 0.012f, 0.045f, 1f),
@@ -362,6 +405,32 @@ public class ProceduralArenaGenerator : MonoBehaviour
                     obstacleAccent = new Color(0.62f, 0.34f, 0.66f),
                     detail = new Color(1f, 0.42f, 0.82f, 0.16f),
                     dynamic = new Color(1f, 0.54f, 0.86f, 0.92f)
+                };
+            case ArenaTheme.DataCore:
+                return new ThemePalette
+                {
+                    background = new Color(0.012f, 0.044f, 0.038f, 1f),
+                    ambientA = new Color(0.20f, 1f, 0.64f, 0.19f),
+                    ambientB = new Color(0.82f, 1f, 0.42f, 0.13f),
+                    shadow = new Color(0.002f, 0.018f, 0.014f, 0.62f),
+                    wall = new Color(0.035f, 0.145f, 0.125f),
+                    obstacleBase = new Color(0.10f, 0.36f, 0.30f),
+                    obstacleAccent = new Color(0.28f, 0.68f, 0.46f),
+                    detail = new Color(0.42f, 1f, 0.62f, 0.20f),
+                    dynamic = new Color(0.70f, 1f, 0.42f, 0.94f)
+                };
+            default:
+                return new ThemePalette
+                {
+                    background = new Color(0.017f, 0.018f, 0.036f, 1f),
+                    ambientA = new Color(0.76f, 0.54f, 1f, 0.17f),
+                    ambientB = new Color(0.40f, 0.92f, 1f, 0.12f),
+                    shadow = new Color(0.004f, 0.004f, 0.012f, 0.68f),
+                    wall = new Color(0.075f, 0.070f, 0.135f),
+                    obstacleBase = new Color(0.20f, 0.20f, 0.34f),
+                    obstacleAccent = new Color(0.34f, 0.38f, 0.58f),
+                    detail = new Color(0.72f, 0.72f, 1f, 0.18f),
+                    dynamic = new Color(0.48f, 0.95f, 1f, 0.92f)
                 };
         }
     }
@@ -442,6 +511,8 @@ public class ProceduralArenaGenerator : MonoBehaviour
         ConfigureThemeMapEventController("LabAmbientSecurityController", activeTheme == ArenaTheme.ContainmentLab, obstaclesRoot, dynamicRoot);
         ConfigureThemeMapEventController("StorageSurgeEventController", activeTheme == ArenaTheme.StorageBay, obstaclesRoot, dynamicRoot);
         ConfigureThemeMapEventController("StorageAmbientCraneController", activeTheme == ArenaTheme.StorageBay, obstaclesRoot, dynamicRoot);
+        ConfigureThemeMapEventController("CoreGateEventController", activeTheme == ArenaTheme.DataCore, obstaclesRoot, dynamicRoot);
+        ConfigureThemeMapEventController("ArchiveNullFieldController", activeTheme == ArenaTheme.NullArchive, obstaclesRoot, dynamicRoot);
     }
 
     private void ConfigureChaosSystems()
@@ -542,6 +613,16 @@ public class ProceduralArenaGenerator : MonoBehaviour
                 break;
 
             case ArenaTheme.RuptureZone:
+                break;
+
+            case ArenaTheme.DataCore:
+                reservedLanes.Add(new Rect(-innerWidth * 0.5f, -primaryLaneWidth * 0.38f, innerWidth, primaryLaneWidth * 0.76f));
+                reservedLanes.Add(new Rect(-secondaryLaneWidth * 0.38f, -innerHeight * 0.5f, secondaryLaneWidth * 0.76f, innerHeight));
+                break;
+
+            case ArenaTheme.NullArchive:
+                reservedLanes.Add(new Rect(-innerWidth * 0.5f, -primaryLaneWidth * 0.30f, innerWidth, primaryLaneWidth * 0.60f));
+                reservedLanes.Add(new Rect(-secondaryLaneWidth * 0.30f, -innerHeight * 0.5f, secondaryLaneWidth * 0.60f, innerHeight));
                 break;
         }
     }
@@ -798,6 +879,12 @@ public class ProceduralArenaGenerator : MonoBehaviour
                 break;
             case ArenaTheme.RuptureZone:
                 GenerateRuptureZone(parent);
+                break;
+            case ArenaTheme.DataCore:
+                GenerateDataCore(parent);
+                break;
+            case ArenaTheme.NullArchive:
+                GenerateNullArchive(parent);
                 break;
         }
     }
@@ -1099,6 +1186,140 @@ public class ProceduralArenaGenerator : MonoBehaviour
             }
         }
 
+    }
+
+    private void GenerateDataCore(Transform parent)
+    {
+        int target = Range(minObstacles + 6, maxObstacles + 12);
+        int placed = 0;
+        int serial = 0;
+
+        float[] columns =
+        {
+            -arenaWidth * 0.34f,
+            -arenaWidth * 0.17f,
+            arenaWidth * 0.17f,
+            arenaWidth * 0.34f
+        };
+
+        for (int i = 0; i < columns.Length && placed < target; i++)
+        {
+            int columnBlocks = Range(2, 5);
+            for (int b = 0; b < columnBlocks && placed < target; b++)
+            {
+                float y = Range(-arenaHeight * 0.34f, arenaHeight * 0.34f);
+                Vector2 center = new Vector2(columns[i] + Range(-0.35f, 0.35f), y);
+                Vector2 size = Range(0f, 1f) < 0.62f
+                    ? new Vector2(Range(0.72f, 1.15f), Range(1.65f, 3.25f))
+                    : new Vector2(Range(1.55f, 3.15f), Range(0.58f, 0.92f));
+
+                bool success = Range(0f, 1f) < 0.82f
+                    ? TryPlaceRectangleObstacle($"Obstacle_CoreCircuit_{serial}", center, size, 0f, parent)
+                    : TryPlaceDiamondObstacle($"Obstacle_CoreNode_{serial}", center, Range(0.95f, 1.55f), parent);
+
+                if (success)
+                {
+                    placed++;
+                    serial++;
+                }
+            }
+        }
+
+        int attempts = target * placementAttemptsPerObstacle;
+        for (int i = 0; i < attempts && placed < target; i++)
+        {
+            float roll = Range(0f, 1f);
+            Vector2 center = GetRandomInsideArena(new Vector2(1.4f, 1.4f));
+            bool success;
+
+            if (roll < 0.46f)
+            {
+                Vector2 size = new Vector2(Range(1.25f, 2.35f), Range(0.48f, 0.78f));
+                success = TryPlaceRectangleObstacle($"Obstacle_CoreBridge_{serial}", center, size, Range(-6f, 6f), parent);
+            }
+            else if (roll < 0.78f)
+            {
+                success = TryPlacePillarObstacle($"Obstacle_CoreCapacitor_{serial}", center, Range(0.42f, 0.74f), parent);
+            }
+            else
+            {
+                success = TryPlaceDiamondObstacle($"Obstacle_CoreSwitch_{serial}", center, Range(0.9f, 1.45f), parent);
+            }
+
+            if (success)
+            {
+                placed++;
+                serial++;
+            }
+        }
+    }
+
+    private void GenerateNullArchive(Transform parent)
+    {
+        int rings = 3;
+        int serial = 0;
+        List<Vector2> placedCenters = new List<Vector2>();
+
+        for (int ring = 0; ring < rings; ring++)
+        {
+            int count = ring == 0 ? 5 : ring == 1 ? 8 : 11;
+            float radiusX = Mathf.Lerp(arenaWidth * 0.16f, arenaWidth * 0.42f, ring / 2f);
+            float radiusY = Mathf.Lerp(arenaHeight * 0.14f, arenaHeight * 0.38f, ring / 2f);
+
+            for (int i = 0; i < count; i++)
+            {
+                float angle = ((Mathf.PI * 2f) * i / count) + Range(-0.12f, 0.12f);
+                Vector2 center = new Vector2(Mathf.Cos(angle) * radiusX, Mathf.Sin(angle) * radiusY);
+                if (!HasMinCenterSpacing(center, placedCenters, 1.45f))
+                {
+                    continue;
+                }
+
+                bool success;
+                float roll = Range(0f, 1f);
+                if (roll < 0.48f)
+                {
+                    float tangent = Mathf.Atan2(Mathf.Cos(angle) * radiusY, -Mathf.Sin(angle) * radiusX) * Mathf.Rad2Deg;
+                    Vector2 size = new Vector2(Range(1.25f, 2.15f), Range(0.52f, 0.82f));
+                    success = TryPlaceRectangleObstacle($"Obstacle_ArchiveIndex_{serial}", center, size, tangent + Range(-8f, 8f), parent);
+                }
+                else if (roll < 0.78f)
+                {
+                    success = TryPlaceDiamondObstacle($"Obstacle_ArchiveShard_{serial}", center, Range(0.95f, 1.55f), parent);
+                }
+                else
+                {
+                    success = TryPlacePillarObstacle($"Obstacle_ArchiveSeal_{serial}", center, Range(0.46f, 0.82f), parent);
+                }
+
+                if (success)
+                {
+                    placedCenters.Add(center);
+                    serial++;
+                }
+            }
+        }
+
+        int target = Range(minObstacles + 10, maxObstacles + 17);
+        int attempts = target * placementAttemptsPerObstacle;
+        for (int i = 0; i < attempts && serial < target; i++)
+        {
+            Vector2 center = GetRandomInsideArena(new Vector2(1.3f, 1.3f));
+            if (!HasMinCenterSpacing(center, placedCenters, 1.55f))
+            {
+                continue;
+            }
+
+            bool success = Range(0f, 1f) < 0.55f
+                ? TryPlaceDiamondObstacle($"Obstacle_ArchiveFragment_{serial}", center, Range(0.85f, 1.35f), parent)
+                : TryPlaceRectangleObstacle($"Obstacle_ArchiveLine_{serial}", center, new Vector2(Range(1.2f, 2.4f), Range(0.45f, 0.72f)), Range(-32f, 32f), parent);
+
+            if (success)
+            {
+                placedCenters.Add(center);
+                serial++;
+            }
+        }
     }
 
     private bool CreateMandatoryRuptureCore(Transform parent)
@@ -1669,10 +1890,16 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     private void CreateBackdropSignalBands(Transform parent)
     {
-        int count = activeTheme == ArenaTheme.RuptureZone ? 12 : activeTheme == ArenaTheme.StorageBay ? 9 : 8;
+        int count = activeTheme == ArenaTheme.RuptureZone
+            ? 12
+            : activeTheme == ArenaTheme.DataCore
+                ? 14
+                : activeTheme == ArenaTheme.NullArchive
+                    ? 11
+                    : activeTheme == ArenaTheme.StorageBay ? 9 : 8;
         for (int i = 0; i < count; i++)
         {
-            bool horizontal = activeTheme != ArenaTheme.StorageBay || i % 4 != 0;
+            bool horizontal = activeTheme == ArenaTheme.DataCore ? i % 2 == 0 : activeTheme != ArenaTheme.StorageBay || i % 4 != 0;
             float width = horizontal ? Range(arenaWidth * 0.18f, arenaWidth * 0.54f) : Range(0.045f, 0.11f);
             float height = horizontal ? Range(0.045f, 0.12f) : Range(arenaHeight * 0.16f, arenaHeight * 0.48f);
             Vector2 position = new Vector2(
@@ -1683,6 +1910,16 @@ public class ProceduralArenaGenerator : MonoBehaviour
             {
                 width = Range(0.18f, 0.42f);
                 height = Range(arenaHeight * 0.18f, arenaHeight * 0.42f);
+            }
+            else if (activeTheme == ArenaTheme.DataCore && i % 4 == 0)
+            {
+                width = horizontal ? Range(arenaWidth * 0.48f, arenaWidth * 0.86f) : Range(0.035f, 0.08f);
+                height = horizontal ? Range(0.035f, 0.08f) : Range(arenaHeight * 0.34f, arenaHeight * 0.72f);
+            }
+            else if (activeTheme == ArenaTheme.NullArchive && i % 3 == 0)
+            {
+                width = Range(arenaWidth * 0.22f, arenaWidth * 0.46f);
+                height = Range(0.030f, 0.075f);
             }
 
             Color color = Color.Lerp(palette.ambientA, palette.ambientB, Range(0f, 1f));
@@ -1705,6 +1942,10 @@ public class ProceduralArenaGenerator : MonoBehaviour
                 return index % 2 == 0 ? -7f : 7f;
             case ArenaTheme.RuptureZone:
                 return Range(-32f, 32f);
+            case ArenaTheme.DataCore:
+                return index % 3 == 0 ? 90f : 0f;
+            case ArenaTheme.NullArchive:
+                return Range(-18f, 18f);
             default:
                 return index % 2 == 0 ? 0f : 90f;
         }
@@ -1726,8 +1967,14 @@ public class ProceduralArenaGenerator : MonoBehaviour
             case ArenaTheme.StorageBay:
                 CreateStorageFloorTexture(parent);
                 break;
-            default:
+            case ArenaTheme.RuptureZone:
                 CreateRuptureFloorTexture(parent);
+                break;
+            case ArenaTheme.DataCore:
+                CreateDataCoreFloorTexture(parent);
+                break;
+            default:
+                CreateNullArchiveFloorTexture(parent);
                 break;
         }
     }
@@ -1806,12 +2053,78 @@ public class ProceduralArenaGenerator : MonoBehaviour
         }
     }
 
+    private void CreateDataCoreFloorTexture(Transform parent)
+    {
+        Color line = new Color(palette.ambientA.r, palette.ambientA.g, palette.ambientA.b, 0.060f);
+        for (float x = -arenaWidth * 0.5f + 1.6f; x <= arenaWidth * 0.5f - 1.6f; x += 1.6f)
+        {
+            GameObject v = CreateBlock($"CoreCircuitTrace_V_{x:0.0}", new Vector2(x, 0f), new Vector2(0.026f, arenaHeight - 2.6f), line, parent);
+            v.GetComponent<SpriteRenderer>().sortingOrder = -11;
+        }
+
+        for (float y = -arenaHeight * 0.5f + 1.6f; y <= arenaHeight * 0.5f - 1.6f; y += 1.6f)
+        {
+            GameObject h = CreateBlock($"CoreCircuitTrace_H_{y:0.0}", new Vector2(0f, y), new Vector2(arenaWidth - 2.6f, 0.026f), line, parent);
+            h.GetComponent<SpriteRenderer>().sortingOrder = -11;
+        }
+
+        for (int i = 0; i < 22; i++)
+        {
+            Vector2 pos = GetRandomInsideArena(new Vector2(0.45f, 0.45f));
+            Color c = Color.Lerp(palette.ambientA, palette.ambientB, Range(0f, 1f));
+            c.a = Range(0.050f, 0.120f);
+            float size = Range(0.12f, 0.32f);
+            GameObject node = CreateBlock($"CoreFloorNode_{i}", pos, Vector2.one * size, c, parent);
+            SpriteRenderer sr = node.GetComponent<SpriteRenderer>();
+            sr.sprite = CircleSpriteProvider.Get();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.sortingOrder = -9;
+            node.AddComponent<ArenaAmbientPulseFx>().Configure(sr, c, c.a * 0.35f, c.a * 1.35f, Range(0.45f, 1.15f), Range(0f, 12f), Vector2.zero, 0f);
+        }
+    }
+
+    private void CreateNullArchiveFloorTexture(Transform parent)
+    {
+        int rings = 5;
+        int segments = 42;
+        for (int ring = 0; ring < rings; ring++)
+        {
+            float t = (ring + 1f) / rings;
+            float rx = Mathf.Lerp(arenaWidth * 0.11f, arenaWidth * 0.44f, t);
+            float ry = Mathf.Lerp(arenaHeight * 0.10f, arenaHeight * 0.40f, t);
+            float segLen = Mathf.Max(0.16f, (2f * Mathf.PI * Mathf.Max(rx, ry)) / segments * 0.22f);
+
+            for (int s = 0; s < segments; s += 2)
+            {
+                float angle = ((Mathf.PI * 2f) * s) / segments;
+                Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+                Vector2 pos = new Vector2(dir.x * rx, dir.y * ry);
+                Color c = Color.Lerp(palette.ambientA, palette.ambientB, t);
+                c.a = Mathf.Lerp(0.032f, 0.076f, 1f - t);
+                GameObject segment = CreateBlock($"ArchiveIndexRing_{ring}_{s}", pos, new Vector2(segLen, 0.045f), c, parent);
+                Vector2 tangent = new Vector2(-Mathf.Sin(angle) * rx, Mathf.Cos(angle) * ry);
+                segment.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(tangent.y, tangent.x) * Mathf.Rad2Deg);
+                segment.GetComponent<SpriteRenderer>().sortingOrder = -10;
+            }
+        }
+
+        for (int i = 0; i < 26; i++)
+        {
+            Vector2 pos = GetRandomInsideArena(new Vector2(0.38f, 0.38f));
+            Color c = Color.Lerp(palette.ambientA, palette.ambientB, Range(0f, 1f));
+            c.a = Range(0.030f, 0.082f);
+            GameObject glyph = CreateBlock($"ArchiveFloorGlyph_{i}", pos, new Vector2(Range(0.18f, 0.54f), Range(0.04f, 0.08f)), c, parent);
+            glyph.transform.rotation = Quaternion.Euler(0f, 0f, Range(-55f, 55f));
+            glyph.GetComponent<SpriteRenderer>().sortingOrder = -9;
+        }
+    }
+
     private void CreateThemeAmbientAccents(Transform parent)
     {
-        int bands = activeTheme == ArenaTheme.RuptureZone ? 8 : 6;
+        int bands = activeTheme == ArenaTheme.RuptureZone ? 8 : activeTheme == ArenaTheme.DataCore ? 10 : activeTheme == ArenaTheme.NullArchive ? 9 : 6;
         for (int i = 0; i < bands; i++)
         {
-            bool horizontal = activeTheme != ArenaTheme.StorageBay || i % 3 != 0;
+            bool horizontal = activeTheme == ArenaTheme.DataCore ? i % 2 == 0 : activeTheme != ArenaTheme.StorageBay || i % 3 != 0;
             Vector2 pos = horizontal
                 ? new Vector2(Range(-arenaWidth * 0.2f, arenaWidth * 0.2f), Range(-arenaHeight * 0.5f + 1.4f, arenaHeight * 0.5f - 1.4f))
                 : new Vector2(Range(-arenaWidth * 0.5f + 1.4f, arenaWidth * 0.5f - 1.4f), Range(-arenaHeight * 0.2f, arenaHeight * 0.2f));
@@ -1821,7 +2134,12 @@ public class ProceduralArenaGenerator : MonoBehaviour
             Color c = Color.Lerp(palette.ambientA, palette.ambientB, Range(0f, 1f));
             c.a = Range(0.018f, activeTheme == ArenaTheme.RuptureZone ? 0.056f : 0.078f);
             GameObject band = CreateBlock($"AmbientBand_{i}", pos, size, c, parent);
-            band.transform.rotation = Quaternion.Euler(0f, 0f, activeTheme == ArenaTheme.RuptureZone ? Range(-24f, 24f) : Range(-4f, 4f));
+            float rot = activeTheme == ArenaTheme.RuptureZone
+                ? Range(-24f, 24f)
+                : activeTheme == ArenaTheme.NullArchive
+                    ? Range(-16f, 16f)
+                    : Range(-4f, 4f);
+            band.transform.rotation = Quaternion.Euler(0f, 0f, rot);
             SpriteRenderer sr = band.GetComponent<SpriteRenderer>();
             sr.sortingOrder = -8;
             band.AddComponent<ArenaAmbientPulseFx>().Configure(sr, c, c.a * 0.45f, c.a * 1.06f, Range(0.22f, 0.62f), Range(0f, 12f), Vector2.zero, 0f);
@@ -1841,6 +2159,12 @@ public class ProceduralArenaGenerator : MonoBehaviour
                 break;
             case ArenaTheme.RuptureZone:
                 count = 38;
+                break;
+            case ArenaTheme.DataCore:
+                count = 42;
+                break;
+            case ArenaTheme.NullArchive:
+                count = 36;
                 break;
             default:
                 count = 28;
@@ -1864,6 +2188,10 @@ public class ProceduralArenaGenerator : MonoBehaviour
                 return ArenaAmbientParticleFx.ParticleStyle.Storage;
             case ArenaTheme.RuptureZone:
                 return ArenaAmbientParticleFx.ParticleStyle.Rupture;
+            case ArenaTheme.DataCore:
+                return ArenaAmbientParticleFx.ParticleStyle.Core;
+            case ArenaTheme.NullArchive:
+                return ArenaAmbientParticleFx.ParticleStyle.Archive;
             default:
                 return ArenaAmbientParticleFx.ParticleStyle.Lab;
         }

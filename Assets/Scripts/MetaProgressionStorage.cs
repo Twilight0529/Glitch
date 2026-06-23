@@ -85,7 +85,7 @@ public static class MetaProgressionStorage
     private const string GlobalBestTimeKey = "Glitch_Meta_GlobalBestTime";
     private const string SelectedSkinKey = "Glitch_Meta_SelectedSkin";
 
-    private static readonly string[] knownLevelLabels = { "Lab", "Storage", "Rupture", "Unknown" };
+    private static readonly string[] knownLevelLabels = { "Lab", "Storage", "Rupture", "Core", "Archive", "Unknown" };
 
     private static readonly UnlockDefinition[] definitions =
     {

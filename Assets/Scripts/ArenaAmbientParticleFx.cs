@@ -7,7 +7,9 @@ public class ArenaAmbientParticleFx : MonoBehaviour
     {
         Lab,
         Storage,
-        Rupture
+        Rupture,
+        Core,
+        Archive
     }
 
     private struct AmbientParticle
@@ -50,7 +52,9 @@ public class ArenaAmbientParticleFx : MonoBehaviour
         particle.transform.localPosition = initialPosition;
 
         SpriteRenderer renderer = particle.AddComponent<SpriteRenderer>();
-        renderer.sprite = style == ParticleStyle.Storage && index % 5 == 0 ? CircleSpriteProvider.Get() : SquareSpriteProvider.Get();
+        renderer.sprite = (style == ParticleStyle.Storage && index % 5 == 0) || (style == ParticleStyle.Core && index % 4 == 0)
+            ? CircleSpriteProvider.Get()
+            : SquareSpriteProvider.Get();
         renderer.sortingOrder = GetSortingOrder();
 
         Color color = Color.Lerp(primary, secondary, Random.Range(0f, 1f));
@@ -101,9 +105,10 @@ public class ArenaAmbientParticleFx : MonoBehaviour
         particle.Position = new Vector2(wrappedPosition.x, wrappedPosition.y);
 
         Vector2 visualOffset = Vector2.zero;
-        if (style == ParticleStyle.Rupture)
+        if (style == ParticleStyle.Rupture || style == ParticleStyle.Archive)
         {
-            float glitchStep = Mathf.Floor((Time.time + particle.Phase) * 7f);
+            float glitchRate = style == ParticleStyle.Archive ? 3.5f : 7f;
+            float glitchStep = Mathf.Floor((Time.time + particle.Phase) * glitchRate);
             visualOffset.x = Mathf.Sin(glitchStep * 3.17f + index) * particle.Jitter;
             visualOffset.y = Mathf.Cos(glitchStep * 2.41f + index) * particle.Jitter;
         }
@@ -116,7 +121,7 @@ public class ArenaAmbientParticleFx : MonoBehaviour
 
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * particle.BlinkSpeed + particle.Phase);
         Color color = particle.BaseColor;
-        float maxPulseAlpha = style == ParticleStyle.Rupture ? 1.08f : 1.22f;
+        float maxPulseAlpha = style == ParticleStyle.Rupture || style == ParticleStyle.Archive ? 1.08f : 1.22f;
         color.a = Mathf.Lerp(particle.BaseColor.a * 0.32f, particle.BaseColor.a * maxPulseAlpha, pulse);
         if (style == ParticleStyle.Rupture && pulse > 0.88f)
         {
@@ -125,7 +130,7 @@ public class ArenaAmbientParticleFx : MonoBehaviour
 
         particle.Renderer.color = color;
 
-        float scalePulse = style == ParticleStyle.Rupture
+        float scalePulse = style == ParticleStyle.Rupture || style == ParticleStyle.Archive
             ? Mathf.Lerp(0.86f, 1.10f, pulse)
             : Mathf.Lerp(0.88f, 1.08f, pulse);
         particle.Transform.localScale = new Vector3(particle.BaseScale.x * scalePulse, particle.BaseScale.y, 1f);
@@ -177,6 +182,14 @@ public class ArenaAmbientParticleFx : MonoBehaviour
                 return index % 4 == 0
                     ? new Vector2(Random.Range(0.22f, 0.62f), Random.Range(0.025f, 0.055f))
                     : Vector2.one * Random.Range(0.035f, 0.085f);
+            case ParticleStyle.Core:
+                return index % 4 == 0
+                    ? Vector2.one * Random.Range(0.040f, 0.078f)
+                    : new Vector2(Random.Range(0.18f, 0.50f), Random.Range(0.018f, 0.042f));
+            case ParticleStyle.Archive:
+                return index % 3 == 0
+                    ? new Vector2(Random.Range(0.18f, 0.46f), Random.Range(0.022f, 0.050f))
+                    : Vector2.one * Random.Range(0.030f, 0.066f);
             default:
                 return index % 3 == 0
                     ? new Vector2(Random.Range(0.24f, 0.58f), Random.Range(0.018f, 0.045f))
@@ -192,6 +205,19 @@ public class ArenaAmbientParticleFx : MonoBehaviour
                 return new Vector2(Random.Range(-0.045f, 0.045f), Random.Range(-0.12f, -0.035f));
             case ParticleStyle.Rupture:
                 return Random.insideUnitCircle.normalized * Random.Range(0.025f, 0.09f);
+            case ParticleStyle.Core:
+                return index % 2 == 0
+                    ? new Vector2(Random.Range(0.12f, 0.24f), 0f)
+                    : new Vector2(0f, Random.Range(-0.18f, 0.18f));
+            case ParticleStyle.Archive:
+                Vector2 pos = Random.insideUnitCircle;
+                Vector2 tangent = new Vector2(-pos.y, pos.x).normalized;
+                if (tangent.sqrMagnitude < 0.001f)
+                {
+                    tangent = Vector2.right;
+                }
+
+                return tangent * Random.Range(0.035f, 0.085f);
             default:
                 return index % 2 == 0
                     ? new Vector2(Random.Range(0.08f, 0.22f), 0f)
@@ -207,6 +233,10 @@ public class ArenaAmbientParticleFx : MonoBehaviour
                 return Random.Range(-8f, 8f);
             case ParticleStyle.Rupture:
                 return Random.Range(0f, 180f);
+            case ParticleStyle.Core:
+                return index % 2 == 0 ? 0f : 90f;
+            case ParticleStyle.Archive:
+                return Random.Range(-45f, 45f);
             default:
                 return index % 2 == 0 ? 0f : 90f;
         }
@@ -220,6 +250,10 @@ public class ArenaAmbientParticleFx : MonoBehaviour
                 return Random.Range(0.08f, 0.18f);
             case ParticleStyle.Rupture:
                 return Random.Range(0.07f, 0.18f);
+            case ParticleStyle.Core:
+                return Random.Range(0.08f, 0.20f);
+            case ParticleStyle.Archive:
+                return Random.Range(0.06f, 0.15f);
             default:
                 return Random.Range(0.07f, 0.17f);
         }
@@ -233,6 +267,10 @@ public class ArenaAmbientParticleFx : MonoBehaviour
                 return Random.Range(0.45f, 1.15f);
             case ParticleStyle.Storage:
                 return Random.Range(0.55f, 1.35f);
+            case ParticleStyle.Core:
+                return Random.Range(0.85f, 1.8f);
+            case ParticleStyle.Archive:
+                return Random.Range(0.35f, 0.95f);
             default:
                 return Random.Range(0.6f, 1.5f);
         }
@@ -240,6 +278,6 @@ public class ArenaAmbientParticleFx : MonoBehaviour
 
     private int GetSortingOrder()
     {
-        return style == ParticleStyle.Rupture ? -3 : -5;
+        return style == ParticleStyle.Rupture || style == ParticleStyle.Archive ? -3 : -5;
     }
 }
