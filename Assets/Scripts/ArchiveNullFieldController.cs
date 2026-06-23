@@ -20,14 +20,17 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
         public Transform root;
         public Rigidbody2D body;
         public Collider2D collider;
+        public Anchor anchor;
         public Vector2 orbitalVelocity;
     }
 
     [Header("Timing")]
-    [SerializeField] private float intervalMin = 12f;
-    [SerializeField] private float intervalMax = 18f;
-    [SerializeField] private float telegraphSeconds = 1.4f;
-    [SerializeField] private float activeSeconds = 6.2f;
+    [SerializeField] private float initialDelayMin = 18f;
+    [SerializeField] private float initialDelayMax = 24f;
+    [SerializeField] private float intervalMin = 15f;
+    [SerializeField] private float intervalMax = 22f;
+    [SerializeField] private float telegraphSeconds = 2f;
+    [SerializeField] private float activeSeconds = 10.5f;
 
     [Header("Null Field")]
     [SerializeField] private int anchorCount = 3;
@@ -77,6 +80,9 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
     private Vector2 enemyOrbitalVelocity;
     private readonly Dictionary<int, Vector2> pickupOrbitalVelocities = new Dictionary<int, Vector2>();
     private readonly Dictionary<int, Vector2> cloneOrbitalVelocities = new Dictionary<int, Vector2>();
+    private readonly Dictionary<int, Anchor> projectileAnchors = new Dictionary<int, Anchor>();
+    private readonly Dictionary<int, Anchor> pickupAnchors = new Dictionary<int, Anchor>();
+    private readonly Dictionary<int, Anchor> cloneAnchors = new Dictionary<int, Anchor>();
     private const string EventPressureKey = "ThemeArchiveNullField";
 
     public string ActiveThemedEventLabel => eventActive ? "POZO GRAVITACIONAL" : string.Empty;
@@ -92,7 +98,7 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
         ApplyOperationModifiersOnce();
         ClearAnchors();
         eventActive = false;
-        ScheduleNextEvent();
+        ScheduleFirstEvent();
     }
 
     private void ApplyOperationModifiersOnce()
@@ -110,6 +116,8 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
 
         intervalMin = Mathf.Max(5.0f, intervalMin * 0.60f);
         intervalMax = Mathf.Max(intervalMin + 1f, intervalMax * 0.68f);
+        initialDelayMin = Mathf.Max(13f, initialDelayMin * 0.82f);
+        initialDelayMax = Mathf.Max(initialDelayMin + 2f, initialDelayMax * 0.86f);
         activeSeconds += 1.35f;
         anchorCount = Mathf.Max(anchorCount + 1, 4);
         influenceRadius += 0.35f;
@@ -153,7 +161,7 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
         if (!mapEventsWereUnlocked)
         {
             mapEventsWereUnlocked = true;
-            timer = Mathf.Min(timer, 1.0f);
+            ScheduleFirstEvent();
         }
 
         if (enemy != null && enemy.IsMapEventSuppressed())
@@ -387,13 +395,22 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
                 continue;
             }
 
+            int id = projectile.GetInstanceID();
+            projectileAnchors.TryGetValue(id, out Anchor capturedAnchor);
             if (!TryResolveOrbitalAcceleration(
                     projectile.transform.position,
                     projectilePullSpeed,
                     projectile.CurrentVelocity,
-                    out Vector2 acceleration))
+                    out Vector2 acceleration,
+                    preferredAnchor: capturedAnchor,
+                    persistentCapture: capturedAnchor != null))
             {
                 continue;
+            }
+
+            if (capturedAnchor == null && TryFindNearestAnchor(projectile.transform.position, influenceRadius, out capturedAnchor))
+            {
+                projectileAnchors[id] = capturedAnchor;
             }
 
             projectile.ApplyOrbitalAcceleration(acceleration, Time.deltaTime, projectileTurnRate);
@@ -428,10 +445,22 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
 
             int id = clone.GetInstanceID();
             cloneOrbitalVelocities.TryGetValue(id, out Vector2 velocity);
-            if (!TryResolveOrbitalAcceleration(clone.GetCurrentPosition(), enemyPullSpeed, velocity, out Vector2 acceleration))
+            cloneAnchors.TryGetValue(id, out Anchor capturedAnchor);
+            if (!TryResolveOrbitalAcceleration(
+                    clone.GetCurrentPosition(),
+                    enemyPullSpeed,
+                    velocity,
+                    out Vector2 acceleration,
+                    preferredAnchor: capturedAnchor,
+                    persistentCapture: capturedAnchor != null))
             {
                 cloneOrbitalVelocities[id] = DampOrbitalVelocity(velocity);
                 continue;
+            }
+
+            if (capturedAnchor == null && TryFindNearestAnchor(clone.GetCurrentPosition(), influenceRadius, out capturedAnchor))
+            {
+                cloneAnchors[id] = capturedAnchor;
             }
 
             velocity = IntegrateOrbitalVelocity(velocity, acceleration);
@@ -449,10 +478,22 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
 
         int id = pickup.GetInstanceID();
         pickupOrbitalVelocities.TryGetValue(id, out Vector2 velocity);
-        if (!TryResolveOrbitalAcceleration(pickup.transform.position, pickupPullSpeed, velocity, out Vector2 acceleration))
+        pickupAnchors.TryGetValue(id, out Anchor capturedAnchor);
+        if (!TryResolveOrbitalAcceleration(
+                pickup.transform.position,
+                pickupPullSpeed,
+                velocity,
+                out Vector2 acceleration,
+                preferredAnchor: capturedAnchor,
+                persistentCapture: capturedAnchor != null))
         {
             pickupOrbitalVelocities[id] = DampOrbitalVelocity(velocity);
             return;
+        }
+
+        if (capturedAnchor == null && TryFindNearestAnchor(pickup.transform.position, influenceRadius, out capturedAnchor))
+        {
+            pickupAnchors[id] = capturedAnchor;
         }
 
         velocity = IntegrateOrbitalVelocity(velocity, acceleration);
@@ -513,6 +554,7 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
                     root = obstacleRoot,
                     body = obstacleRoot.GetComponent<Rigidbody2D>(),
                     collider = best,
+                    anchor = anchor,
                     orbitalVelocity = Vector2.zero
                 });
             }
@@ -568,7 +610,9 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
                     obstacle.orbitalVelocity,
                     out Vector2 acceleration,
                     orbitRadius,
-                    influenceRadius * Mathf.Max(1f, obstacleCaptureRadiusMultiplier)))
+                    influenceRadius * Mathf.Max(1f, obstacleCaptureRadiusMultiplier),
+                    obstacle.anchor,
+                    true))
             {
                 obstacle.orbitalVelocity = DampOrbitalVelocity(obstacle.orbitalVelocity);
                 continue;
@@ -605,26 +649,24 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
         Vector2 currentVelocity,
         out Vector2 acceleration,
         float targetRadiusOverride = -1f,
-        float fieldRadiusOverride = -1f)
+        float fieldRadiusOverride = -1f,
+        Anchor preferredAnchor = null,
+        bool persistentCapture = false)
     {
         acceleration = Vector2.zero;
-        Anchor selectedAnchor = null;
-        float selectedDistance = float.MaxValue;
         float fieldRadius = fieldRadiusOverride > 0f ? fieldRadiusOverride : influenceRadius;
+        Anchor selectedAnchor = IsAnchorValid(preferredAnchor) ? preferredAnchor : null;
+        float selectedDistance = selectedAnchor != null
+            ? Vector2.Distance(selectedAnchor.position, position)
+            : float.MaxValue;
 
-        for (int i = 0; i < anchors.Count; i++)
+        if (selectedAnchor == null && !TryFindNearestAnchor(position, fieldRadius, out selectedAnchor))
         {
-            Anchor anchor = anchors[i];
-            Vector2 toAnchor = anchor.position - position;
-            float distance = toAnchor.magnitude;
-            if (distance <= fieldRadius && distance < selectedDistance)
-            {
-                selectedAnchor = anchor;
-                selectedDistance = distance;
-            }
+            return false;
         }
 
-        if (selectedAnchor == null || selectedDistance <= 0.001f)
+        selectedDistance = Vector2.Distance(selectedAnchor.position, position);
+        if (selectedDistance <= 0.001f)
         {
             return false;
         }
@@ -632,7 +674,8 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
         Vector2 inward = (selectedAnchor.position - position) / selectedDistance;
         Vector2 tangent = new Vector2(-inward.y, inward.x) * selectedAnchor.orbitDirection;
         float normalizedDistance = Mathf.Clamp01(selectedDistance / fieldRadius);
-        float fieldStrength = Mathf.SmoothStep(0f, 1f, 1f - normalizedDistance);
+        float edgeStrength = Mathf.SmoothStep(0f, 1f, 1f - normalizedDistance);
+        float fieldStrength = persistentCapture ? Mathf.Max(0.62f, edgeStrength) : edgeStrength;
         float targetRadius = targetRadiusOverride > 0f
             ? targetRadiusOverride
             : Mathf.Max(anchorRadius + 0.18f, minimumOrbitRadius);
@@ -646,6 +689,34 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
 
         acceleration = (inward * radialAcceleration + tangent * tangentialAcceleration) * fieldStrength;
         return acceleration.sqrMagnitude > 0.0001f;
+    }
+
+    private bool TryFindNearestAnchor(Vector2 position, float radius, out Anchor selectedAnchor)
+    {
+        selectedAnchor = null;
+        float selectedDistance = float.MaxValue;
+        for (int i = 0; i < anchors.Count; i++)
+        {
+            Anchor anchor = anchors[i];
+            if (!IsAnchorValid(anchor))
+            {
+                continue;
+            }
+
+            float distance = Vector2.Distance(anchor.position, position);
+            if (distance <= radius && distance < selectedDistance)
+            {
+                selectedAnchor = anchor;
+                selectedDistance = distance;
+            }
+        }
+
+        return selectedAnchor != null;
+    }
+
+    private bool IsAnchorValid(Anchor anchor)
+    {
+        return anchor != null && anchor.root != null && anchors.Contains(anchor);
     }
 
     private Vector2 IntegrateOrbitalVelocity(Vector2 velocity, Vector2 acceleration)
@@ -675,7 +746,17 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
         enemyOrbitalVelocity = Vector2.zero;
         pickupOrbitalVelocities.Clear();
         cloneOrbitalVelocities.Clear();
+        projectileAnchors.Clear();
+        pickupAnchors.Clear();
+        cloneAnchors.Clear();
         capturedObstacles.Clear();
+    }
+
+    private void ScheduleFirstEvent()
+    {
+        timer = Random.Range(
+            Mathf.Min(initialDelayMin, initialDelayMax),
+            Mathf.Max(initialDelayMin, initialDelayMax));
     }
 
     private void ScheduleNextEvent()
