@@ -446,6 +446,8 @@ public class EnemyController : MonoBehaviour
     private float stateTransitionBurstCooldownTimer;
     private float externalSpeedTimer;
     private float externalSpeedMultiplier = 1f;
+    private float sectorSpeedMultiplier = 1f;
+    private float sectorResponseMultiplier = 1f;
     private float parryStunTimer;
     private float parryKnockbackTimer;
     private float breachLureTimer;
@@ -817,7 +819,7 @@ public class EnemyController : MonoBehaviour
 
         UpdateStuckDetection(strategicTarget);
 
-        float speed = baseMoveSpeed;
+        float speed = baseMoveSpeed * sectorSpeedMultiplier;
         if (currentPattern == BehaviorPattern.ErraticBurst)
         {
             speed *= erraticBurstMultiplier;
@@ -844,7 +846,10 @@ public class EnemyController : MonoBehaviour
         }
 
         Vector2 desiredVelocity = desiredDirection * speed;
-        rb.linearVelocity = Vector2.MoveTowards(rb.linearVelocity, desiredVelocity, velocityResponsiveness * Time.deltaTime);
+        rb.linearVelocity = Vector2.MoveTowards(
+            rb.linearVelocity,
+            desiredVelocity,
+            velocityResponsiveness * sectorResponseMultiplier * Time.deltaTime);
     }
 
     private void ResolveArenaBounds()
@@ -2438,7 +2443,7 @@ public class EnemyController : MonoBehaviour
 
         splitClone = cloneGo.AddComponent<SplitAnomalyCloneController>();
         splitClone.ConfigureMovement(
-            Mathf.Max(0.5f, baseMoveSpeed * splitCloneSpeedMultiplier),
+            Mathf.Max(0.5f, baseMoveSpeed * sectorSpeedMultiplier * splitCloneSpeedMultiplier),
             splitCloneVelocityResponsiveness,
             splitCloneSideOffset,
             splitMergeSpeed,
@@ -2545,6 +2550,13 @@ public class EnemyController : MonoBehaviour
         Vector2 target = rb.position + delta;
         rb.position = target;
         transform.position = new Vector3(target.x, target.y, transform.position.z);
+    }
+
+    public void ApplySectorProgression(int sectorLevel)
+    {
+        int extraSectors = Mathf.Max(0, sectorLevel - 1);
+        sectorSpeedMultiplier = 1f + Mathf.Min(0.28f, extraSectors * 0.04f);
+        sectorResponseMultiplier = 1f + Mathf.Min(0.36f, extraSectors * 0.055f);
     }
 
     public void ApplyParryImpact(Vector2 impactPosition, Vector2 pushDirection)
@@ -2708,9 +2720,12 @@ public class EnemyController : MonoBehaviour
             lastMoveDirection = desiredDirection;
         }
 
-        float speed = baseMoveSpeed * Mathf.Max(0.2f, splitMergeOwnerSpeedMultiplier);
+        float speed = baseMoveSpeed * sectorSpeedMultiplier * Mathf.Max(0.2f, splitMergeOwnerSpeedMultiplier);
         Vector2 desiredVelocity = desiredDirection * speed;
-        rb.linearVelocity = Vector2.MoveTowards(rb.linearVelocity, desiredVelocity, velocityResponsiveness * 1.15f * Time.deltaTime);
+        rb.linearVelocity = Vector2.MoveTowards(
+            rb.linearVelocity,
+            desiredVelocity,
+            velocityResponsiveness * sectorResponseMultiplier * 1.15f * Time.deltaTime);
     }
 
     private void ForceCompleteSplitMerge()

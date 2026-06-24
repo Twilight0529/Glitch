@@ -228,12 +228,15 @@ public class GameManager : MonoBehaviour
         get
         {
             float interval = Mathf.Max(0.5f, behaviorChangeInterval);
+            float sectorMultiplier = arenaGenerator != null
+                ? Mathf.Clamp(1f / Mathf.Max(1f, arenaGenerator.SectorPressureMultiplier), 0.76f, 1f)
+                : 1f;
             if (!chaosTempoEnabled)
             {
-                return interval;
+                return interval * sectorMultiplier;
             }
 
-            return interval * Mathf.Max(0.1f, chaosBehaviorIntervalMultiplier);
+            return interval * Mathf.Max(0.1f, chaosBehaviorIntervalMultiplier) * sectorMultiplier;
         }
     }
 
@@ -4544,7 +4547,8 @@ public class GameManager : MonoBehaviour
 
         float chipH = 34f * s;
         float rightMargin = 12f * s;
-        string levelText = $"Level: {levelType}";
+        int sectorLevel = arenaGenerator != null ? arenaGenerator.SectorLevel : 1;
+        string levelText = $"Sector {sectorLevel} | {levelType}";
         float levelW = CalcChipWidth(levelText, 190f * s, 420f * s, 22f * s);
         float rightX = Screen.width - levelW - rightMargin;
         DrawHudChip(new Rect(rightX, 10f * s, levelW, chipH), levelText, new Color(0.14f, 0.21f, 0.33f, 0.72f));

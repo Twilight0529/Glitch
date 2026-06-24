@@ -107,6 +107,8 @@ public class ProceduralArenaGenerator : MonoBehaviour
     private static ArenaTheme lastGeneratedTheme;
     private static readonly List<ArenaTheme> themeBag = new List<ArenaTheme>();
     private static bool themeBagIncludesAdvancedThemes;
+    private readonly HashSet<ArenaTheme> visitedThemes = new HashSet<ArenaTheme>();
+    private int sectorLevel = 1;
 
     private readonly List<Rect> blockedAreas = new List<Rect>();
     private readonly List<Rect> placedObstacleRects = new List<Rect>();
@@ -126,6 +128,10 @@ public class ProceduralArenaGenerator : MonoBehaviour
     public float ArenaHeight => arenaHeight;
     public ArenaTheme ActiveTheme => activeTheme;
     public string ActiveThemeLabel => ToThemeLabel(activeTheme);
+    public int SectorLevel => Mathf.Max(1, sectorLevel);
+    public float SectorPressureMultiplier => 1f + Mathf.Min(0.42f, (SectorLevel - 1) * 0.08f);
+    public string ActiveThemeRule => GetThemeRule(activeTheme);
+    public Color ActiveThemeAccent => GetThemeAccent(activeTheme);
 
     private void Awake()
     {
@@ -143,18 +149,22 @@ public class ProceduralArenaGenerator : MonoBehaviour
     public void GenerateNow()
     {
         InitializeRandom();
+        sectorLevel = 1;
+        visitedThemes.Clear();
         GenerateTheme(SelectTheme());
     }
 
     public void GenerateBreachShift()
     {
         InitializeRandom();
-        GenerateTheme(SelectDifferentTheme(activeTheme));
+        sectorLevel++;
+        GenerateTheme(SelectProgressionTheme(activeTheme, sectorLevel));
     }
 
     private void GenerateTheme(ArenaTheme theme)
     {
         activeTheme = theme;
+        visitedThemes.Add(activeTheme);
         hasLastGeneratedTheme = true;
         lastGeneratedTheme = activeTheme;
         palette = GetPalette(activeTheme);
@@ -229,6 +239,79 @@ public class ProceduralArenaGenerator : MonoBehaviour
         return selected;
     }
 
+    private ArenaTheme SelectProgressionTheme(ArenaTheme current, int level)
+    {
+        List<ArenaTheme> candidates = BuildProgressionCandidates(level);
+        candidates.Remove(current);
+        if (candidates.Count == 0)
+        {
+            return SelectDifferentTheme(current);
+        }
+
+        List<float> weights = new List<float>(candidates.Count);
+        float totalWeight = 0f;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            ArenaTheme candidate = candidates[i];
+            float weight = visitedThemes.Contains(candidate) ? 0.7f : 2.2f;
+            if (level == 2 && (candidate == ArenaTheme.ContainmentLab || candidate == ArenaTheme.StorageBay))
+            {
+                weight += 1.8f;
+            }
+            if (level == 3 && candidate == ArenaTheme.RuptureZone)
+            {
+                weight += 3.4f;
+            }
+            if (level >= 4 && candidate == ArenaTheme.DataCore)
+            {
+                weight += 3.0f;
+            }
+            if (level >= 5 && candidate == ArenaTheme.NullArchive)
+            {
+                weight += 3.8f;
+            }
+
+            weights.Add(weight);
+            totalWeight += weight;
+        }
+
+        float roll = (float)rng.NextDouble() * Mathf.Max(0.01f, totalWeight);
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            roll -= weights[i];
+            if (roll <= 0f)
+            {
+                return candidates[i];
+            }
+        }
+
+        return candidates[candidates.Count - 1];
+    }
+
+    private static List<ArenaTheme> BuildProgressionCandidates(int level)
+    {
+        List<ArenaTheme> candidates = new List<ArenaTheme>
+        {
+            ArenaTheme.ContainmentLab,
+            ArenaTheme.StorageBay
+        };
+
+        if (level >= 3)
+        {
+            candidates.Add(ArenaTheme.RuptureZone);
+        }
+        if (level >= 4)
+        {
+            candidates.Add(ArenaTheme.DataCore);
+        }
+        if (level >= 5)
+        {
+            candidates.Add(ArenaTheme.NullArchive);
+        }
+
+        return candidates;
+    }
+
     public void SetRuntimeReferences(Transform player, Transform anomaly)
     {
         playerTransform = player;
@@ -250,6 +333,31 @@ public class ProceduralArenaGenerator : MonoBehaviour
             default:
                 return "Archive";
         }
+    }
+
+    private static string GetThemeRule(ArenaTheme theme)
+    {
+        switch (theme)
+        {
+            case ArenaTheme.ContainmentLab:
+                return "Seguridad reactiva: activa barreras y sistemas de contencion";
+            case ArenaTheme.StorageBay:
+                return "Logistica viva: gruas y cargamento redibujan las rutas";
+            case ArenaTheme.RuptureZone:
+                return "Espacio inestable: ecos y grietas alteran la persecucion";
+            case ArenaTheme.DataCore:
+                return "Red programable: usa reles para controlar las compuertas";
+            default:
+                return "Gravedad corrupta: las anomalías arrastran entidades y objetos";
+        }
+    }
+
+    private static Color GetThemeAccent(ArenaTheme theme)
+    {
+        ThemePalette themePalette = GetPalette(theme);
+        Color accent = themePalette.dynamic;
+        accent.a = 1f;
+        return accent;
     }
 
     private void InitializeRandom()

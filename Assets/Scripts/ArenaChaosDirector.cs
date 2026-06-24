@@ -72,7 +72,7 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private float breachSweepDuration = 13.5f;
     [SerializeField] private float breachEnemyGuideDuration = 6f;
     [SerializeField] private float breachTransitionDuration = 1.25f;
-    [SerializeField] private float breachArrivalHoldSeconds = 2f;
+    [SerializeField] private float breachArrivalHoldSeconds = 3f;
     [SerializeField] private float breachArrivalFxDuration = 2.25f;
     [SerializeField] private float minimumBreachMapAgeSeconds = 50f;
     [SerializeField] private float breachSystemSuppressionWindowSeconds = 5f;
@@ -157,6 +157,7 @@ public class ArenaChaosDirector : MonoBehaviour
     {
         arena = arenaGenerator;
         RefreshReferences();
+        ApplySectorProgression();
         EnsureRuntimeRoot();
         ApplyOperationModifiersOnce();
         ClearRuntimeObjects();
@@ -370,7 +371,7 @@ public class ArenaChaosDirector : MonoBehaviour
             activePickup = null;
             if (gameManager != null)
             {
-                gameManager.AddScore(Mathf.Max(0, powerupScorePoints));
+                gameManager.AddScore(Mathf.RoundToInt(Mathf.Max(0, powerupScorePoints) * GetSectorRewardMultiplier()));
             }
         }
     }
@@ -524,21 +525,21 @@ public class ArenaChaosDirector : MonoBehaviour
     {
         float min = Mathf.Min(pulseEventIntervalRange.x, pulseEventIntervalRange.y);
         float max = Mathf.Max(pulseEventIntervalRange.x, pulseEventIntervalRange.y);
-        pulseEventTimer = Random.Range(min, max);
+        pulseEventTimer = Random.Range(min, max) * GetSectorIntervalMultiplier();
     }
 
     private void ScheduleObjectiveEvent()
     {
         float min = Mathf.Min(objectiveEventIntervalRange.x, objectiveEventIntervalRange.y);
         float max = Mathf.Max(objectiveEventIntervalRange.x, objectiveEventIntervalRange.y);
-        objectiveEventTimer = Random.Range(min, max);
+        objectiveEventTimer = Random.Range(min, max) * GetSectorIntervalMultiplier();
     }
 
     private void ScheduleBreachEvent()
     {
         float min = Mathf.Min(breachEventIntervalRange.x, breachEventIntervalRange.y);
         float max = Mathf.Max(breachEventIntervalRange.x, breachEventIntervalRange.y);
-        breachEventTimer = Random.Range(min, max);
+        breachEventTimer = Random.Range(min, max) * Mathf.Lerp(1f, GetSectorIntervalMultiplier(), 0.45f);
     }
 
     private void ScheduleScorePickup()
@@ -546,6 +547,38 @@ public class ArenaChaosDirector : MonoBehaviour
         float min = Mathf.Min(scorePickupIntervalRange.x, scorePickupIntervalRange.y);
         float max = Mathf.Max(scorePickupIntervalRange.x, scorePickupIntervalRange.y);
         scorePickupTimer = Random.Range(min, max);
+    }
+
+    private float GetSectorPressureMultiplier()
+    {
+        return arena != null ? arena.SectorPressureMultiplier : 1f;
+    }
+
+    private float GetSectorIntervalMultiplier()
+    {
+        return Mathf.Clamp(1f / Mathf.Max(1f, GetSectorPressureMultiplier()), 0.72f, 1f);
+    }
+
+    private float GetSectorRewardMultiplier()
+    {
+        int extraSectors = arena != null ? Mathf.Max(0, arena.SectorLevel - 1) : 0;
+        return 1f + Mathf.Min(0.8f, extraSectors * 0.12f);
+    }
+
+    private int GetSectorExtraHazardCount()
+    {
+        int extraSectors = arena != null ? Mathf.Max(0, arena.SectorLevel - 1) : 0;
+        return Mathf.Min(3, extraSectors / 2);
+    }
+
+    private void ApplySectorProgression()
+    {
+        if (enemy == null)
+        {
+            enemy = FindAnyObjectByType<EnemyController>();
+        }
+
+        enemy?.ApplySectorProgression(arena != null ? arena.SectorLevel : 1);
     }
 
     private bool TryReserveDirectorEventPressure(string pressureKey, float cost, float duration, float cooldown)
@@ -706,7 +739,10 @@ public class ArenaChaosDirector : MonoBehaviour
             col.radius = dataCore ? 0.28f : 0.2f;
 
             ArenaScorePickup pickup = go.AddComponent<ArenaScorePickup>();
-            int points = Mathf.Max(1, scorePickupPoints) * (dataCore ? Mathf.Max(1, dataCoreScoreMultiplier) : 1);
+            int points = Mathf.RoundToInt(
+                Mathf.Max(1, scorePickupPoints) *
+                (dataCore ? Mathf.Max(1, dataCoreScoreMultiplier) : 1) *
+                GetSectorRewardMultiplier());
             pickup.Configure(this, gameManager, points, scorePickupLifetime, dataCore, dataCore ? dataCoreFirewallChargeBonus : 0f);
             activeScorePickups.Add(pickup);
         }
@@ -812,7 +848,7 @@ public class ArenaChaosDirector : MonoBehaviour
         ReleaseDirectorEventPressure(ObjectiveEventPressureKey, objectiveEventPressureCooldown);
         if (gameManager != null)
         {
-            gameManager.AddScore(Mathf.Max(0, objectiveCompleteScore));
+            gameManager.AddScore(Mathf.RoundToInt(Mathf.Max(0, objectiveCompleteScore) * GetSectorRewardMultiplier()));
         }
 
         RaiseEvent("Containment Synced");
@@ -1067,7 +1103,9 @@ public class ArenaChaosDirector : MonoBehaviour
         ClearObjectiveNodes();
         if (gameManager != null)
         {
-            gameManager.AddScore(Mathf.Max(0, breachScoreBonus));
+            int upcomingSector = arena != null ? arena.SectorLevel + 1 : 1;
+            float rewardMultiplier = 1f + Mathf.Min(0.75f, Mathf.Max(0, upcomingSector - 1) * 0.15f);
+            gameManager.AddScore(Mathf.RoundToInt(Mathf.Max(0, breachScoreBonus) * rewardMultiplier));
             gameManager.NotifyBreachEscaped();
         }
 
@@ -1083,8 +1121,12 @@ public class ArenaChaosDirector : MonoBehaviour
         yield return new WaitForSeconds(regenerateDelay);
 
         arena.GenerateBreachShift();
+        ApplySectorProgression();
         RepositionActorsAfterBreach(breachPosition, arrivalHoldSeconds > 0.05f, out Vector2 arrivalPosition, out Vector2 arrivalDirection);
         SpawnBreachArrivalFx(arrivalPosition, arrivalDirection);
+        SpawnSectorArrivalFx();
+        RaiseWarning($"SECTOR {arena.SectorLevel} | {arena.ActiveThemeLabel}", Mathf.Max(1.8f, arrivalHoldSeconds));
+        RaiseEvent(arena.ActiveThemeRule);
         yield return new WaitForSeconds(Mathf.Max(0.02f, transitionSeconds - regenerateDelay));
 
         if (arrivalHoldSeconds > 0f)
@@ -1206,11 +1248,12 @@ public class ArenaChaosDirector : MonoBehaviour
 
     private IEnumerator BreachArrivalHoldRoutine(float seconds)
     {
-        RaiseWarning("Sector estabilizando", Mathf.Min(1.4f, seconds));
         float remaining = Mathf.Max(0f, seconds);
         while (remaining > 0f)
         {
-            activeEventLabel = $"Sector estabilizando | {Mathf.CeilToInt(remaining)}s";
+            string themeLabel = arena != null ? arena.ActiveThemeLabel : "Sector";
+            int sector = arena != null ? arena.SectorLevel : 1;
+            activeEventLabel = $"Sector {sector}: {themeLabel} | Presion x{GetSectorPressureMultiplier():0.00}";
             eventLabelTimer = 0.25f;
             remaining -= Time.deltaTime;
             yield return null;
@@ -1373,6 +1416,27 @@ public class ArenaChaosDirector : MonoBehaviour
         arrivalFx.Configure(position, entryDirection, breachColor, Mathf.Max(0.75f, breachArrivalFxDuration));
     }
 
+    private void SpawnSectorArrivalFx()
+    {
+        if (runtimeRoot == null || arena == null)
+        {
+            return;
+        }
+
+        GameObject fx = new GameObject("SectorProgressionArrivalFx");
+        fx.transform.SetParent(runtimeRoot, false);
+        fx.transform.position = transform.position;
+        ArenaSectorArrivalFx sectorFx = fx.AddComponent<ArenaSectorArrivalFx>();
+        sectorFx.Configure(
+            arena,
+            arena.SectorLevel,
+            arena.ActiveThemeAccent,
+            Mathf.Max(1.6f, breachArrivalHoldSeconds + 0.35f),
+            arena.ActiveThemeLabel,
+            arena.ActiveThemeRule,
+            GetSectorPressureMultiplier());
+    }
+
     private Vector2 GetBreachGatePosition(out float rotationZ, out Vector2 sweepDirection)
     {
         rotationZ = 0f;
@@ -1480,7 +1544,7 @@ public class ArenaChaosDirector : MonoBehaviour
         pulseEventActive = true;
         int minCount = Mathf.Max(1, Mathf.Min(pulseHazardsMin, pulseHazardsMax));
         int maxCount = Mathf.Max(minCount, Mathf.Max(pulseHazardsMin, pulseHazardsMax));
-        int count = Random.Range(minCount, maxCount + 1);
+        int count = Random.Range(minCount, maxCount + 1) + GetSectorExtraHazardCount();
 
         // Primero avisa y despues crea peligros cerca del foco de pelea para que el evento sea esquivable.
         RaiseWarning("Containment Pulse Incoming", pulsePreWarningSeconds);
