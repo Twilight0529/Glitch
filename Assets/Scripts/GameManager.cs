@@ -3576,15 +3576,22 @@ public class GameManager : MonoBehaviour
         }
 
         bool cyclePressed = false;
+        bool topologyPressed = false;
 #if ENABLE_INPUT_SYSTEM
         cyclePressed |= Keyboard.current != null && Keyboard.current.f9Key.wasPressedThisFrame;
+        topologyPressed |= Keyboard.current != null && Keyboard.current.f10Key.wasPressedThisFrame;
 #endif
 #if ENABLE_LEGACY_INPUT_MANAGER
         cyclePressed |= Input.GetKeyDown(KeyCode.F9);
+        topologyPressed |= Input.GetKeyDown(KeyCode.F10);
 #endif
         if (cyclePressed)
         {
             enemyController.ForceLevelThreeStateForDebug();
+        }
+        if (topologyPressed)
+        {
+            enemyController.ForceTopologyProjectileStateForDebug();
         }
     }
 
@@ -4461,13 +4468,11 @@ public class GameManager : MonoBehaviour
             case "PhaseContract":
                 return "Phase Contract";
             case "AdaptiveCountermeasure":
-                return "Contramedida Adaptativa";
-            case "VectorHijack":
-                return "Secuestro Vectorial";
-            case "TopologyFold":
-                return "Pliegue Topologico";
-            case "CausalFork":
-                return "Bifurcacion Causal";
+                return "Adaptive Countermeasure";
+            case "SignalTether":
+                return "Signal Tether";
+            case "BlindspotProtocol":
+                return "Blindspot Protocol";
             default:
                 return raw;
         }
@@ -4493,9 +4498,8 @@ public class GameManager : MonoBehaviour
             case "SignalPossession":
             case "PhaseContract":
             case "AdaptiveCountermeasure":
-            case "VectorHijack":
-            case "TopologyFold":
-            case "CausalFork":
+            case "SignalTether":
+            case "BlindspotProtocol":
                 return true;
             default:
                 return false;
@@ -4519,9 +4523,8 @@ public class GameManager : MonoBehaviour
     private static bool IsBossLevelThreeState(string raw)
     {
         return raw == "AdaptiveCountermeasure" ||
-               raw == "VectorHijack" ||
-               raw == "TopologyFold" ||
-               raw == "CausalFork";
+               raw == "SignalTether" ||
+               raw == "BlindspotProtocol";
     }
 
     private static Color GetBossStateColor(string raw)
@@ -4568,11 +4571,9 @@ public class GameManager : MonoBehaviour
                 return new Color(1f, 0.84f, 0.46f, 1f);
             case "AdaptiveCountermeasure":
                 return new Color(1f, 0.35f, 0.72f, 1f);
-            case "VectorHijack":
+            case "SignalTether":
                 return new Color(0.32f, 1f, 0.78f, 1f);
-            case "TopologyFold":
-                return new Color(0.38f, 0.82f, 1f, 1f);
-            case "CausalFork":
+            case "BlindspotProtocol":
                 return new Color(1f, 0.76f, 0.28f, 1f);
             default:
                 return new Color(1f, 0.76f, 0.82f, 1f);

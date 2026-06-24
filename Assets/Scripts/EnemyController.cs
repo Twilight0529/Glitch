@@ -29,9 +29,8 @@ public class EnemyController : MonoBehaviour
         SignalPossession,
         PhaseContract,
         AdaptiveCountermeasure,
-        VectorHijack,
-        TopologyFold,
-        CausalFork
+        SignalTether,
+        BlindspotProtocol
     }
 
     private enum BehaviorPattern
@@ -78,6 +77,8 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private bool enableAdvancedStates = true;
     [SerializeField] private Vector2 stateDurationMultiplierRange = new Vector2(0.85f, 1.25f);
     [SerializeField] private Vector2 majorStateDurationRange = new Vector2(9f, 15f);
+    [SerializeField] private Vector2 levelTwoStateDurationRange = new Vector2(14f, 19f);
+    [SerializeField] private Vector2 levelThreeStateDurationRange = new Vector2(17f, 23f);
     [SerializeField] private float speedStateMultiplier = 1.35f;
     [SerializeField] private bool logStateChanges = false;
 
@@ -298,9 +299,8 @@ public class EnemyController : MonoBehaviour
     [SerializeField, Min(0f)] private float signalPossessionWeight = 0.54f;
     [SerializeField, Min(0f)] private float phaseContractWeight = 0.50f;
     [SerializeField, Min(0f)] private float adaptiveCountermeasureWeight = 0.62f;
-    [SerializeField, Min(0f)] private float vectorHijackWeight = 0.58f;
-    [SerializeField, Min(0f)] private float topologyFoldWeight = 0.56f;
-    [SerializeField, Min(0f)] private float causalForkWeight = 0.60f;
+    [SerializeField, Min(0f)] private float signalTetherWeight = 0.62f;
+    [SerializeField, Min(0f)] private float blindspotProtocolWeight = 0.64f;
 
     [Header("Level 2 State Priority")]
     [SerializeField, Range(1f, 5f)] private float levelTwoStatePriorityMultiplier = 2.75f;
@@ -699,6 +699,27 @@ public class EnemyController : MonoBehaviour
             return;
         }
 
+        if (levelThreeStateController != null &&
+            levelThreeStateController.TryGetMovementOverride(out Vector2 levelThreeVelocity))
+        {
+            Vector2 overrideTarget = levelThreeStateController.GetMovementOverrideTarget(player.GetPosition());
+            UpdateStuckDetection(overrideTarget);
+            if (emergencyDestroyerActive || currentState == AnomalyState.Destroyer)
+            {
+                return;
+            }
+
+            rb.linearVelocity = Vector2.MoveTowards(
+                rb.linearVelocity,
+                levelThreeVelocity,
+                velocityResponsiveness * sectorResponseMultiplier * Time.deltaTime);
+            if (rb.linearVelocity.sqrMagnitude > 0.001f)
+            {
+                lastMoveDirection = rb.linearVelocity.normalized;
+            }
+            return;
+        }
+
         if (splitMergeInProgress && splitClone != null)
         {
             TickOwnerSplitMergeMovement();
@@ -1050,6 +1071,20 @@ public class EnemyController : MonoBehaviour
 
     private float GetRandomDurationForState(AnomalyState state)
     {
+        if (IsLevelThreeState(state))
+        {
+            float minLevelThree = Mathf.Max(1f, Mathf.Min(levelThreeStateDurationRange.x, levelThreeStateDurationRange.y));
+            float maxLevelThree = Mathf.Max(minLevelThree, Mathf.Max(levelThreeStateDurationRange.x, levelThreeStateDurationRange.y));
+            return Random.Range(minLevelThree, maxLevelThree);
+        }
+
+        if (IsLevelTwoState(state))
+        {
+            float minLevelTwo = Mathf.Max(1f, Mathf.Min(levelTwoStateDurationRange.x, levelTwoStateDurationRange.y));
+            float maxLevelTwo = Mathf.Max(minLevelTwo, Mathf.Max(levelTwoStateDurationRange.x, levelTwoStateDurationRange.y));
+            return Random.Range(minLevelTwo, maxLevelTwo);
+        }
+
         if (state == AnomalyState.Split ||
             state == AnomalyState.ExpansionShoot ||
             state == AnomalyState.Destroyer ||
@@ -1063,8 +1098,7 @@ public class EnemyController : MonoBehaviour
             state == AnomalyState.InputDesync ||
             state == AnomalyState.MapRecompile ||
             state == AnomalyState.SignalPossession ||
-            state == AnomalyState.PhaseContract ||
-            IsLevelThreeState(state))
+            state == AnomalyState.PhaseContract)
         {
             float minMajor = Mathf.Max(0.6f, Mathf.Min(majorStateDurationRange.x, majorStateDurationRange.y));
             float maxMajor = Mathf.Max(minMajor, Mathf.Max(majorStateDurationRange.x, majorStateDurationRange.y));
@@ -1286,11 +1320,8 @@ public class EnemyController : MonoBehaviour
             HidePhaseContractVisual();
         }
 
-        if (IsLevelThreeState(currentState))
-        {
-            levelThreeStateController?.Configure(this, player, gameManager);
-            levelThreeStateController?.EnterState(currentState);
-        }
+        levelThreeStateController?.Configure(this, player, gameManager);
+        levelThreeStateController?.EnterState(currentState);
 
         if (currentPattern == BehaviorPattern.ErraticBurst)
         {
@@ -1307,7 +1338,7 @@ public class EnemyController : MonoBehaviour
 
     private void HandleStateTransition(AnomalyState previous, AnomalyState next)
     {
-        if (IsLevelThreeState(previous) && previous != next)
+        if (levelThreeStateController != null && levelThreeStateController.IsActive && previous != next)
         {
             levelThreeStateController?.ExitState();
         }
@@ -1391,9 +1422,8 @@ public class EnemyController : MonoBehaviour
             fullOptions.Add(new StateWeight(AnomalyState.SignalPossession, signalPossessionWeight));
             fullOptions.Add(new StateWeight(AnomalyState.PhaseContract, phaseContractWeight));
             fullOptions.Add(new StateWeight(AnomalyState.AdaptiveCountermeasure, adaptiveCountermeasureWeight));
-            fullOptions.Add(new StateWeight(AnomalyState.VectorHijack, vectorHijackWeight));
-            fullOptions.Add(new StateWeight(AnomalyState.TopologyFold, topologyFoldWeight));
-            fullOptions.Add(new StateWeight(AnomalyState.CausalFork, causalForkWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.SignalTether, signalTetherWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.BlindspotProtocol, blindspotProtocolWeight));
         }
 
         ApplyProgressionFilter(fullOptions);
@@ -1626,9 +1656,8 @@ public class EnemyController : MonoBehaviour
     private static bool IsLevelThreeState(AnomalyState state)
     {
         return state == AnomalyState.AdaptiveCountermeasure ||
-               state == AnomalyState.VectorHijack ||
-               state == AnomalyState.TopologyFold ||
-               state == AnomalyState.CausalFork;
+               state == AnomalyState.SignalTether ||
+               state == AnomalyState.BlindspotProtocol;
     }
 
     private static bool IsBaseSpecialState(AnomalyState state)
@@ -1897,11 +1926,9 @@ public class EnemyController : MonoBehaviour
                 return new Color(1f, 0.84f, 0.46f, 1f);
             case AnomalyState.AdaptiveCountermeasure:
                 return new Color(1f, 0.35f, 0.72f, 1f);
-            case AnomalyState.VectorHijack:
+            case AnomalyState.SignalTether:
                 return new Color(0.32f, 1f, 0.78f, 1f);
-            case AnomalyState.TopologyFold:
-                return new Color(0.38f, 0.82f, 1f, 1f);
-            case AnomalyState.CausalFork:
+            case AnomalyState.BlindspotProtocol:
                 return new Color(1f, 0.76f, 0.28f, 1f);
             case AnomalyState.ErraticBurst:
                 return new Color(0.74f, 0.76f, 1f, 1f);
@@ -2063,9 +2090,8 @@ public class EnemyController : MonoBehaviour
         AnomalyState[] options =
         {
             AnomalyState.AdaptiveCountermeasure,
-            AnomalyState.VectorHijack,
-            AnomalyState.TopologyFold,
-            AnomalyState.CausalFork
+            AnomalyState.SignalTether,
+            AnomalyState.BlindspotProtocol
         };
 
         int currentIndex = System.Array.IndexOf(options, currentState);
@@ -2075,6 +2101,36 @@ public class EnemyController : MonoBehaviour
         currentPattern = ResolvePatternForState(currentState);
         stateTimer = 0f;
         currentStateDuration = GetRandomDurationForState(currentState);
+        HandleStateTransition(previous, currentState);
+        TriggerStatePulse();
+        SpawnStateTransitionBurst(currentState, previous != currentState);
+        OnStateEntered();
+        RegisterStateForPacing(currentState);
+        GlitchAudioManager.PlayEnemyState(currentState, transform.position);
+    }
+
+    public void ForceTopologyProjectileStateForDebug()
+    {
+        if (breachAbsorbed)
+        {
+            return;
+        }
+
+        AnomalyState previous = currentState;
+        AnomalyState[] options =
+        {
+            AnomalyState.ExpansionShoot,
+            AnomalyState.PincerBarrage,
+            AnomalyState.OrbitBarrage,
+            AnomalyState.SignalPossession
+        };
+        int currentIndex = System.Array.IndexOf(options, currentState);
+        currentState = currentIndex >= 0
+            ? options[(currentIndex + 1) % options.Length]
+            : options[0];
+        currentPattern = ResolvePatternForState(currentState);
+        stateTimer = 0f;
+        currentStateDuration = Mathf.Max(GetRandomDurationForState(currentState), 14f);
         HandleStateTransition(previous, currentState);
         TriggerStatePulse();
         SpawnStateTransitionBurst(currentState, previous != currentState);
@@ -2235,11 +2291,9 @@ public class EnemyController : MonoBehaviour
                 return BehaviorPattern.DirectChase;
             case AnomalyState.AdaptiveCountermeasure:
                 return BehaviorPattern.PredictiveIntercept;
-            case AnomalyState.VectorHijack:
+            case AnomalyState.SignalTether:
                 return BehaviorPattern.DirectChase;
-            case AnomalyState.TopologyFold:
-                return BehaviorPattern.CutoffFlank;
-            case AnomalyState.CausalFork:
+            case AnomalyState.BlindspotProtocol:
                 return BehaviorPattern.PredictiveIntercept;
             default:
                 return BehaviorPattern.DirectChase;
@@ -2778,6 +2832,36 @@ public class EnemyController : MonoBehaviour
     public Vector2 ClampAdvancedStatePoint(Vector2 point, float margin)
     {
         return ClampPointToArenaWithMargin(point, margin);
+    }
+
+    public bool TryBuildAdvancedStatePath(Vector2 startWorld, Vector2 goalWorld, List<Vector2> result)
+    {
+        if (result == null)
+        {
+            return false;
+        }
+
+        result.Clear();
+        BuildNavigationGrid();
+        Vector2Int start = WorldToCell(ClampPointToArenaWithMargin(startWorld, agentRadius + 0.12f));
+        Vector2Int goal = WorldToCell(ClampPointToArenaWithMargin(goalWorld, agentRadius + 0.12f));
+        if (!TryNearestWalkable(start, out start) || !TryNearestWalkable(goal, out goal) ||
+            !TryFindPath(start, goal, out List<Vector2Int> cells))
+        {
+            return false;
+        }
+
+        result.Add(startWorld);
+        for (int i = 1; i < cells.Count; i++)
+        {
+            result.Add(CellToWorld(cells[i]));
+        }
+        return result.Count > 1;
+    }
+
+    public bool HasAdvancedStateLineOfSight(Vector2 from, Vector2 to)
+    {
+        return HasDirectPath(from, to);
     }
 
     public void TeleportForAdvancedState(Vector2 position, bool preserveVelocity)
@@ -4618,29 +4702,36 @@ public class EnemyController : MonoBehaviour
 
         Vector2 approach = enemyToPlayer.sqrMagnitude > 0.001f ? enemyToPlayer.normalized : Vector2.right;
         Vector2 playerVelocity = player.CurrentVelocity;
-        Vector2 escapeBias = playerVelocity.sqrMagnitude > 0.1f ? playerVelocity.normalized * 0.9f : Vector2.zero;
-        Vector2 barrierCenter = playerPos - approach * Mathf.Max(1.1f, mapRecompileBlockDistanceFromPlayer) + escapeBias;
-        Vector2 side = new Vector2(-approach.y, approach.x);
+        Vector2 escapeDirection = playerVelocity.sqrMagnitude > 0.1f ? playerVelocity.normalized : approach;
+        if (Vector2.Dot(escapeDirection, approach) < -0.25f)
+        {
+            escapeDirection = Vector2.Lerp(escapeDirection, approach, 0.58f).normalized;
+        }
+        Vector2 barrierCenter = playerPos + escapeDirection * Mathf.Max(1.4f, mapRecompileBlockDistanceFromPlayer);
+        Vector2 side = new Vector2(-escapeDirection.y, escapeDirection.x);
         int count = Mathf.Max(1, desired);
         float spacing = Mathf.Max(0.45f, mapRecompileBlockSpacing) * Mathf.Lerp(0.9f, 1.18f, Mathf.Clamp01((count - 2f) / 3f));
 
         for (int i = 0; i < count; i++)
         {
-            float lane = count == 1 ? 0f : i - (count - 1) * 0.5f;
+            float gapHalfWidth = Mathf.Max(agentRadius * 1.7f, 0.9f);
+            float laneMagnitude = Mathf.Floor(i * 0.5f) + 1f;
+            float laneSign = i % 2 == 0 ? -1f : 1f;
+            float lateralOffset = laneSign * laneMagnitude * Mathf.Max(spacing, gapHalfWidth);
             bool secondRow = count >= 4 && (i == 1 || i == count - 2);
-            float rowOffset = secondRow ? -0.82f : 0f;
+            float rowOffset = secondRow ? 0.82f : 0f;
             Vector2 candidate = ClampPointToArenaWithMargin(
-                barrierCenter + side * lane * spacing + approach * rowOffset,
+                barrierCenter + side * lateralOffset + escapeDirection * rowOffset,
                 agentRadius + 0.35f);
 
             if (Vector2.Distance(candidate, playerPos) < 1.15f)
             {
-                candidate = ClampPointToArenaWithMargin(candidate - approach * 1.15f, agentRadius + 0.35f);
+                candidate = ClampPointToArenaWithMargin(candidate + escapeDirection * 1.15f, agentRadius + 0.35f);
             }
 
             if (Vector2.Distance(candidate, enemyPos) < 1.0f)
             {
-                candidate = ClampPointToArenaWithMargin(candidate + side * Mathf.Sign(lane == 0f ? Random.Range(-1f, 1f) : lane) * spacing, agentRadius + 0.35f);
+                candidate = ClampPointToArenaWithMargin(candidate + side * laneSign * spacing, agentRadius + 0.35f);
             }
 
             slots.Add(candidate);
@@ -4779,6 +4870,15 @@ public class EnemyController : MonoBehaviour
         }
 
         Bounds bounds = movingCollider.bounds;
+        if (player != null)
+        {
+            float corridorClearance = Mathf.Max(bounds.extents.x, bounds.extents.y) + agentRadius + 0.35f;
+            if (DistancePointToSegment(candidate, GetCurrentPosition(), player.GetPosition()) < corridorClearance)
+            {
+                return false;
+            }
+        }
+
         Vector2 size = new Vector2(
             Mathf.Max(0.35f, bounds.size.x * 0.82f),
             Mathf.Max(0.35f, bounds.size.y * 0.82f));
@@ -5166,17 +5266,52 @@ public class EnemyController : MonoBehaviour
 
         if (phaseContractRingRenderer != null)
         {
-            phaseContractRingRenderer.transform.localPosition = Vector3.down * 1.75f;
-            phaseContractRingRenderer.size = Vector2.one * Mathf.Lerp(1.1f, 1.45f, pulse);
-            phaseContractRingRenderer.color = new Color(phaseContractColor.r, phaseContractColor.g, phaseContractColor.b, 0.24f + pulse * 0.28f);
+            if (phaseContractRuleIndex == 1)
+            {
+                float radius = Mathf.Max(0.5f, phaseContractMinEnemyDistance);
+                Vector2 enemyPosition = GetCurrentPosition();
+                bool safe = Vector2.Distance(playerPos, enemyPosition) >= radius;
+                Color distanceColor = safe
+                    ? new Color(0.42f, 1f, 0.72f, 1f)
+                    : new Color(1f, 0.34f, 0.48f, 1f);
+                phaseContractRingRenderer.transform.position = enemyPosition;
+                phaseContractRingRenderer.size = Vector2.one * radius * 2f;
+                phaseContractRingRenderer.color = new Color(
+                    distanceColor.r,
+                    distanceColor.g,
+                    distanceColor.b,
+                    0.2f + pulse * 0.18f);
+            }
+            else
+            {
+                phaseContractRingRenderer.transform.localPosition = Vector3.down * 1.75f;
+                phaseContractRingRenderer.size = Vector2.one * Mathf.Lerp(1.1f, 1.45f, pulse);
+                phaseContractRingRenderer.color = new Color(phaseContractColor.r, phaseContractColor.g, phaseContractColor.b, 0.24f + pulse * 0.28f);
+            }
         }
 
         if (phaseContractLineRenderer != null)
         {
-            phaseContractLineRenderer.transform.localPosition = Vector3.down * 1.75f;
-            phaseContractLineRenderer.transform.localRotation = Quaternion.Euler(0f, 0f, Time.time * 70f);
-            phaseContractLineRenderer.size = new Vector2(1.8f, 0.06f);
-            phaseContractLineRenderer.color = new Color(phaseContractColor.r, phaseContractColor.g, phaseContractColor.b, 0.22f + pulse * 0.36f);
+            if (phaseContractRuleIndex == 1)
+            {
+                Vector2 enemyPosition = GetCurrentPosition();
+                Vector2 delta = playerPos - enemyPosition;
+                bool safe = delta.magnitude >= Mathf.Max(0.5f, phaseContractMinEnemyDistance);
+                Color distanceColor = safe
+                    ? new Color(0.42f, 1f, 0.72f, 1f)
+                    : new Color(1f, 0.34f, 0.48f, 1f);
+                phaseContractLineRenderer.transform.position = (playerPos + enemyPosition) * 0.5f;
+                phaseContractLineRenderer.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
+                phaseContractLineRenderer.size = new Vector2(delta.magnitude, 0.055f + pulse * 0.025f);
+                phaseContractLineRenderer.color = new Color(distanceColor.r, distanceColor.g, distanceColor.b, 0.38f + pulse * 0.3f);
+            }
+            else
+            {
+                phaseContractLineRenderer.transform.localPosition = Vector3.down * 1.75f;
+                phaseContractLineRenderer.transform.localRotation = Quaternion.Euler(0f, 0f, Time.time * 70f);
+                phaseContractLineRenderer.size = new Vector2(1.8f, 0.06f);
+                phaseContractLineRenderer.color = new Color(phaseContractColor.r, phaseContractColor.g, phaseContractColor.b, 0.22f + pulse * 0.36f);
+            }
         }
     }
 

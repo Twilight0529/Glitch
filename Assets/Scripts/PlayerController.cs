@@ -141,6 +141,8 @@ public class PlayerController : MonoBehaviour
     private static bool tutorialInputLocked;
 
     public Vector2 CurrentVelocity => rb != null ? rb.linearVelocity : Vector2.zero;
+    public Vector2 CurrentMoveInput => moveInput;
+    public Vector2 LastMoveDirection => lastMoveDirection;
     public bool IsInDeathSequence => deathSequenceActive;
     public float DeathExplosionDuration => Mathf.Max(0.02f, deathChargeDuration) + Mathf.Max(0.02f, deathFlashDuration) + Mathf.Max(0.02f, deathAfterglowDuration);
     public bool HasShield => shieldTimer > 0f;

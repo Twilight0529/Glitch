@@ -1234,7 +1234,7 @@ public class MainMenuController : MonoBehaviour
             DeveloperModeStorage.SkipCountdown = true;
             StartGameplay();
         }
-        GUILayout.Label("Durante una run de Nivel 3, F9 recorre los cuatro estados.", paragraphStyle);
+        GUILayout.Label("Nivel 3: F9 recorre estados exclusivos y F10 ataques con Topology Fold.", paragraphStyle);
 
         if (!string.IsNullOrEmpty(developerActionMessage))
         {

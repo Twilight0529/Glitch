@@ -12,10 +12,11 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         Stillness
     }
 
-    private struct DelayedVector
+    private struct MotionSample
     {
-        public float releaseTime;
-        public Vector2 delta;
+        public float time;
+        public Vector2 position;
+        public Vector2 velocity;
     }
 
     [Header("Adaptive Countermeasure")]
@@ -24,36 +25,40 @@ public class EnemyLevelThreeStateController : MonoBehaviour
     [SerializeField] private float adaptiveCycleSeconds = 4.5f;
     [SerializeField] private float adaptivePredictionSeconds = 0.72f;
     [SerializeField] private float adaptiveArrivalDistance = 1.45f;
+    [SerializeField] private float adaptiveExecutionSpeed = 11.5f;
+    [SerializeField] private float adaptiveLearningStrength = 0.48f;
 
-    [Header("Vector Hijack")]
-    [SerializeField] private float vectorDelay = 0.38f;
-    [SerializeField] private float vectorGain = 0.82f;
-    [SerializeField] private float vectorMaxStep = 0.2f;
-    [SerializeField] private int vectorEchoCount = 5;
+    [Header("Signal Tether")]
+    [SerializeField] private float tetherBreakHoldSeconds = 0.72f;
+    [SerializeField] private float tetherPulseInterval = 1.25f;
+    [SerializeField] private float tetherPlayerPull = 0.72f;
+    [SerializeField] private float tetherEnemyAdvance = 0.48f;
+    [SerializeField] private float tetherBreakStun = 1.15f;
 
-    [Header("Topology Fold")]
+    [Header("Topology Fold Projectile Modifier")]
+    [SerializeField, Range(0f, 1f)] private float topologyProjectileStateChance = 1f;
     [SerializeField] private float topologyWarmupSeconds = 1.65f;
-    [SerializeField] private float topologyEdgeDepth = 0.72f;
-    [SerializeField] private float topologyExitInset = 1.05f;
+    [SerializeField] private float topologyEdgeDepth = 1.45f;
+    [SerializeField] private float topologyExitInset = 1.65f;
     [SerializeField] private float topologyObjectCooldown = 0.42f;
     [SerializeField] private float topologyScanInterval = 0.08f;
 
-    [Header("Causal Fork")]
-    [SerializeField] private float causalObserveSeconds = 1.25f;
-    [SerializeField] private float causalRevealSeconds = 0.65f;
-    [SerializeField] private float causalCollapseSeconds = 0.85f;
-    [SerializeField] private float causalFutureSeconds = 1.35f;
-    [SerializeField] private float causalHazardRadius = 0.55f;
-    [SerializeField] private float causalSlowMultiplier = 0.56f;
-    [SerializeField] private float causalSlowDuration = 1.1f;
+    [Header("Blindspot Protocol")]
+    [SerializeField] private float blindspotSearchInterval = 0.65f;
+    [SerializeField] private float blindspotHiddenChargeSeconds = 1.25f;
+    [SerializeField] private float blindspotRouteSpeed = 10.5f;
+    [SerializeField] private float blindspotAmbushSpeed = 14f;
+    [SerializeField] private float blindspotPredictionSeconds = 0.48f;
+    [SerializeField] private int blindspotCandidateCount = 20;
+    [SerializeField] private Vector2 blindspotRadiusRange = new Vector2(3.5f, 7.2f);
 
     [Header("Visual Language")]
     [SerializeField] private Color adaptiveColor = new Color(1f, 0.35f, 0.72f, 1f);
     [SerializeField] private Color vectorColor = new Color(0.32f, 1f, 0.78f, 1f);
     [SerializeField] private Color topologyColorA = new Color(0.38f, 0.82f, 1f, 1f);
     [SerializeField] private Color topologyColorB = new Color(1f, 0.48f, 0.84f, 1f);
-    [SerializeField] private Color causalColorA = new Color(1f, 0.76f, 0.28f, 1f);
-    [SerializeField] private Color causalColorB = new Color(0.58f, 0.48f, 1f, 1f);
+    [SerializeField] private Color blindspotChargeColor = new Color(1f, 0.76f, 0.28f, 1f);
+    [SerializeField] private Color blindspotRouteColor = new Color(0.58f, 0.48f, 1f, 1f);
 
     private EnemyController owner;
     private PlayerController player;
@@ -72,6 +77,8 @@ public class EnemyLevelThreeStateController : MonoBehaviour
     private float sampledDistance;
     private readonly List<float> recentDashTimes = new List<float>();
     private readonly List<float> recentParryTimes = new List<float>();
+    private readonly List<MotionSample> motionHistory = new List<MotionSample>();
+    private float motionSampleTimer;
 
     private AdaptiveProfile adaptiveProfile;
     private float adaptiveCycleAge;
@@ -80,32 +87,69 @@ public class EnemyLevelThreeStateController : MonoBehaviour
     private SpriteRenderer adaptiveTargetRing;
     private SpriteRenderer adaptiveLine;
     private readonly List<SpriteRenderer> adaptiveTicks = new List<SpriteRenderer>();
+    private readonly List<Vector2> adaptivePath = new List<Vector2>();
+    private int adaptivePathIndex;
+    private bool adaptiveExecuting;
+    private float adaptiveRepathTimer;
+    private bool adaptivePredictionPending;
+    private float adaptivePredictionEvaluationTime;
+    private Vector2 adaptivePreviousTarget;
+    private Vector2 adaptiveLearnedCorrection;
 
-    private readonly Queue<DelayedVector> delayedVectors = new Queue<DelayedVector>();
-    private readonly List<SpriteRenderer> vectorEchoes = new List<SpriteRenderer>();
-    private SpriteRenderer vectorTether;
-    private SpriteRenderer vectorArrow;
+    private float tetherBlockedTimer;
+    private float tetherPulseTimer;
+    private float tetherResetTimer;
+    private SpriteRenderer tetherLine;
+    private SpriteRenderer tetherEnemyRing;
+    private SpriteRenderer tetherPlayerRing;
+    private bool movementOverrideActive;
+    private Vector2 movementOverrideVelocity;
 
     private bool topologyHorizontal;
     private bool topologyLive;
+    private bool topologyModifierActive;
     private float topologyScanTimer;
     private readonly Dictionary<int, float> topologyCooldowns = new Dictionary<int, float>();
     private readonly List<SpriteRenderer> topologyBands = new List<SpriteRenderer>();
     private readonly List<SpriteRenderer> topologyArrows = new List<SpriteRenderer>();
 
-    private float causalCycleAge;
-    private bool causalBranchChosen;
-    private bool causalResolved;
-    private bool causalCollapseHit;
-    private int causalChosenBranch;
-    private readonly Vector2[] causalBranchA = new Vector2[4];
-    private readonly Vector2[] causalBranchB = new Vector2[4];
-    private readonly List<SpriteRenderer> causalLinesA = new List<SpriteRenderer>();
-    private readonly List<SpriteRenderer> causalLinesB = new List<SpriteRenderer>();
-    private SpriteRenderer causalGhostA;
-    private SpriteRenderer causalGhostB;
+    private readonly List<Vector2> blindspotPath = new List<Vector2>();
+    private int blindspotPathIndex;
+    private Vector2 blindspotTarget;
+    private float blindspotSearchTimer;
+    private float blindspotHiddenCharge;
+    private bool blindspotAtCover;
+    private bool blindspotAmbushing;
+    private SpriteRenderer blindspotTargetRing;
+    private SpriteRenderer blindspotSightLine;
+    private readonly List<SpriteRenderer> blindspotPathLines = new List<SpriteRenderer>();
 
     public bool IsActive => stateActive;
+
+    public bool TryGetMovementOverride(out Vector2 velocity)
+    {
+        velocity = movementOverrideVelocity;
+        return stateActive && movementOverrideActive;
+    }
+
+    public Vector2 GetMovementOverrideTarget(Vector2 fallback)
+    {
+        if (!stateActive || !movementOverrideActive)
+        {
+            return fallback;
+        }
+        if (activeState == EnemyController.AnomalyState.AdaptiveCountermeasure &&
+            adaptivePathIndex >= 0 && adaptivePathIndex < adaptivePath.Count)
+        {
+            return adaptivePath[adaptivePathIndex];
+        }
+        if (activeState == EnemyController.AnomalyState.BlindspotProtocol &&
+            blindspotPathIndex >= 0 && blindspotPathIndex < blindspotPath.Count)
+        {
+            return blindspotPath[blindspotPathIndex];
+        }
+        return fallback;
+    }
 
     public void Configure(EnemyController ownerReference, PlayerController playerReference, GameManager managerReference)
     {
@@ -139,19 +183,21 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         {
             stateLabel.transform.position = owner.GetCurrentPosition() + Vector2.up * 1.15f;
         }
+        if (topologyModifierActive)
+        {
+            TickTopologyFold();
+        }
+
         switch (activeState)
         {
             case EnemyController.AnomalyState.AdaptiveCountermeasure:
                 TickAdaptiveCountermeasure();
                 break;
-            case EnemyController.AnomalyState.VectorHijack:
-                TickVectorHijack();
+            case EnemyController.AnomalyState.SignalTether:
+                TickSignalTether();
                 break;
-            case EnemyController.AnomalyState.TopologyFold:
-                TickTopologyFold();
-                break;
-            case EnemyController.AnomalyState.CausalFork:
-                TickCausalFork();
+            case EnemyController.AnomalyState.BlindspotProtocol:
+                TickBlindspotProtocol();
                 break;
         }
     }
@@ -164,7 +210,11 @@ public class EnemyLevelThreeStateController : MonoBehaviour
     public void EnterState(EnemyController.AnomalyState state)
     {
         ExitState();
-        if (!IsLevelThreeState(state))
+        bool projectileModifier = IsTopologyProjectileState(state) &&
+                                  gameManager != null &&
+                                  gameManager.AreBossLevelThreeStatesUnlocked &&
+                                  Random.value <= Mathf.Clamp01(topologyProjectileStateChance);
+        if (!IsLevelThreeState(state) && !projectileModifier)
         {
             return;
         }
@@ -176,19 +226,23 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         visualRoot = new GameObject($"LevelThree_{state}");
         CreateStateLabel(GetStateTitle(state));
 
+        if (projectileModifier)
+        {
+            topologyModifierActive = true;
+            BeginTopologyFold();
+            return;
+        }
+
         switch (state)
         {
             case EnemyController.AnomalyState.AdaptiveCountermeasure:
                 BeginAdaptiveCycle();
                 break;
-            case EnemyController.AnomalyState.VectorHijack:
-                BeginVectorHijack();
+            case EnemyController.AnomalyState.SignalTether:
+                BeginSignalTether();
                 break;
-            case EnemyController.AnomalyState.TopologyFold:
-                BeginTopologyFold();
-                break;
-            case EnemyController.AnomalyState.CausalFork:
-                BeginCausalCycle();
+            case EnemyController.AnomalyState.BlindspotProtocol:
+                BeginBlindspotProtocol();
                 break;
         }
     }
@@ -196,15 +250,15 @@ public class EnemyLevelThreeStateController : MonoBehaviour
     public void ExitState()
     {
         stateActive = false;
-        delayedVectors.Clear();
+        movementOverrideActive = false;
+        movementOverrideVelocity = Vector2.zero;
         topologyCooldowns.Clear();
         adaptiveTicks.Clear();
-        vectorEchoes.Clear();
         topologyBands.Clear();
         topologyArrows.Clear();
-        causalLinesA.Clear();
-        causalLinesB.Clear();
+        blindspotPathLines.Clear();
         topologyLive = false;
+        topologyModifierActive = false;
 
         if (visualRoot != null)
         {
@@ -216,10 +270,11 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         stateLabel = null;
         adaptiveTargetRing = null;
         adaptiveLine = null;
-        vectorTether = null;
-        vectorArrow = null;
-        causalGhostA = null;
-        causalGhostB = null;
+        tetherLine = null;
+        tetherEnemyRing = null;
+        tetherPlayerRing = null;
+        blindspotTargetRing = null;
+        blindspotSightLine = null;
     }
 
     private void ResolveReferences()
@@ -270,6 +325,31 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         lastPlayerPosition = current;
         TrimBehaviorSamples(recentDashTimes, 6f);
         TrimBehaviorSamples(recentParryTimes, 6f);
+
+        motionSampleTimer += delta;
+        if (motionSampleTimer >= 0.08f)
+        {
+            motionSampleTimer = 0f;
+            motionHistory.Add(new MotionSample
+            {
+                time = Time.time,
+                position = current,
+                velocity = player.CurrentVelocity
+            });
+        }
+        while (motionHistory.Count > 0 && motionHistory[0].time < Time.time - 3.5f)
+        {
+            motionHistory.RemoveAt(0);
+        }
+
+        if (adaptivePredictionPending && Time.time >= adaptivePredictionEvaluationTime)
+        {
+            Vector2 error = current - adaptivePreviousTarget;
+            adaptiveLearnedCorrection = Vector2.ClampMagnitude(
+                Vector2.Lerp(adaptiveLearnedCorrection, error, Mathf.Clamp01(adaptiveLearningStrength)),
+                2.8f);
+            adaptivePredictionPending = false;
+        }
     }
 
     private static void TrimBehaviorSamples(List<float> samples, float memorySeconds)
@@ -287,6 +367,10 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         ResetCycleRoot("AdaptiveCycle");
         adaptiveCycleAge = 0f;
         adaptiveResolved = false;
+        adaptiveExecuting = false;
+        adaptiveRepathTimer = 0f;
+        movementOverrideActive = false;
+        movementOverrideVelocity = Vector2.zero;
         adaptiveProfile = SelectAdaptiveProfile();
         adaptiveTarget = CalculateAdaptiveTarget(adaptiveProfile);
 
@@ -301,11 +385,33 @@ public class EnemyLevelThreeStateController : MonoBehaviour
             adaptiveTicks.Add(tick);
         }
 
-        UpdateStateLabel($"LECTURA: {GetAdaptiveProfileLabel(adaptiveProfile)}", adaptiveColor);
+        UpdateStateLabel($"LEARNING: {GetAdaptiveProfileLabel(adaptiveProfile)}", adaptiveColor);
     }
 
     private void TickAdaptiveCountermeasure()
     {
+        if (adaptiveExecuting)
+        {
+            movementOverrideActive = true;
+            adaptiveRepathTimer -= Time.deltaTime;
+            if (adaptiveRepathTimer <= 0f)
+            {
+                adaptiveRepathTimer = 0.28f;
+                Vector2 liveTarget = CalculateAdaptiveTarget(adaptiveProfile);
+                adaptiveTarget = Vector2.Lerp(adaptiveTarget, liveTarget, 0.72f);
+                RebuildAdaptiveExecutionPath(adaptiveTarget);
+            }
+            if (TickPathMovement(adaptivePath, ref adaptivePathIndex, adaptiveExecutionSpeed))
+            {
+                adaptiveExecuting = false;
+                movementOverrideActive = false;
+                movementOverrideVelocity = Vector2.zero;
+                SpawnImpactBurst(owner.GetCurrentPosition(), adaptiveColor, 14, 1.35f);
+                BeginAdaptiveCycle();
+            }
+            return;
+        }
+
         adaptiveCycleAge += Time.deltaTime;
         float read = Mathf.Max(0.4f, adaptiveReadSeconds);
         float reveal = Mathf.Max(0.2f, adaptiveRevealSeconds);
@@ -356,28 +462,33 @@ public class EnemyLevelThreeStateController : MonoBehaviour
     private Vector2 CalculateAdaptiveTarget(AdaptiveProfile profile)
     {
         Vector2 playerPosition = player.GetPosition();
-        Vector2 velocity = player.CurrentVelocity;
+        Vector2 velocity = GetAveragePlayerVelocity(1.1f);
         Vector2 enemyPosition = owner.GetCurrentPosition();
-        Vector2 target;
+        float distance = Vector2.Distance(enemyPosition, playerPosition);
+        float horizon = Mathf.Clamp(distance / Mathf.Max(5f, adaptiveExecutionSpeed), 0.42f, 1.28f);
+        Vector2 acceleration = GetPlayerVelocityTrend(1.4f);
+        Vector2 target = playerPosition +
+                         velocity * horizon +
+                         acceleration * (0.5f * horizon * horizon) +
+                         adaptiveLearnedCorrection;
 
         switch (profile)
         {
             case AdaptiveProfile.Velocity:
-                target = playerPosition + velocity * adaptivePredictionSeconds;
+                target += velocity.normalized * Mathf.Max(0.2f, adaptivePredictionSeconds);
                 break;
             case AdaptiveProfile.Parry:
                 Vector2 away = (playerPosition - enemyPosition).normalized;
                 Vector2 side = new Vector2(-away.y, away.x) * (Vector2.Dot(velocity, new Vector2(-away.y, away.x)) >= 0f ? -1f : 1f);
-                target = playerPosition + side * 2.2f;
+                target += side * (player.ParryRadius + 0.85f);
                 break;
             case AdaptiveProfile.Distance:
-                Vector2 approach = (playerPosition - enemyPosition).normalized;
-                target = playerPosition + approach * 1.8f;
+                target += (playerPosition - owner.GetArenaCenter()).normalized * 0.8f;
                 break;
             default:
                 Vector2 center = owner.GetArenaCenter();
                 Vector2 centerDirection = (center - playerPosition).normalized;
-                target = playerPosition + centerDirection * 1.6f;
+                target += centerDirection * 1.15f;
                 break;
         }
 
@@ -387,93 +498,153 @@ public class EnemyLevelThreeStateController : MonoBehaviour
     private void ResolveAdaptiveCountermeasure()
     {
         Vector2 playerPosition = player.GetPosition();
-        Vector2 fromPlayer = adaptiveTarget - playerPosition;
-        if (fromPlayer.sqrMagnitude < 0.01f)
+        Vector2 approach = (adaptiveTarget - playerPosition).normalized;
+        if (approach.sqrMagnitude < 0.01f)
         {
-            fromPlayer = (owner.GetCurrentPosition() - playerPosition).normalized;
+            approach = (playerPosition - owner.GetCurrentPosition()).normalized;
         }
 
-        Vector2 arrival = adaptiveTarget + fromPlayer.normalized * Mathf.Max(0.7f, adaptiveArrivalDistance);
-        arrival = owner.ClampAdvancedStatePoint(arrival, 0.8f);
-        owner.TeleportForAdvancedState(arrival, true);
-        owner.ApplyContainmentLock(arrival, 0.16f);
-        SpawnImpactBurst(arrival, adaptiveColor, 14, 1.7f);
-        GlitchAudioManager.PlayEnemyPhaseBlinkArrive(arrival);
+        Vector2 arrival = owner.ClampAdvancedStatePoint(
+            adaptiveTarget - approach * Mathf.Max(0.45f, adaptiveArrivalDistance * 0.55f),
+            0.8f);
+        adaptivePath.Clear();
+        RebuildAdaptiveExecutionPath(arrival);
+        adaptiveExecuting = true;
+        adaptiveRepathTimer = 0.28f;
+        movementOverrideActive = true;
+        adaptivePreviousTarget = adaptiveTarget;
+        adaptivePredictionEvaluationTime = Time.time + 0.8f;
+        adaptivePredictionPending = true;
+        UpdateStateLabel("ROUTE LEARNED", adaptiveColor);
     }
 
-    private void BeginVectorHijack()
+    private void RebuildAdaptiveExecutionPath(Vector2 destination)
     {
-        ResetCycleRoot("VectorHijack");
-        delayedVectors.Clear();
-        lastPlayerPosition = player.GetPosition();
-        vectorTether = CreateSprite(cycleRoot.transform, "VectorTether", SquareSpriteProvider.Get(), vectorColor, 18);
-        vectorArrow = CreateSprite(cycleRoot.transform, "VectorArrow", SquareSpriteProvider.Get(), vectorColor, 21);
-
-        vectorEchoes.Clear();
-        int count = Mathf.Clamp(vectorEchoCount, 3, 8);
-        for (int i = 0; i < count; i++)
+        adaptivePath.Clear();
+        Vector2 start = owner.GetCurrentPosition();
+        Vector2 target = owner.ClampAdvancedStatePoint(destination, 0.8f);
+        if (!owner.TryBuildAdvancedStatePath(start, target, adaptivePath))
         {
-            Color echoColor = vectorColor;
-            echoColor.a = Mathf.Lerp(0.12f, 0.5f, (i + 1f) / count);
-            SpriteRenderer echo = CreateSprite(cycleRoot.transform, $"DelayedVector_{i}", GetPlayerSprite(), echoColor, 19);
-            echo.transform.localScale = player.transform.localScale * 0.62f;
-            vectorEchoes.Add(echo);
+            adaptivePath.Add(start);
+            adaptivePath.Add(target);
         }
-
-        UpdateStateLabel("VECTOR ROBADO", vectorColor);
+        adaptivePathIndex = 1;
     }
 
-    private void TickVectorHijack()
+    private Vector2 GetAveragePlayerVelocity(float memorySeconds)
     {
-        // Reproduce los vectores del jugador con retraso: el enlace es predecible, pero puede ser explotado.
-        Vector2 playerPosition = player.GetPosition();
-        Vector2 playerDelta = playerPosition - lastPlayerPosition;
-        lastPlayerPosition = playerPosition;
-        if (playerDelta.sqrMagnitude <= 1.6f)
+        Vector2 sum = Vector2.zero;
+        int count = 0;
+        float oldest = Time.time - Mathf.Max(0.2f, memorySeconds);
+        for (int i = motionHistory.Count - 1; i >= 0; i--)
         {
-            delayedVectors.Enqueue(new DelayedVector
+            if (motionHistory[i].time < oldest)
             {
-                releaseTime = Time.time + Mathf.Max(0.08f, vectorDelay),
-                delta = playerDelta
-            });
+                break;
+            }
+            sum += motionHistory[i].velocity;
+            count++;
         }
+        return count > 0 ? sum / count : player.CurrentVelocity;
+    }
 
-        while (delayedVectors.Count > 0 && delayedVectors.Peek().releaseTime <= Time.time)
+    private Vector2 GetPlayerVelocityTrend(float memorySeconds)
+    {
+        if (motionHistory.Count < 2)
         {
-            DelayedVector delayed = delayedVectors.Dequeue();
-            Vector2 step = Vector2.ClampMagnitude(delayed.delta * Mathf.Max(0f, vectorGain), Mathf.Max(0.03f, vectorMaxStep));
-            Vector2 current = owner.GetCurrentPosition();
-            Vector2 target = owner.ClampAdvancedStatePoint(current + step, 0.65f);
-            owner.ApplyExternalDisplacement(target - current);
+            return Vector2.zero;
         }
 
+        float oldestTime = Time.time - Mathf.Max(0.3f, memorySeconds);
+        MotionSample newest = motionHistory[motionHistory.Count - 1];
+        MotionSample oldest = newest;
+        for (int i = motionHistory.Count - 2; i >= 0; i--)
+        {
+            oldest = motionHistory[i];
+            if (oldest.time <= oldestTime)
+            {
+                break;
+            }
+        }
+
+        float elapsed = Mathf.Max(0.08f, newest.time - oldest.time);
+        return Vector2.ClampMagnitude((newest.velocity - oldest.velocity) / elapsed, 8f);
+    }
+
+    private void BeginSignalTether()
+    {
+        ResetCycleRoot("SignalTether");
+        movementOverrideActive = false;
+        movementOverrideVelocity = Vector2.zero;
+        tetherBlockedTimer = 0f;
+        tetherPulseTimer = Mathf.Max(0.25f, tetherPulseInterval);
+        tetherResetTimer = 0f;
+        tetherLine = CreateSprite(cycleRoot.transform, "SignalTetherLine", SquareSpriteProvider.Get(), vectorColor, 20);
+        tetherEnemyRing = CreateSprite(cycleRoot.transform, "SignalTetherEnemyRing", CircleSpriteProvider.Get(), vectorColor, 21);
+        tetherPlayerRing = CreateSprite(cycleRoot.transform, "SignalTetherPlayerRing", CircleSpriteProvider.Get(), vectorColor, 21);
+        UpdateStateLabel("BREAK LINE OF SIGHT", vectorColor);
+    }
+
+    private void TickSignalTether()
+    {
         Vector2 enemyPosition = owner.GetCurrentPosition();
-        float pulse = 0.55f + Mathf.Sin(Time.time * 12f) * 0.18f;
-        Color tetherColor = vectorColor;
-        tetherColor.a = pulse;
-        SetLine(vectorTether, playerPosition, enemyPosition, 0.055f, tetherColor);
+        Vector2 playerPosition = player.GetPosition();
+        Vector2 delta = playerPosition - enemyPosition;
+        bool blocked = !owner.HasAdvancedStateLineOfSight(enemyPosition, playerPosition);
+        float pulse = 0.5f + Mathf.Sin(Time.time * 10f) * 0.22f;
+        Color color = blocked ? topologyColorA : vectorColor;
+        color.a = blocked ? 0.42f + pulse * 0.22f : 0.72f + pulse * 0.22f;
+        SetLine(tetherLine, enemyPosition, playerPosition, blocked ? 0.045f : 0.095f, color);
+        UpdateTetherRing(tetherEnemyRing, enemyPosition, color, pulse);
+        UpdateTetherRing(tetherPlayerRing, playerPosition, color, pulse);
 
-        Vector2 movement = player.CurrentVelocity;
-        if (movement.sqrMagnitude < 0.05f)
+        if (tetherResetTimer > 0f)
         {
-            movement = playerPosition - enemyPosition;
-        }
-        movement = movement.normalized;
-        if (vectorArrow != null)
-        {
-            vectorArrow.transform.position = Vector2.Lerp(playerPosition, enemyPosition, 0.5f);
-            vectorArrow.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg);
-            vectorArrow.transform.localScale = new Vector3(0.62f, 0.12f + pulse * 0.05f, 1f);
-            vectorArrow.color = tetherColor;
+            tetherResetTimer -= Time.deltaTime;
+            return;
         }
 
-        for (int i = 0; i < vectorEchoes.Count; i++)
+        if (blocked)
         {
-            float t = (i + 1f) / (vectorEchoes.Count + 1f);
-            SpriteRenderer echo = vectorEchoes[i];
-            echo.transform.position = Vector2.Lerp(playerPosition, enemyPosition, t) - movement * Mathf.Sin(Time.time * 5f + i) * 0.12f;
-            echo.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(movement.y, movement.x) * Mathf.Rad2Deg);
+            tetherBlockedTimer += Time.deltaTime;
+            UpdateStateLabel($"SIGNAL BREAK {Mathf.CeilToInt(Mathf.Max(0f, tetherBreakHoldSeconds - tetherBlockedTimer) * 10f) / 10f:F1}s", topologyColorA);
+            if (tetherBlockedTimer >= Mathf.Max(0.2f, tetherBreakHoldSeconds))
+            {
+                owner.ApplyContainmentLock(enemyPosition, Mathf.Max(0.25f, tetherBreakStun));
+                player.AddFirewallCharge(4f);
+                SpawnImpactBurst(enemyPosition, topologyColorA, 12, 1.25f);
+                tetherBlockedTimer = 0f;
+                tetherResetTimer = 1.15f;
+                UpdateStateLabel("TETHER SEVERED", topologyColorA);
+            }
+            return;
         }
+
+        tetherBlockedTimer = Mathf.Max(0f, tetherBlockedTimer - Time.deltaTime * 1.8f);
+        UpdateStateLabel("USE COVER TO BREAK TETHER", vectorColor);
+        tetherPulseTimer -= Time.deltaTime;
+        if (tetherPulseTimer > 0f)
+        {
+            return;
+        }
+
+        tetherPulseTimer = Mathf.Max(0.35f, tetherPulseInterval);
+        Vector2 direction = delta.sqrMagnitude > 0.001f ? delta.normalized : Vector2.right;
+        float distanceFactor = Mathf.InverseLerp(2f, 10f, delta.magnitude);
+        player.ApplyExternalDisplacement(-direction * Mathf.Lerp(tetherPlayerPull * 0.55f, tetherPlayerPull, distanceFactor));
+        owner.ApplyExternalDisplacement(direction * Mathf.Lerp(tetherEnemyAdvance * 0.55f, tetherEnemyAdvance, distanceFactor));
+        SpawnImpactBurst(Vector2.Lerp(enemyPosition, playerPosition, 0.5f), vectorColor, 8, 0.75f);
+    }
+
+    private static void UpdateTetherRing(SpriteRenderer ring, Vector2 position, Color color, float pulse)
+    {
+        if (ring == null)
+        {
+            return;
+        }
+        ring.transform.position = position;
+        ring.transform.localScale = Vector3.one * Mathf.Lerp(0.65f, 0.92f, pulse);
+        ring.color = new Color(color.r, color.g, color.b, color.a * 0.42f);
     }
 
     private void BeginTopologyFold()
@@ -487,7 +658,7 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         Vector2 separation = player.GetPosition() - owner.GetCurrentPosition();
         topologyHorizontal = Mathf.Abs(separation.x) >= Mathf.Abs(separation.y);
         CreateTopologyBands();
-        UpdateStateLabel(topologyHorizontal ? "BORDES X ENLAZADOS" : "BORDES Y ENLAZADOS", topologyColorA);
+        UpdateStateLabel(topologyHorizontal ? "X EDGES LINKED" : "Y EDGES LINKED", topologyColorA);
     }
 
     private void TickTopologyFold()
@@ -574,8 +745,10 @@ public class EnemyLevelThreeStateController : MonoBehaviour
     private void TryWrapPlayer()
     {
         Vector2 position = player.GetPosition();
-        Vector2 velocity = player.CurrentVelocity;
-        if (!TryGetWrappedPosition(position, velocity, out Vector2 wrapped))
+        Vector2 outwardIntent = player.CurrentMoveInput.sqrMagnitude > 0.01f
+            ? player.CurrentMoveInput
+            : player.CurrentVelocity;
+        if (!TryGetWrappedPosition(position, outwardIntent, true, out Vector2 wrapped))
         {
             return;
         }
@@ -594,7 +767,7 @@ public class EnemyLevelThreeStateController : MonoBehaviour
     private void TryWrapEnemy()
     {
         Vector2 position = owner.GetCurrentPosition();
-        if (!TryGetWrappedPosition(position, owner.CurrentVelocity, out Vector2 wrapped))
+        if (!TryGetWrappedPosition(position, owner.CurrentVelocity, false, out Vector2 wrapped))
         {
             return;
         }
@@ -623,7 +796,7 @@ public class EnemyLevelThreeStateController : MonoBehaviour
             }
 
             Vector2 position = projectile.transform.position;
-            if (!TryGetWrappedPosition(position, projectile.CurrentVelocity, out Vector2 wrapped))
+            if (!TryGetWrappedPosition(position, projectile.CurrentVelocity, false, out Vector2 wrapped))
             {
                 continue;
             }
@@ -640,7 +813,7 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         }
 
         Vector2 clonePosition = clone.GetCurrentPosition();
-        if (TryGetWrappedPosition(clonePosition, clone.CurrentVelocity, out Vector2 cloneWrapped))
+        if (TryGetWrappedPosition(clonePosition, clone.CurrentVelocity, false, out Vector2 cloneWrapped))
         {
             clone.ApplyExternalDisplacement(cloneWrapped - clonePosition);
             MarkTopologyCooldown(clone.GetInstanceID());
@@ -648,7 +821,7 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         }
     }
 
-    private bool TryGetWrappedPosition(Vector2 position, Vector2 velocity, out Vector2 wrapped)
+    private bool TryGetWrappedPosition(Vector2 position, Vector2 movementIntent, bool acceptWallContact, out Vector2 wrapped)
     {
         owner.GetAdvancedStateArena(out Vector2 origin, out Vector2 size);
         float depth = Mathf.Max(0.25f, topologyEdgeDepth);
@@ -657,12 +830,12 @@ public class EnemyLevelThreeStateController : MonoBehaviour
 
         if (topologyHorizontal)
         {
-            if (position.x <= origin.x + depth && velocity.x < -0.05f)
+            if (position.x <= origin.x + depth && (movementIntent.x < -0.05f || acceptWallContact))
             {
                 wrapped.x = origin.x + size.x - inset;
                 return true;
             }
-            if (position.x >= origin.x + size.x - depth && velocity.x > 0.05f)
+            if (position.x >= origin.x + size.x - depth && (movementIntent.x > 0.05f || acceptWallContact))
             {
                 wrapped.x = origin.x + inset;
                 return true;
@@ -670,12 +843,12 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         }
         else
         {
-            if (position.y <= origin.y + depth && velocity.y < -0.05f)
+            if (position.y <= origin.y + depth && (movementIntent.y < -0.05f || acceptWallContact))
             {
                 wrapped.y = origin.y + size.y - inset;
                 return true;
             }
-            if (position.y >= origin.y + size.y - depth && velocity.y > 0.05f)
+            if (position.y >= origin.y + size.y - depth && (movementIntent.y > 0.05f || acceptWallContact))
             {
                 wrapped.y = origin.y + inset;
                 return true;
@@ -729,169 +902,185 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         GlitchAudioManager.PlayEnemyPhaseBlinkArrive(destination);
     }
 
-    private void BeginCausalCycle()
+    private void BeginBlindspotProtocol()
     {
-        // Dibuja dos futuros completos; uno se confirma antes del salto y el otro colapsa como riesgo temporal.
-        ResetCycleRoot("CausalFork");
-        causalCycleAge = 0f;
-        causalBranchChosen = false;
-        causalResolved = false;
-        causalCollapseHit = false;
-        BuildCausalBranches();
-
-        causalLinesA.Clear();
-        causalLinesB.Clear();
-        for (int i = 0; i < causalBranchA.Length - 1; i++)
-        {
-            causalLinesA.Add(CreateSprite(cycleRoot.transform, $"FutureA_{i}", SquareSpriteProvider.Get(), causalColorA, 19));
-            causalLinesB.Add(CreateSprite(cycleRoot.transform, $"FutureB_{i}", SquareSpriteProvider.Get(), causalColorB, 19));
-        }
-
-        causalGhostA = CreateSprite(cycleRoot.transform, "FutureGhostA", GetOwnerSprite(), causalColorA, 21);
-        causalGhostB = CreateSprite(cycleRoot.transform, "FutureGhostB", GetOwnerSprite(), causalColorB, 21);
-        causalGhostA.transform.localScale = transform.localScale * 0.9f;
-        causalGhostB.transform.localScale = transform.localScale * 0.9f;
-        UpdateStateLabel("DOS FUTUROS POSIBLES", causalColorA);
+        ResetCycleRoot("BlindspotProtocol");
+        movementOverrideActive = true;
+        movementOverrideVelocity = Vector2.zero;
+        blindspotSearchTimer = 0f;
+        blindspotHiddenCharge = 0f;
+        blindspotAtCover = false;
+        blindspotAmbushing = false;
+        blindspotTargetRing = CreateSprite(cycleRoot.transform, "BlindspotTarget", CircleSpriteProvider.Get(), blindspotChargeColor, 21);
+        blindspotSightLine = CreateSprite(cycleRoot.transform, "BlindspotSightLine", SquareSpriteProvider.Get(), blindspotRouteColor, 19);
+        SelectBlindspotTarget();
     }
 
-    private void TickCausalFork()
+    private void TickBlindspotProtocol()
     {
-        causalCycleAge += Time.deltaTime;
-        float observe = Mathf.Max(0.55f, causalObserveSeconds);
-        float reveal = Mathf.Max(0.25f, causalRevealSeconds);
-        float collapse = Mathf.Max(0.35f, causalCollapseSeconds);
-
-        if (!causalBranchChosen && causalCycleAge >= observe)
-        {
-            causalBranchChosen = true;
-            causalChosenBranch = ChooseCausalBranch();
-            UpdateStateLabel(causalChosenBranch == 0 ? "FUTURO A FIJADO" : "FUTURO B FIJADO",
-                causalChosenBranch == 0 ? causalColorA : causalColorB);
-        }
-
-        float revealProgress = causalBranchChosen ? Mathf.Clamp01((causalCycleAge - observe) / reveal) : 0f;
-        UpdateCausalVisuals(revealProgress);
-
-        if (!causalResolved && causalCycleAge >= observe + reveal)
-        {
-            causalResolved = true;
-            Vector2 destination = causalChosenBranch == 0 ? causalBranchA[causalBranchA.Length - 1] : causalBranchB[causalBranchB.Length - 1];
-            owner.TeleportForAdvancedState(destination, true);
-            owner.ApplyContainmentLock(destination, 0.12f);
-            SpawnImpactBurst(destination, causalChosenBranch == 0 ? causalColorA : causalColorB, 16, 1.8f);
-            GlitchAudioManager.PlayEnemyPhaseBlinkArrive(destination);
-        }
-
-        if (causalResolved)
-        {
-            float collapseProgress = Mathf.Clamp01((causalCycleAge - observe - reveal) / collapse);
-            TickCausalCollapsedBranch(collapseProgress);
-        }
-
-        if (causalCycleAge >= observe + reveal + collapse + 1.35f)
-        {
-            BeginCausalCycle();
-        }
-    }
-
-    private void BuildCausalBranches()
-    {
-        Vector2 start = owner.GetCurrentPosition();
+        Vector2 enemyPosition = owner.GetCurrentPosition();
         Vector2 playerPosition = player.GetPosition();
-        Vector2 predicted = playerPosition + Vector2.ClampMagnitude(player.CurrentVelocity, 7f) * causalFutureSeconds;
-        predicted = owner.ClampAdvancedStatePoint(predicted, 0.85f);
-        Vector2 toward = (predicted - start).normalized;
-        if (toward.sqrMagnitude < 0.01f)
+        UpdateBlindspotPathVisual();
+        bool visible = owner.HasAdvancedStateLineOfSight(playerPosition, enemyPosition);
+        Color sightColor = visible ? new Color(1f, 0.38f, 0.48f, 0.9f) : new Color(0.48f, 1f, 0.78f, 0.62f);
+        SetLine(blindspotSightLine, playerPosition, enemyPosition, visible ? 0.085f : 0.045f, sightColor);
+        if (blindspotTargetRing != null)
         {
-            toward = Vector2.right;
+            float charge = Mathf.Clamp01(blindspotHiddenCharge / Mathf.Max(0.1f, blindspotHiddenChargeSeconds));
+            float scale = Mathf.Lerp(0.85f, 1.5f, charge) + Mathf.Sin(Time.time * 8f) * 0.06f;
+            blindspotTargetRing.transform.localScale = Vector3.one * scale;
+            blindspotTargetRing.color = new Color(
+                blindspotChargeColor.r,
+                blindspotChargeColor.g,
+                blindspotChargeColor.b,
+                Mathf.Lerp(0.2f, 0.72f, charge));
         }
-        Vector2 side = new Vector2(-toward.y, toward.x);
-        float travel = Mathf.Clamp(Vector2.Distance(start, predicted), 3.8f, 7.5f);
 
-        causalBranchA[0] = start;
-        causalBranchA[1] = owner.ClampAdvancedStatePoint(start + toward * travel * 0.36f, 0.8f);
-        causalBranchA[2] = owner.ClampAdvancedStatePoint(Vector2.Lerp(start, predicted, 0.72f), 0.8f);
-        causalBranchA[3] = owner.ClampAdvancedStatePoint(predicted - toward * 1.15f, 0.8f);
-
-        float sideSign = Vector2.Dot(player.CurrentVelocity, side) >= 0f ? -1f : 1f;
-        causalBranchB[0] = start;
-        causalBranchB[1] = owner.ClampAdvancedStatePoint(start + side * sideSign * 2.8f + toward * travel * 0.2f, 0.8f);
-        causalBranchB[2] = owner.ClampAdvancedStatePoint(predicted + side * sideSign * 2.4f, 0.8f);
-        causalBranchB[3] = owner.ClampAdvancedStatePoint(predicted + side * sideSign * 1.35f - toward * 0.7f, 0.8f);
-    }
-
-    private int ChooseCausalBranch()
-    {
-        Vector2 projectedPlayer = player.GetPosition() + Vector2.ClampMagnitude(player.CurrentVelocity, 6f) * 0.45f;
-        float distanceA = Vector2.Distance(projectedPlayer, causalBranchA[causalBranchA.Length - 1]);
-        float distanceB = Vector2.Distance(projectedPlayer, causalBranchB[causalBranchB.Length - 1]);
-        return distanceA <= distanceB ? 0 : 1;
-    }
-
-    private void UpdateCausalVisuals(float revealProgress)
-    {
-        float pulse = 0.55f + Mathf.Sin(Time.time * 9f) * 0.2f;
-        for (int i = 0; i < causalLinesA.Count; i++)
+        if (blindspotAmbushing)
         {
-            Color colorA = causalColorA;
-            Color colorB = causalColorB;
-            float alphaA = pulse;
-            float alphaB = pulse;
-            if (causalBranchChosen)
+            if (TickPathMovement(blindspotPath, ref blindspotPathIndex, blindspotAmbushSpeed))
             {
-                alphaA *= causalChosenBranch == 0 ? Mathf.Lerp(0.65f, 1f, revealProgress) : Mathf.Lerp(0.65f, 0.16f, revealProgress);
-                alphaB *= causalChosenBranch == 1 ? Mathf.Lerp(0.65f, 1f, revealProgress) : Mathf.Lerp(0.65f, 0.16f, revealProgress);
+                blindspotAmbushing = false;
+                blindspotAtCover = false;
+                blindspotHiddenCharge = 0f;
+                movementOverrideVelocity = Vector2.zero;
+                SpawnImpactBurst(owner.GetCurrentPosition(), blindspotChargeColor, 16, 1.55f);
+                SelectBlindspotTarget();
             }
-            colorA.a = alphaA;
-            colorB.a = alphaB;
-            SetLine(causalLinesA[i], causalBranchA[i], causalBranchA[i + 1], 0.1f, colorA);
-            SetLine(causalLinesB[i], causalBranchB[i], causalBranchB[i + 1], 0.1f, colorB);
+            return;
         }
 
-        if (causalGhostA != null)
+        if (!blindspotAtCover)
         {
-            causalGhostA.transform.position = causalBranchA[causalBranchA.Length - 1];
-            causalGhostA.color = new Color(causalColorA.r, causalColorA.g, causalColorA.b,
-                causalBranchChosen && causalChosenBranch != 0 ? Mathf.Lerp(0.42f, 0.08f, revealProgress) : 0.48f);
+            if (TickPathMovement(blindspotPath, ref blindspotPathIndex, blindspotRouteSpeed))
+            {
+                blindspotAtCover = true;
+                movementOverrideVelocity = Vector2.zero;
+            }
+            UpdateStateLabel("SEEKING BLINDSPOT", blindspotRouteColor);
+            return;
         }
-        if (causalGhostB != null)
+
+        if (visible)
         {
-            causalGhostB.transform.position = causalBranchB[causalBranchB.Length - 1];
-            causalGhostB.color = new Color(causalColorB.r, causalColorB.g, causalColorB.b,
-                causalBranchChosen && causalChosenBranch != 1 ? Mathf.Lerp(0.42f, 0.08f, revealProgress) : 0.48f);
-        }
-    }
-
-    private void TickCausalCollapsedBranch(float progress)
-    {
-        Vector2[] collapsed = causalChosenBranch == 0 ? causalBranchB : causalBranchA;
-        List<SpriteRenderer> lines = causalChosenBranch == 0 ? causalLinesB : causalLinesA;
-        Color collapseColor = causalChosenBranch == 0 ? causalColorB : causalColorA;
-        float head = Mathf.Clamp01(progress);
-
-        for (int i = 0; i < lines.Count; i++)
-        {
-            float segmentStart = i / (float)lines.Count;
-            float segmentEnd = (i + 1f) / lines.Count;
-            float active = Mathf.InverseLerp(segmentStart, segmentEnd, head);
-            Color color = collapseColor;
-            color.a = active > 0f && active < 1f ? 0.95f : Mathf.Lerp(0.3f, 0f, head);
-            SetLine(lines[i], collapsed[i], collapsed[i + 1], Mathf.Lerp(0.11f, 0.34f, active), color);
+            blindspotHiddenCharge = Mathf.Max(0f, blindspotHiddenCharge - Time.deltaTime * 2.2f);
+            blindspotSearchTimer += Time.deltaTime;
+            UpdateStateLabel("KEEP IT IN SIGHT", new Color(1f, 0.48f, 0.56f, 1f));
+            if (blindspotSearchTimer >= Mathf.Max(0.2f, blindspotSearchInterval))
+            {
+                SelectBlindspotTarget();
+            }
+            return;
         }
 
-        if (causalCollapseHit || progress <= 0f || progress >= 1f)
+        blindspotSearchTimer = 0f;
+        blindspotHiddenCharge += Time.deltaTime;
+        float remaining = Mathf.Max(0f, blindspotHiddenChargeSeconds - blindspotHiddenCharge);
+        UpdateStateLabel($"AMBUSH CHARGING {remaining:F1}s", blindspotChargeColor);
+        if (blindspotHiddenCharge < Mathf.Max(0.35f, blindspotHiddenChargeSeconds))
         {
             return;
         }
 
-        Vector2 point = EvaluatePolyline(collapsed, progress);
-        if (Vector2.Distance(player.GetPosition(), point) <= Mathf.Max(0.25f, causalHazardRadius))
+        Vector2 ambushTarget = owner.ClampAdvancedStatePoint(
+            playerPosition + player.CurrentVelocity * Mathf.Max(0.1f, blindspotPredictionSeconds),
+            0.75f);
+        blindspotPath.Clear();
+        if (!owner.TryBuildAdvancedStatePath(enemyPosition, ambushTarget, blindspotPath))
         {
-            causalCollapseHit = true;
-            player.ApplyMovementSlow(Mathf.Clamp(causalSlowMultiplier, 0.2f, 0.95f), Mathf.Max(0.25f, causalSlowDuration));
-            Vector2 push = (player.GetPosition() - point).normalized;
-            player.ApplyExternalDisplacement(push * 0.55f);
-            SpawnImpactBurst(point, collapseColor, 10, 1.05f);
+            blindspotPath.Add(enemyPosition);
+            blindspotPath.Add(ambushTarget);
+        }
+        blindspotPathIndex = 1;
+        blindspotAmbushing = true;
+        UpdateBlindspotPathVisual();
+        UpdateStateLabel("AMBUSH COMMITTED", blindspotChargeColor);
+    }
+
+    private void SelectBlindspotTarget()
+    {
+        blindspotSearchTimer = 0f;
+        blindspotHiddenCharge = 0f;
+        blindspotAtCover = false;
+        blindspotAmbushing = false;
+        Vector2 playerPosition = player.GetPosition();
+        Vector2 enemyPosition = owner.GetCurrentPosition();
+        float minRadius = Mathf.Min(blindspotRadiusRange.x, blindspotRadiusRange.y);
+        float maxRadius = Mathf.Max(blindspotRadiusRange.x, blindspotRadiusRange.y);
+        float bestScore = float.NegativeInfinity;
+        List<Vector2> bestPath = null;
+
+        for (int i = 0; i < Mathf.Max(8, blindspotCandidateCount); i++)
+        {
+            float angle = (Mathf.PI * 2f * i / Mathf.Max(8, blindspotCandidateCount)) + Random.Range(-0.16f, 0.16f);
+            Vector2 direction = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            Vector2 candidate = owner.ClampAdvancedStatePoint(
+                playerPosition + direction * Random.Range(minRadius, maxRadius),
+                0.85f);
+            if (owner.HasAdvancedStateLineOfSight(playerPosition, candidate))
+            {
+                continue;
+            }
+
+            List<Vector2> candidatePath = new List<Vector2>();
+            if (!owner.TryBuildAdvancedStatePath(enemyPosition, candidate, candidatePath))
+            {
+                continue;
+            }
+
+            float distanceToPlayer = Vector2.Distance(candidate, playerPosition);
+            float pathCost = Mathf.Max(1, candidatePath.Count);
+            float behindPlayer = Mathf.Max(0f, Vector2.Dot(direction, -player.LastMoveDirection));
+            float score = 5f - Mathf.Abs(distanceToPlayer - 4.5f) - pathCost * 0.08f + behindPlayer * 1.4f;
+            if (score > bestScore)
+            {
+                bestScore = score;
+                blindspotTarget = candidate;
+                bestPath = candidatePath;
+            }
+        }
+
+        blindspotPath.Clear();
+        if (bestPath != null)
+        {
+            blindspotPath.AddRange(bestPath);
+        }
+        else
+        {
+            blindspotTarget = owner.ClampAdvancedStatePoint(
+                playerPosition - player.LastMoveDirection.normalized * 4f,
+                0.85f);
+            blindspotPath.Add(enemyPosition);
+            blindspotPath.Add(blindspotTarget);
+        }
+
+        blindspotPathIndex = 1;
+        if (blindspotTargetRing != null)
+        {
+            blindspotTargetRing.transform.position = blindspotTarget;
+            blindspotTargetRing.transform.localScale = Vector3.one * 1.15f;
+            blindspotTargetRing.color = new Color(blindspotChargeColor.r, blindspotChargeColor.g, blindspotChargeColor.b, 0.32f);
+        }
+        UpdateBlindspotPathVisual();
+    }
+
+    private void UpdateBlindspotPathVisual()
+    {
+        while (blindspotPathLines.Count < Mathf.Max(0, blindspotPath.Count - 1))
+        {
+            blindspotPathLines.Add(CreateSprite(cycleRoot.transform, $"BlindspotRoute_{blindspotPathLines.Count}", SquareSpriteProvider.Get(), blindspotRouteColor, 18));
+        }
+
+        for (int i = 0; i < blindspotPathLines.Count; i++)
+        {
+            if (i >= blindspotPath.Count - 1)
+            {
+                blindspotPathLines[i].color = Color.clear;
+                continue;
+            }
+            Color color = blindspotRouteColor;
+            color.a = 0.2f + Mathf.Sin(Time.time * 8f + i) * 0.08f;
+            SetLine(blindspotPathLines[i], blindspotPath[i], blindspotPath[i + 1], 0.055f, color);
         }
     }
 
@@ -955,12 +1144,6 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         return renderer != null && renderer.sprite != null ? renderer.sprite : SquareSpriteProvider.Get();
     }
 
-    private Sprite GetPlayerSprite()
-    {
-        SpriteRenderer renderer = player != null ? player.GetComponent<SpriteRenderer>() : null;
-        return renderer != null && renderer.sprite != null ? renderer.sprite : SquareSpriteProvider.Get();
-    }
-
     private static void SetLine(SpriteRenderer line, Vector2 start, Vector2 end, float width, Color color)
     {
         if (line == null)
@@ -998,28 +1181,45 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         fx.Configure(color, Mathf.Clamp(rayCount, 6, 20), Mathf.Max(0.4f, radius));
     }
 
-    private static Vector2 EvaluatePolyline(Vector2[] points, float progress)
+    private bool TickPathMovement(List<Vector2> path, ref int pathIndex, float speed)
     {
-        if (points == null || points.Length == 0)
+        if (path == null || path.Count < 2 || pathIndex >= path.Count)
         {
-            return Vector2.zero;
-        }
-        if (points.Length == 1)
-        {
-            return points[0];
+            movementOverrideVelocity = Vector2.zero;
+            return true;
         }
 
-        float scaled = Mathf.Clamp01(progress) * (points.Length - 1);
-        int index = Mathf.Min(points.Length - 2, Mathf.FloorToInt(scaled));
-        return Vector2.Lerp(points[index], points[index + 1], scaled - index);
+        Vector2 position = owner.GetCurrentPosition();
+        while (pathIndex < path.Count && Vector2.Distance(position, path[pathIndex]) <= 0.3f)
+        {
+            pathIndex++;
+        }
+        if (pathIndex >= path.Count)
+        {
+            movementOverrideVelocity = Vector2.zero;
+            return true;
+        }
+
+        Vector2 direction = path[pathIndex] - position;
+        movementOverrideVelocity = direction.sqrMagnitude > 0.001f
+            ? direction.normalized * Mathf.Max(1f, speed)
+            : Vector2.zero;
+        return false;
     }
 
     private static bool IsLevelThreeState(EnemyController.AnomalyState state)
     {
         return state == EnemyController.AnomalyState.AdaptiveCountermeasure ||
-               state == EnemyController.AnomalyState.VectorHijack ||
-               state == EnemyController.AnomalyState.TopologyFold ||
-               state == EnemyController.AnomalyState.CausalFork;
+               state == EnemyController.AnomalyState.SignalTether ||
+               state == EnemyController.AnomalyState.BlindspotProtocol;
+    }
+
+    private static bool IsTopologyProjectileState(EnemyController.AnomalyState state)
+    {
+        return state == EnemyController.AnomalyState.ExpansionShoot ||
+               state == EnemyController.AnomalyState.PincerBarrage ||
+               state == EnemyController.AnomalyState.OrbitBarrage ||
+               state == EnemyController.AnomalyState.SignalPossession;
     }
 
     private static string GetStateTitle(EnemyController.AnomalyState state)
@@ -1027,13 +1227,13 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         switch (state)
         {
             case EnemyController.AnomalyState.AdaptiveCountermeasure:
-                return "CONTRAMEDIDA ADAPTATIVA";
-            case EnemyController.AnomalyState.VectorHijack:
-                return "SECUESTRO VECTORIAL";
-            case EnemyController.AnomalyState.TopologyFold:
-                return "PLIEGUE TOPOLOGICO";
+                return "ADAPTIVE COUNTERMEASURE";
+            case EnemyController.AnomalyState.SignalTether:
+                return "SIGNAL TETHER";
+            case EnemyController.AnomalyState.BlindspotProtocol:
+                return "BLINDSPOT PROTOCOL";
             default:
-                return "BIFURCACION CAUSAL";
+                return "TOPOLOGY FOLD";
         }
     }
 
@@ -1042,13 +1242,13 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         switch (profile)
         {
             case AdaptiveProfile.Velocity:
-                return "TRAYECTORIA";
+                return "TRAJECTORY";
             case AdaptiveProfile.Parry:
-                return "DEFENSA";
+                return "DEFENSE";
             case AdaptiveProfile.Distance:
-                return "DISTANCIA";
+                return "DISTANCE";
             default:
-                return "QUIETUD";
+                return "STILLNESS";
         }
     }
 }

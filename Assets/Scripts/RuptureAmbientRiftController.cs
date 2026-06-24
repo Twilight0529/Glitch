@@ -24,8 +24,8 @@ public class RuptureAmbientRiftController : MonoBehaviour
     [Header("Timing")]
     [SerializeField] private float telegraphSeconds = 1.05f;
     [SerializeField] private float materializeSeconds = 0.72f;
-    [SerializeField] private Vector2 solidHoldRange = new Vector2(4.4f, 6.8f);
-    [SerializeField] private float dissolveSeconds = 1.05f;
+    [SerializeField] private Vector2 solidHoldRange = new Vector2(6.5f, 9.5f);
+    [SerializeField] private float dissolveSeconds = 1.25f;
 
     [Header("Visuals")]
     [SerializeField] private Color warningColor = new Color(0.82f, 0.28f, 0.86f, 0.46f);

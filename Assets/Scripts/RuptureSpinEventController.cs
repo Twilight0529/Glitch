@@ -35,10 +35,10 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
     [Header("Event Timing")]
     [SerializeField] private float intervalMin = 8f;
     [SerializeField] private float intervalMax = 14f;
-    [SerializeField] private float durationMin = 7f;
-    [SerializeField] private float durationMax = 11f;
+    [SerializeField] private float durationMin = 10f;
+    [SerializeField] private float durationMax = 15f;
     [SerializeField, Range(0.4f, 1f)] private float cadenceIntervalMultiplier = 0.68f;
-    [SerializeField, Range(0.8f, 1.5f)] private float cadenceDurationMultiplier = 1.18f;
+    [SerializeField, Range(0.8f, 1.8f)] private float cadenceDurationMultiplier = 1.32f;
 
     [Header("Spin Motion (2D)")]
     [SerializeField] private bool enableSpinMotion = true;
@@ -67,7 +67,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
     [SerializeField] private int riftEchoCountMax = 4;
     [SerializeField] private float riftEchoRadius = 1.35f;
     [SerializeField] private float riftEchoTelegraphSeconds = 0.85f;
-    [SerializeField] private float riftEchoLinkDuration = 4.8f;
+    [SerializeField] private float riftEchoLinkDuration = 7.2f;
     [SerializeField] private float riftEchoLinkTriggerRadius = 0.42f;
     [SerializeField] private float riftEchoTrapStunDuration = 1.2f;
     [SerializeField] private float riftEchoAnchorFirewallReward = 2f;
