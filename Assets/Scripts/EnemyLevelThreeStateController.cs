@@ -29,11 +29,13 @@ public class EnemyLevelThreeStateController : MonoBehaviour
     [SerializeField] private float adaptiveLearningStrength = 0.48f;
 
     [Header("Signal Tether")]
-    [SerializeField] private float tetherBreakHoldSeconds = 0.72f;
-    [SerializeField] private float tetherPulseInterval = 1.25f;
-    [SerializeField] private float tetherPlayerPull = 0.72f;
-    [SerializeField] private float tetherEnemyAdvance = 0.48f;
-    [SerializeField] private float tetherBreakStun = 1.15f;
+    [SerializeField] private float tetherBreakHoldSeconds = 0.62f;
+    [SerializeField] private float tetherPulseInterval = 0.9f;
+    [SerializeField] private float tetherPlayerPull = 1.05f;
+    [SerializeField] private float tetherEnemyAdvance = 0.72f;
+    [SerializeField] private float tetherBreakStun = 0.9f;
+    [SerializeField] private float tetherExposureRampSeconds = 4f;
+    [SerializeField] private float tetherPressureSlow = 0.78f;
 
     [Header("Topology Fold Projectile Modifier")]
     [SerializeField, Range(0f, 1f)] private float topologyProjectileStateChance = 1f;
@@ -44,12 +46,13 @@ public class EnemyLevelThreeStateController : MonoBehaviour
     [SerializeField] private float topologyScanInterval = 0.08f;
 
     [Header("Blindspot Protocol")]
-    [SerializeField] private float blindspotSearchInterval = 0.65f;
-    [SerializeField] private float blindspotHiddenChargeSeconds = 1.25f;
-    [SerializeField] private float blindspotRouteSpeed = 10.5f;
-    [SerializeField] private float blindspotAmbushSpeed = 14f;
-    [SerializeField] private float blindspotPredictionSeconds = 0.48f;
-    [SerializeField] private int blindspotCandidateCount = 20;
+    [SerializeField] private float blindspotSearchInterval = 0.48f;
+    [SerializeField] private float blindspotHiddenChargeSeconds = 0.82f;
+    [SerializeField] private float blindspotRouteSpeed = 13f;
+    [SerializeField] private float blindspotAmbushSpeed = 18f;
+    [SerializeField] private float blindspotPredictionSeconds = 0.62f;
+    [SerializeField] private int blindspotCandidateCount = 28;
+    [SerializeField] private int blindspotVolleyProjectiles = 3;
     [SerializeField] private Vector2 blindspotRadiusRange = new Vector2(3.5f, 7.2f);
 
     [Header("Visual Language")]
@@ -99,6 +102,7 @@ public class EnemyLevelThreeStateController : MonoBehaviour
     private float tetherBlockedTimer;
     private float tetherPulseTimer;
     private float tetherResetTimer;
+    private float tetherExposure;
     private SpriteRenderer tetherLine;
     private SpriteRenderer tetherEnemyRing;
     private SpriteRenderer tetherPlayerRing;
@@ -579,6 +583,7 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         tetherBlockedTimer = 0f;
         tetherPulseTimer = Mathf.Max(0.25f, tetherPulseInterval);
         tetherResetTimer = 0f;
+        tetherExposure = 0f;
         tetherLine = CreateSprite(cycleRoot.transform, "SignalTetherLine", SquareSpriteProvider.Get(), vectorColor, 20);
         tetherEnemyRing = CreateSprite(cycleRoot.transform, "SignalTetherEnemyRing", CircleSpriteProvider.Get(), vectorColor, 21);
         tetherPlayerRing = CreateSprite(cycleRoot.transform, "SignalTetherPlayerRing", CircleSpriteProvider.Get(), vectorColor, 21);
@@ -607,6 +612,7 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         if (blocked)
         {
             tetherBlockedTimer += Time.deltaTime;
+            tetherExposure = Mathf.Max(0f, tetherExposure - Time.deltaTime * 2.4f);
             UpdateStateLabel($"SIGNAL BREAK {Mathf.CeilToInt(Mathf.Max(0f, tetherBreakHoldSeconds - tetherBlockedTimer) * 10f) / 10f:F1}s", topologyColorA);
             if (tetherBlockedTimer >= Mathf.Max(0.2f, tetherBreakHoldSeconds))
             {
@@ -615,25 +621,35 @@ public class EnemyLevelThreeStateController : MonoBehaviour
                 SpawnImpactBurst(enemyPosition, topologyColorA, 12, 1.25f);
                 tetherBlockedTimer = 0f;
                 tetherResetTimer = 1.15f;
+                tetherExposure = 0f;
                 UpdateStateLabel("TETHER SEVERED", topologyColorA);
             }
             return;
         }
 
         tetherBlockedTimer = Mathf.Max(0f, tetherBlockedTimer - Time.deltaTime * 1.8f);
-        UpdateStateLabel("USE COVER TO BREAK TETHER", vectorColor);
+        tetherExposure += Time.deltaTime;
+        float pressure = Mathf.Clamp01(tetherExposure / Mathf.Max(0.5f, tetherExposureRampSeconds));
+        owner.ApplyExternalSpeedModifier(Mathf.Lerp(1.16f, 1.42f, pressure), 0.2f);
+        UpdateStateLabel(pressure >= 0.66f ? "TETHER CRITICAL - FIND COVER" : "USE COVER TO BREAK TETHER", vectorColor);
         tetherPulseTimer -= Time.deltaTime;
         if (tetherPulseTimer > 0f)
         {
             return;
         }
 
-        tetherPulseTimer = Mathf.Max(0.35f, tetherPulseInterval);
+        tetherPulseTimer = Mathf.Lerp(
+            Mathf.Max(0.28f, tetherPulseInterval),
+            Mathf.Max(0.2f, tetherPulseInterval * 0.52f),
+            pressure);
         Vector2 direction = delta.sqrMagnitude > 0.001f ? delta.normalized : Vector2.right;
         float distanceFactor = Mathf.InverseLerp(2f, 10f, delta.magnitude);
-        player.ApplyExternalDisplacement(-direction * Mathf.Lerp(tetherPlayerPull * 0.55f, tetherPlayerPull, distanceFactor));
-        owner.ApplyExternalDisplacement(direction * Mathf.Lerp(tetherEnemyAdvance * 0.55f, tetherEnemyAdvance, distanceFactor));
-        SpawnImpactBurst(Vector2.Lerp(enemyPosition, playerPosition, 0.5f), vectorColor, 8, 0.75f);
+        float pull = Mathf.Lerp(tetherPlayerPull * 0.6f, tetherPlayerPull, distanceFactor) * Mathf.Lerp(1f, 1.5f, pressure);
+        float advance = Mathf.Lerp(tetherEnemyAdvance * 0.6f, tetherEnemyAdvance, distanceFactor) * Mathf.Lerp(1f, 1.35f, pressure);
+        player.ApplyExternalDisplacement(direction * pull);
+        player.ApplyMovementSlow(Mathf.Lerp(0.9f, tetherPressureSlow, pressure), 0.42f);
+        owner.ApplyExternalDisplacement(direction * advance);
+        SpawnImpactBurst(Vector2.Lerp(enemyPosition, playerPosition, 0.5f), vectorColor, 10, Mathf.Lerp(0.8f, 1.25f, pressure));
     }
 
     private static void UpdateTetherRing(SpriteRenderer ring, Vector2 position, Color color, float pulse)
@@ -985,6 +1001,7 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         Vector2 ambushTarget = owner.ClampAdvancedStatePoint(
             playerPosition + player.CurrentVelocity * Mathf.Max(0.1f, blindspotPredictionSeconds),
             0.75f);
+        owner.FireAdvancedAmbushVolley(ambushTarget, Mathf.Max(1, blindspotVolleyProjectiles));
         blindspotPath.Clear();
         if (!owner.TryBuildAdvancedStatePath(enemyPosition, ambushTarget, blindspotPath))
         {

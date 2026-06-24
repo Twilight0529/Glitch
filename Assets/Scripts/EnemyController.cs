@@ -2864,6 +2864,39 @@ public class EnemyController : MonoBehaviour
         return HasDirectPath(from, to);
     }
 
+    public void FireAdvancedAmbushVolley(Vector2 predictedTarget, int projectileCount)
+    {
+        if (player == null || !CanDamagePlayer())
+        {
+            return;
+        }
+
+        Vector2 origin = GetCurrentPosition();
+        Vector2 baseDirection = predictedTarget - origin;
+        if (baseDirection.sqrMagnitude < 0.001f)
+        {
+            baseDirection = player.GetPosition() - origin;
+        }
+        baseDirection = baseDirection.sqrMagnitude > 0.001f ? baseDirection.normalized : Vector2.right;
+        int count = Mathf.Clamp(projectileCount, 1, 5);
+        float totalSpread = count <= 1 ? 0f : 24f;
+        for (int i = 0; i < count; i++)
+        {
+            float t = count <= 1 ? 0.5f : i / (float)(count - 1);
+            float angle = Mathf.Lerp(-totalSpread * 0.5f, totalSpread * 0.5f, t);
+            Vector2 direction = Rotate(baseDirection, angle);
+            CreateProjectile(
+                origin + direction * 0.48f,
+                direction,
+                new Color(1f, 0.72f, 0.30f, 1f),
+                expansionShootProjectileSize * 0.88f,
+                1.18f);
+        }
+
+        SpawnLevelTwoRadialBurst(origin, 1.15f, new Color(1f, 0.72f, 0.30f, 1f), "BlindspotAmbush");
+        GlitchAudioManager.PlayEnemyOrbitBarrageFire(origin);
+    }
+
     public void TeleportForAdvancedState(Vector2 position, bool preserveVelocity)
     {
         if (breachAbsorbed || rb == null)
