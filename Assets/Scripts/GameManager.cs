@@ -149,6 +149,7 @@ public class GameManager : MonoBehaviour
     [Header("Progression Gates")]
     [SerializeField] private float bossSpecialStatesUnlockTime = 30f;
     [SerializeField] private float bossLevelTwoUnlockTime = 150f;
+    [SerializeField] private float bossLevelThreeUnlockTime = 300f;
     [SerializeField] private float mapEventsUnlockTime = 60f;
     [SerializeField] private float containmentPulseUnlockTime = 90f;
 
@@ -185,6 +186,12 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Color bossLevelTwoIntroPrimary = new Color(0.58f, 1f, 0.92f, 1f);
     [SerializeField] private Color bossLevelTwoIntroSecondary = new Color(1f, 0.42f, 0.92f, 1f);
 
+    [Header("Boss Level 3 Intro")]
+    [SerializeField] private float bossLevelThreeIntroDuration = 3.15f;
+    [SerializeField, Range(0f, 1f)] private float bossLevelThreeIntroBackdropOpacity = 0.62f;
+    [SerializeField] private Color bossLevelThreeIntroPrimary = new Color(1f, 0.34f, 0.74f, 1f);
+    [SerializeField] private Color bossLevelThreeIntroSecondary = new Color(0.34f, 0.94f, 1f, 1f);
+
     [Header("HUD Atmosphere")]
     [SerializeField] private bool enableAmbientHudFrame = true;
     [SerializeField, Range(0.04f, 0.35f)] private float sideHudOpacity = 0.085f;
@@ -214,8 +221,9 @@ public class GameManager : MonoBehaviour
     public int CurrentScore => Mathf.Max(0, Mathf.FloorToInt(SurvivalTime * Mathf.Max(0f, pointsPerSecond)) + bonusScore);
     public string CurrentLevelTypeLabel => levelType;
     public bool IsBreachSensitiveSuppressionActive => breachSensitiveSuppressionTimer > 0f;
-    public bool AreBossSpecialStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && (devForceBossLevelTwo || SurvivalTime >= Mathf.Max(0f, bossSpecialStatesUnlockTime));
-    public bool AreBossLevelTwoStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && (devForceBossLevelTwo || SurvivalTime >= Mathf.Max(bossSpecialStatesUnlockTime, bossLevelTwoUnlockTime));
+    public bool AreBossSpecialStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && (devForceBossLevelTwo || devForceBossLevelThree || SurvivalTime >= Mathf.Max(0f, bossSpecialStatesUnlockTime));
+    public bool AreBossLevelTwoStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && (devForceBossLevelTwo || devForceBossLevelThree || SurvivalTime >= Mathf.Max(bossSpecialStatesUnlockTime, bossLevelTwoUnlockTime));
+    public bool AreBossLevelThreeStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && (devForceBossLevelThree || SurvivalTime >= Mathf.Max(bossLevelTwoUnlockTime, bossLevelThreeUnlockTime));
     public bool AreMapEventsUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, mapEventsUnlockTime);
     public bool IsContainmentPulseUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && SurvivalTime >= Mathf.Max(0f, containmentPulseUnlockTime);
     public bool IsContainmentPulsePressureActive => chaosDirector != null && chaosDirector.IsContainmentPulsePressureActive;
@@ -284,6 +292,8 @@ public class GameManager : MonoBehaviour
     private string bossStateBannerRaw;
     private bool bossLevelTwoIntroPlayed;
     private float bossLevelTwoIntroTimer;
+    private bool bossLevelThreeIntroPlayed;
+    private float bossLevelThreeIntroTimer;
     private int bonusScore;
     private float hudScale = 1f;
     private float cachedHudScaleForStyles = -1f;
@@ -357,6 +367,7 @@ public class GameManager : MonoBehaviour
     private bool contextBreachShown;
     private bool operationPlayerModifiersApplied;
     private bool devForceBossLevelTwo;
+    private bool devForceBossLevelThree;
     private bool devFastRunLoops;
     private bool devSkipCountdown;
     private float labRunTime;
@@ -435,6 +446,8 @@ public class GameManager : MonoBehaviour
         {
             TrackBossTempoPulse();
             TrackBossLevelTwoIntro();
+            TrackBossLevelThreeIntro();
+            UpdateDeveloperBossShortcuts();
         }
 
         if (statePulseOverlayTimer > 0f)
@@ -448,6 +461,10 @@ public class GameManager : MonoBehaviour
         if (bossLevelTwoIntroTimer > 0f)
         {
             bossLevelTwoIntroTimer -= Time.deltaTime;
+        }
+        if (bossLevelThreeIntroTimer > 0f)
+        {
+            bossLevelThreeIntroTimer -= Time.deltaTime;
         }
         if (achievementToastTimer > 0f)
         {
@@ -1254,6 +1271,7 @@ public class GameManager : MonoBehaviour
                 DrawBossStateHud();
                 DrawStatePulseOverlay();
                 DrawBossLevelTwoIntroOverlay();
+                DrawBossLevelThreeIntroOverlay();
                 DrawBossStateBanner();
                 DrawChaosWarningOverlay();
             }
@@ -1268,6 +1286,7 @@ public class GameManager : MonoBehaviour
             DrawBossStateHud();
             DrawStatePulseOverlay();
             DrawBossLevelTwoIntroOverlay();
+            DrawBossLevelThreeIntroOverlay();
             DrawBossStateBanner();
             DrawChaosWarningOverlay();
             DrawUpgradeSelectionOverlay();
@@ -1297,6 +1316,8 @@ public class GameManager : MonoBehaviour
         lastBossStateRaw = null;
         bossLevelTwoIntroPlayed = false;
         bossLevelTwoIntroTimer = 0f;
+        bossLevelThreeIntroPlayed = false;
+        bossLevelThreeIntroTimer = 0f;
         scorePopups.Clear();
         currentUpgradeChoices.Clear();
         displayedScore = 0f;
@@ -1387,6 +1408,7 @@ public class GameManager : MonoBehaviour
     private void ApplyDeveloperRunSettings()
     {
         devForceBossLevelTwo = DeveloperModeStorage.ForceBossLevelTwo;
+        devForceBossLevelThree = DeveloperModeStorage.ForceBossLevelThree;
         devFastRunLoops = DeveloperModeStorage.FastRunLoops;
         devSkipCountdown = DeveloperModeStorage.SkipCountdown;
 
@@ -1394,6 +1416,11 @@ public class GameManager : MonoBehaviour
         if (devForceBossLevelTwo)
         {
             startTime = Mathf.Max(startTime, Mathf.Max(bossSpecialStatesUnlockTime, bossLevelTwoUnlockTime) + 0.5f);
+        }
+        if (devForceBossLevelThree)
+        {
+            devForceBossLevelTwo = true;
+            startTime = Mathf.Max(startTime, Mathf.Max(bossLevelTwoUnlockTime, bossLevelThreeUnlockTime) + 0.5f);
         }
 
         SurvivalTime = Mathf.Max(0f, startTime);
@@ -3526,12 +3553,55 @@ public class GameManager : MonoBehaviour
         }
 
         bossLevelTwoIntroPlayed = true;
+        if (devForceBossLevelThree)
+        {
+            return;
+        }
+
         bossLevelTwoIntroTimer = Mathf.Max(0.25f, bossLevelTwoIntroDuration);
         statePulseOverlayTimer = Mathf.Max(statePulseOverlayTimer, Mathf.Max(0.08f, statePulseOverlayDuration) * 1.8f);
         enemyController.TriggerLevelTwoAwakeningFx();
         if (devForceBossLevelTwo)
         {
             enemyController.ForceLevelTwoStateForDebug();
+        }
+        GlitchAudioManager.PlayBossLevelTwoAwaken(enemyController.transform.position);
+    }
+
+    private void UpdateDeveloperBossShortcuts()
+    {
+        if (!devForceBossLevelThree || enemyController == null || !IsRunActive)
+        {
+            return;
+        }
+
+        bool cyclePressed = false;
+#if ENABLE_INPUT_SYSTEM
+        cyclePressed |= Keyboard.current != null && Keyboard.current.f9Key.wasPressedThisFrame;
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        cyclePressed |= Input.GetKeyDown(KeyCode.F9);
+#endif
+        if (cyclePressed)
+        {
+            enemyController.ForceLevelThreeStateForDebug();
+        }
+    }
+
+    private void TrackBossLevelThreeIntro()
+    {
+        if (bossLevelThreeIntroPlayed || !AreBossLevelThreeStatesUnlocked || enemyController == null)
+        {
+            return;
+        }
+
+        bossLevelThreeIntroPlayed = true;
+        bossLevelThreeIntroTimer = Mathf.Max(0.25f, bossLevelThreeIntroDuration);
+        statePulseOverlayTimer = Mathf.Max(statePulseOverlayTimer, Mathf.Max(0.08f, statePulseOverlayDuration) * 2.4f);
+        enemyController.TriggerLevelThreeAwakeningFx();
+        if (devForceBossLevelThree)
+        {
+            enemyController.ForceLevelThreeStateForDebug();
         }
         GlitchAudioManager.PlayBossLevelTwoAwaken(enemyController.transform.position);
     }
@@ -3627,6 +3697,69 @@ public class GameManager : MonoBehaviour
         GUI.color = oldGui;
     }
 
+    private void DrawBossLevelThreeIntroOverlay()
+    {
+        if (bossLevelThreeIntroTimer <= 0f)
+        {
+            return;
+        }
+
+        EnsureBossStateStyles();
+        float duration = Mathf.Max(0.25f, bossLevelThreeIntroDuration);
+        float remaining = Mathf.Clamp01(bossLevelThreeIntroTimer / duration);
+        float age = 1f - remaining;
+        float alpha = Mathf.Min(
+            Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(age * 3.6f)),
+            Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(remaining * 3f)));
+        if (alpha <= 0.01f)
+        {
+            return;
+        }
+
+        float s = hudScale;
+        Color primary = bossLevelThreeIntroPrimary;
+        Color secondary = bossLevelThreeIntroSecondary;
+        DrawSolidRect(new Rect(0f, 0f, Screen.width, Screen.height),
+            new Color(0.008f, 0.004f, 0.016f, bossLevelThreeIntroBackdropOpacity * 0.42f * alpha));
+
+        for (int i = 0; i < 12; i++)
+        {
+            float direction = i % 2 == 0 ? 1f : -1f;
+            float width = Mathf.Lerp(90f, 320f, Mathf.PingPong(Time.unscaledTime * 1.2f + i * 0.17f, 1f)) * s;
+            float x = direction > 0f
+                ? Mathf.Repeat(Time.unscaledTime * (130f + i * 9f) + i * 113f, Screen.width + width) - width
+                : Screen.width - Mathf.Repeat(Time.unscaledTime * (130f + i * 9f) + i * 113f, Screen.width + width);
+            float y = Mathf.Lerp(Screen.height * 0.12f, Screen.height * 0.88f, i / 11f);
+            Color color = i % 2 == 0 ? primary : secondary;
+            DrawSolidRect(new Rect(x, y, width, (i % 3 == 0 ? 4f : 2f) * s),
+                new Color(color.r, color.g, color.b, 0.22f * alpha));
+        }
+
+        float panelWidth = Mathf.Min(Screen.width * 0.82f, 900f * s);
+        float panelHeight = 158f * s;
+        float jitter = Mathf.Sin(Time.unscaledTime * 51f) * 5f * s * alpha;
+        Rect panel = new Rect((Screen.width - panelWidth) * 0.5f + jitter, (Screen.height - panelHeight) * 0.5f, panelWidth, panelHeight);
+        DrawSolidRect(panel, new Color(0.012f, 0.014f, 0.032f, 0.9f * alpha));
+        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 5f * s), new Color(primary.r, primary.g, primary.b, 0.94f * alpha));
+        DrawSolidRect(new Rect(panel.x, panel.yMax - 5f * s, panel.width, 5f * s), new Color(secondary.r, secondary.g, secondary.b, 0.9f * alpha));
+        float scanX = panel.x + Mathf.Repeat(Time.unscaledTime * 520f, panel.width + 60f * s) - 30f * s;
+        DrawSolidRect(new Rect(scanX, panel.y, 14f * s, panel.height), new Color(secondary.r, secondary.g, secondary.b, 0.2f * alpha));
+
+        Color oldGui = GUI.color;
+        Color oldLabel = bossStateBannerLabelStyle.normal.textColor;
+        Color oldValue = bossStateBannerValueStyle.normal.textColor;
+        GUI.color = new Color(1f, 1f, 1f, alpha);
+        bossStateBannerLabelStyle.normal.textColor = new Color(secondary.r, secondary.g, secondary.b, 0.94f);
+        bossStateBannerValueStyle.normal.textColor = Color.Lerp(Color.white, primary, 0.32f);
+        GUI.Label(new Rect(panel.x, panel.y + 22f * s, panel.width, 30f * s), "PROTOCOLO ADAPTATIVO INESTABLE", bossStateBannerLabelStyle);
+        GUI.Label(new Rect(panel.x, panel.y + 52f * s, panel.width, 66f * s), "ANOMALIA NIVEL 3", bossStateBannerValueStyle);
+        bossStateBannerLabelStyle.normal.textColor = new Color(0.88f, 0.95f, 1f, 0.9f);
+        GUI.Label(new Rect(panel.x, panel.y + 120f * s, panel.width, 28f * s), "LA ARENA YA NO ES UNA REGLA FIJA", bossStateBannerLabelStyle);
+        bossStateBannerLabelStyle.normal.textColor = oldLabel;
+        bossStateBannerValueStyle.normal.textColor = oldValue;
+        GUI.color = oldGui;
+    }
+
     private void DrawBossStateHud()
     {
         EnsureBossStateStyles();
@@ -3662,7 +3795,9 @@ public class GameManager : MonoBehaviour
 
         Color oldValue = bossStateValueStyle.normal.textColor;
         bossStateValueStyle.normal.textColor = Color.Lerp(Color.white, stateColor, 0.42f);
-        string header = IsBossLevelTwoState(stateRaw) ? "ANOMALIA NIVEL 2" : "ANOMALIA";
+        string header = IsBossLevelThreeState(stateRaw)
+            ? "ANOMALIA NIVEL 3"
+            : IsBossLevelTwoState(stateRaw) ? "ANOMALIA NIVEL 2" : "ANOMALIA";
         GUI.Label(new Rect(x, y + (6f * s), width, lineHeight), header, bossStateStyle);
         GUI.Label(new Rect(x, y + (30f * s), width, lineHeight + (6f * s)), stateValue.ToUpperInvariant(), bossStateValueStyle);
         bossStateValueStyle.normal.textColor = oldValue;
@@ -3712,7 +3847,9 @@ public class GameManager : MonoBehaviour
         bossStateBannerLabelStyle.normal.textColor = new Color(0.88f, 0.94f, 1f, 0.86f * alpha);
         bossStateBannerValueStyle.normal.textColor = Color.Lerp(Color.white, stateColor, 0.36f);
 
-        string header = IsBossLevelTwoState(bossStateBannerRaw) ? "ANOMALIA NIVEL 2" : "CAMBIO DE ESTADO";
+        string header = IsBossLevelThreeState(bossStateBannerRaw)
+            ? "ANOMALIA NIVEL 3"
+            : IsBossLevelTwoState(bossStateBannerRaw) ? "ANOMALIA NIVEL 2" : "CAMBIO DE ESTADO";
         GUI.Label(new Rect(panel.x, panel.y + (16f * s), panel.width, 26f * s), header, bossStateBannerLabelStyle);
         GUI.Label(new Rect(panel.x, panel.y + (42f * s), panel.width, 58f * s), label, bossStateBannerValueStyle);
 
@@ -4323,6 +4460,14 @@ public class GameManager : MonoBehaviour
                 return "Signal Possession";
             case "PhaseContract":
                 return "Phase Contract";
+            case "AdaptiveCountermeasure":
+                return "Contramedida Adaptativa";
+            case "VectorHijack":
+                return "Secuestro Vectorial";
+            case "TopologyFold":
+                return "Pliegue Topologico";
+            case "CausalFork":
+                return "Bifurcacion Causal";
             default:
                 return raw;
         }
@@ -4347,6 +4492,10 @@ public class GameManager : MonoBehaviour
             case "MapRecompile":
             case "SignalPossession":
             case "PhaseContract":
+            case "AdaptiveCountermeasure":
+            case "VectorHijack":
+            case "TopologyFold":
+            case "CausalFork":
                 return true;
             default:
                 return false;
@@ -4365,6 +4514,14 @@ public class GameManager : MonoBehaviour
                raw == "MapRecompile" ||
                raw == "SignalPossession" ||
                raw == "PhaseContract";
+    }
+
+    private static bool IsBossLevelThreeState(string raw)
+    {
+        return raw == "AdaptiveCountermeasure" ||
+               raw == "VectorHijack" ||
+               raw == "TopologyFold" ||
+               raw == "CausalFork";
     }
 
     private static Color GetBossStateColor(string raw)
@@ -4409,6 +4566,14 @@ public class GameManager : MonoBehaviour
                 return new Color(0.76f, 1f, 0.54f, 1f);
             case "PhaseContract":
                 return new Color(1f, 0.84f, 0.46f, 1f);
+            case "AdaptiveCountermeasure":
+                return new Color(1f, 0.35f, 0.72f, 1f);
+            case "VectorHijack":
+                return new Color(0.32f, 1f, 0.78f, 1f);
+            case "TopologyFold":
+                return new Color(0.38f, 0.82f, 1f, 1f);
+            case "CausalFork":
+                return new Color(1f, 0.76f, 0.28f, 1f);
             default:
                 return new Color(1f, 0.76f, 0.82f, 1f);
         }

@@ -27,7 +27,11 @@ public class EnemyController : MonoBehaviour
         InputDesync,
         MapRecompile,
         SignalPossession,
-        PhaseContract
+        PhaseContract,
+        AdaptiveCountermeasure,
+        VectorHijack,
+        TopologyFold,
+        CausalFork
     }
 
     private enum BehaviorPattern
@@ -266,6 +270,13 @@ public class EnemyController : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float levelTwoPassiveTint = 0.24f;
     [SerializeField] private float levelTwoAwakeningScaleBoost = 1.28f;
 
+    [Header("Level 3 Awakening FX")]
+    [SerializeField] private float levelThreeAwakeningDuration = 2.8f;
+    [SerializeField] private Color levelThreeAwakenedColor = new Color(1f, 0.36f, 0.78f, 1f);
+    [SerializeField] private Color levelThreeAwakeningBurstColor = new Color(0.38f, 0.94f, 1f, 1f);
+    [SerializeField, Range(0f, 1f)] private float levelThreePassiveTint = 0.38f;
+    [SerializeField] private float levelThreeAwakeningScaleBoost = 1.42f;
+
     [Header("State Weights")]
     [SerializeField, Min(0f)] private float directChaseWeight = 1f;
     [SerializeField, Min(0f)] private float predictiveInterceptWeight = 1f;
@@ -286,17 +297,29 @@ public class EnemyController : MonoBehaviour
     [SerializeField, Min(0f)] private float mapRecompileWeight = 0.56f;
     [SerializeField, Min(0f)] private float signalPossessionWeight = 0.54f;
     [SerializeField, Min(0f)] private float phaseContractWeight = 0.50f;
+    [SerializeField, Min(0f)] private float adaptiveCountermeasureWeight = 0.62f;
+    [SerializeField, Min(0f)] private float vectorHijackWeight = 0.58f;
+    [SerializeField, Min(0f)] private float topologyFoldWeight = 0.56f;
+    [SerializeField, Min(0f)] private float causalForkWeight = 0.60f;
 
     [Header("Level 2 State Priority")]
     [SerializeField, Range(1f, 5f)] private float levelTwoStatePriorityMultiplier = 2.75f;
     [SerializeField, Range(0.5f, 2f)] private float levelTwoBaseSpecialPriorityMultiplier = 1.12f;
     [SerializeField, Range(0.05f, 1f)] private float levelTwoMinorStatePriorityMultiplier = 0.36f;
 
+    [Header("Level 3 State Priority")]
+    [SerializeField, Range(1f, 6f)] private float levelThreeStatePriorityMultiplier = 3.35f;
+    [SerializeField, Range(0.2f, 2f)] private float levelThreeLevelTwoPriorityMultiplier = 0.88f;
+    [SerializeField, Range(0.1f, 2f)] private float levelThreeBaseSpecialPriorityMultiplier = 0.62f;
+    [SerializeField, Range(0.02f, 1f)] private float levelThreeMinorStatePriorityMultiplier = 0.2f;
+
     public AnomalyState CurrentState => currentState;
     public string CurrentStateLabel => currentState.ToString();
     public PacingPhase CurrentPacingPhase => pacingPhase;
     public string CurrentPacingPhaseLabel => pacingPhase.ToString();
     public bool IsCurrentStateLevelTwo => IsLevelTwoState(currentState);
+    public bool IsCurrentStateLevelThree => IsLevelThreeState(currentState);
+    public Vector2 CurrentVelocity => rb != null ? rb.linearVelocity : Vector2.zero;
 
     [Header("Navigation Grid")]
     [SerializeField] private LayerMask obstacleMask = ~0;
@@ -455,6 +478,9 @@ public class EnemyController : MonoBehaviour
     private bool breachAbsorbed;
     private bool levelTwoAwakened;
     private float levelTwoAwakeningTimer;
+    private bool levelThreeAwakened;
+    private float levelThreeAwakeningTimer;
+    private EnemyLevelThreeStateController levelThreeStateController;
     private Vector3 baseScale = Vector3.one;
     private Color baseColor = Color.white;
 
@@ -581,6 +607,12 @@ public class EnemyController : MonoBehaviour
         {
             baseColor = ownRenderer.color;
         }
+
+        levelThreeStateController = GetComponent<EnemyLevelThreeStateController>();
+        if (levelThreeStateController == null)
+        {
+            levelThreeStateController = gameObject.AddComponent<EnemyLevelThreeStateController>();
+        }
     }
 
     private static void EnsureNoFrictionMaterial()
@@ -609,6 +641,7 @@ public class EnemyController : MonoBehaviour
             gameManager = FindAnyObjectByType<GameManager>();
         }
 
+        levelThreeStateController?.Configure(this, player, gameManager);
         ResolveArenaBounds();
         BuildNavigationGrid();
         InitializePacingDirector();
@@ -622,6 +655,7 @@ public class EnemyController : MonoBehaviour
         DestroySplitCloneImmediate();
         DestroySplitMergeTelegraphImmediate();
         DestroyLevelTwoTelegraphsImmediate();
+        levelThreeStateController?.ExitState();
         if (ownRenderer != null)
         {
             ownRenderer.color = baseColor;
@@ -629,6 +663,8 @@ public class EnemyController : MonoBehaviour
 
         levelTwoAwakened = false;
         levelTwoAwakeningTimer = 0f;
+        levelThreeAwakened = false;
+        levelThreeAwakeningTimer = 0f;
         transform.localScale = baseScale;
     }
 
@@ -956,6 +992,13 @@ public class EnemyController : MonoBehaviour
             SelectNextState(forceDifferent: true);
             return;
         }
+        if (gameManager != null &&
+            gameManager.IsContainmentPulsePressureActive &&
+            (IsLevelTwoState(currentState) || IsLevelThreeState(currentState)))
+        {
+            SelectNextState(forceDifferent: true);
+            return;
+        }
 
         stateTimer += Time.deltaTime;
 
@@ -1020,7 +1063,8 @@ public class EnemyController : MonoBehaviour
             state == AnomalyState.InputDesync ||
             state == AnomalyState.MapRecompile ||
             state == AnomalyState.SignalPossession ||
-            state == AnomalyState.PhaseContract)
+            state == AnomalyState.PhaseContract ||
+            IsLevelThreeState(state))
         {
             float minMajor = Mathf.Max(0.6f, Mathf.Min(majorStateDurationRange.x, majorStateDurationRange.y));
             float maxMajor = Mathf.Max(minMajor, Mathf.Max(majorStateDurationRange.x, majorStateDurationRange.y));
@@ -1242,6 +1286,12 @@ public class EnemyController : MonoBehaviour
             HidePhaseContractVisual();
         }
 
+        if (IsLevelThreeState(currentState))
+        {
+            levelThreeStateController?.Configure(this, player, gameManager);
+            levelThreeStateController?.EnterState(currentState);
+        }
+
         if (currentPattern == BehaviorPattern.ErraticBurst)
         {
             erraticRefreshTimer = 0f;
@@ -1257,6 +1307,11 @@ public class EnemyController : MonoBehaviour
 
     private void HandleStateTransition(AnomalyState previous, AnomalyState next)
     {
+        if (IsLevelThreeState(previous) && previous != next)
+        {
+            levelThreeStateController?.ExitState();
+        }
+
         if (previous == AnomalyState.PhaseBlink && next != AnomalyState.PhaseBlink)
         {
             phaseBlinkCharging = false;
@@ -1335,10 +1390,15 @@ public class EnemyController : MonoBehaviour
             fullOptions.Add(new StateWeight(AnomalyState.MapRecompile, mapRecompileWeight));
             fullOptions.Add(new StateWeight(AnomalyState.SignalPossession, signalPossessionWeight));
             fullOptions.Add(new StateWeight(AnomalyState.PhaseContract, phaseContractWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.AdaptiveCountermeasure, adaptiveCountermeasureWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.VectorHijack, vectorHijackWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.TopologyFold, topologyFoldWeight));
+            fullOptions.Add(new StateWeight(AnomalyState.CausalFork, causalForkWeight));
         }
 
         ApplyProgressionFilter(fullOptions);
         ApplyLevelTwoPriority(fullOptions);
+        ApplyLevelThreePriority(fullOptions);
 
         List<StateWeight> filtered = new List<StateWeight>(fullOptions);
         ApplyPacingFilter(filtered);
@@ -1388,6 +1448,12 @@ public class EnemyController : MonoBehaviour
 
     private void ApplyPacingFilter(List<StateWeight> options)
     {
+        if (CanUseLevelThreeStates())
+        {
+            ApplyLevelThreePacingFilter(options);
+            return;
+        }
+
         if (CanUseLevelTwoStates())
         {
             ApplyLevelTwoPacingFilter(options);
@@ -1424,7 +1490,8 @@ public class EnemyController : MonoBehaviour
                state == AnomalyState.InputDesync ||
                state == AnomalyState.MapRecompile ||
                state == AnomalyState.SignalPossession ||
-               state == AnomalyState.PhaseContract;
+               state == AnomalyState.PhaseContract ||
+               IsLevelThreeState(state);
     }
 
     private static bool IsCalmMinorState(AnomalyState state)
@@ -1450,6 +1517,33 @@ public class EnemyController : MonoBehaviour
         if (!CanUseLevelTwoStates())
         {
             options.RemoveAll(o => IsLevelTwoState(o.state));
+        }
+
+        if (!CanUseLevelThreeStates())
+        {
+            options.RemoveAll(o => IsLevelThreeState(o.state));
+        }
+    }
+
+    private void ApplyLevelThreePacingFilter(List<StateWeight> options)
+    {
+        switch (pacingPhase)
+        {
+            case PacingPhase.SustainPeak:
+                options.RemoveAll(o => !IsLevelThreeState(o.state) && !IsLevelTwoState(o.state));
+                break;
+            case PacingPhase.BuildUp:
+            case PacingPhase.PeakFade:
+                options.RemoveAll(o => !IsLevelThreeState(o.state) && !IsLevelTwoState(o.state) && !IsBaseSpecialState(o.state));
+                break;
+            case PacingPhase.Relax:
+                options.RemoveAll(o => IsLevelThreeState(o.state));
+                if (options.Count == 0)
+                {
+                    options.Add(new StateWeight(AnomalyState.DirectChase, directChaseWeight));
+                    options.Add(new StateWeight(AnomalyState.PredictiveIntercept, predictiveInterceptWeight));
+                }
+                break;
         }
     }
 
@@ -1485,6 +1579,11 @@ public class EnemyController : MonoBehaviour
         return gameManager != null && gameManager.AreBossLevelTwoStatesUnlocked && !gameManager.IsContainmentPulsePressureActive;
     }
 
+    private bool CanUseLevelThreeStates()
+    {
+        return gameManager != null && gameManager.AreBossLevelThreeStatesUnlocked && !gameManager.IsContainmentPulsePressureActive;
+    }
+
     private bool AreSpecialStatesSuppressedForBreach()
     {
         return gameManager != null && gameManager.IsBreachSensitiveSuppressionActive;
@@ -1506,7 +1605,8 @@ public class EnemyController : MonoBehaviour
                state == AnomalyState.InputDesync ||
                state == AnomalyState.MapRecompile ||
                state == AnomalyState.SignalPossession ||
-               state == AnomalyState.PhaseContract;
+               state == AnomalyState.PhaseContract ||
+               IsLevelThreeState(state);
     }
 
     private static bool IsLevelTwoState(AnomalyState state)
@@ -1523,6 +1623,14 @@ public class EnemyController : MonoBehaviour
                state == AnomalyState.PhaseContract;
     }
 
+    private static bool IsLevelThreeState(AnomalyState state)
+    {
+        return state == AnomalyState.AdaptiveCountermeasure ||
+               state == AnomalyState.VectorHijack ||
+               state == AnomalyState.TopologyFold ||
+               state == AnomalyState.CausalFork;
+    }
+
     private static bool IsBaseSpecialState(AnomalyState state)
     {
         return state == AnomalyState.Split ||
@@ -1534,7 +1642,7 @@ public class EnemyController : MonoBehaviour
 
     private void ApplyLevelTwoPriority(List<StateWeight> options)
     {
-        if (!CanUseLevelTwoStates() || options == null)
+        if (!CanUseLevelTwoStates() || CanUseLevelThreeStates() || options == null)
         {
             return;
         }
@@ -1553,6 +1661,37 @@ public class EnemyController : MonoBehaviour
             else
             {
                 option.weight *= Mathf.Max(0.01f, levelTwoMinorStatePriorityMultiplier);
+            }
+
+            options[i] = option;
+        }
+    }
+
+    private void ApplyLevelThreePriority(List<StateWeight> options)
+    {
+        if (!CanUseLevelThreeStates() || options == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < options.Count; i++)
+        {
+            StateWeight option = options[i];
+            if (IsLevelThreeState(option.state))
+            {
+                option.weight *= Mathf.Max(1f, levelThreeStatePriorityMultiplier);
+            }
+            else if (IsLevelTwoState(option.state))
+            {
+                option.weight *= Mathf.Max(0.1f, levelThreeLevelTwoPriorityMultiplier);
+            }
+            else if (IsBaseSpecialState(option.state))
+            {
+                option.weight *= Mathf.Max(0.05f, levelThreeBaseSpecialPriorityMultiplier);
+            }
+            else
+            {
+                option.weight *= Mathf.Max(0.01f, levelThreeMinorStatePriorityMultiplier);
             }
 
             options[i] = option;
@@ -1756,6 +1895,14 @@ public class EnemyController : MonoBehaviour
                 return new Color(0.76f, 1f, 0.54f, 1f);
             case AnomalyState.PhaseContract:
                 return new Color(1f, 0.84f, 0.46f, 1f);
+            case AnomalyState.AdaptiveCountermeasure:
+                return new Color(1f, 0.35f, 0.72f, 1f);
+            case AnomalyState.VectorHijack:
+                return new Color(0.32f, 1f, 0.78f, 1f);
+            case AnomalyState.TopologyFold:
+                return new Color(0.38f, 0.82f, 1f, 1f);
+            case AnomalyState.CausalFork:
+                return new Color(1f, 0.76f, 0.28f, 1f);
             case AnomalyState.ErraticBurst:
                 return new Color(0.74f, 0.76f, 1f, 1f);
             case AnomalyState.CutoffFlank:
@@ -1777,6 +1924,10 @@ public class EnemyController : MonoBehaviour
         if (levelTwoAwakeningTimer > 0f)
         {
             levelTwoAwakeningTimer -= Time.deltaTime;
+        }
+        if (levelThreeAwakeningTimer > 0f)
+        {
+            levelThreeAwakeningTimer -= Time.deltaTime;
         }
 
         Color visualBaseColor = GetCurrentVisualBaseColor();
@@ -1803,6 +1954,16 @@ public class EnemyController : MonoBehaviour
 
     private Color GetCurrentVisualBaseColor()
     {
+        if (levelThreeAwakened || levelThreeAwakeningTimer > 0f)
+        {
+            float levelThreeWake = Mathf.Clamp01(levelThreeAwakeningTimer / Mathf.Max(0.05f, levelThreeAwakeningDuration));
+            float levelThreePulse = levelThreeAwakeningTimer > 0f ? Mathf.Sin((1f - levelThreeWake) * Mathf.PI * 8f) * 0.5f + 0.5f : 0f;
+            float levelThreeTint = Mathf.Clamp01(levelThreePassiveTint + levelThreeWake * 0.3f + levelThreePulse * 0.2f);
+            Color levelThreeColor = Color.Lerp(baseColor, levelThreeAwakenedColor, levelThreeTint);
+            levelThreeColor.a = baseColor.a;
+            return levelThreeColor;
+        }
+
         if (!levelTwoAwakened && levelTwoAwakeningTimer <= 0f)
         {
             return baseColor;
@@ -1818,6 +1979,13 @@ public class EnemyController : MonoBehaviour
 
     private Vector3 GetCurrentVisualBaseScale()
     {
+        if (levelThreeAwakeningTimer > 0f)
+        {
+            float levelThreeNormalized = 1f - Mathf.Clamp01(levelThreeAwakeningTimer / Mathf.Max(0.05f, levelThreeAwakeningDuration));
+            float levelThreePulse = Mathf.Sin(levelThreeNormalized * Mathf.PI) * Mathf.Max(0f, levelThreeAwakeningScaleBoost - 1f);
+            return baseScale * (1f + levelThreePulse);
+        }
+
         if (levelTwoAwakeningTimer <= 0f)
         {
             return baseScale;
@@ -1834,6 +2002,15 @@ public class EnemyController : MonoBehaviour
         levelTwoAwakeningTimer = Mathf.Max(levelTwoAwakeningTimer, Mathf.Max(0.1f, levelTwoAwakeningDuration));
         TriggerStatePulse();
         SpawnLevelTwoAwakeningBurst();
+    }
+
+    public void TriggerLevelThreeAwakeningFx()
+    {
+        levelTwoAwakened = true;
+        levelThreeAwakened = true;
+        levelThreeAwakeningTimer = Mathf.Max(levelThreeAwakeningTimer, Mathf.Max(0.1f, levelThreeAwakeningDuration));
+        TriggerStatePulse();
+        SpawnLevelThreeAwakeningBurst();
     }
 
     public void ForceLevelTwoStateForDebug()
@@ -1875,6 +2052,37 @@ public class EnemyController : MonoBehaviour
         GlitchAudioManager.PlayEnemyState(currentState, transform.position);
     }
 
+    public void ForceLevelThreeStateForDebug()
+    {
+        if (breachAbsorbed)
+        {
+            return;
+        }
+
+        AnomalyState previous = currentState;
+        AnomalyState[] options =
+        {
+            AnomalyState.AdaptiveCountermeasure,
+            AnomalyState.VectorHijack,
+            AnomalyState.TopologyFold,
+            AnomalyState.CausalFork
+        };
+
+        int currentIndex = System.Array.IndexOf(options, currentState);
+        currentState = currentIndex >= 0
+            ? options[(currentIndex + 1) % options.Length]
+            : options[0];
+        currentPattern = ResolvePatternForState(currentState);
+        stateTimer = 0f;
+        currentStateDuration = GetRandomDurationForState(currentState);
+        HandleStateTransition(previous, currentState);
+        TriggerStatePulse();
+        SpawnStateTransitionBurst(currentState, previous != currentState);
+        OnStateEntered();
+        RegisterStateForPacing(currentState);
+        GlitchAudioManager.PlayEnemyState(currentState, transform.position);
+    }
+
     private void SpawnLevelTwoAwakeningBurst()
     {
         Vector3 pos = transform.position;
@@ -1903,6 +2111,42 @@ public class EnemyController : MonoBehaviour
             ray.transform.localScale = new Vector3(0.28f, 0.07f, 1f);
             ray.AddComponent<AnomalyStateRayFx>().Configure(sr, dir, 2.8f, 0.38f);
             Destroy(ray, 0.55f);
+        }
+    }
+
+    private void SpawnLevelThreeAwakeningBurst()
+    {
+        Vector3 position = transform.position;
+        for (int layer = 0; layer < 3; layer++)
+        {
+            GameObject ring = new GameObject($"LevelThreeAwakeningRing_{layer}");
+            ring.transform.position = position;
+            SpriteRenderer ringRenderer = ring.AddComponent<SpriteRenderer>();
+            ringRenderer.sprite = CircleSpriteProvider.Get();
+            ringRenderer.sortingOrder = 20 + layer;
+            ringRenderer.color = layer % 2 == 0 ? levelThreeAwakeningBurstColor : levelThreeAwakenedColor;
+            ring.transform.localScale = Vector3.one * (0.18f + layer * 0.15f);
+            ring.AddComponent<AnomalyStateBurstFx>().Configure(
+                ringRenderer,
+                2.8f + layer * 0.7f,
+                0.48f + layer * 0.08f,
+                ringRenderer.color);
+            Destroy(ring, 0.82f);
+        }
+
+        for (int i = 0; i < 24; i++)
+        {
+            float angle = ((Mathf.PI * 2f) * i) / 24f + Random.Range(-0.06f, 0.06f);
+            Vector2 direction = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            GameObject ray = new GameObject($"LevelThreeAwakeningRay_{i}");
+            ray.transform.position = position;
+            SpriteRenderer renderer = ray.AddComponent<SpriteRenderer>();
+            renderer.sprite = SquareSpriteProvider.Get();
+            renderer.sortingOrder = 22;
+            renderer.color = i % 3 == 0 ? levelThreeAwakenedColor : levelThreeAwakeningBurstColor;
+            ray.transform.localScale = new Vector3(i % 2 == 0 ? 0.42f : 0.24f, 0.065f, 1f);
+            ray.AddComponent<AnomalyStateRayFx>().Configure(renderer, direction, 3.4f + (i % 3) * 0.45f, 0.5f);
+            Destroy(ray, 0.72f);
         }
     }
 
@@ -1989,6 +2233,14 @@ public class EnemyController : MonoBehaviour
                 return BehaviorPattern.PredictiveIntercept;
             case AnomalyState.PhaseContract:
                 return BehaviorPattern.DirectChase;
+            case AnomalyState.AdaptiveCountermeasure:
+                return BehaviorPattern.PredictiveIntercept;
+            case AnomalyState.VectorHijack:
+                return BehaviorPattern.DirectChase;
+            case AnomalyState.TopologyFold:
+                return BehaviorPattern.CutoffFlank;
+            case AnomalyState.CausalFork:
+                return BehaviorPattern.PredictiveIntercept;
             default:
                 return BehaviorPattern.DirectChase;
         }
@@ -2510,6 +2762,42 @@ public class EnemyController : MonoBehaviour
     public Vector2 GetCurrentPosition()
     {
         return rb != null ? rb.position : (Vector2)transform.position;
+    }
+
+    public Vector2 GetArenaCenter()
+    {
+        return navOrigin + navSize * 0.5f;
+    }
+
+    public void GetAdvancedStateArena(out Vector2 origin, out Vector2 size)
+    {
+        origin = navOrigin;
+        size = navSize;
+    }
+
+    public Vector2 ClampAdvancedStatePoint(Vector2 point, float margin)
+    {
+        return ClampPointToArenaWithMargin(point, margin);
+    }
+
+    public void TeleportForAdvancedState(Vector2 position, bool preserveVelocity)
+    {
+        if (breachAbsorbed || rb == null)
+        {
+            return;
+        }
+
+        Vector2 velocity = rb.linearVelocity;
+        Vector2 target = ClampPointToArenaWithMargin(position, agentRadius + 0.18f);
+        rb.position = target;
+        transform.position = new Vector3(target.x, target.y, transform.position.z);
+        rb.linearVelocity = preserveVelocity ? velocity : Vector2.zero;
+        pathWorld.Clear();
+        pathIndex = 0;
+        repathTimer = repathInterval;
+        ResetBlockedRepathHysteresis();
+        stuckCheckPosition = target;
+        stuckConsecutiveChecks = 0;
     }
 
     public Vector2 GetCurrentTargetForSplitClone()

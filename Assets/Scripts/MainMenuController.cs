@@ -1115,10 +1115,10 @@ public class MainMenuController : MonoBehaviour
             developerActionMessageExpireAt = Time.unscaledTime + 2.4f;
             GlitchAudioManager.PlayMenuToggle();
         }
-        if (GUILayout.Button(DeveloperModeStorage.SkipCountdown ? "Sin cuenta: ON" : "Sin cuenta: OFF", buttonStyle, GUILayout.Height(36f)))
+        if (GUILayout.Button(DeveloperModeStorage.ForceBossLevelThree ? "Jefe Nivel 3: ON" : "Jefe Nivel 3: OFF", buttonStyle, GUILayout.Height(36f)))
         {
-            DeveloperModeStorage.SkipCountdown = !DeveloperModeStorage.SkipCountdown;
-            developerActionMessage = DeveloperModeStorage.SkipCountdown ? "La run empieza instantaneamente." : "Cuenta regresiva restaurada.";
+            DeveloperModeStorage.ForceBossLevelThree = !DeveloperModeStorage.ForceBossLevelThree;
+            developerActionMessage = DeveloperModeStorage.ForceBossLevelThree ? "El jefe iniciara con estados de Nivel 3." : "Nivel 3 vuelve a curva normal.";
             developerActionMessageExpireAt = Time.unscaledTime + 2.4f;
             GlitchAudioManager.PlayMenuToggle();
         }
@@ -1126,6 +1126,14 @@ public class MainMenuController : MonoBehaviour
 
         GUILayout.Space(6f);
         GUILayout.BeginHorizontal();
+        if (GUILayout.Button(DeveloperModeStorage.SkipCountdown ? "Sin cuenta: ON" : "Sin cuenta: OFF", buttonStyle, GUILayout.Height(36f)))
+        {
+            DeveloperModeStorage.SkipCountdown = !DeveloperModeStorage.SkipCountdown;
+            developerActionMessage = DeveloperModeStorage.SkipCountdown ? "La run empieza instantaneamente." : "Cuenta regresiva restaurada.";
+            developerActionMessageExpireAt = Time.unscaledTime + 2.4f;
+            GlitchAudioManager.PlayMenuToggle();
+        }
+
         if (GUILayout.Button(DeveloperModeStorage.FastRunLoops ? "Loops rapidos: ON" : "Loops rapidos: OFF", buttonStyle, GUILayout.Height(36f)))
         {
             DeveloperModeStorage.FastRunLoops = !DeveloperModeStorage.FastRunLoops;
@@ -1216,6 +1224,17 @@ public class MainMenuController : MonoBehaviour
             StartGameplay();
         }
         GUILayout.EndHorizontal();
+
+        GUILayout.Space(6f);
+        if (GUILayout.Button("Ejecutar Nivel 3", buttonStyle, GUILayout.Height(42f)))
+        {
+            DeveloperModeStorage.ForceBossLevelTwo = true;
+            DeveloperModeStorage.ForceBossLevelThree = true;
+            DeveloperModeStorage.StartTimeSeconds = Mathf.Max(DeveloperModeStorage.StartTimeSeconds, 301f);
+            DeveloperModeStorage.SkipCountdown = true;
+            StartGameplay();
+        }
+        GUILayout.Label("Durante una run de Nivel 3, F9 recorre los cuatro estados.", paragraphStyle);
 
         if (!string.IsNullOrEmpty(developerActionMessage))
         {

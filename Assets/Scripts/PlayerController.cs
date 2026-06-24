@@ -412,13 +412,19 @@ public class PlayerController : MonoBehaviour
 
     public void TeleportTo(Vector2 position)
     {
+        TeleportTo(position, false);
+    }
+
+    public void TeleportTo(Vector2 position, bool preserveVelocity)
+    {
         if (deathSequenceActive || breachConsumptionActive || rb == null)
         {
             return;
         }
 
+        Vector2 velocity = rb.linearVelocity;
         rb.position = position;
-        rb.linearVelocity = Vector2.zero;
+        rb.linearVelocity = preserveVelocity ? velocity : Vector2.zero;
         transform.position = new Vector3(position.x, position.y, transform.position.z);
     }
 

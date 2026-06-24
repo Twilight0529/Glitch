@@ -33,6 +33,8 @@ public class SplitAnomalyCloneController : MonoBehaviour
         return rb != null ? rb.position : (Vector2)transform.position;
     }
 
+    public Vector2 CurrentVelocity => rb != null ? rb.linearVelocity : Vector2.zero;
+
     public void ApplyExternalDisplacement(Vector2 delta)
     {
         if (rb == null || delta.sqrMagnitude <= 0.000001f)

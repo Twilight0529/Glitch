@@ -6,6 +6,7 @@ public static class DeveloperModeStorage
     private const string ArenaOverrideEnabledKey = "Glitch_Dev_ArenaOverrideEnabled";
     private const string ArenaOverrideThemeKey = "Glitch_Dev_ArenaOverrideTheme";
     private const string ForceBossLevelTwoKey = "Glitch_Dev_ForceBossLevelTwo";
+    private const string ForceBossLevelThreeKey = "Glitch_Dev_ForceBossLevelThree";
     private const string StartTimeSecondsKey = "Glitch_Dev_StartTimeSeconds";
     private const string FastRunLoopsKey = "Glitch_Dev_FastRunLoops";
     private const string SkipCountdownKey = "Glitch_Dev_SkipCountdown";
@@ -70,6 +71,16 @@ public static class DeveloperModeStorage
         }
     }
 
+    public static bool ForceBossLevelThree
+    {
+        get => PlayerPrefs.GetInt(ForceBossLevelThreeKey, 0) == 1;
+        set
+        {
+            PlayerPrefs.SetInt(ForceBossLevelThreeKey, value ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+    }
+
     public static bool FastRunLoops
     {
         get => PlayerPrefs.GetInt(FastRunLoopsKey, 0) == 1;
@@ -116,14 +127,16 @@ public static class DeveloperModeStorage
     public static string GetDebugSummary()
     {
         string levelTwo = ForceBossLevelTwo ? "N2 ON" : "N2 OFF";
+        string levelThree = ForceBossLevelThree ? "N3 ON" : "N3 OFF";
         string fast = FastRunLoops ? "Loops rapidos" : "Loops normales";
         string countdown = SkipCountdown ? "Sin cuenta" : "Cuenta normal";
-        return $"{levelTwo} | Inicio {GetStartTimeLabel()} | {fast} | {countdown}";
+        return $"{levelTwo} | {levelThree} | Inicio {GetStartTimeLabel()} | {fast} | {countdown}";
     }
 
     public static void ClearRunDebugOptions()
     {
         PlayerPrefs.DeleteKey(ForceBossLevelTwoKey);
+        PlayerPrefs.DeleteKey(ForceBossLevelThreeKey);
         PlayerPrefs.DeleteKey(StartTimeSecondsKey);
         PlayerPrefs.DeleteKey(FastRunLoopsKey);
         PlayerPrefs.DeleteKey(SkipCountdownKey);
