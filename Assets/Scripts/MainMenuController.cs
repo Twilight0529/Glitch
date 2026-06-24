@@ -245,14 +245,16 @@ public class MainMenuController : MonoBehaviour
         GUI.Label(new Rect(panel.x + 18f, panel.y + 134f, panel.width - 36f, 20f), operationLine, BuildFittedSingleLineStyle(paragraphStyle, operationLine, panel.width - 36f, 20f, 9));
         float buttonY = panel.y + 158f;
         Rect playRect = new Rect(panel.x + 18f, buttonY, panel.width - 36f, 42f);
-        Rect unlocksRect = new Rect(panel.x + 18f, buttonY + 50f, panel.width - 36f, 36f);
-        Rect statsRect = new Rect(panel.x + 18f, buttonY + 94f, panel.width - 36f, 36f);
-        Rect optionsRect = new Rect(panel.x + 18f, buttonY + 138f, panel.width - 36f, 36f);
-        Rect creditsRect = new Rect(panel.x + 18f, buttonY + 182f, panel.width - 36f, 36f);
-        Rect exitRect = new Rect(panel.x + 18f, buttonY + 226f, panel.width - 36f, 36f);
+        Rect versusRect = new Rect(panel.x + 18f, buttonY + 50f, panel.width - 36f, 42f);
+        Rect unlocksRect = new Rect(panel.x + 18f, buttonY + 100f, panel.width - 36f, 36f);
+        Rect statsRect = new Rect(panel.x + 18f, buttonY + 144f, panel.width - 36f, 36f);
+        Rect optionsRect = new Rect(panel.x + 18f, buttonY + 188f, panel.width - 36f, 36f);
+        Rect creditsRect = new Rect(panel.x + 18f, buttonY + 232f, panel.width - 36f, 36f);
+        Rect exitRect = new Rect(panel.x + 18f, buttonY + 276f, panel.width - 36f, 36f);
 
         if (DrawAnimatedMenuButton(playRect, "Jugar", true))
         {
+            LocalVersusModeStorage.SelectSinglePlayer();
             selectedOperationIndex = ContainmentOperationStorage.GetDefinitionIndex(ContainmentOperationStorage.SelectedOperationId);
             showOptions = false;
             showUnlocks = false;
@@ -260,6 +262,17 @@ public class MainMenuController : MonoBehaviour
             showCredits = false;
             showOperations = true;
             GlitchAudioManager.PlayMenuConfirm();
+        }
+        if (DrawAnimatedMenuButton(versusRect, "1v1 Local", true))
+        {
+            LocalVersusModeStorage.SelectLocalVersus();
+            showOptions = false;
+            showUnlocks = false;
+            showStats = false;
+            showCredits = false;
+            showOperations = false;
+            GlitchAudioManager.PlayMenuConfirm();
+            StartGameplay();
         }
         if (DrawAnimatedMenuButton(unlocksRect, "Desbloqueos"))
         {
@@ -357,6 +370,7 @@ public class MainMenuController : MonoBehaviour
         Rect startRect = new Rect(area.xMax - 230f, area.yMax - 42f, 230f, 34f);
         if (DrawAnimatedMenuButton(startRect, "Iniciar operacion", true))
         {
+            LocalVersusModeStorage.SelectSinglePlayer();
             ContainmentOperationStorage.SelectOperation(selected.id);
             StartGameplay();
         }
@@ -546,7 +560,7 @@ public class MainMenuController : MonoBehaviour
     private void GetMainMenuLayout(out Rect mainPanel, out Rect rankingPanel, out bool sideBySide)
     {
         float mainW = 390f;
-        float mainH = 448f;
+        float mainH = 498f;
         float rankW = 400f;
         float rankH = 320f;
         float gap = 22f;

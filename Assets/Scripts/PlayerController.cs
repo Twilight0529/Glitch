@@ -150,6 +150,10 @@ public class PlayerController : MonoBehaviour
     public bool HasMovementSlow => movementSlowTimer > 0f;
     public bool HasCompactMode => compactTimer > 0f;
     public bool IsParryActive => parryTimer > 0f;
+    public bool IsParryReady => parryCooldownTimer <= 0f;
+    public float ParryCooldownNormalized => IsParryReady
+        ? 1f
+        : Mathf.Clamp01(1f - parryCooldownTimer / Mathf.Max(0.05f, parryCooldown));
     public bool IsGhostDashing => ghostDashTimer > 0f;
     public bool IsGhostDashReady => ghostDashTimer <= 0f && ghostDashCooldownTimer <= 0f;
     public float GhostDashCooldownNormalized => IsGhostDashReady
@@ -312,6 +316,10 @@ public class PlayerController : MonoBehaviour
         {
             return true;
         }
+        if (LocalVersusModeStorage.IsLocalVersus && Gamepad.all.Count > 0 && Gamepad.all[0].buttonEast.wasPressedThisFrame)
+        {
+            return true;
+        }
 #endif
 #if ENABLE_LEGACY_INPUT_MANAGER
         return Input.GetKeyDown(KeyCode.LeftShift) || Input.GetKeyDown(KeyCode.RightShift);
@@ -330,13 +338,18 @@ public class PlayerController : MonoBehaviour
             return true;
         }
 
-        if (mouse != null && mouse.rightButton.wasPressedThisFrame)
+        if (!LocalVersusModeStorage.IsLocalVersus && mouse != null && mouse.rightButton.wasPressedThisFrame)
+        {
+            return true;
+        }
+        if (LocalVersusModeStorage.IsLocalVersus && Gamepad.all.Count > 0 && Gamepad.all[0].buttonNorth.wasPressedThisFrame)
         {
             return true;
         }
 #endif
 #if ENABLE_LEGACY_INPUT_MANAGER
-        return Input.GetKeyDown(KeyCode.Q) || Input.GetKeyDown(KeyCode.R) || Input.GetMouseButtonDown(1);
+        return Input.GetKeyDown(KeyCode.Q) || Input.GetKeyDown(KeyCode.R) ||
+               (!LocalVersusModeStorage.IsLocalVersus && Input.GetMouseButtonDown(1));
 #else
         return false;
 #endif
@@ -352,13 +365,18 @@ public class PlayerController : MonoBehaviour
             return true;
         }
 
-        if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+        if (!LocalVersusModeStorage.IsLocalVersus && mouse != null && mouse.leftButton.wasPressedThisFrame)
+        {
+            return true;
+        }
+        if (LocalVersusModeStorage.IsLocalVersus && Gamepad.all.Count > 0 && Gamepad.all[0].buttonSouth.wasPressedThisFrame)
         {
             return true;
         }
 #endif
 #if ENABLE_LEGACY_INPUT_MANAGER
-        return Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.E) || Input.GetMouseButtonDown(0);
+        return Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.E) ||
+               (!LocalVersusModeStorage.IsLocalVersus && Input.GetMouseButtonDown(0));
 #else
         return false;
 #endif
@@ -373,12 +391,18 @@ public class PlayerController : MonoBehaviour
             float horizontal = 0f;
             float vertical = 0f;
 
-            if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed) horizontal -= 1f;
-            if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed) horizontal += 1f;
-            if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed) vertical -= 1f;
-            if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed) vertical += 1f;
+            if (keyboard.aKey.isPressed || (!LocalVersusModeStorage.IsLocalVersus && keyboard.leftArrowKey.isPressed)) horizontal -= 1f;
+            if (keyboard.dKey.isPressed || (!LocalVersusModeStorage.IsLocalVersus && keyboard.rightArrowKey.isPressed)) horizontal += 1f;
+            if (keyboard.sKey.isPressed || (!LocalVersusModeStorage.IsLocalVersus && keyboard.downArrowKey.isPressed)) vertical -= 1f;
+            if (keyboard.wKey.isPressed || (!LocalVersusModeStorage.IsLocalVersus && keyboard.upArrowKey.isPressed)) vertical += 1f;
 
-            return new Vector2(horizontal, vertical);
+            Vector2 combined = new Vector2(horizontal, vertical);
+            if (LocalVersusModeStorage.IsLocalVersus && Gamepad.all.Count > 0)
+            {
+                combined += Gamepad.all[0].leftStick.ReadValue();
+            }
+
+            return Vector2.ClampMagnitude(combined, 1f);
         }
 #endif
 #if ENABLE_LEGACY_INPUT_MANAGER

@@ -208,6 +208,9 @@ public class GameManager : MonoBehaviour
 
     public bool IsGameOver { get; private set; }
     public bool IsRunActive => runPhase == RunPhase.Active && !IsGameOver && !playerDefeatSequenceRunning;
+    public bool IsLocalVersus => LocalVersusModeStorage.IsLocalVersus;
+    public string VersusWinnerLabel { get; private set; }
+    public string VersusResultSubtitle { get; private set; }
     public bool IsUpgradeSelectionOpen => upgradeSelectionOpen;
     public bool IsIntroTutorialOpen => introTutorialOpen;
     public bool ShouldShowCursorForContextTutorial => contextTutorialOpen && IsClickValidatedContextTutorial(contextTutorialKind);
@@ -373,6 +376,7 @@ public class GameManager : MonoBehaviour
     private float labRunTime;
     private float storageRunTime;
     private float ruptureRunTime;
+    private LocalVersusManager localVersusManager;
 
     private void Awake()
     {
@@ -387,6 +391,7 @@ public class GameManager : MonoBehaviour
         RefreshHudScaleSetting();
         RefreshLevelType();
         BeginStartupSequence();
+        EnsureLocalVersusSetup();
     }
 
     private void OnDestroy()
@@ -419,6 +424,22 @@ public class GameManager : MonoBehaviour
         if (playerController == null)
         {
             playerController = FindAnyObjectByType<PlayerController>();
+        }
+        EnsureLocalVersusSetup();
+        if (IsLocalVersus)
+        {
+            if (IsGameOver)
+            {
+                HandleOptionalReload();
+                return;
+            }
+
+            if (runPhase != RunPhase.Active)
+            {
+                UpdateStartupSequence();
+            }
+
+            return;
         }
         ApplyOperationPlayerModifiersOnce();
         if (chaosDirector == null)
@@ -525,6 +546,12 @@ public class GameManager : MonoBehaviour
             return;
         }
 
+        if (IsLocalVersus)
+        {
+            TriggerVersusGameOver("ANOMALIA", "La anomalia alcanzo al corredor.");
+            return;
+        }
+
         IsGameOver = true;
         runPhase = RunPhase.Active;
         if (!HasAwardedMetaReward)
@@ -535,6 +562,28 @@ public class GameManager : MonoBehaviour
         }
 
         Debug.Log($"GAME OVER | Time Survived: {SurvivalTime:F2}s");
+    }
+
+    public void SetVersusElapsedTime(float elapsed)
+    {
+        if (IsLocalVersus && !IsGameOver)
+        {
+            SurvivalTime = Mathf.Max(0f, elapsed);
+        }
+    }
+
+    public void TriggerVersusGameOver(string winner, string subtitle)
+    {
+        if (IsGameOver)
+        {
+            return;
+        }
+
+        VersusWinnerLabel = winner;
+        VersusResultSubtitle = subtitle;
+        IsGameOver = true;
+        runPhase = RunPhase.Active;
+        Debug.Log($"LOCAL VERSUS OVER | Winner: {winner}");
     }
 
     public void RequestPlayerDefeat(PlayerController defeatedPlayer)
@@ -1257,6 +1306,16 @@ public class GameManager : MonoBehaviour
             return;
         }
 
+        if (IsLocalVersus)
+        {
+            if (runPhase == RunPhase.StartupDelay || runPhase == RunPhase.Countdown || runPhase == RunPhase.GoFlash)
+            {
+                DrawCountdownOverlay();
+            }
+
+            return;
+        }
+
         if (introTutorialOpen)
         {
             DrawIntroTutorialOverlay();
@@ -1296,6 +1355,35 @@ public class GameManager : MonoBehaviour
         {
             DrawCountdownOverlay();
         }
+    }
+
+    private void EnsureLocalVersusSetup()
+    {
+        if (!IsLocalVersus || localVersusManager != null)
+        {
+            return;
+        }
+
+        if (playerController == null)
+        {
+            playerController = FindAnyObjectByType<PlayerController>();
+        }
+        if (enemyController == null)
+        {
+            enemyController = FindAnyObjectByType<EnemyController>();
+        }
+        if (playerController == null || enemyController == null)
+        {
+            return;
+        }
+
+        localVersusManager = GetComponent<LocalVersusManager>();
+        if (localVersusManager == null)
+        {
+            localVersusManager = gameObject.AddComponent<LocalVersusManager>();
+        }
+
+        localVersusManager.Configure(this, playerController, enemyController);
     }
 
     private void BeginStartupSequence()

@@ -451,6 +451,12 @@ public class GameMenuController : MonoBehaviour
 
     private void DrawDefeatMenu()
     {
+        if (gameManager != null && gameManager.IsLocalVersus)
+        {
+            DrawVersusResultMenu();
+            return;
+        }
+
         float t = Time.unscaledTime;
         float defeatElapsed = Mathf.Max(0f, t - defeatStartedAtUnscaled);
         float introDuration = Mathf.Max(0.01f, defeatCinematicDuration);
@@ -581,6 +587,47 @@ public class GameMenuController : MonoBehaviour
             float remaining = Mathf.Max(0f, defeatInputUnlockDelay - defeatElapsed);
             DrawDefeatHoldPrompt(remaining);
         }
+    }
+
+    private void DrawVersusResultMenu()
+    {
+        float elapsed = Mathf.Max(0f, Time.unscaledTime - defeatStartedAtUnscaled);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 3.2f);
+        DrawScreenFade(0.78f);
+        DrawDefeatBackdrop(pulse, 0.28f, Time.unscaledTime);
+
+        Rect panel = CenterRect(Mathf.Min(610f, Screen.width - 48f), Mathf.Min(390f, Screen.height - 48f));
+        DrawPanel(panel, new Color(0.025f, 0.035f, 0.075f, 0.95f), new Color(0.42f, 0.88f, 1f, 0.72f));
+        Rect area = new Rect(panel.x + 24f, panel.y + 22f, panel.width - 48f, panel.height - 42f);
+        GUILayout.BeginArea(area);
+
+        string winner = string.IsNullOrWhiteSpace(gameManager.VersusWinnerLabel)
+            ? "DUELO FINALIZADO"
+            : $"GANA {gameManager.VersusWinnerLabel}";
+        GUIStyle fittedWinner = GetFittedSingleLineStyle(titleStyle, winner, area.width, 34, 22);
+        GUILayout.Label(winner, fittedWinner, GUILayout.Height(56f));
+        GUILayout.Label(gameManager.VersusResultSubtitle, subtitleStyle, GUILayout.Height(38f));
+        GUILayout.Space(18f);
+        GUILayout.Label($"Arena: {gameManager.CurrentLevelTypeLabel}", bodyStyle);
+        GUILayout.Label($"Duracion: {gameManager.SurvivalTime:F1}s", bodyStyle);
+        GUILayout.Space(28f);
+
+        bool canInteract = elapsed >= 0.75f;
+        bool previous = GUI.enabled;
+        GUI.enabled = canInteract;
+        if (GUILayout.Button("Revancha", buttonStyle, GUILayout.Height(44f)))
+        {
+            GlitchAudioManager.PlayMenuConfirm();
+            RestartLevel();
+        }
+        GUILayout.Space(12f);
+        if (GUILayout.Button("Menu Principal", buttonStyle, GUILayout.Height(44f)))
+        {
+            GlitchAudioManager.PlayMenuBack();
+            ReturnToMainMenu();
+        }
+        GUI.enabled = previous;
+        GUILayout.EndArea();
     }
 
     private void PrepareDefeatRegistration()

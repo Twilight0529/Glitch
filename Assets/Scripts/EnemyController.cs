@@ -1,6 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 using System.Collections;
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem;
+#endif
 
 [RequireComponent(typeof(Rigidbody2D))]
 [RequireComponent(typeof(Collider2D))]
@@ -320,6 +323,10 @@ public class EnemyController : MonoBehaviour
     public bool IsCurrentStateLevelTwo => IsLevelTwoState(currentState);
     public bool IsCurrentStateLevelThree => IsLevelThreeState(currentState);
     public Vector2 CurrentVelocity => rb != null ? rb.linearVelocity : Vector2.zero;
+    public bool IsLocalVersusControlled => localVersusControl;
+    public float LocalVersusStateTimeRemaining => localVersusControl ? Mathf.Max(0f, localVersusStateDuration - stateTimer) : 0f;
+    public float LocalVersusManualChangeTimeRemaining => localVersusControl ? Mathf.Max(0f, localVersusManualChangeUnlock - stateTimer) : 0f;
+    public bool CanLocalVersusChangeState => localVersusControl && stateTimer >= localVersusManualChangeUnlock;
 
     [Header("Navigation Grid")]
     [SerializeField] private LayerMask obstacleMask = ~0;
@@ -368,9 +375,14 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float parryBurstRadius = 1.45f;
     [SerializeField] private float parryBurstDuration = 0.22f;
 
+    [Header("Local Versus")]
+    [SerializeField] private float localVersusManualChangeUnlock = 10f;
+    [SerializeField] private float localVersusStateDuration = 20f;
+
     private Rigidbody2D rb;
     private Collider2D ownCollider;
     private SpriteRenderer ownRenderer;
+    private bool localVersusControl;
 
     private AnomalyState currentState;
     private BehaviorPattern currentPattern;
@@ -647,7 +659,14 @@ public class EnemyController : MonoBehaviour
         InitializePacingDirector();
 
         stuckCheckPosition = rb.position;
-        SelectNextState(forceDifferent: false);
+        if (localVersusControl)
+        {
+            SelectNextLocalVersusState();
+        }
+        else
+        {
+            SelectNextState(forceDifferent: false);
+        }
     }
 
     private void OnDisable()
@@ -696,6 +715,12 @@ public class EnemyController : MonoBehaviour
 
         if (TickParryStun())
         {
+            return;
+        }
+
+        if (localVersusControl)
+        {
+            UpdateLocalVersusMovement();
             return;
         }
 
@@ -876,31 +901,7 @@ public class EnemyController : MonoBehaviour
 
         UpdateStuckDetection(strategicTarget);
 
-        float speed = baseMoveSpeed * sectorSpeedMultiplier;
-        if (currentPattern == BehaviorPattern.ErraticBurst)
-        {
-            speed *= erraticBurstMultiplier;
-        }
-
-        if (currentState == AnomalyState.SpeedSurge)
-        {
-            speed *= speedStateMultiplier;
-        }
-        else if (currentState == AnomalyState.WeaveHunter)
-        {
-            speed *= Mathf.Max(0.1f, weaveHunterSpeedMultiplier);
-        }
-
-        // El impulso de caos sube la presion base sin cambiar el estado de comportamiento elegido.
-        if (chaosDriveEnabled)
-        {
-            speed *= Mathf.Lerp(1f, chaosTempoMultiplier, 0.42f);
-        }
-
-        if (externalSpeedTimer > 0f)
-        {
-            speed *= externalSpeedMultiplier;
-        }
+        float speed = GetCurrentStateMoveSpeed();
 
         Vector2 desiredVelocity = desiredDirection * speed;
         rb.linearVelocity = Vector2.MoveTowards(
@@ -1008,6 +1009,17 @@ public class EnemyController : MonoBehaviour
 
     private void HandleStateSwitch()
     {
+        if (localVersusControl)
+        {
+            stateTimer += Time.deltaTime;
+            if (stateTimer >= Mathf.Max(localVersusManualChangeUnlock, localVersusStateDuration) ||
+                (stateTimer >= localVersusManualChangeUnlock && WasLocalVersusStateChangePressed()))
+            {
+                SelectNextLocalVersusState();
+            }
+            return;
+        }
+
         if (AreSpecialStatesSuppressedForBreach() && IsPre60SpecialState(currentState))
         {
             SelectNextState(forceDifferent: true);
@@ -1067,6 +1079,151 @@ public class EnemyController : MonoBehaviour
         }
         OnStateEntered();
         RegisterStateForPacing(currentState);
+    }
+
+    public void EnableLocalVersusControl(PlayerController controlledTarget)
+    {
+        localVersusControl = true;
+        if (controlledTarget != null)
+        {
+            player = controlledTarget;
+        }
+
+        emergencyDestroyerActive = false;
+        DestroySplitCloneImmediate();
+        levelThreeStateController?.ExitState();
+        SelectNextLocalVersusState();
+    }
+
+    private void SelectNextLocalVersusState()
+    {
+        AnomalyState[] options =
+        {
+            AnomalyState.DirectChase,
+            AnomalyState.SpeedSurge,
+            AnomalyState.Destroyer,
+            AnomalyState.ExpansionShoot,
+            AnomalyState.PhaseBlink,
+            AnomalyState.PincerBarrage,
+            AnomalyState.SignalJam,
+            AnomalyState.OrbitBarrage
+        };
+
+        AnomalyState previous = currentState;
+        int previousIndex = System.Array.IndexOf(options, previous);
+        int offset = Random.Range(1, options.Length);
+        int nextIndex = previousIndex >= 0 ? (previousIndex + offset) % options.Length : Random.Range(0, options.Length);
+        ApplyLocalVersusState(options[nextIndex], previous);
+    }
+
+    private void ApplyLocalVersusState(AnomalyState next, AnomalyState previous)
+    {
+        emergencyDestroyerActive = false;
+        stuckConsecutiveChecks = 0;
+        ResetBlockedRepathHysteresis();
+        currentState = next;
+        currentPattern = ResolvePatternForState(currentState);
+        stateTimer = 0f;
+        currentStateDuration = Mathf.Max(localVersusManualChangeUnlock, localVersusStateDuration);
+        HandleStateTransition(previous, currentState);
+        TriggerStatePulse();
+        SpawnStateTransitionBurst(currentState, previous != currentState);
+        GlitchAudioManager.PlayEnemyState(currentState, transform.position);
+        OnStateEntered();
+    }
+
+    private void UpdateLocalVersusMovement()
+    {
+        Vector2 input = ReadLocalVersusMoveInput();
+        if (input.sqrMagnitude > 1f)
+        {
+            input.Normalize();
+        }
+        if (input.sqrMagnitude > 0.001f)
+        {
+            lastMoveDirection = input.normalized;
+        }
+
+        float speed = GetCurrentStateMoveSpeed();
+        rb.linearVelocity = Vector2.MoveTowards(
+            rb.linearVelocity,
+            input * speed,
+            velocityResponsiveness * sectorResponseMultiplier * Time.deltaTime);
+    }
+
+    private float GetCurrentStateMoveSpeed()
+    {
+        float speed = baseMoveSpeed * sectorSpeedMultiplier;
+        if (currentPattern == BehaviorPattern.ErraticBurst)
+        {
+            speed *= erraticBurstMultiplier;
+        }
+        if (currentState == AnomalyState.SpeedSurge)
+        {
+            speed *= speedStateMultiplier;
+        }
+        else if (currentState == AnomalyState.WeaveHunter)
+        {
+            speed *= Mathf.Max(0.1f, weaveHunterSpeedMultiplier);
+        }
+        if (chaosDriveEnabled)
+        {
+            speed *= Mathf.Lerp(1f, chaosTempoMultiplier, 0.42f);
+        }
+        if (externalSpeedTimer > 0f)
+        {
+            speed *= externalSpeedMultiplier;
+        }
+        return speed;
+    }
+
+    private static Vector2 ReadLocalVersusMoveInput()
+    {
+        Vector2 input = Vector2.zero;
+#if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null)
+        {
+            if (keyboard.leftArrowKey.isPressed) input.x -= 1f;
+            if (keyboard.rightArrowKey.isPressed) input.x += 1f;
+            if (keyboard.downArrowKey.isPressed) input.y -= 1f;
+            if (keyboard.upArrowKey.isPressed) input.y += 1f;
+        }
+        if (Gamepad.all.Count > 1)
+        {
+            input += Gamepad.all[1].leftStick.ReadValue();
+        }
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        if (Input.GetKey(KeyCode.LeftArrow)) input.x -= 1f;
+        if (Input.GetKey(KeyCode.RightArrow)) input.x += 1f;
+        if (Input.GetKey(KeyCode.DownArrow)) input.y -= 1f;
+        if (Input.GetKey(KeyCode.UpArrow)) input.y += 1f;
+#endif
+        return Vector2.ClampMagnitude(input, 1f);
+    }
+
+    private static bool WasLocalVersusStateChangePressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null &&
+            (keyboard.rightCtrlKey.wasPressedThisFrame || keyboard.enterKey.wasPressedThisFrame ||
+             keyboard.numpadEnterKey.wasPressedThisFrame))
+        {
+            return true;
+        }
+        if (Gamepad.all.Count > 1 && Gamepad.all[1].rightShoulder.wasPressedThisFrame)
+        {
+            return true;
+        }
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.RightControl) || Input.GetKeyDown(KeyCode.Return) ||
+               Input.GetKeyDown(KeyCode.KeypadEnter);
+#else
+        return false;
+#endif
     }
 
     private float GetRandomDurationForState(AnomalyState state)
