@@ -3,18 +3,17 @@ using UnityEngine;
 
 public static class ContainmentOperationStorage
 {
-    // Define operaciones pre-run: modificadores simples, objetivo y recompensa de datos.
+    // Define reglas pre-run que alteran toda la partida a cambio de mayor puntuacion.
     public struct OperationDefinition
     {
         public string id;
         public string title;
         public string subtitle;
         public string description;
-        public string objective;
-        public string risk;
+        public string rule;
+        public string hudRule;
+        public string pressure;
         public string reward;
-        public int target;
-        public int dataReward;
         public float scoreMultiplier;
         public Color accent;
     }
@@ -39,68 +38,63 @@ public static class ContainmentOperationStorage
             title = "Protocolo Estandar",
             subtitle = "Run limpia",
             description = "Sin reglas adicionales. Ideal para practicar movimiento, parry y lectura de eventos.",
-            objective = "Sobrevive y suma puntos.",
-            risk = "Sin modificadores.",
-            reward = "Recompensa base.",
-            target = 0,
-            dataReward = 0,
+            rule = "Todos los sistemas funcionan normalmente.",
+            hudRule = "SISTEMAS NORMALES",
+            pressure = "Sin restricciones adicionales.",
+            reward = "Puntaje x1.00.",
             scoreMultiplier = 1f,
             accent = new Color(0.48f, 0.90f, 1f, 1f)
         },
         new OperationDefinition
         {
             id = FirewallId,
-            title = "Protocolo Firewall",
-            subtitle = "Defensa agresiva",
-            description = "Parry y Firewall ganan alcance, carga y control: cada Burst cambia el ritmo de la persecucion.",
-            objective = "Activa 4 Firewall Burst.",
-            risk = "Necesitas acercarte al peligro para cargarlo.",
-            reward = "+24 Datos y +20 pts por cada Burst.",
-            target = 4,
-            dataReward = 24,
-            scoreMultiplier = 1f,
+            title = "Sistemas Degradados",
+            subtitle = "Defensa limitada",
+            description = "La anomalia interfiere con tus herramientas defensivas durante toda la operacion.",
+            rule = "El parry tarda 75% mas y Firewall carga 40% menos.",
+            hudRule = "PARRY LENTO | FIREWALL -40%",
+            pressure = "Cada defensa fallida deja una ventana de peligro mayor.",
+            reward = "Puntaje x1.30.",
+            scoreMultiplier = 1.30f,
             accent = new Color(1f, 0.74f, 0.42f, 1f)
         },
         new OperationDefinition
         {
             id = ExtractionId,
-            title = "Extraccion Inestable",
-            subtitle = "Riesgo por recursos",
-            description = "La arena suelta oleadas de datos y nucleos: hay mas rutas tentadoras, pero menos tiempo para decidir.",
-            objective = "Recolecta 32 pickups de score.",
-            risk = "Perseguir datos puede sacarte de posicion.",
-            reward = "+24 Datos y +3 puntos extra por pickup.",
-            target = 32,
-            dataReward = 24,
-            scoreMultiplier = 1f,
+            title = "Sin Suministros",
+            subtitle = "Cero powerups",
+            description = "La red de soporte queda desconectada: solo contas con movimiento, parry y tus mejoras instaladas.",
+            rule = "No aparecen powerups de velocidad, escudo ni modo compacto.",
+            hudRule = "SIN POWERUPS",
+            pressure = "No hay rescates temporales ni golpes absorbidos.",
+            reward = "Puntaje x1.35.",
+            scoreMultiplier = 1.35f,
             accent = new Color(0.54f, 1f, 0.72f, 1f)
         },
         new OperationDefinition
         {
             id = ContractId,
-            title = "Cadena de Contratos",
-            subtitle = "Objetivos bajo presion",
-            description = "Los encargos encadenan decisiones rapidas con mas pago: conviene jugar la ruta, no solo sobrevivir.",
-            objective = "Completa 4 contratos de run.",
-            risk = "Los contratos pueden forzarte a cambiar prioridad.",
-            reward = "+30 Datos al completar la cadena.",
-            target = 4,
-            dataReward = 30,
-            scoreMultiplier = 1f,
+            title = "Nucleo Sin Parches",
+            subtitle = "Sin mejoras de run",
+            description = "La configuracion inicial queda sellada y no puede modificarse mientras dure la persecucion.",
+            rule = "No aparecen selecciones de mejoras durante la run.",
+            hudRule = "SIN MEJORAS DE RUN",
+            pressure = "Tu kit no escala mientras la anomalia si lo hace.",
+            reward = "Puntaje x1.40.",
+            scoreMultiplier = 1.40f,
             accent = new Color(0.88f, 0.62f, 1f, 1f)
         },
         new OperationDefinition
         {
             id = BreachId,
-            title = "Mensajero Breach",
-            subtitle = "Escape entre arenas",
-            description = "Las brechas aparecen mas seguido y valen mas: la run se vuelve una cadena de escapes entre arenas.",
-            objective = "Escapa por 3 Breach.",
-            risk = "Debes llegar vivo al portal durante el barrido.",
-            reward = "+36 Datos al cruzar las brechas.",
-            target = 3,
-            dataReward = 36,
-            scoreMultiplier = 1f,
+            title = "Caceria Acelerada",
+            subtitle = "Anomalia sobrecargada",
+            description = "El perseguidor recibe mas velocidad y cambia de estrategia con una cadencia mas agresiva.",
+            rule = "La anomalia corre 18% mas y sus estados rotan 18% antes.",
+            hudRule = "ANOMALIA +18% | ROTACION RAPIDA",
+            pressure = "Hay menos tiempo para crear distancia y reconocer patrones.",
+            reward = "Puntaje x1.35.",
+            scoreMultiplier = 1.35f,
             accent = new Color(1f, 0.42f, 0.78f, 1f)
         },
         new OperationDefinition
@@ -109,12 +103,11 @@ public static class ContainmentOperationStorage
             title = "Sobrecarga Ambiental",
             subtitle = "Arena hiperactiva",
             description = "Cada arena fuerza su sistema pasivo: gruas, compuertas, fisuras, gates y campos nulos aparecen con mucha mas presencia.",
-            objective = "Sobrevive 120s con la arena alterada.",
-            risk = "Cada zona cambia de forma mas rapido y exige leer el espacio.",
-            reward = "+30 Datos al estabilizar la sobrecarga.",
-            target = 120,
-            dataReward = 30,
-            scoreMultiplier = 1f,
+            rule = "Los sistemas pasivos de todas las arenas se activan con mucha mas frecuencia.",
+            hudRule = "ARENA HIPERACTIVA",
+            pressure = "El espacio seguro cambia constantemente durante la persecucion.",
+            reward = "Puntaje x1.45.",
+            scoreMultiplier = 1.45f,
             accent = new Color(1f, 0.70f, 0.36f, 1f)
         }
     };

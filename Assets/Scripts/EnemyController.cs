@@ -44,6 +44,8 @@ public class EnemyController : MonoBehaviour
         ErraticBurst
     }
 
+    private bool containmentOperationPressureApplied;
+
     public enum PacingPhase
     {
         BuildUp,
@@ -1291,6 +1293,22 @@ public class EnemyController : MonoBehaviour
         }
 
         return Mathf.Max(0.6f, baseInterval * durationMultiplier);
+    }
+
+    public void ApplyContainmentOperationPressure(float speedMultiplier, float stateDurationMultiplier)
+    {
+        if (containmentOperationPressureApplied)
+        {
+            return;
+        }
+
+        containmentOperationPressureApplied = true;
+        baseMoveSpeed *= Mathf.Max(1f, speedMultiplier);
+        float durationScale = Mathf.Clamp(stateDurationMultiplier, 0.55f, 1f);
+        stateDurationMultiplierRange *= durationScale;
+        majorStateDurationRange *= durationScale;
+        levelTwoStateDurationRange *= durationScale;
+        levelThreeStateDurationRange *= durationScale;
     }
 
     private void InitializePacingDirector()

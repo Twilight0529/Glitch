@@ -206,26 +206,7 @@ public class ArenaChaosDirector : MonoBehaviour
         ContainmentOperationStorage.OperationDefinition operation = ContainmentOperationStorage.SelectedOperation;
         if (operation.id == ContainmentOperationStorage.ExtractionId)
         {
-            scorePickupIntervalRange = new Vector2(
-                Mathf.Max(0.18f, scorePickupIntervalRange.x * 0.38f),
-                Mathf.Max(0.34f, scorePickupIntervalRange.y * 0.48f));
-            scorePickupMaxAlive = Mathf.Max(scorePickupMaxAlive + 8, 16);
-            scorePickupBurstMin = Mathf.Max(scorePickupBurstMin, 3);
-            scorePickupBurstMax = Mathf.Max(scorePickupBurstMax, 5);
-            scorePickupLifetime = Mathf.Max(4.0f, scorePickupLifetime * 0.66f);
-            dataCoreChance = Mathf.Clamp01(dataCoreChance + 0.34f);
-            dataCoreScoreMultiplier = Mathf.Max(dataCoreScoreMultiplier + 1, 5);
-            dataCoreFirewallChargeBonus += 5f;
-        }
-        else if (operation.id == ContainmentOperationStorage.BreachId)
-        {
-            breachEventIntervalRange = new Vector2(16f, 25f);
-            minimumBreachMapAgeSeconds = Mathf.Max(20f, minimumBreachMapAgeSeconds - 30f);
-            breachTelegraphSeconds += 2.0f;
-            breachLifetime += 5.0f;
-            breachScoreBonus += 24;
-            breachGateSize += new Vector2(0.35f, 0.16f);
-            breachEnemyGuideDuration += 1.4f;
+            enablePowerups = false;
         }
     }
 

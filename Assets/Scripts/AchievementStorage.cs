@@ -321,36 +321,36 @@ public static class AchievementStorage
         new AchievementDefinition
         {
             id = OperationFirewallId,
-            title = "Operacion: Firewall",
-            description = "Completa Protocolo Firewall.",
-            progressLabel = "Operacion completada",
+            title = "Sistema Comprometido",
+            description = "Juega una run con Sistemas Degradados.",
+            progressLabel = "Regla utilizada",
             target = 1,
             dataReward = 10
         },
         new AchievementDefinition
         {
             id = OperationExtractionId,
-            title = "Operacion: Extraccion",
-            description = "Completa Extraccion Inestable.",
-            progressLabel = "Operacion completada",
+            title = "Con Lo Puesto",
+            description = "Juega una run sin suministros.",
+            progressLabel = "Regla utilizada",
             target = 1,
             dataReward = 10
         },
         new AchievementDefinition
         {
             id = OperationContractId,
-            title = "Operacion: Contratos",
-            description = "Completa Cadena de Contratos.",
-            progressLabel = "Operacion completada",
+            title = "Version de Fabrica",
+            description = "Juega una run sin mejoras temporales.",
+            progressLabel = "Regla utilizada",
             target = 1,
             dataReward = 10
         },
         new AchievementDefinition
         {
             id = OperationBreachId,
-            title = "Operacion: Breach",
-            description = "Completa Mensajero Breach.",
-            progressLabel = "Operacion completada",
+            title = "Sin Respiro",
+            description = "Juega una run con Caceria Acelerada.",
+            progressLabel = "Regla utilizada",
             target = 1,
             dataReward = 12
         },
@@ -358,8 +358,8 @@ public static class AchievementStorage
         {
             id = OperationAmbientId,
             title = "Operacion: Sobrecarga",
-            description = "Completa Sobrecarga Ambiental.",
-            progressLabel = "Operacion completada",
+            description = "Juega una run con Sobrecarga Ambiental.",
+            progressLabel = "Regla utilizada",
             target = 1,
             dataReward = 16
         },
@@ -367,8 +367,8 @@ public static class AchievementStorage
         {
             id = OperationsThreeId,
             title = "Operador Versatil",
-            description = "Completa 3 operaciones de contencion.",
-            progressLabel = "Operaciones completadas",
+            description = "Juega 3 runs con reglas de contencion.",
+            progressLabel = "Reglas utilizadas",
             target = 3,
             dataReward = 26
         },
@@ -376,8 +376,8 @@ public static class AchievementStorage
         {
             id = OperationsTenId,
             title = "Jefe de Protocolo",
-            description = "Completa 10 operaciones de contencion.",
-            progressLabel = "Operaciones completadas",
+            description = "Juega 10 runs con reglas de contencion.",
+            progressLabel = "Reglas utilizadas",
             target = 10,
             dataReward = 64
         },

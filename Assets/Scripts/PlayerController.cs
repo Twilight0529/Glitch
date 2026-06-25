@@ -554,6 +554,15 @@ public class PlayerController : MonoBehaviour
         parryCooldownTimer = Mathf.Min(parryCooldownTimer, parryCooldown);
     }
 
+    public void ApplyDefensiveSystemDegradation(float parryCooldownMultiplier, float firewallGainMultiplier)
+    {
+        parryCooldown = Mathf.Max(0.05f, parryCooldown * Mathf.Max(1f, parryCooldownMultiplier));
+        firewallChargeGainMultiplier = Mathf.Clamp(
+            firewallChargeGainMultiplier * Mathf.Clamp(firewallGainMultiplier, 0.1f, 1f),
+            0.1f,
+            Mathf.Max(1f, maxFirewallChargeGainMultiplier));
+    }
+
     public void ExpandParryRadius(float extraRadius)
     {
         parryRadius = Mathf.Min(Mathf.Max(0.2f, maxParryRadius), parryRadius + Mathf.Max(0f, extraRadius));

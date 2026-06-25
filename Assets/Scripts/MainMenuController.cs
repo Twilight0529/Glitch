@@ -338,7 +338,7 @@ public class MainMenuController : MonoBehaviour
         DrawPanelFx(panel, new Color(0.50f, 0.95f, 1f, 1f), 0.11f);
 
         Rect area = new Rect(panel.x + 18f, panel.y + 16f, panel.width - 36f, panel.height - 28f);
-        GUI.Label(new Rect(area.x, area.y, area.width, 42f), "Operaciones", panelTitleStyle);
+        GUI.Label(new Rect(area.x, area.y, area.width, 42f), "Reglas de Contencion", panelTitleStyle);
         DrawSolidRect(new Rect(area.x, area.y + 50f, area.width, 1f), new Color(0.70f, 0.90f, 1f, 0.24f));
 
         IReadOnlyList<ContainmentOperationStorage.OperationDefinition> operations = ContainmentOperationStorage.Definitions;
@@ -363,7 +363,7 @@ public class MainMenuController : MonoBehaviour
             DrawSolidRect(row, fill);
             DrawSolidRect(new Rect(row.x, row.y, 4f, row.height), new Color(operation.accent.r, operation.accent.g, operation.accent.b, selectedRow ? 0.92f : 0.44f));
             GUI.Label(new Rect(row.x + 12f, row.y + 4f, row.width - 24f, 23f), operation.title, BuildFittedSingleLineStyle(rankingRowStyle, operation.title, row.width - 24f, 23f, 10));
-            string state = stored ? "SELECCIONADA" : operation.subtitle;
+            string state = stored ? "ACTIVA" : operation.subtitle;
             GUI.Label(new Rect(row.x + 12f, row.y + 29f, row.width - 24f, 20f), state, BuildFittedSingleLineStyle(paragraphStyle, state, row.width - 24f, 20f, 9));
             if (GUI.Button(row, GUIContent.none, GUIStyle.none))
             {
@@ -382,7 +382,7 @@ public class MainMenuController : MonoBehaviour
         }
 
         Rect startRect = new Rect(area.xMax - 230f, area.yMax - 42f, 230f, 34f);
-        if (DrawAnimatedMenuButton(startRect, "Iniciar operacion", true))
+        if (DrawAnimatedMenuButton(startRect, "Iniciar con regla", true))
         {
             LocalVersusModeStorage.SelectSinglePlayer();
             ContainmentOperationStorage.SelectOperation(selected.id);
@@ -401,20 +401,16 @@ public class MainMenuController : MonoBehaviour
         GUI.Label(new Rect(icon.xMax + 18f, detail.y + 18f, detail.width - icon.width - 54f, 34f), operation.title, BuildFittedSingleLineStyle(panelTitleStyle, operation.title, detail.width - icon.width - 54f, 34f, 16));
         GUI.Label(new Rect(icon.xMax + 18f, detail.y + 54f, detail.width - icon.width - 54f, 22f), operation.subtitle, rankingScoreStyle);
 
-        GUIStyle wrapped = new GUIStyle(paragraphStyle)
-        {
-            wordWrap = true,
-            alignment = TextAnchor.UpperLeft,
-            clipping = TextClipping.Clip
-        };
-
         Rect description = new Rect(detail.x + 18f, detail.y + 104f, detail.width - 36f, 58f);
-        GUI.Label(description, operation.description, wrapped);
+        GUI.Label(
+            description,
+            operation.description,
+            BuildFittedWrappedStyle(paragraphStyle, operation.description, description.width, description.height, 10));
 
         float y = description.yMax + 8f;
-        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 62f), "Objetivo", operation.objective, operation.accent);
+        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 62f), "Regla", operation.rule, operation.accent);
         y += 68f;
-        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 62f), "Riesgo", operation.risk, new Color(1f, 0.58f, 0.72f, 1f));
+        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 62f), "Presion", operation.pressure, new Color(1f, 0.58f, 0.72f, 1f));
         y += 68f;
         DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 62f), "Recompensa", operation.reward, new Color(1f, 0.82f, 0.46f, 1f));
     }
@@ -423,15 +419,13 @@ public class MainMenuController : MonoBehaviour
     {
         DrawSolidRect(rect, new Color(0.05f, 0.07f, 0.12f, 0.72f));
         DrawSolidRect(new Rect(rect.x, rect.y, 4f, rect.height), new Color(accent.r, accent.g, accent.b, 0.70f));
-        Rect labelRect = new Rect(rect.x + 12f, rect.y + 2f, rect.width - 24f, 25f);
+        Rect labelRect = new Rect(rect.x + 12f, rect.y + 2f, rect.width - 24f, 22f);
         GUI.Label(labelRect, label, BuildFittedSingleLineStyle(rankingScoreStyle, label, labelRect.width, labelRect.height, 11));
-        GUIStyle wrapped = new GUIStyle(paragraphStyle)
-        {
-            wordWrap = true,
-            alignment = TextAnchor.UpperLeft,
-            clipping = TextClipping.Clip
-        };
-        GUI.Label(new Rect(rect.x + 12f, rect.y + 30f, rect.width - 24f, rect.height - 33f), value, wrapped);
+        Rect valueRect = new Rect(rect.x + 12f, rect.y + 24f, rect.width - 24f, rect.height - 28f);
+        GUI.Label(
+            valueRect,
+            value,
+            BuildFittedWrappedStyle(paragraphStyle, value, valueRect.width, valueRect.height, 9));
     }
 
     private void DrawOperationIcon(Rect rect, ContainmentOperationStorage.OperationDefinition operation)
@@ -452,6 +446,7 @@ public class MainMenuController : MonoBehaviour
                 DrawSolidRect(new Rect(rect.x + 12f + i * 9f, rect.y + 18f + (i % 2) * 12f, 8f, 8f), Color.white);
             }
             DrawSolidRect(new Rect(rect.x + 26f, rect.yMax - 22f, 22f, 10f), new Color(0.54f, 1f, 0.72f, 0.95f));
+            DrawSolidRect(new Rect(rect.x + 10f, rect.center.y - 2f, rect.width - 20f, 4f), new Color(1f, 0.34f, 0.48f, 0.94f));
         }
         else if (operation.id == ContainmentOperationStorage.ContractId)
         {
@@ -461,8 +456,9 @@ public class MainMenuController : MonoBehaviour
         }
         else if (operation.id == ContainmentOperationStorage.BreachId)
         {
-            DrawSolidRect(new Rect(rect.center.x - 7f, rect.y + 8f, 14f, rect.height - 16f), operation.accent);
-            DrawSolidRect(new Rect(rect.x + 13f, rect.center.y - 2f, rect.width - 26f, 4f), new Color(0.50f, 0.95f, 1f, 0.86f));
+            DrawSolidRect(new Rect(rect.x + 12f, rect.center.y - 3f, rect.width - 24f, 6f), operation.accent);
+            DrawSolidRect(new Rect(rect.xMax - 25f, rect.center.y - 12f, 13f, 24f), operation.accent);
+            DrawSolidRect(new Rect(rect.x + 14f, rect.center.y + 10f, rect.width - 38f, 2f), new Color(1f, 0.74f, 0.88f, 0.62f));
         }
         else if (operation.id == ContainmentOperationStorage.AmbientOverdriveId)
         {
@@ -2441,6 +2437,35 @@ public class MainMenuController : MonoBehaviour
             style.fontSize = size;
             Vector2 measured = style.CalcSize(content);
             if (measured.x <= width && measured.y <= height)
+            {
+                return style;
+            }
+        }
+
+        style.fontSize = minSize;
+        return style;
+    }
+
+    private static GUIStyle BuildFittedWrappedStyle(GUIStyle baseStyle, string text, float width, float height, int minSize)
+    {
+        if (baseStyle == null || string.IsNullOrEmpty(text))
+        {
+            return baseStyle;
+        }
+
+        GUIContent content = new GUIContent(text);
+        GUIStyle style = new GUIStyle(baseStyle)
+        {
+            wordWrap = true,
+            alignment = TextAnchor.UpperLeft,
+            clipping = TextClipping.Clip
+        };
+
+        int preferred = Mathf.Max(minSize, baseStyle.fontSize);
+        for (int size = preferred; size >= minSize; size--)
+        {
+            style.fontSize = size;
+            if (style.CalcHeight(content, Mathf.Max(1f, width)) <= height)
             {
                 return style;
             }
