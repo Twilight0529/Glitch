@@ -162,6 +162,13 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float destroyerRespawnWarningLeadTime = 2f;
     [SerializeField] private float destroyerRespawnWarningPulseSpeed = 7.5f;
     [SerializeField] private Color destroyerRespawnWarningColor = new Color(1f, 0.72f, 0.84f, 0.85f);
+    [SerializeField] private float destroyerForwardBreakDistance = 1.15f;
+    [SerializeField] private float destroyerForwardBreakRadiusMultiplier = 0.82f;
+
+    [Header("Rupture Navigation")]
+    [SerializeField] private float ruptureGridRefreshInterval = 0.28f;
+    [SerializeField] private float ruptureRepathInterval = 0.10f;
+    [SerializeField, Range(0.35f, 1f)] private float ruptureRepulsionMultiplier = 0.68f;
 
     [Header("Weave Hunter")]
     [SerializeField] private float weaveHunterSpeedMultiplier = 1.2f;
@@ -528,6 +535,7 @@ public class EnemyController : MonoBehaviour
     private int gridHeight;
     private bool[,] walkable;
     private int[,] obstacleDistanceSteps;
+    private bool navigatingRupture;
 
     private float repathTimer;
     private float gridRefreshTimer;
@@ -779,7 +787,10 @@ public class EnemyController : MonoBehaviour
 
         // Reconstruye la grilla periodicamente porque eventos y el estado destructor pueden mover o quitar bloqueos.
         gridRefreshTimer += Time.deltaTime;
-        if (gridRefreshTimer >= gridRefreshInterval)
+        float effectiveGridRefresh = navigatingRupture
+            ? Mathf.Min(gridRefreshInterval, Mathf.Max(0.08f, ruptureGridRefreshInterval))
+            : gridRefreshInterval;
+        if (gridRefreshTimer >= effectiveGridRefresh)
         {
             gridRefreshTimer = 0f;
             BuildNavigationGrid();
@@ -813,6 +824,10 @@ public class EnemyController : MonoBehaviour
             float effectiveRepathInterval = Mathf.Max(
                 0.05f,
                 repathInterval * (chaosDriveEnabled ? chaosRepathIntervalMultiplier : 1f));
+            if (navigatingRupture)
+            {
+                effectiveRepathInterval = Mathf.Min(effectiveRepathInterval, Mathf.Max(0.05f, ruptureRepathInterval));
+            }
 
             bool intervalRepathDue = repathTimer >= effectiveRepathInterval;
             bool shouldRepath = pathWorld.Count == 0 || pathAheadBlocked;
@@ -942,12 +957,14 @@ public class EnemyController : MonoBehaviour
         ProceduralArenaGenerator generator = FindAnyObjectByType<ProceduralArenaGenerator>();
         if (generator == null)
         {
+            navigatingRupture = false;
             return;
         }
 
         navSize = new Vector2(generator.ArenaWidth, generator.ArenaHeight);
         Vector2 center = generator.transform.position;
         navOrigin = center - navSize * 0.5f;
+        navigatingRupture = generator.ActiveTheme == ProceduralArenaGenerator.ArenaTheme.RuptureZone;
     }
 
     private void BuildNavigationGrid()
@@ -1968,6 +1985,10 @@ public class EnemyController : MonoBehaviour
         {
             ownRenderer.enabled = false;
         }
+        if (levelAppearanceRoot != null)
+        {
+            levelAppearanceRoot.SetActive(false);
+        }
 
         transform.position = breachPosition;
         HideExpansionShootTelegraphVisual();
@@ -1976,6 +1997,8 @@ public class EnemyController : MonoBehaviour
 
     public void ReappearFromBreach(Vector2 position)
     {
+        ResolveArenaBounds();
+        position = ClampPointToArenaWithMargin(position, agentRadius + 0.18f);
         transform.position = position;
         rb.position = position;
         rb.linearVelocity = Vector2.zero;
@@ -1993,6 +2016,10 @@ public class EnemyController : MonoBehaviour
         {
             ownRenderer.enabled = true;
             ownRenderer.color = baseColor;
+        }
+        if (levelAppearanceRoot != null)
+        {
+            levelAppearanceRoot.SetActive(true);
         }
 
         transform.localScale = baseScale;
@@ -3324,6 +3351,61 @@ public class EnemyController : MonoBehaviour
         if (destroyerTouchCooldownTimer > 0f)
         {
             destroyerTouchCooldownTimer -= Time.deltaTime;
+        }
+
+        if (currentState == AnomalyState.Destroyer &&
+            !breachAbsorbed &&
+            breachLureTimer <= 0f &&
+            destroyerBreakCount < destroyerBreakLimit &&
+            destroyerTouchCooldownTimer <= 0f)
+        {
+            TryDestroyObstacleAhead();
+        }
+    }
+
+    private void TryDestroyObstacleAhead()
+    {
+        Vector2 direction = rb.linearVelocity.sqrMagnitude > 0.05f
+            ? rb.linearVelocity.normalized
+            : lastMoveDirection;
+        if (direction.sqrMagnitude < 0.001f)
+        {
+            direction = player != null
+                ? (player.GetPosition() - rb.position).normalized
+                : Vector2.right;
+        }
+
+        float radius = Mathf.Max(
+            0.12f,
+            agentRadius * Mathf.Clamp(destroyerForwardBreakRadiusMultiplier, 0.35f, 1.2f));
+        float distance = Mathf.Max(0.25f, destroyerForwardBreakDistance);
+        RaycastHit2D[] hits = Physics2D.CircleCastAll(rb.position, radius, direction, distance, obstacleMask);
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider2D candidate = hits[i].collider;
+            if (!IsBlockingCollider(candidate))
+            {
+                continue;
+            }
+
+            if (CanDestroyThisCollider(candidate))
+            {
+                TryDestroyObstacle(candidate);
+            }
+            return;
+        }
+
+        Collider2D[] overlaps = Physics2D.OverlapCircleAll(rb.position, agentRadius + 0.12f, obstacleMask);
+        for (int i = 0; i < overlaps.Length; i++)
+        {
+            if (!CanDestroyThisCollider(overlaps[i]))
+            {
+                continue;
+            }
+
+            TryDestroyObstacle(overlaps[i]);
+            return;
         }
     }
 
@@ -6360,7 +6442,8 @@ public class EnemyController : MonoBehaviour
             return baseDir;
         }
 
-        Vector2 blended = (baseDir + repulsion.normalized * repulsionWeight).normalized;
+        float effectiveWeight = repulsionWeight * (navigatingRupture ? ruptureRepulsionMultiplier : 1f);
+        Vector2 blended = (baseDir + repulsion.normalized * effectiveWeight).normalized;
         return blended;
     }
 
@@ -7127,6 +7210,7 @@ public class AnomalyStateBurstFx : MonoBehaviour
             spriteRenderer.color = new Color(baseColor.r, baseColor.g, baseColor.b, Mathf.Lerp(0.85f, 0f, t));
         }
     }
+
 }
 
 public class AnomalyStateRayFx : MonoBehaviour

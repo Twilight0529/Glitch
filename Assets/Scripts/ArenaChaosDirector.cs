@@ -71,6 +71,7 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private float breachTelegraphSeconds = 5.2f;
     [SerializeField] private float breachSweepDuration = 13.5f;
     [SerializeField] private float breachEnemyGuideDuration = 6f;
+    [SerializeField] private float breachEnemyEntryDistance = 1.35f;
     [SerializeField] private float breachTransitionDuration = 1.25f;
     [SerializeField] private float breachArrivalHoldSeconds = 3f;
     [SerializeField] private float breachArrivalFxDuration = 2.25f;
@@ -135,6 +136,7 @@ public class ArenaChaosDirector : MonoBehaviour
     private bool breachTransitionActive;
     private bool pendingBreachEnemyReentry;
     private bool breachPlayerConsumed;
+    private bool breachEnemyAbsorbed;
     private bool operationModifiersApplied;
     private float breachTelegraphTimer;
     private float currentArenaPlayableSeconds;
@@ -491,6 +493,7 @@ public class ArenaChaosDirector : MonoBehaviour
         breachTransitionActive = false;
         pendingBreachEnemyReentry = false;
         breachPlayerConsumed = false;
+        breachEnemyAbsorbed = false;
         breachTimer = 0f;
         breachTelegraphTimer = 0f;
     }
@@ -907,6 +910,7 @@ public class ArenaChaosDirector : MonoBehaviour
         breachTimer = Mathf.Max(2f, breachLifetime);
         breachSweepStarted = false;
         breachPlayerConsumed = false;
+        breachEnemyAbsorbed = false;
         breachTelegraphTimer = Mathf.Max(0.4f, breachTelegraphSeconds);
         activeBreachPosition = position;
         activeBreachSweepDirection = sweepDirection;
@@ -931,9 +935,10 @@ public class ArenaChaosDirector : MonoBehaviour
             return;
         }
 
-        if (enemy != null)
+        if (enemy != null && !breachEnemyAbsorbed)
         {
             enemy.GuideTowardBreach(activeBreachGate.transform.position, 0.35f);
+            TryAbsorbEnemyAtBreach();
         }
 
         if (!breachSweepStarted)
@@ -964,6 +969,26 @@ public class ArenaChaosDirector : MonoBehaviour
         {
             FailBreachEvent();
         }
+    }
+
+    private void TryAbsorbEnemyAtBreach()
+    {
+        if (breachEnemyAbsorbed || enemy == null || activeBreachGate == null)
+        {
+            return;
+        }
+
+        float threshold = Mathf.Max(
+            0.75f,
+            breachEnemyEntryDistance + Mathf.Max(breachGateSize.x, breachGateSize.y) * 0.12f);
+        Vector2 gatePosition = activeBreachGate.transform.position;
+        if (Vector2.Distance(enemy.GetCurrentPosition(), gatePosition) > threshold)
+        {
+            return;
+        }
+
+        breachEnemyAbsorbed = true;
+        enemy.AbsorbIntoBreach(gatePosition);
     }
 
     private void StartBreachCollapse()
@@ -1024,7 +1049,8 @@ public class ArenaChaosDirector : MonoBehaviour
 
         if (enemy != null)
         {
-            enemy.ReappearFromBreach(enemy.GetCurrentPosition());
+            enemy.ReappearFromBreach(GetSafeEnemyRecoveryPosition());
+            breachEnemyAbsorbed = false;
         }
 
         RaiseWarning("Consumido por el glitch", 1.2f);
@@ -1152,7 +1178,8 @@ public class ArenaChaosDirector : MonoBehaviour
 
         if (enemy != null)
         {
-            enemy.ReappearFromBreach(enemy.GetCurrentPosition());
+            enemy.ReappearFromBreach(GetSafeEnemyRecoveryPosition());
+            breachEnemyAbsorbed = false;
         }
 
         RaiseWarning("Consumido por el glitch", 1.2f);
@@ -1164,6 +1191,18 @@ public class ArenaChaosDirector : MonoBehaviour
         }
 
         ReleaseDirectorEventPressure(BreachEventPressureKey, breachEventPressureCooldown);
+    }
+
+    private Vector2 GetSafeEnemyRecoveryPosition()
+    {
+        Vector2 center = transform.position;
+        Vector2 awayFromGate = center - activeBreachPosition;
+        if (awayFromGate.sqrMagnitude < 0.001f)
+        {
+            awayFromGate = Vector2.right;
+        }
+
+        return ClampPointToArena(activeBreachPosition + awayFromGate.normalized * 2.1f, 1.2f);
     }
 
     private void HideActorsForBreachTransition(Vector2 breachPosition)
@@ -1218,6 +1257,7 @@ public class ArenaChaosDirector : MonoBehaviour
             {
                 enemy.ReappearFromBreach(enemyPos);
                 pendingBreachEnemyReentry = false;
+                breachEnemyAbsorbed = false;
             }
         }
     }
@@ -1250,6 +1290,7 @@ public class ArenaChaosDirector : MonoBehaviour
         }
 
         enemy.ReappearFromBreach(pendingBreachEnemyPosition);
+        breachEnemyAbsorbed = false;
         SpawnBreachArrivalFx(pendingBreachEnemyPosition, pendingBreachEnemyEntryDirection, true);
         RaiseWarning("Anomalia reinsertada", 1f);
     }
