@@ -221,38 +221,52 @@ public class MainMenuController : MonoBehaviour
     private void DrawMainMenu()
     {
         DrawScreenFade(0.38f);
-        float bob = Mathf.Sin(Time.unscaledTime * 1.35f) * 6f;
+        float bob = Mathf.Sin(Time.unscaledTime * 1.15f) * 3f;
         GetMainMenuLayout(out Rect panel, out Rect rankingRect, out bool sideBySide);
         panel.y += bob;
-        rankingRect.y += bob * 0.55f;
+        rankingRect.y -= bob * 0.35f;
         DrawSignalBeams(Time.unscaledTime);
         DrawMenuAtmosphere(panel, rankingRect, sideBySide);
         DrawPanelOrbiters(panel, rankingRect);
 
-        DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.90f), new Color(0.47f, 0.56f, 0.72f, 0.58f));
+        DrawPanel(panel, new Color(0.025f, 0.045f, 0.08f, 0.91f), new Color(0.47f, 0.72f, 0.92f, 0.52f));
         DrawPanelFx(panel, new Color(0.62f, 0.76f, 1f, 1f), 0.14f);
 
-        Rect titleRect = new Rect(panel.x + 18f, panel.y + 14f, panel.width - 36f, 62f);
-        Rect subtitleRect = new Rect(panel.x + 18f, panel.y + 76f, panel.width - 36f, 26f);
+        Rect titleRect = new Rect(panel.x + 22f, panel.y + 12f, panel.width - 44f, 56f);
+        Rect subtitleRect = new Rect(panel.x + 22f, panel.y + 65f, panel.width - 44f, 24f);
         DrawGlitchTitle(titleRect, gameTitle, titleStyle, 1f);
         DrawGlitchTitle(subtitleRect, gameSubtitle, subtitleStyle, 0.55f);
-        DrawSolidRect(new Rect(panel.x + 36f, panel.y + 110f, panel.width - 72f, 1f), new Color(0.80f, 0.90f, 1f, 0.18f));
-        float markerX = panel.x + 42f + Mathf.Repeat(Time.unscaledTime * 90f, Mathf.Max(1f, panel.width - 88f));
-        DrawSolidRect(new Rect(markerX, panel.y + 109f, 26f, 3f), new Color(0.90f, 0.97f, 1f, 0.35f));
+        DrawSolidRect(new Rect(panel.x + 24f, panel.y + 96f, panel.width - 48f, 1f),
+            new Color(0.80f, 0.90f, 1f, 0.18f));
+        float markerX = panel.x + 28f + Mathf.Repeat(Time.unscaledTime * 105f, Mathf.Max(1f, panel.width - 82f));
+        DrawSolidRect(new Rect(markerX, panel.y + 95f, 30f, 3f),
+            new Color(0.50f, 0.94f, 1f, 0.42f));
 
-        GUI.Label(new Rect(panel.x + 18f, panel.y + 114f, panel.width - 36f, 20f), $"Datos Recuperados: {MetaProgressionStorage.CurrentData}", paragraphStyle);
-        string operationLine = $"Operacion: {ContainmentOperationStorage.SelectedOperation.title}";
-        GUI.Label(new Rect(panel.x + 18f, panel.y + 134f, panel.width - 36f, 20f), operationLine, BuildFittedSingleLineStyle(paragraphStyle, operationLine, panel.width - 36f, 20f, 9));
-        float buttonY = panel.y + 158f;
-        Rect playRect = new Rect(panel.x + 18f, buttonY, panel.width - 36f, 42f);
-        Rect versusRect = new Rect(panel.x + 18f, buttonY + 50f, panel.width - 36f, 42f);
-        Rect unlocksRect = new Rect(panel.x + 18f, buttonY + 100f, panel.width - 36f, 36f);
-        Rect statsRect = new Rect(panel.x + 18f, buttonY + 144f, panel.width - 36f, 36f);
-        Rect optionsRect = new Rect(panel.x + 18f, buttonY + 188f, panel.width - 36f, 36f);
-        Rect creditsRect = new Rect(panel.x + 18f, buttonY + 232f, panel.width - 36f, 36f);
-        Rect exitRect = new Rect(panel.x + 18f, buttonY + 276f, panel.width - 36f, 36f);
+        int knownZones = GetKnownZoneCount();
+        Rect telemetry = new Rect(panel.x + 24f, panel.y + 106f, panel.width - 48f, 38f);
+        DrawSolidRect(telemetry, new Color(0.04f, 0.075f, 0.12f, 0.72f));
+        GUI.Label(new Rect(telemetry.x + 10f, telemetry.y + 2f, telemetry.width * 0.48f, 17f),
+            $"DATOS  {MetaProgressionStorage.CurrentData}", rankingRowStyle);
+        GUI.Label(new Rect(telemetry.center.x, telemetry.y + 2f, telemetry.width * 0.48f - 10f, 17f),
+            $"ZONAS  {knownZones}/5", rankingRowStyle);
+        string operationLine = ContainmentOperationStorage.SelectedOperation.title;
+        string operationStatus = $"PROTOCOLO ACTIVO  |  {operationLine}";
+        GUI.Label(new Rect(telemetry.x + 10f, telemetry.y + 19f, telemetry.width - 20f, 17f),
+            operationStatus,
+            BuildFittedSingleLineStyle(paragraphStyle, operationStatus, telemetry.width - 20f, 17f, 8));
 
-        if (DrawAnimatedMenuButton(playRect, "Jugar", true))
+        float commandsY = panel.y + 155f;
+        Rect playRect = new Rect(panel.x + 24f, commandsY, panel.width - 48f, 60f);
+        Rect versusRect = new Rect(panel.x + 24f, commandsY + 68f, panel.width - 48f, 52f);
+        float columnGap = 12f;
+        float compactWidth = (panel.width - 48f - columnGap) * 0.5f;
+        Rect unlocksRect = new Rect(panel.x + 24f, commandsY + 134f, compactWidth, 56f);
+        Rect statsRect = new Rect(unlocksRect.xMax + columnGap, unlocksRect.y, compactWidth, 56f);
+        Rect optionsRect = new Rect(unlocksRect.x, commandsY + 198f, compactWidth, 56f);
+        Rect creditsRect = new Rect(statsRect.x, optionsRect.y, compactWidth, 56f);
+        Rect exitRect = new Rect(panel.x + 24f, commandsY + 270f, panel.width - 48f, 40f);
+
+        if (DrawMainCommandButton(playRect, "01", "INICIAR CONTENCION", "Run individual y operaciones", new Color(0.38f, 0.92f, 1f, 1f), true))
         {
             LocalVersusModeStorage.SelectSinglePlayer();
             selectedOperationIndex = ContainmentOperationStorage.GetDefinitionIndex(ContainmentOperationStorage.SelectedOperationId);
@@ -263,7 +277,7 @@ public class MainMenuController : MonoBehaviour
             showOperations = true;
             GlitchAudioManager.PlayMenuConfirm();
         }
-        if (DrawAnimatedMenuButton(versusRect, "1v1 Local", true))
+        if (DrawMainCommandButton(versusRect, "02", "DUELO LOCAL", "Corredor contra anomalia", new Color(1f, 0.42f, 0.65f, 1f), true))
         {
             LocalVersusModeStorage.SelectLocalVersus();
             showOptions = false;
@@ -274,7 +288,7 @@ public class MainMenuController : MonoBehaviour
             GlitchAudioManager.PlayMenuConfirm();
             StartGameplay();
         }
-        if (DrawAnimatedMenuButton(unlocksRect, "Desbloqueos"))
+        if (DrawMainCommandButton(unlocksRect, "03", "DESBLOQUEOS", "Mejoras y colores", new Color(0.62f, 0.82f, 1f, 1f)))
         {
             showOptions = false;
             showStats = false;
@@ -282,7 +296,7 @@ public class MainMenuController : MonoBehaviour
             showCredits = false;
             showUnlocks = true;
         }
-        if (DrawAnimatedMenuButton(statsRect, "Estadisticas"))
+        if (DrawMainCommandButton(statsRect, "04", "ESTADISTICAS", "Perfil y records", new Color(0.82f, 0.62f, 1f, 1f)))
         {
             showOptions = false;
             showUnlocks = false;
@@ -290,7 +304,7 @@ public class MainMenuController : MonoBehaviour
             showCredits = false;
             showStats = true;
         }
-        if (DrawAnimatedMenuButton(optionsRect, "Opciones"))
+        if (DrawMainCommandButton(optionsRect, "05", "OPCIONES", "Audio e interfaz", new Color(0.52f, 1f, 0.74f, 1f)))
         {
             showUnlocks = false;
             showStats = false;
@@ -298,7 +312,7 @@ public class MainMenuController : MonoBehaviour
             showCredits = false;
             showOptions = true;
         }
-        if (DrawAnimatedMenuButton(creditsRect, "Creditos"))
+        if (DrawMainCommandButton(creditsRect, "06", "CREDITOS", "Fuentes y recursos", new Color(1f, 0.76f, 0.38f, 1f)))
         {
             showOptions = false;
             showUnlocks = false;
@@ -306,7 +320,7 @@ public class MainMenuController : MonoBehaviour
             showOperations = false;
             showCredits = true;
         }
-        if (DrawAnimatedMenuButton(exitRect, "Salir"))
+        if (DrawMainCommandButton(exitRect, "ESC", "SALIR", string.Empty, new Color(1f, 0.42f, 0.52f, 1f)))
         {
             ExitGame();
         }
@@ -559,8 +573,8 @@ public class MainMenuController : MonoBehaviour
 
     private void GetMainMenuLayout(out Rect mainPanel, out Rect rankingPanel, out bool sideBySide)
     {
-        float mainW = 390f;
-        float mainH = 498f;
+        float mainW = 470f;
+        float mainH = 500f;
         float rankW = 400f;
         float rankH = 320f;
         float gap = 22f;
@@ -1760,20 +1774,76 @@ public class MainMenuController : MonoBehaviour
 
     private void DrawThematicBackground()
     {
-        float bandWidth = Screen.width / 3f;
         float t = Time.unscaledTime;
+        List<ProceduralArenaGenerator.ArenaTheme> visibleThemes = new List<ProceduralArenaGenerator.ArenaTheme>();
+        IReadOnlyList<ProceduralArenaGenerator.ArenaTheme> discovered = ArenaDiscoveryStorage.DiscoveredThemes;
+        for (int i = 0; i < discovered.Count; i++)
+        {
+            visibleThemes.Add(discovered[i]);
+        }
 
-        Rect lab = new Rect(0f, 0f, bandWidth, Screen.height);
-        Rect storage = new Rect(bandWidth, 0f, bandWidth, Screen.height);
-        Rect rupture = new Rect(bandWidth * 2f, 0f, Screen.width - bandWidth * 2f, Screen.height);
+        if (visibleThemes.Count == 0)
+        {
+            visibleThemes.Add(ProceduralArenaGenerator.ArenaTheme.ContainmentLab);
+        }
 
-        DrawBand(lab, new Color(0.14f, 0.18f, 0.26f), "LAB", 0, t);
-        DrawBand(storage, new Color(0.28f, 0.20f, 0.14f), "STORAGE", 1, t);
-        DrawBand(rupture, new Color(0.25f, 0.16f, 0.31f), "RUPTURE", 2, t);
+        float bandWidth = Screen.width / visibleThemes.Count;
+        for (int i = 0; i < visibleThemes.Count; i++)
+        {
+            ProceduralArenaGenerator.ArenaTheme theme = visibleThemes[i];
+            Rect band = new Rect(i * bandWidth, 0f,
+                i == visibleThemes.Count - 1 ? Screen.width - i * bandWidth : bandWidth,
+                Screen.height);
+            GetMenuThemePresentation(theme, out Color color, out string label, out int style);
+            DrawBand(band, color, label, style, t);
+            if (i > 0)
+            {
+                float separatorX = i * bandWidth;
+                DrawSolidRect(new Rect(separatorX - 1f, 0f, 2f, Screen.height),
+                    new Color(1f, 1f, 1f, 0.14f));
+                float reveal = Mathf.PingPong(t * 0.35f + i * 0.23f, 1f);
+                DrawSolidRect(new Rect(separatorX - 3f, Screen.height * reveal, 6f, 42f),
+                    new Color(color.r, color.g, color.b, 0.18f));
+            }
+        }
 
-        DrawSolidRect(new Rect(bandWidth - 1f, 0f, 2f, Screen.height), new Color(1f, 1f, 1f, 0.14f));
-        DrawSolidRect(new Rect(bandWidth * 2f - 1f, 0f, 2f, Screen.height), new Color(1f, 1f, 1f, 0.14f));
         DrawGlobalAmbientOverlay(t);
+    }
+
+    private static void GetMenuThemePresentation(
+        ProceduralArenaGenerator.ArenaTheme theme,
+        out Color color,
+        out string label,
+        out int style)
+    {
+        switch (theme)
+        {
+            case ProceduralArenaGenerator.ArenaTheme.StorageBay:
+                color = new Color(0.28f, 0.20f, 0.14f);
+                label = "STORAGE";
+                style = 1;
+                return;
+            case ProceduralArenaGenerator.ArenaTheme.RuptureZone:
+                color = new Color(0.25f, 0.16f, 0.31f);
+                label = "RUPTURE";
+                style = 2;
+                return;
+            case ProceduralArenaGenerator.ArenaTheme.DataCore:
+                color = new Color(0.08f, 0.24f, 0.19f);
+                label = "CORE";
+                style = 3;
+                return;
+            case ProceduralArenaGenerator.ArenaTheme.NullArchive:
+                color = new Color(0.10f, 0.13f, 0.28f);
+                label = "ARCHIVE";
+                style = 4;
+                return;
+            default:
+                color = new Color(0.14f, 0.18f, 0.26f);
+                label = "LAB";
+                style = 0;
+                return;
+        }
     }
 
     private static void DrawGlobalAmbientOverlay(float time)
@@ -1899,8 +1969,14 @@ public class MainMenuController : MonoBehaviour
             case 1:
                 DrawStorageMotif(band, time);
                 break;
-            default:
+            case 2:
                 DrawRuptureMotif(band, time);
+                break;
+            case 3:
+                DrawCoreMotif(band, time);
+                break;
+            default:
+                DrawArchiveMotif(band, time);
                 break;
         }
 
@@ -1983,6 +2059,87 @@ public class MainMenuController : MonoBehaviour
             float w = i % 3 == 0 ? 28f : 20f;
             float h = i % 3 == 0 ? 10f : 18f;
             DrawSolidRect(new Rect(x - w * 0.5f, y - h * 0.5f, w, h), obstacle);
+        }
+    }
+
+    private static void DrawCoreMotif(Rect band, float time)
+    {
+        Color circuit = new Color(0.30f, 0.96f, 0.69f, 0.22f);
+        Color node = new Color(0.55f, 1f, 0.80f, 0.46f);
+        float columnWidth = Mathf.Max(26f, band.width * 0.18f);
+        float left = band.x + band.width * 0.18f;
+        float right = band.xMax - band.width * 0.18f;
+
+        for (int i = 0; i < 7; i++)
+        {
+            float normalized = (i + 1f) / 8f;
+            float y = band.y + band.height * normalized;
+            float pulse = 0.45f + 0.55f * Mathf.Sin(time * 1.8f + i * 0.9f);
+            float centerX = Mathf.Lerp(left, right, 0.5f + Mathf.Sin(i * 2.1f) * 0.32f);
+            float horizontalLength = Mathf.Max(18f, band.width * (0.22f + (i % 3) * 0.07f));
+
+            DrawSolidRect(
+                new Rect(centerX - horizontalLength * 0.5f, y, horizontalLength, 2f),
+                new Color(circuit.r, circuit.g, circuit.b, circuit.a + pulse * 0.08f));
+            DrawSolidRect(
+                new Rect(centerX - 1f, y - band.height * 0.055f, 2f, band.height * 0.11f),
+                circuit);
+
+            float nodeSize = 5f + pulse * 3f;
+            DrawSolidRect(
+                new Rect(centerX - nodeSize * 0.5f, y - nodeSize * 0.5f, nodeSize, nodeSize),
+                node);
+        }
+
+        float scanX = band.x + Mathf.Repeat(time * 34f, band.width + columnWidth) - columnWidth;
+        DrawSolidRect(
+            new Rect(scanX, band.y + 42f, columnWidth, band.height - 66f),
+            new Color(0.35f, 1f, 0.75f, 0.035f));
+
+        Vector2 core = new Vector2(band.center.x, band.center.y);
+        float corePulse = 0.5f + 0.5f * Mathf.Sin(time * 2.4f);
+        DrawFilledCircle(core, 12f + corePulse * 3f, new Color(0.42f, 1f, 0.75f, 0.24f));
+        DrawEllipseRing(core, Mathf.Max(22f, band.width * 0.13f), 34f, circuit);
+    }
+
+    private static void DrawArchiveMotif(Rect band, float time)
+    {
+        Vector2 center = new Vector2(
+            band.center.x + Mathf.Sin(time * 0.31f) * band.width * 0.04f,
+            band.center.y + Mathf.Cos(time * 0.27f) * band.height * 0.025f);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(time * 1.35f);
+        Color orbit = new Color(0.48f, 0.84f, 1f, 0.22f);
+        Color anomaly = new Color(0.61f, 0.45f, 0.96f, 0.34f);
+
+        DrawFilledCircle(center, 10f + pulse * 3f, anomaly);
+        for (int ring = 0; ring < 4; ring++)
+        {
+            float radiusX = Mathf.Max(20f, band.width * (0.10f + ring * 0.055f));
+            float radiusY = band.height * (0.10f + ring * 0.065f);
+            DrawEllipseRing(
+                center,
+                radiusX,
+                radiusY,
+                new Color(orbit.r, orbit.g, orbit.b, orbit.a - ring * 0.025f));
+
+            float angle = time * (0.42f + ring * 0.08f) + ring * 1.7f;
+            Vector2 satellite = new Vector2(
+                center.x + Mathf.Cos(angle) * radiusX,
+                center.y + Mathf.Sin(angle) * radiusY);
+            float size = ring % 2 == 0 ? 7f : 5f;
+            DrawSolidRect(
+                new Rect(satellite.x - size * 0.5f, satellite.y - size * 0.5f, size, size),
+                new Color(0.65f, 0.91f, 1f, 0.48f));
+        }
+
+        for (int i = 0; i < 10; i++)
+        {
+            float seed = i * 1.73f;
+            float x = band.x + Mathf.Repeat(seed * 47f + time * (3f + i % 3), band.width);
+            float y = band.y + 52f + Mathf.Repeat(seed * 83f, Mathf.Max(1f, band.height - 88f));
+            DrawSolidRect(
+                new Rect(x, y, 2f + i % 3, 2f + (i + 1) % 3),
+                new Color(0.67f, 0.86f, 1f, 0.15f));
         }
     }
 
@@ -2097,6 +2254,106 @@ public class MainMenuController : MonoBehaviour
         }
 
         return clicked;
+    }
+
+    private bool DrawMainCommandButton(
+        Rect rect,
+        string code,
+        string title,
+        string subtitle,
+        Color accent,
+        bool emphasis = false)
+    {
+        bool canInteract = transitionState == MenuTransitionState.Idle;
+        string hoverKey = $"main_{code}_{title}";
+        bool hovered = canInteract && rect.Contains(Event.current.mousePosition);
+        TrackButtonHover(hoverKey, hovered);
+        float hover = GetButtonHoverState(hoverKey, hovered);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (emphasis ? 3.4f : 2.3f));
+
+        Color fill = emphasis
+            ? new Color(accent.r, accent.g, accent.b, 0.10f + hover * 0.10f)
+            : new Color(0.025f, 0.05f, 0.09f, 0.38f + hover * 0.30f);
+        DrawSolidRect(rect, fill);
+        DrawSolidRect(new Rect(rect.x, rect.y, 4f + hover * 3f, rect.height),
+            new Color(accent.r, accent.g, accent.b, 0.54f + hover * 0.38f));
+        DrawSolidRect(new Rect(rect.x + 12f, rect.yMax - 1f, rect.width - 12f, 1f),
+            new Color(accent.r, accent.g, accent.b, 0.18f + hover * 0.28f));
+
+        float codeWidth = emphasis ? 48f : 38f;
+        GUIStyle codeStyle = new GUIStyle(rankingScoreStyle)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            fontSize = emphasis ? 15 : 12
+        };
+        codeStyle.normal.textColor = new Color(accent.r, accent.g, accent.b, 0.90f);
+        GUI.Label(new Rect(rect.x + 10f, rect.y, codeWidth, rect.height), code, codeStyle);
+
+        float textX = rect.x + codeWidth + 18f;
+        float arrowSpace = 34f;
+        GUIStyle commandStyle = new GUIStyle(rankingRowStyle)
+        {
+            alignment = string.IsNullOrWhiteSpace(subtitle) ? TextAnchor.MiddleLeft : TextAnchor.LowerLeft,
+            fontSize = emphasis ? 16 : 12,
+            clipping = TextClipping.Clip
+        };
+        commandStyle.normal.textColor = Color.Lerp(new Color(0.84f, 0.90f, 1f, 0.92f), Color.white, hover);
+        float titleHeight = string.IsNullOrWhiteSpace(subtitle) ? rect.height : rect.height * 0.56f;
+        GUI.Label(new Rect(textX, rect.y + 2f, rect.xMax - textX - arrowSpace, titleHeight), title, commandStyle);
+
+        if (!string.IsNullOrWhiteSpace(subtitle))
+        {
+            GUIStyle subtitleCommand = new GUIStyle(paragraphStyle)
+            {
+                alignment = TextAnchor.UpperLeft,
+                fontSize = emphasis ? 10 : 9,
+                clipping = TextClipping.Clip
+            };
+            subtitleCommand.normal.textColor = new Color(0.68f, 0.76f, 0.88f, 0.84f);
+            GUI.Label(new Rect(textX, rect.y + titleHeight, rect.xMax - textX - arrowSpace, rect.height - titleHeight - 2f),
+                subtitle, subtitleCommand);
+        }
+
+        float arrowX = rect.xMax - 22f - hover * 5f;
+        DrawSolidRect(new Rect(arrowX, rect.center.y - 1f, 12f, 2f),
+            new Color(accent.r, accent.g, accent.b, 0.46f + hover * 0.44f));
+        DrawSolidRect(new Rect(arrowX + 8f, rect.center.y - 4f, 2f, 4f),
+            new Color(accent.r, accent.g, accent.b, 0.46f + hover * 0.44f));
+        DrawSolidRect(new Rect(arrowX + 8f, rect.center.y + 1f, 2f, 4f),
+            new Color(accent.r, accent.g, accent.b, 0.46f + hover * 0.44f));
+
+        if (hovered)
+        {
+            float sweepX = rect.x + Mathf.Repeat(Time.unscaledTime * 145f, rect.width + 44f) - 44f;
+            Rect sweep = IntersectRect(new Rect(sweepX, rect.y, 44f, rect.height), rect);
+            if (sweep.width > 0f)
+            {
+                DrawSolidRect(sweep, new Color(accent.r, accent.g, accent.b, 0.025f + pulse * 0.025f));
+            }
+        }
+
+        if (!canInteract)
+        {
+            return false;
+        }
+
+        bool clicked = GUI.Button(rect, GUIContent.none, GUIStyle.none);
+        if (clicked)
+        {
+            GlitchAudioManager.PlayMenuConfirm();
+        }
+        return clicked;
+    }
+
+    private static int GetKnownZoneCount()
+    {
+        int count = 0;
+        if (ArenaDiscoveryStorage.IsDiscovered(ProceduralArenaGenerator.ArenaTheme.ContainmentLab)) count++;
+        if (ArenaDiscoveryStorage.IsDiscovered(ProceduralArenaGenerator.ArenaTheme.StorageBay)) count++;
+        if (ArenaDiscoveryStorage.IsDiscovered(ProceduralArenaGenerator.ArenaTheme.RuptureZone)) count++;
+        if (ArenaDiscoveryStorage.IsDiscovered(ProceduralArenaGenerator.ArenaTheme.DataCore)) count++;
+        if (ArenaDiscoveryStorage.IsDiscovered(ProceduralArenaGenerator.ArenaTheme.NullArchive)) count++;
+        return count;
     }
 
     private void TrackButtonHover(string key, bool hovered)

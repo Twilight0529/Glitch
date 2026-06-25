@@ -165,6 +165,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
     {
         activeTheme = theme;
         visitedThemes.Add(activeTheme);
+        ArenaDiscoveryStorage.Discover(activeTheme);
         hasLastGeneratedTheme = true;
         lastGeneratedTheme = activeTheme;
         palette = GetPalette(activeTheme);
@@ -378,14 +379,18 @@ public class ProceduralArenaGenerator : MonoBehaviour
             return fixedTheme;
         }
 
-        Array values = Enum.GetValues(typeof(ArenaTheme));
-        int count = values.Length;
-        if (count <= 1)
+        return DrawDiscoveredInitialTheme(includeAdvancedThemes: true);
+    }
+
+    private ArenaTheme DrawDiscoveredInitialTheme(bool includeAdvancedThemes)
+    {
+        List<ArenaTheme> values = ArenaDiscoveryStorage.GetInitialThemePool(includeAdvancedThemes);
+        if (values.Count <= 0)
         {
-            return (ArenaTheme)values.GetValue(0);
+            return ArenaTheme.ContainmentLab;
         }
 
-        return DrawThemeFromBag(ShouldIncludeAdvancedThemes());
+        return values[rng.Next(0, values.Count)];
     }
 
     private ArenaTheme DrawThemeFromBag(bool includeAdvancedThemes)

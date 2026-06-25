@@ -597,14 +597,11 @@ public class GameMenuController : MonoBehaviour
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4.6f);
         bool anomalyWon = gameManager != null &&
                           string.Equals(gameManager.VersusWinnerLabel, "ANOMALIA", System.StringComparison.OrdinalIgnoreCase);
-        Color winnerColor = anomalyWon
-            ? new Color(1f, 0.28f, 0.48f, 1f)
-            : new Color(0.25f, 0.90f, 1f, 1f);
-        Color loserColor = anomalyWon
-            ? new Color(0.25f, 0.90f, 1f, 1f)
-            : new Color(1f, 0.28f, 0.48f, 1f);
+        Color runnerBlue = new Color(0.25f, 0.90f, 1f, 1f);
+        Color anomalyRed = new Color(1f, 0.28f, 0.48f, 1f);
+        Color winnerColor = anomalyWon ? anomalyRed : runnerBlue;
 
-        DrawVersusResultBackdrop(winnerColor, loserColor, pulse, elapsed, intro);
+        DrawVersusResultBackdrop(runnerBlue, anomalyRed, winnerColor, pulse, elapsed, intro);
         DrawVersusResultImpact(winnerColor, elapsed);
 
         float panelWidth = Mathf.Min(690f, Screen.width - 44f);
@@ -617,7 +614,7 @@ public class GameMenuController : MonoBehaviour
         panel.x += (Mathf.PerlinNoise(Time.unscaledTime * 18f, 0.31f) - 0.5f) * jitter;
         DrawPanel(panel, new Color(0.012f, 0.022f, 0.046f, 0.96f),
             new Color(winnerColor.r, winnerColor.g, winnerColor.b, 0.82f));
-        DrawVersusResultPanelFx(panel, winnerColor, loserColor, pulse);
+        DrawVersusResultPanelFx(panel, runnerBlue, anomalyRed, winnerColor, pulse);
 
         Rect content = new Rect(panel.x + 28f, panel.y + 18f, panel.width - 56f, panel.height - 36f);
         string winner = string.IsNullOrWhiteSpace(gameManager.VersusWinnerLabel)
@@ -644,8 +641,8 @@ public class GameMenuController : MonoBehaviour
         GUI.color = new Color(1f, 1f, 1f, statsAlpha);
         Rect arenaStat = new Rect(content.x + 18f, content.y + 123f, (content.width - 48f) * 0.5f, 78f);
         Rect timeStat = new Rect(arenaStat.xMax + 12f, arenaStat.y, arenaStat.width, arenaStat.height);
-        DrawVersusResultStat(arenaStat, "ZONA DE CONTENCION", gameManager.CurrentLevelTypeLabel, winnerColor);
-        DrawVersusResultStat(timeStat, "DURACION DEL DUELO", $"{gameManager.SurvivalTime:F1}s", loserColor);
+        DrawVersusResultStat(arenaStat, "J1 | ZONA DE CONTENCION", gameManager.CurrentLevelTypeLabel, runnerBlue);
+        DrawVersusResultStat(timeStat, "J2 | DURACION DEL DUELO", $"{gameManager.SurvivalTime:F1}s", anomalyRed);
         GUI.color = oldGui;
 
         float dividerY = content.y + 220f;
@@ -675,14 +672,24 @@ public class GameMenuController : MonoBehaviour
         GUI.color = oldGui;
     }
 
-    private void DrawVersusResultBackdrop(Color winner, Color loser, float pulse, float elapsed, float intro)
+    private void DrawVersusResultBackdrop(
+        Color runnerBlue,
+        Color anomalyRed,
+        Color winner,
+        float pulse,
+        float elapsed,
+        float intro)
     {
         DrawScreenFade(Mathf.Lerp(0.94f, 0.78f, intro));
         float split = Mathf.Lerp(0f, Screen.width * 0.54f, EaseOutCubic(Mathf.Clamp01(elapsed / 0.62f)));
         DrawSolidRect(new Rect(0f, 0f, split, Screen.height),
-            new Color(winner.r, winner.g, winner.b, 0.07f + pulse * 0.035f));
-        DrawSolidRect(new Rect(Screen.width - split * 0.48f, 0f, split * 0.48f, Screen.height),
-            new Color(loser.r, loser.g, loser.b, 0.035f));
+            new Color(runnerBlue.r, runnerBlue.g, runnerBlue.b, 0.055f + pulse * 0.025f));
+        DrawSolidRect(new Rect(Screen.width - split, 0f, split, Screen.height),
+            new Color(anomalyRed.r, anomalyRed.g, anomalyRed.b, 0.055f + pulse * 0.025f));
+        float winnerWidth = Screen.width * 0.5f;
+        float winnerX = winner.r > winner.b ? Screen.width * 0.5f : 0f;
+        DrawSolidRect(new Rect(winnerX, 0f, winnerWidth, Screen.height),
+            new Color(winner.r, winner.g, winner.b, 0.025f + pulse * 0.018f));
 
         for (int i = 0; i < 14; i++)
         {
@@ -692,7 +699,7 @@ public class GameMenuController : MonoBehaviour
                 ? Mathf.Repeat(Time.unscaledTime * (115f + i * 5f) + i * 127f, Screen.width + width) - width
                 : Screen.width - Mathf.Repeat(Time.unscaledTime * (105f + i * 6f) + i * 91f, Screen.width + width);
             float y = (i + 0.5f) * Screen.height / 14f;
-            Color color = i % 3 == 0 ? loser : winner;
+            Color color = direction > 0f ? runnerBlue : anomalyRed;
             DrawSolidRect(new Rect(x, y, width, i % 4 == 0 ? 3f : 1.5f),
                 new Color(color.r, color.g, color.b, 0.08f + pulse * 0.035f));
         }
@@ -722,12 +729,12 @@ public class GameMenuController : MonoBehaviour
         }
     }
 
-    private void DrawVersusResultPanelFx(Rect panel, Color winner, Color loser, float pulse)
+    private void DrawVersusResultPanelFx(Rect panel, Color runnerBlue, Color anomalyRed, Color winner, float pulse)
     {
-        DrawSolidRect(new Rect(panel.x, panel.y, panel.width * 0.68f, 4f),
-            new Color(winner.r, winner.g, winner.b, 0.86f));
-        DrawSolidRect(new Rect(panel.x + panel.width * 0.68f, panel.y, panel.width * 0.32f, 4f),
-            new Color(loser.r, loser.g, loser.b, 0.60f));
+        DrawSolidRect(new Rect(panel.x, panel.y, panel.width * 0.5f, 4f),
+            new Color(runnerBlue.r, runnerBlue.g, runnerBlue.b, 0.78f));
+        DrawSolidRect(new Rect(panel.center.x, panel.y, panel.width * 0.5f, 4f),
+            new Color(anomalyRed.r, anomalyRed.g, anomalyRed.b, 0.78f));
         float scanY = panel.y + Mathf.Repeat(Time.unscaledTime * 62f, panel.height);
         DrawSolidRect(new Rect(panel.x + 3f, scanY, panel.width - 6f, 2f),
             new Color(winner.r, winner.g, winner.b, 0.055f + pulse * 0.025f));

@@ -378,6 +378,7 @@ public class EnemyController : MonoBehaviour
     [Header("Local Versus")]
     [SerializeField] private float localVersusManualChangeUnlock = 10f;
     [SerializeField] private float localVersusStateDuration = 20f;
+    [SerializeField, Range(1f, 1.6f)] private float localVersusMoveSpeedMultiplier = 1.22f;
 
     private Rigidbody2D rb;
     private Collider2D ownCollider;
@@ -1154,6 +1155,10 @@ public class EnemyController : MonoBehaviour
     private float GetCurrentStateMoveSpeed()
     {
         float speed = baseMoveSpeed * sectorSpeedMultiplier;
+        if (localVersusControl)
+        {
+            speed *= Mathf.Max(1f, localVersusMoveSpeedMultiplier);
+        }
         if (currentPattern == BehaviorPattern.ErraticBurst)
         {
             speed *= erraticBurstMultiplier;

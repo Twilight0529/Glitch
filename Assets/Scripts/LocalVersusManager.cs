@@ -256,8 +256,7 @@ public class LocalVersusManager : MonoBehaviour
 
         DrawResource(panel, ref y, "FIREWALL", runner != null ? runner.FirewallChargeNormalized : 0f,
             runner != null && runner.IsFirewallBurstReady ? Color.white : runnerColor, scale);
-        DrawResource(panel, ref y, "PARRY", runner != null ? runner.ParryCooldownNormalized : 0f,
-            new Color(0.48f, 1f, 0.82f, 1f), scale);
+        DrawVersusParryResource(panel, ref y, scale);
         DrawResource(panel, ref y, "GHOST DASH", runner != null ? runner.GhostDashCooldownNormalized : 0f,
             new Color(0.68f, 0.72f, 1f, 1f), scale);
 
@@ -428,6 +427,37 @@ public class LocalVersusManager : MonoBehaviour
             new Color(color.r, color.g, color.b, 0.82f));
         DrawRect(new Rect(bar.x + Mathf.Repeat(Time.unscaledTime * 46f, Mathf.Max(1f, bar.width)), bar.y, 2f * scale, bar.height),
             new Color(1f, 1f, 1f, 0.24f));
+        y += 22f * scale;
+    }
+
+    private void DrawVersusParryResource(Rect panel, ref float y, float scale)
+    {
+        float pad = 16f * scale;
+        int charges = runner != null ? runner.LocalVersusParryCharges : 0;
+        int maximum = runner != null ? runner.LocalVersusParryChargesMax : 3;
+        string label = charges > 0
+            ? $"PARRY  {charges}/{maximum}"
+            : $"PARRY  RECARGA {Mathf.CeilToInt(runner != null ? runner.LocalVersusParryRechargeRemaining : 0f)}s";
+        GUI.Label(new Rect(panel.x + pad, y, panel.width - pad * 2f, 18f * scale), label, compactStyle);
+        y += 19f * scale;
+
+        float gap = 4f * scale;
+        float totalWidth = panel.width - pad * 2f;
+        float segmentWidth = (totalWidth - gap * (maximum - 1)) / Mathf.Max(1, maximum);
+        for (int i = 0; i < maximum; i++)
+        {
+            Rect segment = new Rect(panel.x + pad + i * (segmentWidth + gap), y, segmentWidth, 11f * scale);
+            bool loaded = i < charges;
+            DrawRect(segment, loaded
+                ? new Color(0.48f, 1f, 0.82f, 0.86f)
+                : new Color(0.04f, 0.07f, 0.12f, 0.96f));
+            if (!loaded && charges <= 0)
+            {
+                float fill = runner != null ? runner.LocalVersusParryRechargeNormalized : 0f;
+                DrawRect(new Rect(segment.x, segment.y, segment.width * fill, segment.height),
+                    new Color(0.48f, 1f, 0.82f, 0.28f));
+            }
+        }
         y += 22f * scale;
     }
 

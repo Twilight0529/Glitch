@@ -40,6 +40,10 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float maxParryActiveDuration = 0.32f;
     [SerializeField] private float minParryCooldown = 0.42f;
     [SerializeField] private float maxParryRadius = 1.55f;
+
+    [Header("Local Versus Parry")]
+    [SerializeField] private int localVersusParryChargesMax = 3;
+    [SerializeField] private float localVersusParryRechargeSeconds = 40f;
     [SerializeField] private Color parryReadyColor = new Color(0.46f, 0.96f, 1f, 0.62f);
     [SerializeField] private Color parrySuccessColor = new Color(1f, 0.96f, 0.64f, 1f);
     [SerializeField] private float parryFxRadius = 1.65f;
@@ -125,6 +129,8 @@ public class PlayerController : MonoBehaviour
     private GameObject shieldVisual;
     private float parryTimer;
     private float parryCooldownTimer;
+    private int localVersusParryCharges;
+    private float localVersusParryRechargeTimer;
     private SpriteRenderer parryRenderer;
     private GameObject parryVisual;
     private ParticleSystem movementTrail;
@@ -150,7 +156,7 @@ public class PlayerController : MonoBehaviour
     public bool HasMovementSlow => movementSlowTimer > 0f;
     public bool HasCompactMode => compactTimer > 0f;
     public bool IsParryActive => parryTimer > 0f;
-    public bool IsParryReady => parryCooldownTimer <= 0f;
+    public bool IsParryReady => parryCooldownTimer <= 0f && HasLocalVersusParryCharge;
     public float ParryCooldownNormalized => IsParryReady
         ? 1f
         : Mathf.Clamp01(1f - parryCooldownTimer / Mathf.Max(0.05f, parryCooldown));
@@ -160,6 +166,19 @@ public class PlayerController : MonoBehaviour
         ? 1f
         : Mathf.Clamp01(1f - ghostDashCooldownTimer / Mathf.Max(0.05f, ghostDashCooldown));
     public float ParryRadius => Mathf.Max(0.1f, parryRadius);
+    public int LocalVersusParryCharges => LocalVersusModeStorage.IsLocalVersus
+        ? Mathf.Clamp(localVersusParryCharges, 0, Mathf.Max(1, localVersusParryChargesMax))
+        : Mathf.Max(1, localVersusParryChargesMax);
+    public int LocalVersusParryChargesMax => Mathf.Max(1, localVersusParryChargesMax);
+    public float LocalVersusParryRechargeNormalized => !LocalVersusModeStorage.IsLocalVersus ||
+                                                       localVersusParryCharges >= LocalVersusParryChargesMax
+        ? 1f
+        : Mathf.Clamp01(1f - localVersusParryRechargeTimer / Mathf.Max(1f, localVersusParryRechargeSeconds));
+    public float LocalVersusParryRechargeRemaining => LocalVersusModeStorage.IsLocalVersus
+        ? Mathf.Max(0f, localVersusParryRechargeTimer)
+        : 0f;
+    private bool HasLocalVersusParryCharge =>
+        !LocalVersusModeStorage.IsLocalVersus || localVersusParryCharges > 0;
     public float FirewallCharge => firewallCharge;
     public float FirewallChargeMax => Mathf.Max(1f, firewallChargeMax);
     public float FirewallChargeNormalized => Mathf.Clamp01(firewallCharge / FirewallChargeMax);
@@ -198,6 +217,8 @@ public class PlayerController : MonoBehaviour
         bodyRenderer = GetComponent<SpriteRenderer>();
         rb.gravityScale = 0f;
         rb.freezeRotation = true;
+        localVersusParryCharges = Mathf.Max(1, localVersusParryChargesMax);
+        localVersusParryRechargeTimer = 0f;
 
         baseBodyScale = transform.localScale;
         if (bodyRenderer != null)
@@ -257,6 +278,7 @@ public class PlayerController : MonoBehaviour
         UpdatePowerupTimers();
         UpdateShieldVisual();
         UpdateParryTimers();
+        UpdateLocalVersusParryCharges();
         UpdateParryVisual();
         UpdateGhostDashTimers();
         UpdateGhostDashVisual();
@@ -926,8 +948,49 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    private void UpdateLocalVersusParryCharges()
+    {
+        if (!LocalVersusModeStorage.IsLocalVersus)
+        {
+            localVersusParryCharges = Mathf.Max(1, localVersusParryChargesMax);
+            localVersusParryRechargeTimer = 0f;
+            return;
+        }
+
+        int maximum = Mathf.Max(1, localVersusParryChargesMax);
+        if (localVersusParryCharges >= maximum)
+        {
+            localVersusParryCharges = maximum;
+            localVersusParryRechargeTimer = 0f;
+            return;
+        }
+
+        localVersusParryRechargeTimer -= Time.deltaTime;
+        if (localVersusParryRechargeTimer <= 0f)
+        {
+            localVersusParryCharges = maximum;
+            localVersusParryRechargeTimer = 0f;
+        }
+    }
+
     private void StartParry()
     {
+        if (!HasLocalVersusParryCharge)
+        {
+            return;
+        }
+
+        if (LocalVersusModeStorage.IsLocalVersus)
+        {
+            int maximum = Mathf.Max(1, localVersusParryChargesMax);
+            bool wasFull = localVersusParryCharges >= maximum;
+            localVersusParryCharges = Mathf.Max(0, localVersusParryCharges - 1);
+            if (wasFull || localVersusParryRechargeTimer <= 0f)
+            {
+                localVersusParryRechargeTimer = Mathf.Max(1f, localVersusParryRechargeSeconds);
+            }
+        }
+
         parryTimer = Mathf.Max(0.04f, parryActiveDuration);
         parryCooldownTimer = Mathf.Max(0.05f, parryCooldown);
         SpawnParryStartFx();

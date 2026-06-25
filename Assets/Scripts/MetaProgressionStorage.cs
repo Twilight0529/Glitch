@@ -355,6 +355,7 @@ public static class MetaProgressionStorage
 
     public static void UnlockAll()
     {
+        ArenaDiscoveryStorage.UnlockAll();
         for (int i = 0; i < definitions.Length; i++)
         {
             if (definitions[i].cost > 0)
@@ -460,6 +461,7 @@ public static class MetaProgressionStorage
 
     public static void ResetProgress()
     {
+        ArenaDiscoveryStorage.Reset();
         PlayerPrefs.DeleteKey(DataKey);
         PlayerPrefs.DeleteKey(LastScoreKey);
         PlayerPrefs.DeleteKey(LastTimeKey);
