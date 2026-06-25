@@ -500,13 +500,22 @@ public class EnemyController : MonoBehaviour
     private GameObject levelTwoAppearanceRoot;
     private GameObject levelThreeAppearanceRoot;
     private SpriteRenderer levelTwoHaloRenderer;
+    private SpriteRenderer levelTwoCoreRenderer;
     private readonly List<SpriteRenderer> levelTwoModuleRenderers = new List<SpriteRenderer>();
     private readonly List<Transform> levelTwoModuleTransforms = new List<Transform>();
+    private readonly List<SpriteRenderer> levelTwoSpokeRenderers = new List<SpriteRenderer>();
+    private readonly List<SpriteRenderer> levelTwoSparkRenderers = new List<SpriteRenderer>();
+    private readonly List<Transform> levelTwoSparkTransforms = new List<Transform>();
+    private SpriteRenderer levelThreeVoidCoreRenderer;
     private readonly List<SpriteRenderer> levelThreeCrownRenderers = new List<SpriteRenderer>();
     private readonly List<Transform> levelThreeCrownTransforms = new List<Transform>();
     private readonly List<SpriteRenderer> levelThreeOrbitRenderers = new List<SpriteRenderer>();
     private readonly List<Transform> levelThreeOrbitTransforms = new List<Transform>();
     private readonly List<SpriteRenderer> levelThreeGhostRenderers = new List<SpriteRenderer>();
+    private readonly List<SpriteRenderer> levelThreeSatelliteRenderers = new List<SpriteRenderer>();
+    private readonly List<Transform> levelThreeSatelliteTransforms = new List<Transform>();
+    private readonly List<SpriteRenderer> levelThreeTrailRenderers = new List<SpriteRenderer>();
+    private readonly List<Transform> levelThreeTrailTransforms = new List<Transform>();
     private Vector3 baseScale = Vector3.one;
     private Color baseColor = Color.white;
 
@@ -2231,10 +2240,15 @@ public class EnemyController : MonoBehaviour
         levelThreeAppearanceRoot.SetActive(showLevelThree);
 
         float time = Time.time;
+        Vector2 velocity = rb != null ? rb.linearVelocity : Vector2.zero;
+        float speedNormalized = Mathf.Clamp01(velocity.magnitude / Mathf.Max(0.1f, baseMoveSpeed * sectorSpeedMultiplier));
+        Vector2 localMoveDirection = velocity.sqrMagnitude > 0.01f
+            ? (Vector2)transform.InverseTransformDirection(velocity.normalized)
+            : lastMoveDirection;
         if (showLevelTwo)
         {
             float pulse = 0.5f + 0.5f * Mathf.Sin(time * 4.2f);
-            levelTwoAppearanceRoot.transform.localRotation = Quaternion.Euler(0f, 0f, time * 24f);
+            levelTwoAppearanceRoot.transform.localRotation = Quaternion.Euler(0f, 0f, time * Mathf.Lerp(24f, 54f, speedNormalized));
             if (levelTwoHaloRenderer != null)
             {
                 levelTwoHaloRenderer.transform.localScale = Vector3.one * Mathf.Lerp(1.38f, 1.55f, pulse);
@@ -2243,6 +2257,16 @@ public class EnemyController : MonoBehaviour
                     levelTwoAwakeningBurstColor.g,
                     levelTwoAwakeningBurstColor.b,
                     0.10f + pulse * 0.09f);
+            }
+            if (levelTwoCoreRenderer != null)
+            {
+                float coreScale = Mathf.Lerp(0.32f, 0.48f, pulse);
+                levelTwoCoreRenderer.transform.localScale = Vector3.one * coreScale;
+                levelTwoCoreRenderer.color = new Color(
+                    levelTwoAwakenedColor.r,
+                    levelTwoAwakenedColor.g,
+                    levelTwoAwakenedColor.b,
+                    0.72f + pulse * 0.25f);
             }
 
             for (int i = 0; i < levelTwoModuleTransforms.Count; i++)
@@ -2255,6 +2279,39 @@ public class EnemyController : MonoBehaviour
                 levelTwoModuleRenderers[i].color = i % 2 == 0
                     ? new Color(levelTwoAwakenedColor.r, levelTwoAwakenedColor.g, levelTwoAwakenedColor.b, 0.88f)
                     : new Color(levelTwoAwakeningBurstColor.r, levelTwoAwakeningBurstColor.g, levelTwoAwakeningBurstColor.b, 0.92f);
+
+                if (i < levelTwoSpokeRenderers.Count)
+                {
+                    ConfigureLocalAppearanceLine(
+                        levelTwoSpokeRenderers[i],
+                        Vector2.zero,
+                        module.localPosition,
+                        0.025f + pulse * 0.018f,
+                        new Color(
+                            levelTwoAwakeningBurstColor.r,
+                            levelTwoAwakeningBurstColor.g,
+                            levelTwoAwakeningBurstColor.b,
+                            0.22f + pulse * 0.24f));
+                }
+            }
+
+            for (int i = 0; i < levelTwoSparkTransforms.Count; i++)
+            {
+                float phase = Mathf.Repeat(time * (0.72f + i * 0.06f) + i * 0.19f, 1f);
+                float angle = i * 2.17f + Mathf.Sin(time * 1.8f + i) * 0.35f;
+                float radius = Mathf.Lerp(0.30f, 1.02f, phase);
+                Transform spark = levelTwoSparkTransforms[i];
+                spark.localPosition = new Vector3(
+                    Mathf.Cos(angle) * radius - localMoveDirection.x * speedNormalized * phase * 0.25f,
+                    Mathf.Sin(angle) * radius - localMoveDirection.y * speedNormalized * phase * 0.25f,
+                    0f);
+                spark.localRotation = Quaternion.Euler(0f, 0f, angle * Mathf.Rad2Deg);
+                spark.localScale = new Vector3(Mathf.Lerp(0.15f, 0.04f, phase), 0.025f, 1f);
+                levelTwoSparkRenderers[i].color = new Color(
+                    i % 2 == 0 ? levelTwoAwakenedColor.r : levelTwoAwakeningBurstColor.r,
+                    i % 2 == 0 ? levelTwoAwakenedColor.g : levelTwoAwakeningBurstColor.g,
+                    i % 2 == 0 ? levelTwoAwakenedColor.b : levelTwoAwakeningBurstColor.b,
+                    Mathf.Sin(phase * Mathf.PI) * (0.32f + speedNormalized * 0.34f));
             }
         }
 
@@ -2264,11 +2321,26 @@ public class EnemyController : MonoBehaviour
         }
 
         float levelThreePulse = 0.5f + 0.5f * Mathf.Sin(time * 6.4f);
+        float distortionPulse = Mathf.PerlinNoise(time * 4.2f, 0.37f);
+        levelThreeAppearanceRoot.transform.localScale = new Vector3(
+            1.03f + levelThreePulse * 0.10f + speedNormalized * 0.05f,
+            1.08f - levelThreePulse * 0.05f,
+            1f);
+        levelThreeAppearanceRoot.transform.localRotation = Quaternion.Euler(
+            0f,
+            0f,
+            Mathf.Sin(time * 2.8f) * (2.5f + distortionPulse * 2f));
+        if (levelThreeVoidCoreRenderer != null)
+        {
+            levelThreeVoidCoreRenderer.transform.localScale = Vector3.one * Mathf.Lerp(1.22f, 1.48f, distortionPulse);
+            levelThreeVoidCoreRenderer.color = new Color(0.015f, 0.008f, 0.035f, 0.48f + distortionPulse * 0.22f);
+        }
+
         for (int i = 0; i < levelThreeGhostRenderers.Count; i++)
         {
             float direction = i == 0 ? -1f : 1f;
-            float jitterX = direction * (0.08f + levelThreePulse * 0.045f);
-            float jitterY = Mathf.Sin(time * 9f + i * 2.4f) * 0.045f;
+            float jitterX = direction * (0.10f + levelThreePulse * 0.055f) - localMoveDirection.x * speedNormalized * (0.08f + i * 0.04f);
+            float jitterY = Mathf.Sin(time * 9f + i * 2.4f) * 0.055f - localMoveDirection.y * speedNormalized * (0.08f + i * 0.04f);
             SpriteRenderer ghost = levelThreeGhostRenderers[i];
             ghost.transform.localPosition = new Vector3(jitterX, jitterY, 0f);
             ghost.transform.localScale = Vector3.one * (1.08f + levelThreePulse * 0.04f);
@@ -2308,6 +2380,44 @@ public class EnemyController : MonoBehaviour
                 levelThreeAwakeningBurstColor.b,
                 i % 2 == 0 ? 0.58f : 0.28f);
         }
+
+        for (int i = 0; i < levelThreeSatelliteTransforms.Count; i++)
+        {
+            float direction = i % 2 == 0 ? 1f : -1f;
+            float angle = time * (1.35f + i * 0.18f) * direction + i * 1.57f;
+            float radiusX = 1.20f + i * 0.07f;
+            float radiusY = 0.72f + (i % 2) * 0.18f;
+            Transform satellite = levelThreeSatelliteTransforms[i];
+            satellite.localPosition = new Vector3(Mathf.Cos(angle) * radiusX, Mathf.Sin(angle) * radiusY, 0f);
+            satellite.localRotation = Quaternion.Euler(0f, 0f, angle * Mathf.Rad2Deg + time * 90f * direction);
+            satellite.localScale = new Vector3(0.16f + distortionPulse * 0.08f, 0.07f, 1f);
+            levelThreeSatelliteRenderers[i].color = i % 2 == 0
+                ? new Color(1f, 0.18f, 0.62f, 0.72f)
+                : new Color(0.20f, 0.94f, 1f, 0.68f);
+        }
+
+        Vector2 trailDirection = localMoveDirection.sqrMagnitude > 0.01f
+            ? -localMoveDirection.normalized
+            : Vector2.left;
+        for (int i = 0; i < levelThreeTrailTransforms.Count; i++)
+        {
+            float distance = 0.32f + i * 0.19f;
+            float side = Mathf.Sin(time * 11f + i * 1.9f) * (0.05f + i * 0.012f);
+            Vector2 perpendicular = new Vector2(-trailDirection.y, trailDirection.x);
+            Vector2 position = trailDirection * distance + perpendicular * side;
+            Transform trail = levelThreeTrailTransforms[i];
+            trail.localPosition = position;
+            trail.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(trailDirection.y, trailDirection.x) * Mathf.Rad2Deg);
+            trail.localScale = new Vector3(
+                Mathf.Lerp(0.30f, 0.09f, i / Mathf.Max(1f, levelThreeTrailTransforms.Count - 1f)),
+                0.045f + (i % 2) * 0.018f,
+                1f);
+            float alpha = Mathf.Lerp(0.54f, 0.08f, i / Mathf.Max(1f, levelThreeTrailTransforms.Count - 1f));
+            alpha *= Mathf.Lerp(0.45f, 1f, speedNormalized);
+            levelThreeTrailRenderers[i].color = i % 2 == 0
+                ? new Color(1f, 0.20f, 0.66f, alpha)
+                : new Color(0.22f, 0.90f, 1f, alpha);
+        }
     }
 
     private void EnsureLevelAppearance()
@@ -2331,6 +2441,14 @@ public class EnemyController : MonoBehaviour
             Vector2.one * 1.45f,
             new Color(levelTwoAwakeningBurstColor.r, levelTwoAwakeningBurstColor.g, levelTwoAwakeningBurstColor.b, 0.16f),
             baseOrder - 2);
+        levelTwoCoreRenderer = CreateAppearanceSprite(
+            levelTwoAppearanceRoot.transform,
+            "LevelTwoCore",
+            SquareSpriteProvider.Get(),
+            Vector2.zero,
+            Vector2.one * 0.40f,
+            levelTwoAwakenedColor,
+            baseOrder + 3);
         CreateAppearanceSprite(
             levelTwoAppearanceRoot.transform,
             "LevelTwoCrossHorizontal",
@@ -2359,11 +2477,33 @@ public class EnemyController : MonoBehaviour
                 baseOrder + 2);
             levelTwoModuleRenderers.Add(module);
             levelTwoModuleTransforms.Add(module.transform);
+            SpriteRenderer spoke = CreateAppearanceSprite(
+                levelTwoAppearanceRoot.transform,
+                $"LevelTwoSpoke_{i}",
+                SquareSpriteProvider.Get(),
+                Vector2.zero,
+                new Vector2(0.5f, 0.025f),
+                new Color(levelTwoAwakeningBurstColor.r, levelTwoAwakeningBurstColor.g, levelTwoAwakeningBurstColor.b, 0.32f),
+                baseOrder);
+            levelTwoSpokeRenderers.Add(spoke);
+        }
+        for (int i = 0; i < 8; i++)
+        {
+            SpriteRenderer spark = CreateAppearanceSprite(
+                levelTwoAppearanceRoot.transform,
+                $"LevelTwoSpark_{i}",
+                SquareSpriteProvider.Get(),
+                Vector2.zero,
+                new Vector2(0.12f, 0.025f),
+                Color.clear,
+                baseOrder + 2);
+            levelTwoSparkRenderers.Add(spark);
+            levelTwoSparkTransforms.Add(spark.transform);
         }
 
         levelThreeAppearanceRoot = new GameObject("LevelThreeMutation");
         levelThreeAppearanceRoot.transform.SetParent(levelAppearanceRoot.transform, false);
-        CreateAppearanceSprite(
+        levelThreeVoidCoreRenderer = CreateAppearanceSprite(
             levelThreeAppearanceRoot.transform,
             "LevelThreeVoidCore",
             CircleSpriteProvider.Get(),
@@ -2414,6 +2554,32 @@ public class EnemyController : MonoBehaviour
             levelThreeOrbitRenderers.Add(tick);
             levelThreeOrbitTransforms.Add(tick.transform);
         }
+        for (int i = 0; i < 4; i++)
+        {
+            SpriteRenderer satellite = CreateAppearanceSprite(
+                levelThreeAppearanceRoot.transform,
+                $"LevelThreeSatellite_{i}",
+                SquareSpriteProvider.Get(),
+                Vector2.zero,
+                new Vector2(0.18f, 0.07f),
+                levelThreeAwakeningBurstColor,
+                baseOrder + 4);
+            levelThreeSatelliteRenderers.Add(satellite);
+            levelThreeSatelliteTransforms.Add(satellite.transform);
+        }
+        for (int i = 0; i < 7; i++)
+        {
+            SpriteRenderer trail = CreateAppearanceSprite(
+                levelThreeAppearanceRoot.transform,
+                $"LevelThreeTrail_{i}",
+                SquareSpriteProvider.Get(),
+                Vector2.zero,
+                new Vector2(0.24f, 0.05f),
+                Color.clear,
+                baseOrder - 2);
+            levelThreeTrailRenderers.Add(trail);
+            levelThreeTrailTransforms.Add(trail.transform);
+        }
 
         levelTwoAppearanceRoot.SetActive(false);
         levelThreeAppearanceRoot.SetActive(false);
@@ -2439,6 +2605,32 @@ public class EnemyController : MonoBehaviour
         return renderer;
     }
 
+    private static void ConfigureLocalAppearanceLine(
+        SpriteRenderer rendererRef,
+        Vector2 start,
+        Vector2 end,
+        float thickness,
+        Color color)
+    {
+        if (rendererRef == null)
+        {
+            return;
+        }
+
+        Vector2 delta = end - start;
+        float distance = delta.magnitude;
+        if (distance <= 0.001f)
+        {
+            rendererRef.color = Color.clear;
+            return;
+        }
+
+        rendererRef.transform.localPosition = (start + end) * 0.5f;
+        rendererRef.transform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
+        rendererRef.transform.localScale = new Vector3(distance, Mathf.Max(0.005f, thickness), 1f);
+        rendererRef.color = color;
+    }
+
     private void DestroyLevelAppearanceImmediate()
     {
         if (levelAppearanceRoot != null)
@@ -2457,13 +2649,22 @@ public class EnemyController : MonoBehaviour
         levelTwoAppearanceRoot = null;
         levelThreeAppearanceRoot = null;
         levelTwoHaloRenderer = null;
+        levelTwoCoreRenderer = null;
         levelTwoModuleRenderers.Clear();
         levelTwoModuleTransforms.Clear();
+        levelTwoSpokeRenderers.Clear();
+        levelTwoSparkRenderers.Clear();
+        levelTwoSparkTransforms.Clear();
+        levelThreeVoidCoreRenderer = null;
         levelThreeCrownRenderers.Clear();
         levelThreeCrownTransforms.Clear();
         levelThreeOrbitRenderers.Clear();
         levelThreeOrbitTransforms.Clear();
         levelThreeGhostRenderers.Clear();
+        levelThreeSatelliteRenderers.Clear();
+        levelThreeSatelliteTransforms.Clear();
+        levelThreeTrailRenderers.Clear();
+        levelThreeTrailTransforms.Clear();
     }
 
     public void TriggerLevelTwoAwakeningFx()

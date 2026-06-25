@@ -225,7 +225,7 @@ public class ScoreCollectSparkFx : MonoBehaviour
     private float distance = 1f;
     private float life = 0.22f;
     private float age;
-    private Vector3 origin;
+    private Vector3 origin; 
 
     public void Configure(SpriteRenderer rendererRef, Vector2 travelDir, float travelDistance, float lifetime)
     {
