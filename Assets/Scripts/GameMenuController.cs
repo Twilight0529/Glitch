@@ -592,42 +592,159 @@ public class GameMenuController : MonoBehaviour
     private void DrawVersusResultMenu()
     {
         float elapsed = Mathf.Max(0f, Time.unscaledTime - defeatStartedAtUnscaled);
-        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 3.2f);
-        DrawScreenFade(0.78f);
-        DrawDefeatBackdrop(pulse, 0.28f, Time.unscaledTime);
+        float intro = Mathf.Clamp01(elapsed / 1.05f);
+        float ease = EaseOutCubic(intro);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4.6f);
+        bool anomalyWon = gameManager != null &&
+                          string.Equals(gameManager.VersusWinnerLabel, "ANOMALIA", System.StringComparison.OrdinalIgnoreCase);
+        Color winnerColor = anomalyWon
+            ? new Color(1f, 0.28f, 0.48f, 1f)
+            : new Color(0.25f, 0.90f, 1f, 1f);
+        Color loserColor = anomalyWon
+            ? new Color(0.25f, 0.90f, 1f, 1f)
+            : new Color(1f, 0.28f, 0.48f, 1f);
 
-        Rect panel = CenterRect(Mathf.Min(610f, Screen.width - 48f), Mathf.Min(390f, Screen.height - 48f));
-        DrawPanel(panel, new Color(0.025f, 0.035f, 0.075f, 0.95f), new Color(0.42f, 0.88f, 1f, 0.72f));
-        Rect area = new Rect(panel.x + 24f, panel.y + 22f, panel.width - 48f, panel.height - 42f);
-        GUILayout.BeginArea(area);
+        DrawVersusResultBackdrop(winnerColor, loserColor, pulse, elapsed, intro);
+        DrawVersusResultImpact(winnerColor, elapsed);
 
+        float panelWidth = Mathf.Min(690f, Screen.width - 44f);
+        float panelHeight = Mathf.Min(470f, Screen.height - 44f);
+        Rect panel = CenterRect(panelWidth, panelHeight);
+        panel.y += Mathf.Lerp(46f, 0f, ease);
+        panel = ScaleRectFromCenter(panel, Mathf.Lerp(0.90f, 1f, ease) + Mathf.Sin(intro * Mathf.PI) * 0.018f);
+
+        float jitter = (1f - intro) * 7f;
+        panel.x += (Mathf.PerlinNoise(Time.unscaledTime * 18f, 0.31f) - 0.5f) * jitter;
+        DrawPanel(panel, new Color(0.012f, 0.022f, 0.046f, 0.96f),
+            new Color(winnerColor.r, winnerColor.g, winnerColor.b, 0.82f));
+        DrawVersusResultPanelFx(panel, winnerColor, loserColor, pulse);
+
+        Rect content = new Rect(panel.x + 28f, panel.y + 18f, panel.width - 56f, panel.height - 36f);
         string winner = string.IsNullOrWhiteSpace(gameManager.VersusWinnerLabel)
             ? "DUELO FINALIZADO"
             : $"GANA {gameManager.VersusWinnerLabel}";
-        GUIStyle fittedWinner = GetFittedSingleLineStyle(titleStyle, winner, area.width, 34, 22);
-        GUILayout.Label(winner, fittedWinner, GUILayout.Height(56f));
-        GUILayout.Label(gameManager.VersusResultSubtitle, subtitleStyle, GUILayout.Height(38f));
-        GUILayout.Space(18f);
-        GUILayout.Label($"Arena: {gameManager.CurrentLevelTypeLabel}", bodyStyle);
-        GUILayout.Label($"Duracion: {gameManager.SurvivalTime:F1}s", bodyStyle);
-        GUILayout.Space(28f);
+        GUIStyle winnerStyle = GetFittedSingleLineStyle(titleStyle, winner, content.width, 38, 23);
+        Color previousTitle = winnerStyle.normal.textColor;
+        winnerStyle.normal.textColor = Color.Lerp(Color.white, winnerColor, 0.38f);
+        DrawGlitchLabel(new Rect(content.x, content.y + 13f, content.width, 50f), winner, winnerStyle, (1f - intro) * 0.7f + pulse * 0.08f);
+        winnerStyle.normal.textColor = previousTitle;
 
-        bool canInteract = elapsed >= 0.75f;
-        bool previous = GUI.enabled;
+        GUIStyle resultLabelStyle = new GUIStyle(rankingStatusStyle)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            fontSize = 12,
+            wordWrap = true
+        };
+        resultLabelStyle.normal.textColor = new Color(0.86f, 0.91f, 1f, 0.90f);
+        GUI.Label(new Rect(content.x + 40f, content.y + 68f, content.width - 80f, 38f),
+            gameManager.VersusResultSubtitle, resultLabelStyle);
+
+        float statsAlpha = Mathf.Clamp01((elapsed - 0.42f) / 0.35f);
+        Color oldGui = GUI.color;
+        GUI.color = new Color(1f, 1f, 1f, statsAlpha);
+        Rect arenaStat = new Rect(content.x + 18f, content.y + 123f, (content.width - 48f) * 0.5f, 78f);
+        Rect timeStat = new Rect(arenaStat.xMax + 12f, arenaStat.y, arenaStat.width, arenaStat.height);
+        DrawVersusResultStat(arenaStat, "ZONA DE CONTENCION", gameManager.CurrentLevelTypeLabel, winnerColor);
+        DrawVersusResultStat(timeStat, "DURACION DEL DUELO", $"{gameManager.SurvivalTime:F1}s", loserColor);
+        GUI.color = oldGui;
+
+        float dividerY = content.y + 220f;
+        DrawSolidRect(new Rect(content.x + 18f, dividerY, content.width - 36f, 1f),
+            new Color(winnerColor.r, winnerColor.g, winnerColor.b, 0.28f));
+        GUI.Label(new Rect(content.x, dividerY + 10f, content.width, 24f),
+            anomalyWon ? "CAPTURA COMPLETADA" : "PROTOCOLO RESISTIDO", subtitleStyle);
+
+        bool canInteract = elapsed >= 1.15f;
+        float actionsAlpha = Mathf.Clamp01((elapsed - 0.90f) / 0.35f);
+        GUI.color = new Color(1f, 1f, 1f, actionsAlpha);
+        bool previousEnabled = GUI.enabled;
         GUI.enabled = canInteract;
-        if (GUILayout.Button("Revancha", buttonStyle, GUILayout.Height(44f)))
+        Rect rematchRect = new Rect(content.x + 18f, content.yMax - 104f, content.width - 36f, 42f);
+        Rect menuRect = new Rect(content.x + 18f, content.yMax - 52f, content.width - 36f, 42f);
+        if (GUI.Button(rematchRect, "Revancha", buttonStyle))
         {
             GlitchAudioManager.PlayMenuConfirm();
             RestartLevel();
         }
-        GUILayout.Space(12f);
-        if (GUILayout.Button("Menu Principal", buttonStyle, GUILayout.Height(44f)))
+        if (GUI.Button(menuRect, "Menu Principal", buttonStyle))
         {
             GlitchAudioManager.PlayMenuBack();
             ReturnToMainMenu();
         }
-        GUI.enabled = previous;
-        GUILayout.EndArea();
+        GUI.enabled = previousEnabled;
+        GUI.color = oldGui;
+    }
+
+    private void DrawVersusResultBackdrop(Color winner, Color loser, float pulse, float elapsed, float intro)
+    {
+        DrawScreenFade(Mathf.Lerp(0.94f, 0.78f, intro));
+        float split = Mathf.Lerp(0f, Screen.width * 0.54f, EaseOutCubic(Mathf.Clamp01(elapsed / 0.62f)));
+        DrawSolidRect(new Rect(0f, 0f, split, Screen.height),
+            new Color(winner.r, winner.g, winner.b, 0.07f + pulse * 0.035f));
+        DrawSolidRect(new Rect(Screen.width - split * 0.48f, 0f, split * 0.48f, Screen.height),
+            new Color(loser.r, loser.g, loser.b, 0.035f));
+
+        for (int i = 0; i < 14; i++)
+        {
+            float direction = i % 2 == 0 ? 1f : -1f;
+            float width = Mathf.Lerp(80f, 360f, Mathf.PerlinNoise(i * 0.31f, Time.unscaledTime * 0.75f));
+            float x = direction > 0f
+                ? Mathf.Repeat(Time.unscaledTime * (115f + i * 5f) + i * 127f, Screen.width + width) - width
+                : Screen.width - Mathf.Repeat(Time.unscaledTime * (105f + i * 6f) + i * 91f, Screen.width + width);
+            float y = (i + 0.5f) * Screen.height / 14f;
+            Color color = i % 3 == 0 ? loser : winner;
+            DrawSolidRect(new Rect(x, y, width, i % 4 == 0 ? 3f : 1.5f),
+                new Color(color.r, color.g, color.b, 0.08f + pulse * 0.035f));
+        }
+    }
+
+    private void DrawVersusResultImpact(Color color, float elapsed)
+    {
+        if (elapsed < 0.16f)
+        {
+            float alpha = 1f - elapsed / 0.16f;
+            DrawSolidRect(new Rect(0f, 0f, Screen.width, Screen.height),
+                new Color(color.r, color.g, color.b, alpha * 0.72f));
+        }
+
+        float progress = Mathf.Clamp01(elapsed / 0.95f);
+        Vector2 center = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+        for (int i = 0; i < 4; i++)
+        {
+            float p = Mathf.Clamp01(progress - i * 0.10f);
+            if (p <= 0f)
+            {
+                continue;
+            }
+            DrawEllipseRing(center, Mathf.Lerp(24f, Screen.width * 0.56f, EaseOutCubic(p)),
+                Mathf.Lerp(12f, Screen.height * 0.48f, EaseOutCubic(p)),
+                new Color(color.r, color.g, color.b, (1f - p) * (0.30f - i * 0.045f)));
+        }
+    }
+
+    private void DrawVersusResultPanelFx(Rect panel, Color winner, Color loser, float pulse)
+    {
+        DrawSolidRect(new Rect(panel.x, panel.y, panel.width * 0.68f, 4f),
+            new Color(winner.r, winner.g, winner.b, 0.86f));
+        DrawSolidRect(new Rect(panel.x + panel.width * 0.68f, panel.y, panel.width * 0.32f, 4f),
+            new Color(loser.r, loser.g, loser.b, 0.60f));
+        float scanY = panel.y + Mathf.Repeat(Time.unscaledTime * 62f, panel.height);
+        DrawSolidRect(new Rect(panel.x + 3f, scanY, panel.width - 6f, 2f),
+            new Color(winner.r, winner.g, winner.b, 0.055f + pulse * 0.025f));
+        DrawPausePanelFx(panel, winner, pulse);
+    }
+
+    private void DrawVersusResultStat(Rect rect, string label, string value, Color accent)
+    {
+        DrawSolidRect(rect, new Color(accent.r, accent.g, accent.b, 0.10f));
+        DrawSolidRect(new Rect(rect.x, rect.y, 4f, rect.height),
+            new Color(accent.r, accent.g, accent.b, 0.78f));
+        GUIStyle labelStyle = GetFittedSingleLineStyle(rankingStatusStyle, label, rect.width - 24f, 11, 8);
+        labelStyle.alignment = TextAnchor.MiddleCenter;
+        GUIStyle valueStyle = GetFittedSingleLineStyle(titleStyle, value, rect.width - 24f, 22, 13);
+        valueStyle.alignment = TextAnchor.MiddleCenter;
+        GUI.Label(new Rect(rect.x + 12f, rect.y + 6f, rect.width - 24f, 20f), label, labelStyle);
+        GUI.Label(new Rect(rect.x + 12f, rect.y + 28f, rect.width - 24f, 40f), value, valueStyle);
     }
 
     private void PrepareDefeatRegistration()
@@ -684,7 +801,7 @@ public class GameMenuController : MonoBehaviour
         return (Time.unscaledTime - defeatStartedAtUnscaled) >= Mathf.Max(0f, defeatInputUnlockDelay);
     }
 
-    private void DrawDefeatBackdrop(float pulse, float glitch, float time)
+    private void DrawDefeatBackdrop(float pulse, float glitch, float time) 
     {
         Color ring = new Color(0.98f, 0.45f, 0.60f, 0.18f + pulse * 0.10f);
         Vector2 center = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);

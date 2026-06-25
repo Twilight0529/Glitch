@@ -223,6 +223,8 @@ public class GameManager : MonoBehaviour
     public float DifficultyMultiplier => 1f + (SurvivalTime * difficultyRampPerSecond);
     public int CurrentScore => Mathf.Max(0, Mathf.FloorToInt(SurvivalTime * Mathf.Max(0f, pointsPerSecond)) + bonusScore);
     public string CurrentLevelTypeLabel => levelType;
+    public string CurrentMapEventLabel => GetMapEventLabel();
+    public string CurrentMapEventHint => GetThemedEventHint();
     public bool IsBreachSensitiveSuppressionActive => breachSensitiveSuppressionTimer > 0f;
     public bool AreBossSpecialStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && (devForceBossLevelTwo || devForceBossLevelThree || SurvivalTime >= Mathf.Max(0f, bossSpecialStatesUnlockTime));
     public bool AreBossLevelTwoStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && (devForceBossLevelTwo || devForceBossLevelThree || SurvivalTime >= Mathf.Max(bossSpecialStatesUnlockTime, bossLevelTwoUnlockTime));
@@ -434,7 +436,9 @@ public class GameManager : MonoBehaviour
                 return;
             }
 
-            if (runPhase != RunPhase.Active)
+            if (runPhase != RunPhase.Active &&
+                localVersusManager != null &&
+                localVersusManager.IntroductionComplete)
             {
                 UpdateStartupSequence();
             }
@@ -1308,7 +1312,9 @@ public class GameManager : MonoBehaviour
 
         if (IsLocalVersus)
         {
-            if (runPhase == RunPhase.StartupDelay || runPhase == RunPhase.Countdown || runPhase == RunPhase.GoFlash)
+            if (localVersusManager != null &&
+                localVersusManager.IntroductionComplete &&
+                (runPhase == RunPhase.StartupDelay || runPhase == RunPhase.Countdown || runPhase == RunPhase.GoFlash))
             {
                 DrawCountdownOverlay();
             }
@@ -1495,6 +1501,18 @@ public class GameManager : MonoBehaviour
 
     private void ApplyDeveloperRunSettings()
     {
+        if (IsLocalVersus)
+        {
+            devForceBossLevelTwo = false;
+            devForceBossLevelThree = false;
+            devFastRunLoops = false;
+            devSkipCountdown = false;
+            SurvivalTime = 0f;
+            runPhase = RunPhase.StartupDelay;
+            Time.timeScale = 0f;
+            return;
+        }
+
         devForceBossLevelTwo = DeveloperModeStorage.ForceBossLevelTwo;
         devForceBossLevelThree = DeveloperModeStorage.ForceBossLevelThree;
         devFastRunLoops = DeveloperModeStorage.FastRunLoops;
