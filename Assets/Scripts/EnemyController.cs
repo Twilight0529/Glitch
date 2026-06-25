@@ -271,16 +271,16 @@ public class EnemyController : MonoBehaviour
 
     [Header("Level 2 Awakening FX")]
     [SerializeField] private float levelTwoAwakeningDuration = 2.35f;
-    [SerializeField] private Color levelTwoAwakenedColor = new Color(0.64f, 1f, 0.94f, 1f);
-    [SerializeField] private Color levelTwoAwakeningBurstColor = new Color(1f, 0.54f, 0.96f, 1f);
-    [SerializeField, Range(0f, 1f)] private float levelTwoPassiveTint = 0.24f;
+    [SerializeField] private Color levelTwoAwakenedColor = new Color(1f, 0.66f, 0.18f, 1f);
+    [SerializeField] private Color levelTwoAwakeningBurstColor = new Color(0.22f, 0.96f, 1f, 1f);
+    [SerializeField, Range(0f, 1f)] private float levelTwoPassiveTint = 0.48f;
     [SerializeField] private float levelTwoAwakeningScaleBoost = 1.28f;
 
     [Header("Level 3 Awakening FX")]
     [SerializeField] private float levelThreeAwakeningDuration = 2.8f;
-    [SerializeField] private Color levelThreeAwakenedColor = new Color(1f, 0.36f, 0.78f, 1f);
-    [SerializeField] private Color levelThreeAwakeningBurstColor = new Color(0.38f, 0.94f, 1f, 1f);
-    [SerializeField, Range(0f, 1f)] private float levelThreePassiveTint = 0.38f;
+    [SerializeField] private Color levelThreeAwakenedColor = new Color(0.96f, 0.96f, 1f, 1f);
+    [SerializeField] private Color levelThreeAwakeningBurstColor = new Color(1f, 0.20f, 0.66f, 1f);
+    [SerializeField, Range(0f, 1f)] private float levelThreePassiveTint = 0.72f;
     [SerializeField] private float levelThreeAwakeningScaleBoost = 1.42f;
 
     [Header("State Weights")]
@@ -496,6 +496,17 @@ public class EnemyController : MonoBehaviour
     private bool levelThreeAwakened;
     private float levelThreeAwakeningTimer;
     private EnemyLevelThreeStateController levelThreeStateController;
+    private GameObject levelAppearanceRoot;
+    private GameObject levelTwoAppearanceRoot;
+    private GameObject levelThreeAppearanceRoot;
+    private SpriteRenderer levelTwoHaloRenderer;
+    private readonly List<SpriteRenderer> levelTwoModuleRenderers = new List<SpriteRenderer>();
+    private readonly List<Transform> levelTwoModuleTransforms = new List<Transform>();
+    private readonly List<SpriteRenderer> levelThreeCrownRenderers = new List<SpriteRenderer>();
+    private readonly List<Transform> levelThreeCrownTransforms = new List<Transform>();
+    private readonly List<SpriteRenderer> levelThreeOrbitRenderers = new List<SpriteRenderer>();
+    private readonly List<Transform> levelThreeOrbitTransforms = new List<Transform>();
+    private readonly List<SpriteRenderer> levelThreeGhostRenderers = new List<SpriteRenderer>();
     private Vector3 baseScale = Vector3.one;
     private Color baseColor = Color.white;
 
@@ -677,6 +688,7 @@ public class EnemyController : MonoBehaviour
         DestroySplitCloneImmediate();
         DestroySplitMergeTelegraphImmediate();
         DestroyLevelTwoTelegraphsImmediate();
+        DestroyLevelAppearanceImmediate();
         levelThreeStateController?.ExitState();
         if (ownRenderer != null)
         {
@@ -2139,6 +2151,7 @@ public class EnemyController : MonoBehaviour
 
         Color visualBaseColor = GetCurrentVisualBaseColor();
         Vector3 visualBaseScale = GetCurrentVisualBaseScale();
+        UpdateLevelAppearanceVisuals();
 
         if (!statePulseFxEnabled || statePulseTimer <= 0f)
         {
@@ -2203,10 +2216,261 @@ public class EnemyController : MonoBehaviour
         return baseScale * (1f + pulse);
     }
 
+    private void UpdateLevelAppearanceVisuals()
+    {
+        if (!levelTwoAwakened && !levelThreeAwakened &&
+            levelTwoAwakeningTimer <= 0f && levelThreeAwakeningTimer <= 0f)
+        {
+            return;
+        }
+
+        EnsureLevelAppearance();
+        bool showLevelThree = levelThreeAwakened || levelThreeAwakeningTimer > 0f;
+        bool showLevelTwo = !showLevelThree && (levelTwoAwakened || levelTwoAwakeningTimer > 0f);
+        levelTwoAppearanceRoot.SetActive(showLevelTwo);
+        levelThreeAppearanceRoot.SetActive(showLevelThree);
+
+        float time = Time.time;
+        if (showLevelTwo)
+        {
+            float pulse = 0.5f + 0.5f * Mathf.Sin(time * 4.2f);
+            levelTwoAppearanceRoot.transform.localRotation = Quaternion.Euler(0f, 0f, time * 24f);
+            if (levelTwoHaloRenderer != null)
+            {
+                levelTwoHaloRenderer.transform.localScale = Vector3.one * Mathf.Lerp(1.38f, 1.55f, pulse);
+                levelTwoHaloRenderer.color = new Color(
+                    levelTwoAwakeningBurstColor.r,
+                    levelTwoAwakeningBurstColor.g,
+                    levelTwoAwakeningBurstColor.b,
+                    0.10f + pulse * 0.09f);
+            }
+
+            for (int i = 0; i < levelTwoModuleTransforms.Count; i++)
+            {
+                float angle = i * Mathf.PI * 0.5f;
+                float radius = 0.62f + pulse * 0.06f;
+                Transform module = levelTwoModuleTransforms[i];
+                module.localPosition = new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 0f);
+                module.localRotation = Quaternion.Euler(0f, 0f, angle * Mathf.Rad2Deg + 45f);
+                levelTwoModuleRenderers[i].color = i % 2 == 0
+                    ? new Color(levelTwoAwakenedColor.r, levelTwoAwakenedColor.g, levelTwoAwakenedColor.b, 0.88f)
+                    : new Color(levelTwoAwakeningBurstColor.r, levelTwoAwakeningBurstColor.g, levelTwoAwakeningBurstColor.b, 0.92f);
+            }
+        }
+
+        if (!showLevelThree)
+        {
+            return;
+        }
+
+        float levelThreePulse = 0.5f + 0.5f * Mathf.Sin(time * 6.4f);
+        for (int i = 0; i < levelThreeGhostRenderers.Count; i++)
+        {
+            float direction = i == 0 ? -1f : 1f;
+            float jitterX = direction * (0.08f + levelThreePulse * 0.045f);
+            float jitterY = Mathf.Sin(time * 9f + i * 2.4f) * 0.045f;
+            SpriteRenderer ghost = levelThreeGhostRenderers[i];
+            ghost.transform.localPosition = new Vector3(jitterX, jitterY, 0f);
+            ghost.transform.localScale = Vector3.one * (1.08f + levelThreePulse * 0.04f);
+            ghost.color = i == 0
+                ? new Color(1f, 0.16f, 0.60f, 0.20f + levelThreePulse * 0.10f)
+                : new Color(0.20f, 0.94f, 1f, 0.20f + (1f - levelThreePulse) * 0.10f);
+        }
+
+        for (int i = 0; i < levelThreeCrownTransforms.Count; i++)
+        {
+            float angle = i / (float)levelThreeCrownTransforms.Count * Mathf.PI * 2f + time * 0.58f;
+            float radius = 0.78f + Mathf.Sin(time * 3.8f + i * 1.7f) * 0.08f;
+            Transform fragment = levelThreeCrownTransforms[i];
+            fragment.localPosition = new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 0f);
+            fragment.localRotation = Quaternion.Euler(0f, 0f, angle * Mathf.Rad2Deg);
+            fragment.localScale = new Vector3(
+                0.30f + levelThreePulse * 0.07f,
+                i % 2 == 0 ? 0.075f : 0.11f,
+                1f);
+            levelThreeCrownRenderers[i].color = i % 3 == 0
+                ? new Color(1f, 1f, 1f, 0.96f)
+                : i % 2 == 0
+                    ? new Color(1f, 0.20f, 0.66f, 0.92f)
+                    : new Color(0.25f, 0.92f, 1f, 0.90f);
+        }
+
+        for (int i = 0; i < levelThreeOrbitTransforms.Count; i++)
+        {
+            float angle = i / (float)levelThreeOrbitTransforms.Count * Mathf.PI * 2f - time * 0.92f;
+            float radius = 1.05f + Mathf.Sin(time * 2.6f + i) * 0.025f;
+            Transform tick = levelThreeOrbitTransforms[i];
+            tick.localPosition = new Vector3(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius, 0f);
+            tick.localRotation = Quaternion.Euler(0f, 0f, angle * Mathf.Rad2Deg);
+            levelThreeOrbitRenderers[i].color = new Color(
+                levelThreeAwakeningBurstColor.r,
+                levelThreeAwakeningBurstColor.g,
+                levelThreeAwakeningBurstColor.b,
+                i % 2 == 0 ? 0.58f : 0.28f);
+        }
+    }
+
+    private void EnsureLevelAppearance()
+    {
+        if (levelAppearanceRoot != null)
+        {
+            return;
+        }
+
+        int baseOrder = ownRenderer != null ? ownRenderer.sortingOrder : 10;
+        levelAppearanceRoot = new GameObject("AnomalyLevelAppearance");
+        levelAppearanceRoot.transform.SetParent(transform, false);
+
+        levelTwoAppearanceRoot = new GameObject("LevelTwoFrame");
+        levelTwoAppearanceRoot.transform.SetParent(levelAppearanceRoot.transform, false);
+        levelTwoHaloRenderer = CreateAppearanceSprite(
+            levelTwoAppearanceRoot.transform,
+            "LevelTwoHalo",
+            CircleSpriteProvider.Get(),
+            Vector2.zero,
+            Vector2.one * 1.45f,
+            new Color(levelTwoAwakeningBurstColor.r, levelTwoAwakeningBurstColor.g, levelTwoAwakeningBurstColor.b, 0.16f),
+            baseOrder - 2);
+        CreateAppearanceSprite(
+            levelTwoAppearanceRoot.transform,
+            "LevelTwoCrossHorizontal",
+            SquareSpriteProvider.Get(),
+            Vector2.zero,
+            new Vector2(1.18f, 0.055f),
+            new Color(levelTwoAwakenedColor.r, levelTwoAwakenedColor.g, levelTwoAwakenedColor.b, 0.70f),
+            baseOrder + 1);
+        CreateAppearanceSprite(
+            levelTwoAppearanceRoot.transform,
+            "LevelTwoCrossVertical",
+            SquareSpriteProvider.Get(),
+            Vector2.zero,
+            new Vector2(0.055f, 1.18f),
+            new Color(levelTwoAwakeningBurstColor.r, levelTwoAwakeningBurstColor.g, levelTwoAwakeningBurstColor.b, 0.72f),
+            baseOrder + 1);
+        for (int i = 0; i < 4; i++)
+        {
+            SpriteRenderer module = CreateAppearanceSprite(
+                levelTwoAppearanceRoot.transform,
+                $"LevelTwoModule_{i}",
+                SquareSpriteProvider.Get(),
+                Vector2.zero,
+                new Vector2(0.24f, 0.10f),
+                levelTwoAwakenedColor,
+                baseOrder + 2);
+            levelTwoModuleRenderers.Add(module);
+            levelTwoModuleTransforms.Add(module.transform);
+        }
+
+        levelThreeAppearanceRoot = new GameObject("LevelThreeMutation");
+        levelThreeAppearanceRoot.transform.SetParent(levelAppearanceRoot.transform, false);
+        CreateAppearanceSprite(
+            levelThreeAppearanceRoot.transform,
+            "LevelThreeVoidCore",
+            CircleSpriteProvider.Get(),
+            Vector2.zero,
+            Vector2.one * 1.34f,
+            new Color(0.015f, 0.008f, 0.035f, 0.62f),
+            baseOrder - 3);
+        for (int i = 0; i < 2; i++)
+        {
+            Sprite ghostSprite = ownRenderer != null && ownRenderer.sprite != null
+                ? ownRenderer.sprite
+                : SquareSpriteProvider.Get();
+            SpriteRenderer ghost = CreateAppearanceSprite(
+                levelThreeAppearanceRoot.transform,
+                $"LevelThreeGhost_{i}",
+                ghostSprite,
+                Vector2.zero,
+                Vector2.one,
+                Color.clear,
+                baseOrder - 1);
+            levelThreeGhostRenderers.Add(ghost);
+        }
+
+        for (int i = 0; i < 6; i++)
+        {
+            SpriteRenderer crown = CreateAppearanceSprite(
+                levelThreeAppearanceRoot.transform,
+                $"LevelThreeCrown_{i}",
+                SquareSpriteProvider.Get(),
+                Vector2.zero,
+                new Vector2(0.34f, 0.09f),
+                levelThreeAwakeningBurstColor,
+                baseOrder + 3);
+            levelThreeCrownRenderers.Add(crown);
+            levelThreeCrownTransforms.Add(crown.transform);
+        }
+
+        for (int i = 0; i < 12; i++)
+        {
+            SpriteRenderer tick = CreateAppearanceSprite(
+                levelThreeAppearanceRoot.transform,
+                $"LevelThreeOrbitTick_{i}",
+                SquareSpriteProvider.Get(),
+                Vector2.zero,
+                new Vector2(i % 2 == 0 ? 0.18f : 0.10f, 0.035f),
+                levelThreeAwakeningBurstColor,
+                baseOrder + 1);
+            levelThreeOrbitRenderers.Add(tick);
+            levelThreeOrbitTransforms.Add(tick.transform);
+        }
+
+        levelTwoAppearanceRoot.SetActive(false);
+        levelThreeAppearanceRoot.SetActive(false);
+    }
+
+    private static SpriteRenderer CreateAppearanceSprite(
+        Transform parent,
+        string objectName,
+        Sprite sprite,
+        Vector2 localPosition,
+        Vector2 localScale,
+        Color color,
+        int sortingOrder)
+    {
+        GameObject visual = new GameObject(objectName);
+        visual.transform.SetParent(parent, false);
+        visual.transform.localPosition = localPosition;
+        visual.transform.localScale = new Vector3(localScale.x, localScale.y, 1f);
+        SpriteRenderer renderer = visual.AddComponent<SpriteRenderer>();
+        renderer.sprite = sprite;
+        renderer.color = color;
+        renderer.sortingOrder = sortingOrder;
+        return renderer;
+    }
+
+    private void DestroyLevelAppearanceImmediate()
+    {
+        if (levelAppearanceRoot != null)
+        {
+            if (Application.isPlaying)
+            {
+                Destroy(levelAppearanceRoot);
+            }
+            else
+            {
+                DestroyImmediate(levelAppearanceRoot);
+            }
+        }
+
+        levelAppearanceRoot = null;
+        levelTwoAppearanceRoot = null;
+        levelThreeAppearanceRoot = null;
+        levelTwoHaloRenderer = null;
+        levelTwoModuleRenderers.Clear();
+        levelTwoModuleTransforms.Clear();
+        levelThreeCrownRenderers.Clear();
+        levelThreeCrownTransforms.Clear();
+        levelThreeOrbitRenderers.Clear();
+        levelThreeOrbitTransforms.Clear();
+        levelThreeGhostRenderers.Clear();
+    }
+
     public void TriggerLevelTwoAwakeningFx()
     {
         levelTwoAwakened = true;
         levelTwoAwakeningTimer = Mathf.Max(levelTwoAwakeningTimer, Mathf.Max(0.1f, levelTwoAwakeningDuration));
+        EnsureLevelAppearance();
         TriggerStatePulse();
         SpawnLevelTwoAwakeningBurst();
     }
@@ -2216,6 +2480,7 @@ public class EnemyController : MonoBehaviour
         levelTwoAwakened = true;
         levelThreeAwakened = true;
         levelThreeAwakeningTimer = Mathf.Max(levelThreeAwakeningTimer, Mathf.Max(0.1f, levelThreeAwakeningDuration));
+        EnsureLevelAppearance();
         TriggerStatePulse();
         SpawnLevelThreeAwakeningBurst();
     }
