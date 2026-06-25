@@ -15,6 +15,10 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float maxBoostMultiplier = 1.9f;
     [SerializeField, Range(0.2f, 1f)] private float minSlowMultiplier = 0.3f;
 
+    [Header("Arena Containment")]
+    [SerializeField] private float arenaContainmentPadding = 0.08f;
+    [SerializeField] private Vector2 fallbackArenaSize = new Vector2(32f, 18f);
+
     [Header("Ghost Dash")]
     [SerializeField] private float ghostDashSpeed = 24f;
     [SerializeField] private float ghostDashDuration = 0.18f;
@@ -107,6 +111,7 @@ public class PlayerController : MonoBehaviour
     private Rigidbody2D rb;
     private Collider2D bodyCollider;
     private SpriteRenderer bodyRenderer;
+    private ProceduralArenaGenerator arenaGenerator;
     private Vector2 moveInput;
     private Vector2 lastMoveDirection = Vector2.right;
     private Vector2 ghostDashDirection = Vector2.right;
@@ -230,6 +235,24 @@ public class PlayerController : MonoBehaviour
         EnsureShieldVisual();
         EnsureParryVisual();
         EnsureMovementTrail();
+    }
+
+    private void LateUpdate()
+    {
+        if (deathSequenceActive || breachConsumptionActive || rb == null)
+        {
+            return;
+        }
+
+        Vector2 contained = ClampToPlayableArena(rb.position);
+        if ((contained - rb.position).sqrMagnitude <= 0.000001f)
+        {
+            return;
+        }
+
+        rb.position = contained;
+        transform.position = new Vector3(contained.x, contained.y, transform.position.z);
+        RemoveVelocityTowardArenaExterior(contained);
     }
 
     private void ApplySelectedMetaSkin()
@@ -452,7 +475,7 @@ public class PlayerController : MonoBehaviour
         }
 
         Vector2 adjustedDelta = delta * Mathf.Clamp(externalDisplacementUpgradeMultiplier, minExternalDisplacementMultiplier, 1f);
-        Vector2 target = rb.position + adjustedDelta;
+        Vector2 target = ClampToPlayableArena(rb.position + adjustedDelta);
         rb.position = target;
         transform.position = new Vector3(target.x, target.y, transform.position.z);
         TryConvertHazardPressureToFirewall();
@@ -471,9 +494,74 @@ public class PlayerController : MonoBehaviour
         }
 
         Vector2 velocity = rb.linearVelocity;
-        rb.position = position;
+        Vector2 target = ClampToPlayableArena(position);
+        rb.position = target;
         rb.linearVelocity = preserveVelocity ? velocity : Vector2.zero;
-        transform.position = new Vector3(position.x, position.y, transform.position.z);
+        transform.position = new Vector3(target.x, target.y, transform.position.z);
+        if (preserveVelocity)
+        {
+            RemoveVelocityTowardArenaExterior(target);
+        }
+    }
+
+    public Vector2 ClampToPlayableArena(Vector2 position)
+    {
+        ResolveArenaGenerator();
+        Vector2 size = arenaGenerator != null
+            ? new Vector2(arenaGenerator.ArenaWidth, arenaGenerator.ArenaHeight)
+            : fallbackArenaSize;
+        Vector2 center = arenaGenerator != null ? (Vector2)arenaGenerator.transform.position : Vector2.zero;
+        Vector2 extents = bodyCollider != null
+            ? new Vector2(bodyCollider.bounds.extents.x, bodyCollider.bounds.extents.y)
+            : Vector2.one * 0.45f;
+        float padding = Mathf.Max(0.02f, arenaContainmentPadding);
+        float marginX = Mathf.Min(size.x * 0.45f, Mathf.Max(0.1f, extents.x + padding));
+        float marginY = Mathf.Min(size.y * 0.45f, Mathf.Max(0.1f, extents.y + padding));
+        Vector2 half = size * 0.5f;
+
+        return new Vector2(
+            Mathf.Clamp(position.x, center.x - half.x + marginX, center.x + half.x - marginX),
+            Mathf.Clamp(position.y, center.y - half.y + marginY, center.y + half.y - marginY));
+    }
+
+    private void ResolveArenaGenerator()
+    {
+        if (arenaGenerator == null)
+        {
+            arenaGenerator = FindAnyObjectByType<ProceduralArenaGenerator>();
+        }
+    }
+
+    private void RemoveVelocityTowardArenaExterior(Vector2 containedPosition)
+    {
+        ResolveArenaGenerator();
+        Vector2 size = arenaGenerator != null
+            ? new Vector2(arenaGenerator.ArenaWidth, arenaGenerator.ArenaHeight)
+            : fallbackArenaSize;
+        Vector2 center = arenaGenerator != null ? (Vector2)arenaGenerator.transform.position : Vector2.zero;
+        Vector2 extents = bodyCollider != null
+            ? new Vector2(bodyCollider.bounds.extents.x, bodyCollider.bounds.extents.y)
+            : Vector2.one * 0.45f;
+        float padding = Mathf.Max(0.02f, arenaContainmentPadding);
+        Vector2 half = size * 0.5f;
+        float minX = center.x - half.x + extents.x + padding;
+        float maxX = center.x + half.x - extents.x - padding;
+        float minY = center.y - half.y + extents.y + padding;
+        float maxY = center.y + half.y - extents.y - padding;
+        Vector2 velocity = rb.linearVelocity;
+
+        if ((containedPosition.x <= minX + 0.001f && velocity.x < 0f) ||
+            (containedPosition.x >= maxX - 0.001f && velocity.x > 0f))
+        {
+            velocity.x = 0f;
+        }
+        if ((containedPosition.y <= minY + 0.001f && velocity.y < 0f) ||
+            (containedPosition.y >= maxY - 0.001f && velocity.y > 0f))
+        {
+            velocity.y = 0f;
+        }
+
+        rb.linearVelocity = velocity;
     }
 
     public void ApplySpeedBoost(float multiplier, float duration)

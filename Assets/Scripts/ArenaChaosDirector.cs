@@ -1196,13 +1196,8 @@ public class ArenaChaosDirector : MonoBehaviour
 
         if (player != null)
         {
-            player.transform.position = playerPos;
-            Rigidbody2D playerRb = player.GetComponent<Rigidbody2D>();
-            if (playerRb != null)
-            {
-                playerRb.position = playerPos;
-                playerRb.linearVelocity = Vector2.zero;
-            }
+            playerPos = player.ClampToPlayableArena(playerPos);
+            player.TeleportTo(playerPos);
         }
 
         if (enemy != null)
