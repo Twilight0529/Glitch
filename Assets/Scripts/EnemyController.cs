@@ -545,6 +545,8 @@ public class EnemyController : MonoBehaviour
 
     private float stuckTimer;
     private Vector2 stuckCheckPosition;
+    private Vector2 stuckLastStrategicTarget;
+    private float stuckLastTargetDistance;
     private int stuckConsecutiveChecks;
     private bool emergencyDestroyerActive;
     private Vector2 pendingBlockedRepathGoal;
@@ -690,6 +692,8 @@ public class EnemyController : MonoBehaviour
         InitializePacingDirector();
 
         stuckCheckPosition = rb.position;
+        stuckLastStrategicTarget = player != null ? player.GetPosition() : rb.position;
+        stuckLastTargetDistance = Vector2.Distance(rb.position, stuckLastStrategicTarget);
         if (localVersusControl)
         {
             SelectNextLocalVersusState();
@@ -2988,7 +2992,10 @@ public class EnemyController : MonoBehaviour
         if (currentPattern == BehaviorPattern.CutoffFlank)
         {
             flankRetargetTimer += Time.deltaTime;
-            if (flankRetargetTimer >= flankRetargetInterval)
+            float retargetInterval = currentState == AnomalyState.Split
+                ? Mathf.Max(1.4f, flankRetargetInterval * 2.4f)
+                : flankRetargetInterval;
+            if (flankRetargetTimer >= retargetInterval)
             {
                 flankRetargetTimer = 0f;
                 flankSide *= -1f;
@@ -3570,7 +3577,11 @@ public class EnemyController : MonoBehaviour
         }
 
         result.Clear();
-        BuildNavigationGrid();
+        if (walkable == null || obstacleDistanceSteps == null ||
+            walkable.GetLength(0) != gridWidth || walkable.GetLength(1) != gridHeight)
+        {
+            BuildNavigationGrid();
+        }
         Vector2Int start = WorldToCell(ClampPointToArenaWithMargin(startWorld, agentRadius + 0.12f));
         Vector2Int goal = WorldToCell(ClampPointToArenaWithMargin(goalWorld, agentRadius + 0.12f));
         if (!TryNearestWalkable(start, out start) || !TryNearestWalkable(goal, out goal) ||
@@ -3665,7 +3676,26 @@ public class EnemyController : MonoBehaviour
         }
 
         Vector2 side = new Vector2(-toPlayer.y, toPlayer.x).normalized * splitSideSign;
-        return target + side * splitCloneSideOffset;
+        Vector2 candidate = ClampPointToArenaWithMargin(
+            target + side * splitCloneSideOffset,
+            splitCloneRadius + 0.16f);
+        if (IsWalkableWorld(candidate))
+        {
+            return candidate;
+        }
+
+        Vector2 opposite = ClampPointToArenaWithMargin(
+            target - side * splitCloneSideOffset,
+            splitCloneRadius + 0.16f);
+        return IsWalkableWorld(opposite) ? opposite : ClampToArena(target);
+    }
+
+    public void NotifySplitClonePathBlocked()
+    {
+        splitSideSign *= -1;
+        pathWorld.Clear();
+        pathIndex = 0;
+        repathTimer = repathInterval;
     }
 
     public bool CanDamagePlayer()
@@ -6239,9 +6269,14 @@ public class EnemyController : MonoBehaviour
                 }
                 return playerPosition;
             case BehaviorPattern.PredictiveIntercept:
-                return GetPredictiveTarget(enemyPosition, playerPosition);
+                Vector2 predicted = GetPredictiveTarget(enemyPosition, playerPosition);
+                if (currentState == AnomalyState.ExpansionShoot && !HasDirectPath(enemyPosition, predicted))
+                {
+                    return playerPosition;
+                }
+                return predicted;
             case BehaviorPattern.CutoffFlank:
-                return GetCutoffTarget(enemyPosition, playerPosition);
+                return GetNavigableCutoffTarget(enemyPosition, playerPosition);
             case BehaviorPattern.ErraticBurst:
                 return erraticTarget;
             default:
@@ -6262,6 +6297,11 @@ public class EnemyController : MonoBehaviour
 
     private Vector2 GetCutoffTarget(Vector2 enemyPosition, Vector2 playerPosition)
     {
+        return GetCutoffTargetForSide(enemyPosition, playerPosition, flankSide);
+    }
+
+    private Vector2 GetCutoffTargetForSide(Vector2 enemyPosition, Vector2 playerPosition, float sideSign)
+    {
         Vector2 toPlayer = playerPosition - enemyPosition;
         Vector2 playerVelocity = player.CurrentVelocity;
 
@@ -6271,8 +6311,25 @@ public class EnemyController : MonoBehaviour
             velocityDir = lastMoveDirection;
         }
 
-        Vector2 side = new Vector2(-velocityDir.y, velocityDir.x) * flankSide;
+        Vector2 side = new Vector2(-velocityDir.y, velocityDir.x) * sideSign;
         return playerPosition + velocityDir * flankLeadFactor + side * flankRadius;
+    }
+
+    private Vector2 GetNavigableCutoffTarget(Vector2 enemyPosition, Vector2 playerPosition)
+    {
+        Vector2 candidate = ClampToArena(GetCutoffTarget(enemyPosition, playerPosition));
+        if (IsWalkableWorld(candidate))
+        {
+            return candidate;
+        }
+
+        Vector2 opposite = ClampToArena(GetCutoffTargetForSide(enemyPosition, playerPosition, -flankSide));
+        if (IsWalkableWorld(opposite))
+        {
+            return opposite;
+        }
+
+        return playerPosition;
     }
 
     private Vector2 GetWeaveHunterTarget(Vector2 enemyPosition, Vector2 playerPosition)
@@ -6461,10 +6518,23 @@ public class EnemyController : MonoBehaviour
         stuckCheckPosition = rb.position;
 
         float targetDistance = Vector2.Distance(rb.position, strategicTarget);
+        float targetShift = Vector2.Distance(strategicTarget, stuckLastStrategicTarget);
+        float distanceProgress = stuckLastTargetDistance - targetDistance;
+        Vector2 towardTarget = strategicTarget - rb.position;
+        float forwardSpeed = towardTarget.sqrMagnitude > 0.001f
+            ? Vector2.Dot(rb.linearVelocity, towardTarget.normalized)
+            : 0f;
+        bool stableTarget = targetShift <= Mathf.Max(0.55f, targetRepathThreshold * 1.5f);
         float progressThreshold = Mathf.Max(0.14f, stuckDistanceThreshold);
-        bool lowProgress = moved < progressThreshold;
+        bool oscillatingWithoutProgress = stableTarget &&
+            moved >= progressThreshold &&
+            distanceProgress < 0.035f &&
+            forwardSpeed < 0.30f;
+        bool lowProgress = moved < progressThreshold || oscillatingWithoutProgress;
         bool needsChase = targetDistance >= Mathf.Max(0.45f, stuckTargetMinDistance * 0.55f);
         bool nearObstacle = IsNearBlockingObstacle(Mathf.Max(0.3f, stuckObstacleProbeRadius));
+        stuckLastStrategicTarget = strategicTarget;
+        stuckLastTargetDistance = targetDistance;
 
         if (!nearObstacle || !needsChase)
         {

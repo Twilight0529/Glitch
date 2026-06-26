@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody2D))]
@@ -27,6 +28,13 @@ public class SplitAnomalyCloneController : MonoBehaviour
     private float firewallStunTimer;
     private float firewallKnockbackTimer;
     private Vector2 lastMoveDirection = Vector2.right;
+    private readonly List<Vector2> chasePath = new List<Vector2>();
+    private int chasePathIndex;
+    private float chasePathTimer;
+    private Vector2 lastPathTarget;
+    private float stuckTimer;
+    private Vector2 stuckCheckPosition;
+    private int stuckChecks;
 
     public Vector2 GetCurrentPosition()
     {
@@ -62,6 +70,11 @@ public class SplitAnomalyCloneController : MonoBehaviour
         gameManager = managerRef;
         owner = ownerRef;
         obstacleMask = obstacles;
+        chasePath.Clear();
+        chasePathIndex = 0;
+        chasePathTimer = 0f;
+        stuckCheckPosition = rb != null ? rb.position : (Vector2)transform.position;
+        stuckChecks = 0;
     }
 
     public void SetSplitState(bool active, bool merging)
@@ -217,7 +230,8 @@ public class SplitAnomalyCloneController : MonoBehaviour
             target = transform.position;
         }
 
-        Vector2 desiredDirection = target - rb.position;
+        Vector2 steeringTarget = GetPathSteeringTarget(target, 0.34f);
+        Vector2 desiredDirection = steeringTarget - rb.position;
         if (desiredDirection.sqrMagnitude < 0.0001f)
         {
             desiredDirection = lastMoveDirection;
@@ -231,6 +245,7 @@ public class SplitAnomalyCloneController : MonoBehaviour
         desiredDirection = ApplySimpleRepulsion(desiredDirection);
         Vector2 desiredVelocity = desiredDirection * moveSpeed;
         rb.linearVelocity = Vector2.MoveTowards(rb.linearVelocity, desiredVelocity, velocityResponsiveness * Time.deltaTime);
+        UpdateStuckRecovery(target);
     }
 
     private void TickMerge()
@@ -247,8 +262,124 @@ public class SplitAnomalyCloneController : MonoBehaviour
             return;
         }
 
-        Vector2 dir = distance > 0.001f ? toOwner / distance : Vector2.zero;
-        rb.linearVelocity = dir * mergeSpeed;
+        Vector2 steeringTarget = GetPathSteeringTarget(ownerPos, 0.18f);
+        Vector2 toSteering = steeringTarget - rb.position;
+        Vector2 dir = toSteering.sqrMagnitude > 0.001f ? toSteering.normalized : toOwner.normalized;
+        dir = ApplySimpleRepulsion(dir);
+        rb.linearVelocity = Vector2.MoveTowards(
+            rb.linearVelocity,
+            dir * mergeSpeed,
+            velocityResponsiveness * 1.35f * Time.deltaTime);
+        UpdateStuckRecovery(ownerPos);
+    }
+
+    private Vector2 GetPathSteeringTarget(Vector2 target, float refreshInterval)
+    {
+        chasePathTimer += Time.deltaTime;
+        bool targetMoved = Vector2.Distance(target, lastPathTarget) >= 0.55f;
+        if (chasePath.Count == 0 || chasePathIndex >= chasePath.Count ||
+            chasePathTimer >= Mathf.Max(0.08f, refreshInterval) || targetMoved)
+        {
+            chasePathTimer = 0f;
+            lastPathTarget = target;
+            chasePath.Clear();
+            chasePathIndex = 0;
+            owner?.TryBuildAdvancedStatePath(rb.position, target, chasePath);
+        }
+
+        while (chasePathIndex < chasePath.Count &&
+               Vector2.Distance(rb.position, chasePath[chasePathIndex]) <= 0.28f)
+        {
+            chasePathIndex++;
+        }
+
+        if (chasePath.Count == 0 || chasePathIndex >= chasePath.Count)
+        {
+            return target;
+        }
+
+        int maxIndex = Mathf.Min(chasePath.Count - 1, chasePathIndex + 3);
+        int selected = chasePathIndex;
+        for (int i = chasePathIndex; i <= maxIndex; i++)
+        {
+            if (!HasDirectPath(chasePath[i]))
+            {
+                break;
+            }
+
+            selected = i;
+        }
+
+        return chasePath[selected];
+    }
+
+    private bool HasDirectPath(Vector2 target)
+    {
+        Vector2 delta = target - rb.position;
+        float distance = delta.magnitude;
+        if (distance <= 0.01f)
+        {
+            return true;
+        }
+
+        float radius = ownCollider != null
+            ? Mathf.Max(0.15f, Mathf.Max(ownCollider.bounds.extents.x, ownCollider.bounds.extents.y))
+            : 0.35f;
+        RaycastHit2D hit = Physics2D.CircleCast(rb.position, radius, delta / distance, distance, obstacleMask);
+        return !IsBlockingCollider(hit.collider);
+    }
+
+    private void UpdateStuckRecovery(Vector2 target)
+    {
+        stuckTimer += Time.deltaTime;
+        if (stuckTimer < 0.32f)
+        {
+            return;
+        }
+
+        stuckTimer = 0f;
+        float moved = Vector2.Distance(rb.position, stuckCheckPosition);
+        stuckCheckPosition = rb.position;
+        bool needsMovement = Vector2.Distance(rb.position, target) > 1f;
+        bool nearObstacle = IsNearObstacle();
+        if (!needsMovement || !nearObstacle || moved >= 0.09f)
+        {
+            stuckChecks = Mathf.Max(0, stuckChecks - 1);
+            return;
+        }
+
+        stuckChecks++;
+        chasePath.Clear();
+        chasePathIndex = 0;
+        chasePathTimer = 999f;
+        if (stuckChecks < 2)
+        {
+            return;
+        }
+
+        owner?.NotifySplitClonePathBlocked();
+        sideSign *= -1;
+        Vector2 toward = target - rb.position;
+        Vector2 escape = toward.sqrMagnitude > 0.001f
+            ? new Vector2(-toward.y, toward.x).normalized * sideSign
+            : Vector2.right * sideSign;
+        rb.linearVelocity = escape * Mathf.Max(moveSpeed, 3f);
+        lastMoveDirection = escape;
+        stuckChecks = 0;
+    }
+
+    private bool IsNearObstacle()
+    {
+        Collider2D[] hits = Physics2D.OverlapCircleAll(rb.position, 0.78f, obstacleMask);
+        for (int i = 0; i < hits.Length; i++)
+        {
+            if (IsBlockingCollider(hits[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private bool TickFirewallStun()
