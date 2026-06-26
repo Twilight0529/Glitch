@@ -498,6 +498,7 @@ public class EnemyController : MonoBehaviour
     private float breachLureTimer;
     private Vector2 breachLureTarget;
     private bool breachAbsorbed;
+    private float postBreachReentryGraceTimer;
     private bool levelTwoAwakened;
     private float levelTwoAwakeningTimer;
     private bool levelThreeAwakened;
@@ -733,6 +734,14 @@ public class EnemyController : MonoBehaviour
 
         if (gameManager == null || player == null || gameManager.IsGameOver || !gameManager.IsRunActive)
         {
+            rb.linearVelocity = Vector2.zero;
+            UpdateStatePulseVisual();
+            return;
+        }
+
+        if (postBreachReentryGraceTimer > 0f)
+        {
+            postBreachReentryGraceTimer -= Time.deltaTime;
             rb.linearVelocity = Vector2.zero;
             UpdateStatePulseVisual();
             return;
@@ -2031,6 +2040,13 @@ public class EnemyController : MonoBehaviour
         BuildNavigationGrid();
         pathWorld.Clear();
         pathIndex = 0;
+    }
+
+    public void BeginPostBreachReentryGrace(float duration)
+    {
+        postBreachReentryGraceTimer = Mathf.Max(postBreachReentryGraceTimer, Mathf.Max(0f, duration));
+        rb.linearVelocity = Vector2.zero;
+        TriggerStatePulse();
     }
 
     private void TriggerStatePulse()
@@ -3700,7 +3716,8 @@ public class EnemyController : MonoBehaviour
 
     public bool CanDamagePlayer()
     {
-        return gameManager != null && gameManager.IsRunActive && !gameManager.IsGameOver;
+        return gameManager != null && gameManager.IsRunActive && !gameManager.IsGameOver &&
+            postBreachReentryGraceTimer <= 0f;
     }
 
     public void ApplyExternalDisplacement(Vector2 delta)

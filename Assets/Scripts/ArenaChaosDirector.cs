@@ -75,6 +75,8 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private float breachTransitionDuration = 1.25f;
     [SerializeField] private float breachArrivalHoldSeconds = 3f;
     [SerializeField] private float breachArrivalFxDuration = 2.25f;
+    [SerializeField] private float breachEnemyReentryMinDistance = 8f;
+    [SerializeField] private float breachEnemyReentryGraceSeconds = 1.25f;
     [SerializeField] private float minimumBreachMapAgeSeconds = 50f;
     [SerializeField] private float breachSystemSuppressionWindowSeconds = 5f;
     [SerializeField] private float breachConsumedPlayerDeathDelay = 0.7f;
@@ -1256,6 +1258,7 @@ public class ArenaChaosDirector : MonoBehaviour
             else
             {
                 enemy.ReappearFromBreach(enemyPos);
+                enemy.BeginPostBreachReentryGrace(breachEnemyReentryGraceSeconds);
                 pendingBreachEnemyReentry = false;
                 breachEnemyAbsorbed = false;
             }
@@ -1289,7 +1292,22 @@ public class ArenaChaosDirector : MonoBehaviour
             return;
         }
 
+        Vector2 playerPosition = player != null ? player.GetPosition() : transform.position;
+        Vector2 playerForward = player != null ? player.CurrentVelocity : Vector2.zero;
+        Vector2 preferredAwayDirection = pendingBreachEnemyEntryDirection;
+        if (playerForward.sqrMagnitude > 0.16f)
+        {
+            preferredAwayDirection = -playerForward.normalized;
+        }
+
+        // El jugador puede moverse durante la transición: el punto debe validarse al reaparecer, no antes.
+        if (TryFindFarEnemyReentryPoint(playerPosition, preferredAwayDirection, out Vector2 refreshedPosition))
+        {
+            pendingBreachEnemyPosition = refreshedPosition;
+        }
+
         enemy.ReappearFromBreach(pendingBreachEnemyPosition);
+        enemy.BeginPostBreachReentryGrace(breachEnemyReentryGraceSeconds);
         breachEnemyAbsorbed = false;
         SpawnBreachArrivalFx(pendingBreachEnemyPosition, pendingBreachEnemyEntryDirection, true);
         RaiseWarning("Anomalia reinsertada", 1f);
@@ -1361,9 +1379,13 @@ public class ArenaChaosDirector : MonoBehaviour
         Vector2 side = new Vector2(-away.y, away.x);
         float minAxis = Mathf.Min(arena.ArenaWidth, arena.ArenaHeight);
         float maxAxis = Mathf.Max(arena.ArenaWidth, arena.ArenaHeight);
-        float minDistance = Mathf.Min(Mathf.Max(6.8f, actorClearance * 2.8f), Mathf.Max(4.5f, minAxis * 0.42f));
+        float arenaSupportedDistance = Mathf.Max(4.5f, minAxis * 0.48f);
+        float minDistance = Mathf.Min(Mathf.Max(breachEnemyReentryMinDistance, actorClearance * 3f), arenaSupportedDistance);
         float maxDistance = Mathf.Max(minDistance + 0.75f, maxAxis * 0.38f);
         float maxSideOffset = Mathf.Max(1.5f, minAxis * 0.28f);
+        Vector2 playerForward = -away;
+        float bestScore = float.NegativeInfinity;
+        bool found = false;
 
         for (int band = 0; band < 6; band++)
         {
@@ -1372,14 +1394,34 @@ public class ArenaChaosDirector : MonoBehaviour
             {
                 float sideOffset = i == 0 ? 0f : (i / 3f) * maxSideOffset;
                 Vector2 candidate = ClampPointToArena(playerPos + away * distance + side * sideOffset, edgePadding + 0.8f);
-                if (Vector2.Distance(candidate, playerPos) < minDistance || !IsFree(candidate, 0.7f))
+                float candidateDistance = Vector2.Distance(candidate, playerPos);
+                Vector2 playerToCandidate = candidate - playerPos;
+                float forwardDot = playerToCandidate.sqrMagnitude > 0.001f
+                    ? Vector2.Dot(playerToCandidate.normalized, playerForward)
+                    : 1f;
+                if (candidateDistance < minDistance || forwardDot > 0.12f || !IsFree(candidate, 0.7f))
                 {
                     continue;
                 }
 
-                result = candidate;
-                return true;
+                float score = candidateDistance * 2f - forwardDot * 5f;
+                if (!HasDirectObstacleFreeLine(playerPos, candidate))
+                {
+                    score += 3.5f;
+                }
+
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    result = candidate;
+                    found = true;
+                }
             }
+        }
+
+        if (found)
+        {
+            return true;
         }
 
         float halfW = arena.ArenaWidth * 0.5f;
@@ -1391,16 +1433,49 @@ public class ArenaChaosDirector : MonoBehaviour
                 Random.Range(center.x - halfW + edgePadding + 0.8f, center.x + halfW - edgePadding - 0.8f),
                 Random.Range(center.y - halfH + edgePadding + 0.8f, center.y + halfH - edgePadding - 0.8f));
 
-            if (Vector2.Distance(candidate, playerPos) < minDistance || !IsFree(candidate, 0.7f))
+            Vector2 playerToCandidate = candidate - playerPos;
+            float candidateDistance = playerToCandidate.magnitude;
+            float forwardDot = playerToCandidate.sqrMagnitude > 0.001f
+                ? Vector2.Dot(playerToCandidate.normalized, playerForward)
+                : 1f;
+            if (candidateDistance < minDistance || forwardDot > 0.12f || !IsFree(candidate, 0.7f))
             {
                 continue;
             }
 
-            result = candidate;
-            return true;
+            float score = candidateDistance * 2f - forwardDot * 5f;
+            if (!HasDirectObstacleFreeLine(playerPos, candidate))
+            {
+                score += 3.5f;
+            }
+
+            if (score > bestScore)
+            {
+                bestScore = score;
+                result = candidate;
+                found = true;
+            }
         }
 
-        return false;
+        return found;
+    }
+
+    private static bool HasDirectObstacleFreeLine(Vector2 from, Vector2 to)
+    {
+        RaycastHit2D[] hits = Physics2D.LinecastAll(from, to);
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider2D hit = hits[i].collider;
+            if (hit == null || hit.isTrigger || hit.GetComponent<PlayerController>() != null ||
+                hit.GetComponent<EnemyController>() != null || hit.GetComponent<SplitAnomalyCloneController>() != null)
+            {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 
     private void SpawnBreachTransitionFx()
