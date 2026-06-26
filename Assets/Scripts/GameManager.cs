@@ -134,7 +134,10 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float upgradeInterval = 42f;
     [SerializeField] private int upgradeOptionsShown = 3;
     [SerializeField] private int upgradeScoreBonus = 8;
-    [SerializeField] private float upgradeChoiceLimitSeconds = 10f;
+    [SerializeField] private float upgradeChoiceLimitSeconds = 21f;
+    [SerializeField] private float upgradeLevelTwoChoiceSeconds = 17f;
+    [SerializeField] private float upgradeLevelThreeChoiceSeconds = 14f;
+    [SerializeField] private float upgradeMinimumChoiceSeconds = 6f;
     [SerializeField] private float upgradeEnterDuration = 0.32f;
     [SerializeField] private float upgradeExitDuration = 0.46f;
 
@@ -333,6 +336,7 @@ public class GameManager : MonoBehaviour
     private bool upgradeSelectionClosing;
     private float upgradeSelectionAge;
     private float upgradeTimeRemaining;
+    private float upgradeCurrentLimitSeconds;
     private float upgradeExitTimer;
     private int upgradeSelectedIndex = -1;
     private Color upgradeSelectedAccent = Color.white;
@@ -1351,6 +1355,7 @@ public class GameManager : MonoBehaviour
         upgradeSelectionClosing = false;
         upgradeSelectionAge = 0f;
         upgradeTimeRemaining = 0f;
+        upgradeCurrentLimitSeconds = 0f;
         upgradeExitTimer = 0f;
         upgradeSelectedIndex = -1;
         upgradePickCount = 0;
@@ -3939,7 +3944,8 @@ public class GameManager : MonoBehaviour
         {
             upgradeSelectionClosing = false;
             upgradeSelectionAge = 0f;
-            upgradeTimeRemaining = Mathf.Max(1f, upgradeChoiceLimitSeconds);
+            upgradeCurrentLimitSeconds = GetUpgradeChoiceLimitForCurrentBossLevel();
+            upgradeTimeRemaining = upgradeCurrentLimitSeconds;
             upgradeExitTimer = 0f;
             upgradeSelectedIndex = -1;
             upgradeSelectedAccent = Color.white;
@@ -3954,6 +3960,26 @@ public class GameManager : MonoBehaviour
         {
             pool.Add(kind);
         }
+    }
+
+    private float GetUpgradeChoiceLimitForCurrentBossLevel()
+    {
+        float minimum = Mathf.Max(1f, upgradeMinimumChoiceSeconds);
+        bool levelThree = devForceBossLevelThree ||
+            SurvivalTime >= Mathf.Max(bossLevelTwoUnlockTime, bossLevelThreeUnlockTime);
+        if (levelThree)
+        {
+            return Mathf.Max(minimum, upgradeLevelThreeChoiceSeconds);
+        }
+
+        bool levelTwo = devForceBossLevelTwo ||
+            SurvivalTime >= Mathf.Max(bossSpecialStatesUnlockTime, bossLevelTwoUnlockTime);
+        if (levelTwo)
+        {
+            return Mathf.Max(minimum, upgradeLevelTwoChoiceSeconds);
+        }
+
+        return Mathf.Max(minimum, upgradeChoiceLimitSeconds);
     }
 
     private void UpdateUpgradeSelectionState()
@@ -4184,6 +4210,7 @@ public class GameManager : MonoBehaviour
         upgradeSelectionClosing = false;
         upgradeSelectionAge = 0f;
         upgradeTimeRemaining = 0f;
+        upgradeCurrentLimitSeconds = 0f;
         upgradeExitTimer = 0f;
         upgradeSelectedIndex = -1;
         nextUpgradeTime = SurvivalTime + Mathf.Max(8f, upgradeInterval);
@@ -4374,7 +4401,9 @@ public class GameManager : MonoBehaviour
 
     private void DrawUpgradeTimer(Rect panel, float s, float alpha, float pulse)
     {
-        float limit = Mathf.Max(1f, upgradeChoiceLimitSeconds);
+        float limit = Mathf.Max(1f, upgradeCurrentLimitSeconds > 0f
+            ? upgradeCurrentLimitSeconds
+            : GetUpgradeChoiceLimitForCurrentBossLevel());
         float normalized = Mathf.Clamp01(upgradeTimeRemaining / limit);
         Color timerColor = Color.Lerp(new Color(1f, 0.35f, 0.46f, 1f), new Color(0.46f, 0.96f, 1f, 1f), normalized);
 

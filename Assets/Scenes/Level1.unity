@@ -42351,7 +42351,7 @@ MonoBehaviour:
   upgradeInterval: 42
   upgradeOptionsShown: 3
   upgradeScoreBonus: 8
-  upgradeChoiceLimitSeconds: 10
+  upgradeChoiceLimitSeconds: 21
   upgradeEnterDuration: 0.32
   upgradeExitDuration: 0.46
   enableRunContracts: 1

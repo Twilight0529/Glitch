@@ -233,7 +233,7 @@ public class ScoreCollectSparkFx : MonoBehaviour
         direction = travelDir.sqrMagnitude > 0.001f ? travelDir.normalized : Vector2.right;
         distance = Mathf.Max(0.1f, travelDistance);
         life = Mathf.Max(0.08f, lifetime);
-        origin = transform.position;
+        origin = transform.position; 
     }
 
     private void Update()
