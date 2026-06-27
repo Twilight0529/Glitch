@@ -3716,8 +3716,16 @@ public class EnemyController : MonoBehaviour
 
     public bool CanDamagePlayer()
     {
-        return gameManager != null && gameManager.IsRunActive && !gameManager.IsGameOver &&
+        return gameManager != null && gameManager.IsRunActive && !gameManager.IsGameOver && !breachAbsorbed &&
             postBreachReentryGraceTimer <= 0f;
+    }
+
+    public bool IsAvailableForCombatTutorial()
+    {
+        bool visible = ownRenderer != null && ownRenderer.enabled;
+        bool collidable = ownCollider != null && ownCollider.enabled;
+        return visible && collidable && CanDamagePlayer() && !IsBreachLureActive() &&
+            gameManager != null && !gameManager.IsBreachSensitiveSuppressionActive;
     }
 
     public void ApplyExternalDisplacement(Vector2 delta)

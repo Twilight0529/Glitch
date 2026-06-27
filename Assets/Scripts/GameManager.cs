@@ -1630,7 +1630,8 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        if (!contextParryShown && enemyController != null && SurvivalTime >= 1.2f)
+        if (!contextParryShown && enemyController != null &&
+            enemyController.IsAvailableForCombatTutorial() && SurvivalTime >= 1.2f)
         {
             float distance = Vector2.Distance(playerController.GetPosition(), enemyController.GetCurrentPosition());
             float parryTeachDistance = Mathf.Max(0.65f, playerController.ParryRadius + 0.10f);
@@ -1641,7 +1642,8 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        if (!contextGhostDashShown && enemyController != null && SurvivalTime >= 3.2f && playerController.IsGhostDashReady)
+        if (!contextGhostDashShown && enemyController != null &&
+            enemyController.IsAvailableForCombatTutorial() && SurvivalTime >= 3.2f && playerController.IsGhostDashReady)
         {
             float distance = Vector2.Distance(playerController.GetPosition(), enemyController.GetCurrentPosition());
             if (distance <= 3.2f)
