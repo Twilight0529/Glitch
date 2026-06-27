@@ -14,6 +14,20 @@ public static class UserSettings
     public const string IntroTutorialKey = "glitch_intro_tutorial";
     public const string ContextTutorialKey = "glitch_context_tutorial";
     private const string ContextTutorialSeenPrefix = "glitch_context_tutorial_seen_";
+    private const string ContextTutorialProgressVersionKey = "glitch_context_tutorial_progress_version";
+    private const int CurrentContextTutorialProgressVersion = 2;
+    private static readonly string[] ContextTutorialKeys =
+    {
+        "movement",
+        "parry",
+        "ghost_dash",
+        "firewall",
+        "score_pickup",
+        "powerup",
+        "upgrade",
+        "arena_event",
+        "breach"
+    };
 
     public const float DefaultMasterVolume = 0.8f;
     public const float DefaultMusicVolume = 0.85f;
@@ -173,27 +187,31 @@ public static class UserSettings
         PlayerPrefs.Save();
     }
 
+    public static void EnsureContextTutorialProgressVersion()
+    {
+        if (PlayerPrefs.GetInt(ContextTutorialProgressVersionKey, 0) >= CurrentContextTutorialProgressVersion)
+        {
+            return;
+        }
+
+        // La version anterior guardaba el tutorial al abrirlo, incluso si la run terminaba antes de completarlo.
+        for (int i = 0; i < ContextTutorialKeys.Length; i++)
+        {
+            PlayerPrefs.DeleteKey(ContextTutorialSeenPrefix + ContextTutorialKeys[i]);
+        }
+
+        PlayerPrefs.SetInt(ContextTutorialProgressVersionKey, CurrentContextTutorialProgressVersion);
+        PlayerPrefs.Save();
+    }
+
     public static void ResetTutorialProgress()
     {
         SetShowIntroTutorial(DefaultShowIntroTutorial);
         SetShowContextTutorial(DefaultShowContextTutorial);
 
-        string[] keys =
+        for (int i = 0; i < ContextTutorialKeys.Length; i++)
         {
-            "movement",
-            "parry",
-            "ghost_dash",
-            "firewall",
-            "score_pickup",
-            "powerup",
-            "upgrade",
-            "arena_event",
-            "breach"
-        };
-
-        for (int i = 0; i < keys.Length; i++)
-        {
-            PlayerPrefs.DeleteKey(ContextTutorialSeenPrefix + keys[i]);
+            PlayerPrefs.DeleteKey(ContextTutorialSeenPrefix + ContextTutorialKeys[i]);
         }
 
         PlayerPrefs.Save();

@@ -243,30 +243,31 @@ public class MainMenuController : MonoBehaviour
             new Color(0.50f, 0.94f, 1f, 0.42f));
 
         int knownZones = GetKnownZoneCount();
-        Rect telemetry = new Rect(panel.x + 24f, panel.y + 106f, panel.width - 48f, 38f);
+        Rect telemetry = new Rect(panel.x + 24f, panel.y + 106f, panel.width - 48f, 32f);
         DrawSolidRect(telemetry, new Color(0.04f, 0.075f, 0.12f, 0.72f));
-        GUI.Label(new Rect(telemetry.x + 10f, telemetry.y + 2f, telemetry.width * 0.48f, 17f),
-            $"DATOS  {MetaProgressionStorage.CurrentData}", rankingRowStyle);
-        GUI.Label(new Rect(telemetry.center.x, telemetry.y + 2f, telemetry.width * 0.48f - 10f, 17f),
-            $"ZONAS  {knownZones}/5", rankingRowStyle);
-        string operationLine = ContainmentOperationStorage.SelectedOperation.title;
-        string operationStatus = $"PROTOCOLO ACTIVO  |  {operationLine}";
-        GUI.Label(new Rect(telemetry.x + 10f, telemetry.y + 19f, telemetry.width - 20f, 17f),
-            operationStatus,
-            BuildFittedSingleLineStyle(paragraphStyle, operationStatus, telemetry.width - 20f, 17f, 8));
+        Rect dataIcon = new Rect(telemetry.x + 12f, telemetry.y + 7f, 18f, 18f);
+        Color navigationAccent = new Color(0.48f, 0.86f, 1f, 1f);
+        DrawMainMenuIcon(dataIcon, "data", navigationAccent, 0f);
+        GUI.Label(new Rect(dataIcon.xMax + 8f, telemetry.y, 82f, telemetry.height),
+            MetaProgressionStorage.CurrentData.ToString(), rankingScoreStyle);
+        Rect zoneIcon = new Rect(telemetry.center.x + 18f, telemetry.y + 7f, 18f, 18f);
+        DrawMainMenuIcon(zoneIcon, "zones", navigationAccent, 0f);
+        GUI.Label(new Rect(zoneIcon.xMax + 8f, telemetry.y, 82f, telemetry.height),
+            $"{knownZones}/5", rankingScoreStyle);
 
-        float commandsY = panel.y + 155f;
-        Rect playRect = new Rect(panel.x + 24f, commandsY, panel.width - 48f, 60f);
-        Rect versusRect = new Rect(panel.x + 24f, commandsY + 68f, panel.width - 48f, 52f);
+        float commandsY = panel.y + 148f;
+        Rect playRect = new Rect(panel.x + 24f, commandsY, panel.width - 48f, 68f);
+        Rect versusRect = new Rect(panel.x + 24f, commandsY + 76f, panel.width - 48f, 60f);
         float columnGap = 12f;
         float compactWidth = (panel.width - 48f - columnGap) * 0.5f;
-        Rect unlocksRect = new Rect(panel.x + 24f, commandsY + 134f, compactWidth, 56f);
-        Rect statsRect = new Rect(unlocksRect.xMax + columnGap, unlocksRect.y, compactWidth, 56f);
-        Rect optionsRect = new Rect(unlocksRect.x, commandsY + 198f, compactWidth, 56f);
+        Rect unlocksRect = new Rect(panel.x + 24f, commandsY + 150f, compactWidth, 64f);
+        Rect statsRect = new Rect(unlocksRect.xMax + columnGap, unlocksRect.y, compactWidth, 64f);
+        Rect optionsRect = new Rect(unlocksRect.x, commandsY + 222f, compactWidth, 64f);
         Rect creditsRect = new Rect(statsRect.x, optionsRect.y, compactWidth, 56f);
-        Rect exitRect = new Rect(panel.x + 24f, commandsY + 270f, panel.width - 48f, 40f);
+        creditsRect.height = 64f;
+        Rect exitRect = new Rect(panel.x + 24f, commandsY + 302f, panel.width - 48f, 46f);
 
-        if (DrawMainCommandButton(playRect, "01", "INICIAR CONTENCION", "Run individual y operaciones", new Color(0.38f, 0.92f, 1f, 1f), true))
+        if (DrawMainCommandButton(playRect, "play", "INICIAR CONTENCION", string.Empty, navigationAccent, true))
         {
             LocalVersusModeStorage.SelectSinglePlayer();
             selectedOperationIndex = ContainmentOperationStorage.GetDefinitionIndex(ContainmentOperationStorage.SelectedOperationId);
@@ -277,7 +278,7 @@ public class MainMenuController : MonoBehaviour
             showOperations = true;
             GlitchAudioManager.PlayMenuConfirm();
         }
-        if (DrawMainCommandButton(versusRect, "02", "DUELO LOCAL", "Corredor contra anomalia", new Color(1f, 0.42f, 0.65f, 1f), true))
+        if (DrawMainCommandButton(versusRect, "duel", "DUELO LOCAL", string.Empty, navigationAccent, true))
         {
             LocalVersusModeStorage.SelectLocalVersus();
             showOptions = false;
@@ -288,7 +289,7 @@ public class MainMenuController : MonoBehaviour
             GlitchAudioManager.PlayMenuConfirm();
             StartGameplay();
         }
-        if (DrawMainCommandButton(unlocksRect, "03", "DESBLOQUEOS", "Mejoras y colores", new Color(0.62f, 0.82f, 1f, 1f)))
+        if (DrawMainCommandButton(unlocksRect, "unlocks", "DESBLOQUEOS", string.Empty, navigationAccent))
         {
             showOptions = false;
             showStats = false;
@@ -296,7 +297,7 @@ public class MainMenuController : MonoBehaviour
             showCredits = false;
             showUnlocks = true;
         }
-        if (DrawMainCommandButton(statsRect, "04", "ESTADISTICAS", "Perfil y records", new Color(0.82f, 0.62f, 1f, 1f)))
+        if (DrawMainCommandButton(statsRect, "stats", "ESTADISTICAS", string.Empty, navigationAccent))
         {
             showOptions = false;
             showUnlocks = false;
@@ -304,7 +305,7 @@ public class MainMenuController : MonoBehaviour
             showCredits = false;
             showStats = true;
         }
-        if (DrawMainCommandButton(optionsRect, "05", "OPCIONES", "Audio e interfaz", new Color(0.52f, 1f, 0.74f, 1f)))
+        if (DrawMainCommandButton(optionsRect, "options", "OPCIONES", string.Empty, navigationAccent))
         {
             showUnlocks = false;
             showStats = false;
@@ -312,7 +313,7 @@ public class MainMenuController : MonoBehaviour
             showCredits = false;
             showOptions = true;
         }
-        if (DrawMainCommandButton(creditsRect, "06", "CREDITOS", "Fuentes y recursos", new Color(1f, 0.76f, 0.38f, 1f)))
+        if (DrawMainCommandButton(creditsRect, "credits", "CREDITOS", string.Empty, navigationAccent))
         {
             showOptions = false;
             showUnlocks = false;
@@ -320,7 +321,7 @@ public class MainMenuController : MonoBehaviour
             showOperations = false;
             showCredits = true;
         }
-        if (DrawMainCommandButton(exitRect, "ESC", "SALIR", string.Empty, new Color(1f, 0.42f, 0.52f, 1f)))
+        if (DrawMainCommandButton(exitRect, "exit", "SALIR", string.Empty, new Color(0.62f, 0.70f, 0.82f, 1f)))
         {
             ExitGame();
         }
@@ -501,7 +502,7 @@ public class MainMenuController : MonoBehaviour
         }
         else
         {
-            int rows = Mathf.Min(sideBySide ? 8 : 6, entries.Count);
+            int rows = Mathf.Min(sideBySide ? 5 : 4, entries.Count);
             for (int i = 0; i < rows; i++)
             {
                 RankingEntry entry = entries[i];
@@ -569,11 +570,11 @@ public class MainMenuController : MonoBehaviour
 
     private void GetMainMenuLayout(out Rect mainPanel, out Rect rankingPanel, out bool sideBySide)
     {
-        float mainW = 470f;
-        float mainH = 500f;
-        float rankW = 400f;
-        float rankH = 320f;
-        float gap = 22f;
+        float mainW = Mathf.Min(570f, Screen.width - 44f);
+        float mainH = Mathf.Min(540f, Screen.height - 44f);
+        float rankW = 430f;
+        float rankH = 340f;
+        float gap = 26f;
         float margin = 26f;
 
         sideBySide = Screen.width >= (mainW + rankW + gap + margin * 2f) && Screen.height >= Mathf.Max(mainH, rankH) + 70f;
@@ -2254,14 +2255,14 @@ public class MainMenuController : MonoBehaviour
 
     private bool DrawMainCommandButton(
         Rect rect,
-        string code,
+        string icon,
         string title,
         string subtitle,
         Color accent,
         bool emphasis = false)
     {
         bool canInteract = transitionState == MenuTransitionState.Idle;
-        string hoverKey = $"main_{code}_{title}";
+        string hoverKey = $"main_{icon}_{title}";
         bool hovered = canInteract && rect.Contains(Event.current.mousePosition);
         TrackButtonHover(hoverKey, hovered);
         float hover = GetButtonHoverState(hoverKey, hovered);
@@ -2276,14 +2277,14 @@ public class MainMenuController : MonoBehaviour
         DrawSolidRect(new Rect(rect.x + 12f, rect.yMax - 1f, rect.width - 12f, 1f),
             new Color(accent.r, accent.g, accent.b, 0.18f + hover * 0.28f));
 
-        float codeWidth = emphasis ? 48f : 38f;
-        GUIStyle codeStyle = new GUIStyle(rankingScoreStyle)
-        {
-            alignment = TextAnchor.MiddleCenter,
-            fontSize = emphasis ? 15 : 12
-        };
-        codeStyle.normal.textColor = new Color(accent.r, accent.g, accent.b, 0.90f);
-        GUI.Label(new Rect(rect.x + 10f, rect.y, codeWidth, rect.height), code, codeStyle);
+        float codeWidth = emphasis ? 50f : 42f;
+        float iconSize = emphasis ? 28f : 24f;
+        Rect iconRect = new Rect(
+            rect.x + 12f + (codeWidth - iconSize) * 0.5f,
+            rect.center.y - iconSize * 0.5f,
+            iconSize,
+            iconSize);
+        DrawMainMenuIcon(iconRect, icon, accent, hover);
 
         float textX = rect.x + codeWidth + 18f;
         float arrowSpace = 34f;
@@ -2339,6 +2340,69 @@ public class MainMenuController : MonoBehaviour
             GlitchAudioManager.PlayMenuConfirm();
         }
         return clicked;
+    }
+
+    private static void DrawMainMenuIcon(Rect rect, string icon, Color accent, float hover)
+    {
+        Color color = new Color(accent.r, accent.g, accent.b, Mathf.Lerp(0.72f, 1f, hover));
+        float unit = Mathf.Max(1f, rect.width / 12f);
+        if (icon == "play")
+        {
+            for (int i = 0; i < 6; i++)
+            {
+                DrawSolidRect(new Rect(rect.x + unit * (3f + i), rect.y + unit * (2f + i * 0.65f), unit * 1.4f, rect.height - unit * (4f + i * 1.3f)), color);
+            }
+        }
+        else if (icon == "duel")
+        {
+            DrawSolidRect(new Rect(rect.x + unit, rect.center.y - unit, rect.width - unit * 2f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.y + unit * 2f, unit * 2f, rect.height - unit * 4f), color);
+            DrawSolidRect(new Rect(rect.xMax - unit * 4f, rect.y + unit * 2f, unit * 2f, rect.height - unit * 4f), color);
+        }
+        else if (icon == "unlocks")
+        {
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.center.y - unit, rect.width - unit * 4f, rect.height * 0.42f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 3f, rect.y + unit, rect.width - unit * 6f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.center.x - unit, rect.center.y, unit * 2f, rect.height * 0.34f), new Color(0.02f, 0.04f, 0.08f, color.a));
+        }
+        else if (icon == "stats")
+        {
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.yMax - unit * 4f, unit * 2f, unit * 3f), color);
+            DrawSolidRect(new Rect(rect.center.x - unit, rect.yMax - unit * 7f, unit * 2f, unit * 6f), color);
+            DrawSolidRect(new Rect(rect.xMax - unit * 4f, rect.yMax - unit * 10f, unit * 2f, unit * 9f), color);
+        }
+        else if (icon == "options")
+        {
+            DrawSolidRect(new Rect(rect.x + unit, rect.y + unit * 2f, rect.width - unit * 2f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.x + unit, rect.center.y - unit, rect.width - unit * 2f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.x + unit, rect.yMax - unit * 4f, rect.width - unit * 2f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 3f, rect.y + unit, unit * 2f, unit * 4f), color);
+            DrawSolidRect(new Rect(rect.xMax - unit * 5f, rect.center.y - unit * 2f, unit * 2f, unit * 4f), color);
+            DrawSolidRect(new Rect(rect.center.x - unit, rect.yMax - unit * 5f, unit * 2f, unit * 4f), color);
+        }
+        else if (icon == "credits")
+        {
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.y + unit, rect.width - unit * 4f, rect.height - unit * 2f), new Color(color.r, color.g, color.b, color.a * 0.32f));
+            DrawSolidRect(new Rect(rect.x + unit * 4f, rect.y + unit * 3f, rect.width - unit * 8f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 4f, rect.center.y, rect.width - unit * 6f, unit), color);
+            DrawSolidRect(new Rect(rect.x + unit * 4f, rect.center.y + unit * 3f, rect.width - unit * 6f, unit), color);
+        }
+        else if (icon == "exit")
+        {
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.y + unit, unit * 2f, rect.height - unit * 2f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 4f, rect.center.y - unit, rect.width - unit * 5f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.xMax - unit * 4f, rect.center.y - unit * 3f, unit * 3f, unit * 6f), color);
+        }
+        else if (icon == "data")
+        {
+            DrawSolidRect(new Rect(rect.center.x - unit, rect.y, unit * 2f, rect.height), color);
+            DrawSolidRect(new Rect(rect.x, rect.center.y - unit, rect.width, unit * 2f), color);
+        }
+        else
+        {
+            DrawSolidRect(new Rect(rect.x + unit, rect.y + unit, rect.width - unit * 2f, rect.height - unit * 2f), new Color(color.r, color.g, color.b, color.a * 0.28f));
+            DrawSolidRect(new Rect(rect.center.x - unit, rect.center.y - unit, unit * 2f, unit * 2f), color);
+        }
     }
 
     private static int GetKnownZoneCount()

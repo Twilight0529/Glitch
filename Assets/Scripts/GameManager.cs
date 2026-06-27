@@ -390,6 +390,7 @@ public class GameManager : MonoBehaviour
 
     private void Awake()
     {
+        UserSettings.EnsureContextTutorialProgressVersion();
         EnsureMenuController();
     }
 
@@ -1741,7 +1742,7 @@ public class GameManager : MonoBehaviour
 
         if (!UserSettings.GetShowContextTutorial())
         {
-            MarkContextTutorialShown(kind, eventKey);
+            MarkContextTutorialOpenedThisRun(kind, eventKey);
             return false;
         }
 
@@ -1750,7 +1751,7 @@ public class GameManager : MonoBehaviour
             return false;
         }
 
-        MarkContextTutorialShown(kind, eventKey);
+        MarkContextTutorialOpenedThisRun(kind, eventKey);
         contextTutorialOpen = true;
         contextTutorialKind = kind;
         contextTutorialProgress = 0f;
@@ -1803,11 +1804,15 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    private void MarkContextTutorialShown(ContextTutorialKind kind, string eventKey)
+    private void MarkContextTutorialCompleted(ContextTutorialKind kind, string eventKey)
     {
         string settingsKey = GetContextTutorialSettingsKey(kind);
         UserSettings.MarkContextTutorialSeen(settingsKey);
+        MarkContextTutorialOpenedThisRun(kind, eventKey);
+    }
 
+    private void MarkContextTutorialOpenedThisRun(ContextTutorialKind kind, string eventKey)
+    {
         switch (kind)
         {
             case ContextTutorialKind.Movement:
@@ -1966,12 +1971,21 @@ public class GameManager : MonoBehaviour
 
     private void CloseContextTutorial(bool playConfirm = true)
     {
+        ContextTutorialKind completedKind = contextTutorialKind;
+        string completedEventKey = contextTutorialEventKey;
+        bool completed = IsContextTutorialComplete();
+
         contextTutorialOpen = false;
         contextTutorialKind = ContextTutorialKind.None;
         contextTutorialProgress = 0f;
         contextTutorialTimer = 0f;
         contextTutorialActionFlash = 0f;
         PlayerController.SetTutorialInputLocked(false);
+
+        if (completed)
+        {
+            MarkContextTutorialCompleted(completedKind, completedEventKey);
+        }
 
         if (!IsGameOver && !upgradeSelectionOpen)
         {
@@ -3800,30 +3814,26 @@ public class GameManager : MonoBehaviour
         }
 
         float s = hudScale;
-        float width = Mathf.Min(Screen.width * 0.44f, 560f * s);
-        float lineHeight = 25f * s;
-        float x = (Screen.width - width) * 0.5f;
-        float y = 8f * s;
+        Rect topBand = GetHudTopBand(s);
+        float width = 252f * s;
+        float lineHeight = 24f * s;
+        float x = topBand.center.x - width * 0.5f;
+        float y = topBand.y + (36f * s);
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 7.5f);
         Color stateColor = GetBossStateColor(stateRaw);
-        Color panelFill = Color.Lerp(new Color(0.03f, 0.04f, 0.08f, 0.84f), new Color(stateColor.r, stateColor.g, stateColor.b, 0.76f), 0.18f + pulse * 0.08f);
-        Rect panel = new Rect(x - (16f * s), y, width + (32f * s), 66f * s);
+        Rect panel = new Rect(x, y, width, Mathf.Max(30f * s, topBand.yMax - y - (3f * s)));
 
-        DrawSolidRect(panel, panelFill);
-        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 2f * s), new Color(stateColor.r, stateColor.g, stateColor.b, 0.78f));
-        DrawSolidRect(new Rect(panel.x, panel.yMax - (2f * s), panel.width, 2f * s), new Color(0.45f, 0.72f, 1f, 0.36f));
+        DrawSolidRect(new Rect(panel.x, panel.y, 3f * s, panel.height), new Color(stateColor.r, stateColor.g, stateColor.b, 0.72f));
+        DrawSolidRect(new Rect(panel.x + (8f * s), panel.yMax - (1f * s), panel.width - (8f * s), 1f * s), new Color(0.45f, 0.72f, 1f, 0.26f));
 
         float markerW = Mathf.Lerp(42f * s, 90f * s, pulse);
-        DrawSolidRect(new Rect(panel.x + (8f * s), panel.y + (7f * s), markerW, 3f * s), new Color(stateColor.r, stateColor.g, stateColor.b, 0.64f));
-        DrawSolidRect(new Rect(panel.xMax - markerW - (8f * s), panel.yMax - (10f * s), markerW, 3f * s), new Color(stateColor.r, stateColor.g, stateColor.b, 0.48f));
+        DrawSolidRect(new Rect(panel.x + (8f * s), panel.y + (5f * s), markerW, 2f * s), new Color(stateColor.r, stateColor.g, stateColor.b, 0.54f));
 
         Color oldValue = bossStateValueStyle.normal.textColor;
         bossStateValueStyle.normal.textColor = Color.Lerp(Color.white, stateColor, 0.42f);
-        string header = IsBossLevelThreeState(stateRaw)
-            ? "ANOMALIA NIVEL 3"
-            : IsBossLevelTwoState(stateRaw) ? "ANOMALIA NIVEL 2" : "ANOMALIA";
-        GUI.Label(new Rect(x, y + (6f * s), width, lineHeight), header, bossStateStyle);
-        GUI.Label(new Rect(x, y + (30f * s), width, lineHeight + (6f * s)), stateValue.ToUpperInvariant(), bossStateValueStyle);
+        Rect stateIcon = new Rect(panel.x + (12f * s), panel.y + (6f * s), 20f * s, 20f * s);
+        DrawHudMetricIcon(stateIcon, "anomaly", stateColor);
+        GUI.Label(new Rect(stateIcon.xMax + (10f * s), y + (3f * s), panel.width - (50f * s), lineHeight), stateValue.ToUpperInvariant(), bossStateValueStyle);
         bossStateValueStyle.normal.textColor = oldValue;
     }
 
@@ -4733,45 +4743,39 @@ public class GameManager : MonoBehaviour
         DrawHudAmbientFrame();
 
         float s = hudScale;
-        Rect leftPanel = new Rect(12f * s, 10f * s, 320f * s, 112f * s);
-        DrawSolidRect(leftPanel, new Color(0.03f, 0.05f, 0.10f, 0.58f));
-        DrawSolidRect(new Rect(leftPanel.x, leftPanel.y, leftPanel.width, 2f), new Color(0.38f, 0.58f, 0.84f, 0.6f));
-        DrawSolidRect(new Rect(leftPanel.x, leftPanel.yMax - 2f, leftPanel.width, 2f), new Color(0.18f, 0.32f, 0.50f, 0.42f));
+        DrawUnifiedHudRail(s);
+        Rect topBand = GetHudTopBand(s);
+        Rect leftPanel = new Rect(topBand.x + (10f * s), topBand.y + (3f * s), 252f * s, topBand.height - (6f * s));
 
-        float pad = 14f * s;
-        float headerY = leftPanel.y + (10f * s);
-        float valueY = leftPanel.y + (36f * s);
-        float colGap = 18f * s;
+        float pad = 12f * s;
+        float iconSize = 24f * s;
+        float valueY = leftPanel.y + (10f * s);
+        float colGap = 12f * s;
         float colW = (leftPanel.width - (pad * 2f) - colGap) * 0.5f;
-        float valueH = 40f * s;
-        float labelH = 22f * s;
+        float valueH = 42f * s;
 
-        GUI.Label(new Rect(leftPanel.x + pad, headerY, colW, labelH), "TIME", hudLabelStyle);
-        GUI.Label(new Rect(leftPanel.x + pad, valueY, colW, valueH), $"{SurvivalTime:F1}s", hudValueStyle);
+        Rect timeIcon = new Rect(leftPanel.x + pad, valueY + (7f * s), iconSize, iconSize);
+        DrawHudMetricIcon(timeIcon, "clock", new Color(0.64f, 0.86f, 0.98f, 0.92f));
+        GUI.Label(new Rect(timeIcon.xMax + (7f * s), valueY, colW - iconSize - (7f * s), valueH), $"{SurvivalTime:F1}s", hudValueStyle);
 
         float rightColX = leftPanel.x + pad + colW + colGap;
-        GUI.Label(new Rect(rightColX, headerY, colW, labelH), "POINTS", hudLabelStyle);
+        Rect scoreIcon = new Rect(rightColX, valueY + (7f * s), iconSize, iconSize);
+        DrawHudMetricIcon(scoreIcon, "data", new Color(0.64f, 0.86f, 0.98f, 0.92f));
         int shownScore = Mathf.Max(0, Mathf.RoundToInt(displayedScore));
-        GUI.Label(new Rect(rightColX, valueY, colW, valueH), shownScore.ToString(), hudValueStyle);
+        GUI.Label(new Rect(scoreIcon.xMax + (7f * s), valueY, colW - iconSize - (7f * s), valueH), shownScore.ToString(), hudValueStyle);
 
         DrawThreatMeter(leftPanel, s);
-        DrawScorePopups(rightColX + (colW * 0.45f), valueY - (6f * s), s);
+        DrawScorePopups(scoreIcon.xMax + (colW * 0.35f), valueY - (6f * s), s);
 
-        float chipH = 34f * s;
-        float rightMargin = 12f * s;
+        float chipH = 30f * s;
         int sectorLevel = arenaGenerator != null ? arenaGenerator.SectorLevel : 1;
-        string levelText = $"Sector {sectorLevel} | {levelType}";
-        float levelW = CalcChipWidth(levelText, 190f * s, 420f * s, 22f * s);
-        float rightX = Screen.width - levelW - rightMargin;
-        DrawHudChip(new Rect(rightX, 10f * s, levelW, chipH), levelText, new Color(0.14f, 0.21f, 0.33f, 0.72f));
-
-        string eventLabel = GetMapEventLabel();
-        if (!string.Equals(eventLabel, "Nominal"))
-        {
-            float eventW = CalcChipWidth(eventLabel, 220f * s, 520f * s, 22f * s);
-            float eventX = Screen.width - eventW - rightMargin;
-            DrawHudChip(new Rect(eventX, (10f * s) + chipH + (6f * s), eventW, chipH), eventLabel, new Color(0.31f, 0.17f, 0.22f, 0.74f));
-        }
+        string levelText = $"L{sectorLevel}  {levelType.ToUpperInvariant()}";
+        Rect sectorRect = new Rect(topBand.xMax - (262f * s), topBand.y + (3f * s), 252f * s, chipH);
+        Rect sectorIcon = new Rect(sectorRect.x + (4f * s), sectorRect.y + (6f * s), 18f * s, 18f * s);
+        DrawHudMetricIcon(sectorIcon, "sector", new Color(0.54f, 0.78f, 0.94f, 0.94f));
+        GUI.Label(new Rect(sectorIcon.xMax + (9f * s), sectorRect.y, sectorRect.width - (35f * s), sectorRect.height), levelText,
+            BuildFittedSingleLineStyle(hudChipStyle, levelText, sectorRect.width - (35f * s), sectorRect.height, Mathf.RoundToInt(9f * s)));
+        DrawSolidRect(new Rect(sectorRect.x, sectorRect.yMax, sectorRect.width, 1f * s), new Color(0.54f, 0.78f, 0.94f, 0.24f));
 
         DrawRunContractHud(s);
         DrawOperationHud(s);
@@ -4783,6 +4787,63 @@ public class GameManager : MonoBehaviour
         {
             DrawThreatVignette();
         }
+    }
+
+    private void DrawUnifiedHudRail(float s)
+    {
+        Rect topBand = GetHudTopBand(s);
+        Rect bottomBand = GetHudBottomBand(s);
+        float threat = enableReactiveHudFx ? Mathf.Clamp01(smoothedThreat) : 0f;
+        Color accent = Color.Lerp(new Color(0.42f, 0.72f, 0.94f, 1f), new Color(1f, 0.34f, 0.46f, 1f), threat);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * Mathf.Lerp(2.2f, 6f, threat));
+
+        DrawSolidRect(topBand, new Color(0.012f, 0.024f, 0.048f, 0.50f));
+        DrawSolidRect(bottomBand, new Color(0.012f, 0.024f, 0.048f, 0.46f));
+        DrawSolidRect(new Rect(topBand.x, topBand.yMax - (2f * s), topBand.width, 2f * s), new Color(accent.r, accent.g, accent.b, 0.40f + pulse * 0.14f));
+        DrawSolidRect(new Rect(bottomBand.x, bottomBand.y, bottomBand.width, 2f * s), new Color(accent.r, accent.g, accent.b, 0.32f + pulse * 0.12f));
+        DrawSolidRect(new Rect(topBand.x, topBand.y, 2f * s, topBand.height), new Color(accent.r, accent.g, accent.b, 0.36f));
+        DrawSolidRect(new Rect(bottomBand.xMax - (2f * s), bottomBand.y, 2f * s, bottomBand.height), new Color(accent.r, accent.g, accent.b, 0.26f));
+
+        float topScanX = topBand.x + Mathf.Repeat(Time.unscaledTime * 64f * s, Mathf.Max(1f, topBand.width - (30f * s)));
+        DrawSolidRect(new Rect(topScanX, topBand.yMax - (3f * s), 30f * s, 3f * s), new Color(accent.r, accent.g, accent.b, 0.28f));
+        float bottomScanX = bottomBand.xMax - Mathf.Repeat(Time.unscaledTime * 48f * s, Mathf.Max(1f, bottomBand.width - (22f * s)));
+        DrawSolidRect(new Rect(bottomScanX - (22f * s), bottomBand.y, 22f * s, 2f * s), new Color(accent.r, accent.g, accent.b, 0.22f));
+    }
+
+    private Rect GetHudArenaScreenRect()
+    {
+        Camera camera = Camera.main;
+        if (camera == null || arenaGenerator == null)
+        {
+            return new Rect(Screen.width * 0.15f, Screen.height * 0.14f, Screen.width * 0.70f, Screen.height * 0.72f);
+        }
+
+        Vector2 center = arenaGenerator.transform.position;
+        Vector3 worldMin = new Vector3(center.x - arenaGenerator.ArenaWidth * 0.5f, center.y - arenaGenerator.ArenaHeight * 0.5f, 0f);
+        Vector3 worldMax = new Vector3(center.x + arenaGenerator.ArenaWidth * 0.5f, center.y + arenaGenerator.ArenaHeight * 0.5f, 0f);
+        Vector3 screenMin = camera.WorldToScreenPoint(worldMin);
+        Vector3 screenMax = camera.WorldToScreenPoint(worldMax);
+        float x = Mathf.Min(screenMin.x, screenMax.x);
+        float width = Mathf.Abs(screenMax.x - screenMin.x);
+        float y = Screen.height - Mathf.Max(screenMin.y, screenMax.y);
+        float height = Mathf.Abs(screenMax.y - screenMin.y);
+        return new Rect(x, y, width, height);
+    }
+
+    private Rect GetHudTopBand(float s)
+    {
+        Rect arenaRect = GetHudArenaScreenRect();
+        float available = Mathf.Max(48f * s, arenaRect.y - (8f * s));
+        float height = Mathf.Min(72f * s, available);
+        return new Rect(arenaRect.x, Mathf.Max(4f * s, arenaRect.y - height - (4f * s)), arenaRect.width, height);
+    }
+
+    private Rect GetHudBottomBand(float s)
+    {
+        Rect arenaRect = GetHudArenaScreenRect();
+        float y = arenaRect.yMax + (4f * s);
+        float available = Mathf.Max(48f * s, Screen.height - y - (6f * s));
+        return new Rect(arenaRect.x, y, arenaRect.width, Mathf.Min(62f * s, available));
     }
 
     private void DrawAchievementToast(float s)
@@ -4829,29 +4890,27 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        Rect panel = new Rect(12f * s, 164f * s, 320f * s, 62f * s);
+        Rect topBand = GetHudTopBand(s);
+        Rect panel = new Rect(topBand.xMax - (262f * s), topBand.y + (35f * s), 252f * s, Mathf.Max(30f * s, topBand.height - (38f * s)));
         Color accent = contractCompletePulseTimer > 0f
             ? new Color(0.56f, 1f, 0.76f, 1f)
             : new Color(0.48f, 0.90f, 1f, 1f);
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 9f);
-        DrawSolidRect(panel, new Color(0.03f, 0.05f, 0.10f, 0.72f));
-        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, (0.55f + pulse * 0.18f)));
-        DrawSolidRect(new Rect(panel.x, panel.yMax - (2f * s), panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, 0.28f));
+        DrawSolidRect(new Rect(panel.x, panel.y, 3f * s, panel.height), new Color(accent.r, accent.g, accent.b, 0.46f + pulse * 0.18f));
+        DrawSolidRect(new Rect(panel.x + (8f * s), panel.yMax - (1f * s), panel.width - (8f * s), 1f * s), new Color(accent.r, accent.g, accent.b, 0.22f));
 
         if (!hasActiveContract)
         {
-            GUI.Label(new Rect(panel.x + (12f * s), panel.y + (8f * s), panel.width - (24f * s), 22f * s), "CONTRATO COMPLETADO", hudLabelStyle);
-            GUI.Label(new Rect(panel.x + (12f * s), panel.y + (30f * s), panel.width - (24f * s), 24f * s), lastContractCompletionLabel, hudValueStyle);
+            GUI.Label(new Rect(panel.x + (12f * s), panel.y + (3f * s), panel.width - (24f * s), panel.height - (6f * s)), "CONTRATO COMPLETADO", hudLabelStyle);
             return;
         }
 
         float remaining = Mathf.Max(0f, activeContract.duration - (SurvivalTime - activeContract.startedAt));
         float normalized = Mathf.Clamp01(activeContract.progress / Mathf.Max(1f, activeContract.target));
-        GUI.Label(new Rect(panel.x + (12f * s), panel.y + (6f * s), panel.width - (84f * s), 18f * s), activeContract.title.ToUpperInvariant(), hudLabelStyle);
-        GUI.Label(new Rect(panel.xMax - (78f * s), panel.y + (6f * s), 66f * s, 18f * s), $"{Mathf.CeilToInt(remaining)}s", hudLabelStyle);
-        GUI.Label(new Rect(panel.x + (12f * s), panel.y + (24f * s), panel.width - (24f * s), 18f * s), $"{activeContract.hint}  {activeContract.progress}/{activeContract.target}", hudLabelStyle);
+        GUI.Label(new Rect(panel.x + (12f * s), panel.y + (2f * s), panel.width - (110f * s), 16f * s), activeContract.title.ToUpperInvariant(), hudLabelStyle);
+        GUI.Label(new Rect(panel.xMax - (96f * s), panel.y + (2f * s), 84f * s, 16f * s), $"{activeContract.progress}/{activeContract.target}  {Mathf.CeilToInt(remaining)}s", hudLabelStyle);
 
-        Rect bar = new Rect(panel.x + (12f * s), panel.yMax - (14f * s), panel.width - (24f * s), 7f * s);
+        Rect bar = new Rect(panel.x + (12f * s), panel.yMax - (9f * s), panel.width - (24f * s), 5f * s);
         DrawSolidRect(bar, new Color(0.04f, 0.06f, 0.10f, 0.92f));
         DrawSolidRect(new Rect(bar.x, bar.y, bar.width * normalized, bar.height), new Color(accent.r, accent.g, accent.b, 0.82f));
     }
@@ -4863,30 +4922,20 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        float y = hasActiveContract || contractCompletePulseTimer > 0f ? 234f * s : 164f * s;
-        Rect panel = new Rect(12f * s, y, 320f * s, 58f * s);
-        Color accent = activeOperation.accent;
+        Rect topBand = GetHudTopBand(s);
+        float panelW = 252f * s;
+        Rect panel = new Rect(topBand.center.x - panelW * 0.5f, topBand.y + (3f * s), panelW, 30f * s);
+        Color accent = new Color(0.54f, 0.78f, 0.94f, 1f);
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 3.2f);
 
-        DrawSolidRect(panel, new Color(0.03f, 0.05f, 0.10f, 0.68f));
-        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, 0.50f + pulse * 0.22f));
-        DrawSolidRect(new Rect(panel.x, panel.yMax - (2f * s), panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, 0.25f));
+        DrawSolidRect(new Rect(panel.x, panel.y, 3f * s, panel.height), new Color(accent.r, accent.g, accent.b, 0.42f + pulse * 0.18f));
+        DrawSolidRect(new Rect(panel.x + (8f * s), panel.yMax - (1f * s), panel.width - (8f * s), 1f * s), new Color(accent.r, accent.g, accent.b, 0.20f));
 
-        string header = activeOperation.title.ToUpperInvariant();
-        GUI.Label(
-            new Rect(panel.x + (12f * s), panel.y + (5f * s), panel.width - (24f * s), 18f * s),
-            header,
-            BuildFittedSingleLineStyle(hudLabelStyle, header, panel.width - (24f * s), 18f * s, Mathf.RoundToInt(9f * s)));
-
-        string progress = $"{activeOperation.hudRule}  |  PTS x{activeOperation.scoreMultiplier:0.00}";
-        GUI.Label(
-            new Rect(panel.x + (12f * s), panel.y + (23f * s), panel.width - (24f * s), 17f * s),
-            progress,
-            BuildFittedSingleLineStyle(hudLabelStyle, progress, panel.width - (24f * s), 17f * s, Mathf.RoundToInt(8f * s)));
-
-        DrawSolidRect(
-            new Rect(panel.x + (12f * s), panel.yMax - (8f * s), panel.width - (24f * s), 3f * s),
-            new Color(accent.r, accent.g, accent.b, 0.42f + pulse * 0.18f));
+        Rect icon = new Rect(panel.x + (8f * s), panel.y + (7f * s), 16f * s, 16f * s);
+        DrawHudMetricIcon(icon, "rule", accent);
+        string progress = $"REGLA  x{activeOperation.scoreMultiplier:0.00}";
+        GUI.Label(new Rect(icon.xMax + (7f * s), panel.y, panel.width - (39f * s), panel.height), progress,
+            BuildFittedSingleLineStyle(hudLabelStyle, progress, panel.width - (39f * s), panel.height, Mathf.RoundToInt(8f * s)));
     }
 
     private void DrawThreatMeter(Rect panel, float s)
@@ -4915,15 +4964,11 @@ public class GameManager : MonoBehaviour
 
         bool ready = playerController.IsGhostDashReady;
         float normalized = playerController.GhostDashCooldownNormalized;
-        float dockW = 152f * s;
-        float dockH = 46f * s;
-        float x = (Screen.width - dockW) * 0.5f;
-        float y = Screen.height - dockH - (18f * s);
-        if (x < 12f * s)
-        {
-            x = (Screen.width - dockW) * 0.5f;
-            y -= dockH + (8f * s);
-        }
+        float dockW = 196f * s;
+        float dockH = 42f * s;
+        Rect bottomBand = GetHudBottomBand(s);
+        float x = bottomBand.x + (10f * s);
+        float y = bottomBand.y + (8f * s);
 
         Rect dock = new Rect(x, y, dockW, dockH);
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (ready ? 9f : 3.5f));
@@ -4931,25 +4976,16 @@ public class GameManager : MonoBehaviour
             ? Color.Lerp(new Color(0.55f, 1f, 0.94f, 1f), new Color(0.92f, 1f, 1f, 1f), pulse)
             : new Color(0.26f, 0.52f, 0.72f, 1f);
 
-        DrawSolidRect(dock, new Color(0.018f, 0.028f, 0.052f, ready ? 0.70f : 0.50f));
-        DrawSolidRect(new Rect(dock.x, dock.y, dock.width, 2f * s), new Color(accent.r, accent.g, accent.b, ready ? 0.82f : 0.38f));
-        DrawSolidRect(new Rect(dock.x, dock.yMax - (2f * s), dock.width, 2f * s), new Color(accent.r, accent.g, accent.b, ready ? 0.42f : 0.22f));
+        DrawSolidRect(new Rect(dock.x, dock.y, dock.width, 1f * s), new Color(accent.r, accent.g, accent.b, ready ? 0.72f : 0.28f));
 
-        string label = "DASH";
-        GUI.Label(
-            new Rect(dock.x + (10f * s), dock.y + (5f * s), dock.width - (20f * s), 18f * s),
-            label,
-            BuildFittedSingleLineStyle(hudLabelStyle, label, dock.width - (20f * s), 18f * s, Mathf.RoundToInt(8f * s)));
-
-        string value = ready ? "SHIFT" : $"{Mathf.RoundToInt(normalized * 100f)}%";
-        GUI.Label(
-            new Rect(dock.x + (10f * s), dock.y + (22f * s), dock.width - (20f * s), 18f * s),
-            value,
-            BuildFittedSingleLineStyle(hudChipStyle, value, dock.width - (20f * s), 18f * s, Mathf.RoundToInt(8f * s)));
-
-        Rect bar = new Rect(dock.x + (10f * s), dock.yMax - (6f * s), dock.width - (20f * s), 3f * s);
+        Rect icon = new Rect(dock.x + (10f * s), dock.y + (9f * s), 24f * s, 24f * s);
+        DrawHudMetricIcon(icon, "dash", accent);
+        Rect bar = new Rect(icon.xMax + (9f * s), dock.y + (15f * s), 105f * s, 12f * s);
         DrawSolidRect(bar, new Color(0.04f, 0.06f, 0.10f, 0.74f));
         DrawSolidRect(new Rect(bar.x, bar.y, bar.width * normalized, bar.height), new Color(accent.r, accent.g, accent.b, ready ? 0.92f : 0.62f));
+        string value = ready ? "SHIFT" : $"{Mathf.RoundToInt(normalized * 100f)}%";
+        Rect valueRect = new Rect(bar.xMax + (8f * s), dock.y + (8f * s), 48f * s, 26f * s);
+        GUI.Label(valueRect, value, BuildFittedSingleLineStyle(hudChipStyle, value, valueRect.width, valueRect.height, Mathf.RoundToInt(8f * s)));
     }
 
     private void DrawFirewallChargeDock(float s)
@@ -4965,64 +5001,42 @@ public class GameManager : MonoBehaviour
         Color readyAccent = Color.Lerp(new Color(0.42f, 0.96f, 1f, 1f), new Color(1f, 0.84f, 0.42f, 1f), pulse);
         Color accent = ready ? readyAccent : Color.Lerp(new Color(0.28f, 0.56f, 0.86f, 1f), new Color(0.48f, 0.94f, 1f, 1f), normalized);
 
-        float panelW = 96f * s;
-        float panelH = Mathf.Clamp(Screen.height * 0.27f, 158f * s, 222f * s);
-        float x = 12f * s;
-        float y = GetFirewallRailY(s, panelH);
+        float panelW = 196f * s;
+        float panelH = 46f * s;
+        Rect bottomBand = GetHudBottomBand(s);
+        float x = bottomBand.x + (222f * s);
+        float y = bottomBand.y + (6f * s);
         Rect panel = new Rect(x, y, panelW, panelH);
 
-        DrawSolidRect(panel, new Color(0.014f, 0.024f, 0.048f, ready ? 0.82f : 0.62f));
-        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, ready ? 0.95f : 0.58f));
-        DrawSolidRect(new Rect(panel.x, panel.yMax - (2f * s), panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, ready ? 0.58f : 0.28f));
+        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 1f * s), new Color(accent.r, accent.g, accent.b, ready ? 0.88f : 0.42f));
         if (ready)
         {
-            DrawSolidRect(new Rect(panel.x - (3f * s), panel.y + (10f * s), 2f * s, panel.height - (20f * s)), new Color(accent.r, accent.g, accent.b, 0.46f + pulse * 0.26f));
-            DrawSolidRect(new Rect(panel.xMax + (1f * s), panel.y + (10f * s), 2f * s, panel.height - (20f * s)), new Color(accent.r, accent.g, accent.b, 0.46f + pulse * 0.26f));
+            DrawSolidRect(new Rect(panel.x - (3f * s), panel.y + (6f * s), 2f * s, panel.height - (12f * s)), new Color(accent.r, accent.g, accent.b, 0.46f + pulse * 0.26f));
+            DrawSolidRect(new Rect(panel.xMax + (1f * s), panel.y + (6f * s), 2f * s, panel.height - (12f * s)), new Color(accent.r, accent.g, accent.b, 0.46f + pulse * 0.26f));
         }
 
-        string label = "FIREWALL";
-        GUI.Label(
-            new Rect(panel.x + (8f * s), panel.y + (7f * s), panel.width - (16f * s), 18f * s),
-            label,
-            BuildFittedSingleLineStyle(hudLabelStyle, label, panel.width - (16f * s), 18f * s, Mathf.RoundToInt(8f * s)));
-
-        string percent = $"{Mathf.RoundToInt(normalized * 100f)}%";
-        GUI.Label(
-            new Rect(panel.x + (8f * s), panel.y + (26f * s), panel.width - (16f * s), 26f * s),
-            percent,
-            BuildFittedSingleLineStyle(hudValueStyle, percent, panel.width - (16f * s), 26f * s, Mathf.RoundToInt(13f * s)));
-
-        float barTop = panel.y + (ready ? 78f * s : 58f * s);
-        float barBottom = panel.yMax - (44f * s);
-        Rect background = new Rect(panel.x + (36f * s), barTop, 24f * s, Mathf.Max(24f * s, barBottom - barTop));
+        Rect icon = new Rect(panel.x + (10f * s), panel.y + (11f * s), 24f * s, 24f * s);
+        DrawHudMetricIcon(icon, "firewall", accent);
+        Rect background = new Rect(icon.xMax + (9f * s), panel.y + (16f * s), 105f * s, 14f * s);
         DrawSolidRect(background, new Color(0.04f, 0.06f, 0.10f, 0.88f));
         Color fill = ready
             ? Color.Lerp(new Color(0.45f, 0.95f, 1f, 0.95f), new Color(1f, 0.88f, 0.48f, 1f), pulse)
             : Color.Lerp(new Color(0.22f, 0.48f, 0.74f, 0.82f), new Color(0.45f, 0.95f, 1f, 0.95f), normalized);
-        float fillH = background.height * normalized;
-        DrawSolidRect(new Rect(background.x, background.yMax - fillH, background.width, fillH), fill);
+        float fillW = background.width * normalized;
+        DrawSolidRect(new Rect(background.x, background.y, fillW, background.height), fill);
         DrawSolidRect(new Rect(background.x, background.y, background.width, 1f), new Color(0.85f, 0.92f, 1f, 0.18f));
         DrawSolidRect(new Rect(background.x, background.y + background.height - 1f, background.width, 1f), new Color(0.85f, 0.92f, 1f, 0.14f));
 
         for (int i = 1; i < 4; i++)
         {
-            float tickY = Mathf.Lerp(background.yMax, background.y, i / 4f);
-            DrawSolidRect(new Rect(background.x - (8f * s), tickY, 7f * s, 1f), new Color(0.72f, 0.84f, 1f, 0.22f));
-            DrawSolidRect(new Rect(background.xMax + (1f * s), tickY, 7f * s, 1f), new Color(0.72f, 0.84f, 1f, 0.22f));
+            float tickX = Mathf.Lerp(background.x, background.xMax, i / 4f);
+            DrawSolidRect(new Rect(tickX, background.y - (3f * s), 1f, background.height + (6f * s)), new Color(0.72f, 0.84f, 1f, 0.22f));
         }
 
-        string input = ready ? "Q / R" : "CARGA";
-        Rect inputRect = new Rect(panel.x + (10f * s), panel.yMax - (34f * s), panel.width - (20f * s), 22f * s);
+        string input = ready ? "Q / R" : $"{Mathf.RoundToInt(normalized * 100f)}%";
+        Rect inputRect = new Rect(background.xMax + (8f * s), panel.y + (10f * s), 48f * s, 26f * s);
         DrawSolidRect(inputRect, new Color(accent.r, accent.g, accent.b, ready ? 0.24f : 0.12f));
         GUI.Label(inputRect, input, BuildFittedSingleLineStyle(hudChipStyle, input, inputRect.width - (6f * s), inputRect.height, Mathf.RoundToInt(8f * s)));
-
-        if (ready)
-        {
-            string readyText = "LISTO";
-            Rect readyRect = new Rect(panel.x + (10f * s), panel.y + (52f * s), panel.width - (20f * s), 20f * s);
-            DrawSolidRect(readyRect, new Color(1f, 0.82f, 0.42f, 0.18f + pulse * 0.12f));
-            GUI.Label(readyRect, readyText, BuildFittedSingleLineStyle(hudChipStyle, readyText, readyRect.width - (6f * s), readyRect.height, Mathf.RoundToInt(8f * s)));
-        }
     }
 
     private float GetFirewallRailY(float s, float panelH)
@@ -5206,6 +5220,81 @@ public class GameManager : MonoBehaviour
         DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 1f), new Color(0.85f, 0.92f, 1f, 0.35f));
         DrawSolidRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), new Color(0.85f, 0.92f, 1f, 0.25f));
         GUI.Label(rect, text, BuildFittedSingleLineStyle(hudChipStyle, text, rect.width - (10f * hudScale), rect.height, Mathf.RoundToInt(10f * hudScale)));
+    }
+
+    private static void DrawHudMetricIcon(Rect rect, string icon, Color color)
+    {
+        float unit = Mathf.Max(1f, rect.width / 12f);
+        if (icon == "data")
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                float inset = Mathf.Abs(2 - i) * unit * 1.5f;
+                DrawSolidRect(new Rect(rect.x + inset, rect.y + unit * (1f + i * 2f), rect.width - inset * 2f, unit * 1.6f), color);
+            }
+            return;
+        }
+
+        if (icon == "firewall")
+        {
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.y + unit, rect.width - unit * 4f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.y + unit * 3f, unit * 2f, rect.height - unit * 6f), color);
+            DrawSolidRect(new Rect(rect.xMax - unit * 4f, rect.y + unit * 3f, unit * 2f, rect.height - unit * 6f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 3f, rect.yMax - unit * 4f, rect.width - unit * 6f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.center.x - unit, rect.yMax - unit * 3f, unit * 2f, unit * 2f), color);
+            return;
+        }
+
+        if (icon == "rule")
+        {
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.y + unit * 2f, rect.width - unit * 4f, unit * 1.5f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.center.y - unit * 0.75f, rect.width - unit * 4f, unit * 1.5f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.yMax - unit * 3.5f, rect.width - unit * 4f, unit * 1.5f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 3f, rect.y + unit, unit * 2f, unit * 3.5f), color);
+            DrawSolidRect(new Rect(rect.xMax - unit * 5f, rect.center.y - unit * 1.75f, unit * 2f, unit * 3.5f), color);
+            DrawSolidRect(new Rect(rect.center.x - unit, rect.yMax - unit * 4.5f, unit * 2f, unit * 3.5f), color);
+            return;
+        }
+
+        if (icon == "anomaly")
+        {
+            DrawSolidRect(new Rect(rect.center.x - unit, rect.y, unit * 2f, rect.height), color);
+            DrawSolidRect(new Rect(rect.x, rect.center.y - unit, rect.width, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.y + unit * 2f, unit * 2f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.xMax - unit * 4f, rect.y + unit * 2f, unit * 2f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.yMax - unit * 4f, unit * 2f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.xMax - unit * 4f, rect.yMax - unit * 4f, unit * 2f, unit * 2f), color);
+            return;
+        }
+
+        if (icon == "sector")
+        {
+            DrawSolidRect(new Rect(rect.x, rect.y + unit * 2f, rect.width, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.center.y - unit, rect.width - unit * 4f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 4f, rect.yMax - unit * 4f, rect.width - unit * 8f, unit * 2f), color);
+            return;
+        }
+
+        if (icon == "dash")
+        {
+            DrawSolidRect(new Rect(rect.x, rect.center.y - unit, rect.width - unit * 3f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.center.y - unit * 4f, rect.width - unit * 5f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.center.y + unit * 2f, rect.width - unit * 5f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.xMax - unit * 5f, rect.center.y - unit * 5f, unit * 5f, unit * 10f), new Color(color.r, color.g, color.b, color.a * 0.36f));
+            return;
+        }
+
+        float frameInset = unit * 1.5f;
+        DrawSolidRect(new Rect(rect.x + frameInset, rect.y, rect.width - frameInset * 2f, unit), color);
+        DrawSolidRect(new Rect(rect.x + frameInset, rect.yMax - unit, rect.width - frameInset * 2f, unit), color);
+        DrawSolidRect(new Rect(rect.x, rect.y + frameInset, unit, rect.height - frameInset * 2f), color);
+        DrawSolidRect(new Rect(rect.xMax - unit, rect.y + frameInset, unit, rect.height - frameInset * 2f), color);
+        DrawSolidRect(new Rect(rect.x + unit * 0.7f, rect.y + unit * 0.7f, unit * 1.5f, unit * 1.5f), color);
+        DrawSolidRect(new Rect(rect.xMax - unit * 2.2f, rect.y + unit * 0.7f, unit * 1.5f, unit * 1.5f), color);
+        DrawSolidRect(new Rect(rect.x + unit * 0.7f, rect.yMax - unit * 2.2f, unit * 1.5f, unit * 1.5f), color);
+        DrawSolidRect(new Rect(rect.xMax - unit * 2.2f, rect.yMax - unit * 2.2f, unit * 1.5f, unit * 1.5f), color);
+        DrawSolidRect(new Rect(rect.center.x - unit * 0.5f, rect.y + unit * 2.5f, unit, rect.height * 0.34f), color);
+        DrawSolidRect(new Rect(rect.center.x, rect.center.y - unit * 0.5f, rect.width * 0.25f, unit), color);
     }
 
     private static GUIStyle BuildFittedSingleLineStyle(GUIStyle baseStyle, string text, float width, float height, int minSize)
