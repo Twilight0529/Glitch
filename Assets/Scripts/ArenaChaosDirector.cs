@@ -1149,6 +1149,7 @@ public class ArenaChaosDirector : MonoBehaviour
         activeBreachTransitionFx = null;
         breachTransitionActive = false;
         ReleaseDirectorEventPressure(BreachEventPressureKey, breachEventPressureCooldown);
+        gameManager?.NotifySectorArrivalForDifficultyDirector();
     }
 
     private void FailBreachEvent()

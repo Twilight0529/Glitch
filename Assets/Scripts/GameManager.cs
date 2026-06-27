@@ -76,6 +76,14 @@ public class GameManager : MonoBehaviour
         FirewallBurst
     }
 
+    private enum ScriptedDirectorBeat
+    {
+        FirstArenaSignature,
+        FirstObjective,
+        FirstBreach,
+        FreePlay
+    }
+
     private struct UpgradeChoice
     {
         public PlayerUpgradeKind kind;
@@ -121,7 +129,6 @@ public class GameManager : MonoBehaviour
 
     [Header("Difficulty")]
     [SerializeField] private float behaviorChangeInterval = 2.5f;
-    [SerializeField] private float difficultyRampPerSecond = 0.03f;
     [SerializeField] private bool chaosTempoEnabled = true;
     [SerializeField, Range(0.45f, 1f)] private float chaosBehaviorIntervalMultiplier = 0.72f;
 
@@ -164,6 +171,20 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float eventPressureRampStartTime = 60f;
     [SerializeField] private float eventPressureRampFullTime = 240f;
     [SerializeField] private float eventPressureRetryDelay = 1.35f;
+
+    [Header("Hybrid Difficulty Director")]
+    [SerializeField] private bool enableHybridDifficultyDirector = true;
+    [SerializeField] private float firstArenaSignatureTime = 64f;
+    [SerializeField] private float firstObjectiveBeatTime = 88f;
+    [SerializeField] private float firstBreachBeatTime = 126f;
+    [SerializeField] private float scriptedBeatReserveLead = 6f;
+    [SerializeField] private float scriptedBeatTimeout = 20f;
+    [SerializeField] private float sectorArrivalRecoverySeconds = 6f;
+    [SerializeField] private float postUpgradeRecoverySeconds = 3f;
+    [SerializeField] private float bossMilestoneProtectionLead = 5f;
+    [SerializeField] private float bossMilestoneRecoverySeconds = 4f;
+    [SerializeField] private float bossMajorSuppressionPressure = 0.6f;
+    [SerializeField] private float boundedDifficultyMultiplierMax = 2.25f;
 
     [Header("Countdown Theme")]
     [SerializeField] private float countdownPulseSpeed = 2.1f;
@@ -222,7 +243,7 @@ public class GameManager : MonoBehaviour
     public int ContractDataBonusEarned => contractDataBonusEarned;
     public string CurrentOperationTitle => activeOperation.title;
     public float SurvivalTime { get; private set; }
-    public float DifficultyMultiplier => 1f + (SurvivalTime * difficultyRampPerSecond);
+    public float DifficultyMultiplier => Mathf.Lerp(1f, Mathf.Max(1f, boundedDifficultyMultiplierMax), GetDirectorDifficulty01());
     public int CurrentScore
     {
         get
@@ -244,21 +265,24 @@ public class GameManager : MonoBehaviour
     public float EventPressureRetryDelay => Mathf.Max(0.25f, eventPressureRetryDelay);
     public float CurrentEventPressureLoad => GetCurrentEventPressureLoad();
     public float CurrentEventPressureCap => GetCurrentEventPressureCap();
+    public bool ShouldSuppressBossMajorStates => enableHybridDifficultyDirector &&
+        (GetCurrentEventPressureLoad() >= Mathf.Max(0.1f, bossMajorSuppressionPressure) || SurvivalTime < directorRecoveryUntil);
 
     public float CurrentBehaviorChangeInterval
     {
         get
         {
             float interval = Mathf.Max(0.5f, behaviorChangeInterval);
+            float curveMultiplier = Mathf.Lerp(1.08f, 0.82f, GetDirectorDifficulty01());
             float sectorMultiplier = arenaGenerator != null
                 ? Mathf.Clamp(1f / Mathf.Max(1f, arenaGenerator.SectorPressureMultiplier), 0.76f, 1f)
                 : 1f;
             if (!chaosTempoEnabled)
             {
-                return interval * sectorMultiplier;
+                return interval * curveMultiplier * sectorMultiplier;
             }
 
-            return interval * Mathf.Max(0.1f, chaosBehaviorIntervalMultiplier) * sectorMultiplier;
+            return interval * curveMultiplier * Mathf.Max(0.1f, chaosBehaviorIntervalMultiplier) * sectorMultiplier;
         }
     }
 
@@ -345,6 +369,10 @@ public class GameManager : MonoBehaviour
     private Coroutine playerDefeatSequenceRoutine;
     private float breachSensitiveSuppressionTimer;
     private float eventPressureCooldownTimer;
+    private ScriptedDirectorBeat scriptedDirectorBeat;
+    private float directorRecoveryUntil;
+    private bool sectorSignatureBeatPending;
+    private float sectorSignatureBeatDeadline;
     private bool introTutorialOpen;
     private IntroTutorialStep introTutorialStep;
     private float introTutorialStepProgress;
@@ -510,6 +538,7 @@ public class GameManager : MonoBehaviour
             breachSensitiveSuppressionTimer -= Time.deltaTime;
         }
         TickEventPressureBudget();
+        UpdateDifficultyDirectorState();
 
         if (upgradeSelectionOpen)
         {
@@ -1081,11 +1110,6 @@ public class GameManager : MonoBehaviour
 
     public bool TryReserveEventPressure(string eventKey, float pressureCost, float expectedDuration, float recoveryCooldown)
     {
-        if (!enableEventPressureBudget)
-        {
-            return true;
-        }
-
         if (!IsRunActive)
         {
             return false;
@@ -1098,6 +1122,17 @@ public class GameManager : MonoBehaviour
             {
                 return true;
             }
+        }
+
+        if (!CanDifficultyDirectorReserve(key, expectedDuration, pressureCost))
+        {
+            return false;
+        }
+
+        if (!enableEventPressureBudget)
+        {
+            RegisterDifficultyDirectorReservation(key);
+            return true;
         }
 
         float pressure = Mathf.Max(0f, pressureCost);
@@ -1117,6 +1152,8 @@ public class GameManager : MonoBehaviour
             remainingSeconds = Mathf.Max(0.05f, expectedDuration),
             recoveryCooldown = Mathf.Max(0f, recoveryCooldown)
         });
+
+        RegisterDifficultyDirectorReservation(key);
 
         return true;
     }
@@ -1144,7 +1181,162 @@ public class GameManager : MonoBehaviour
         if (removed)
         {
             eventPressureCooldownTimer = Mathf.Max(eventPressureCooldownTimer, Mathf.Max(0f, recoveryCooldown));
+            directorRecoveryUntil = Mathf.Max(directorRecoveryUntil, SurvivalTime + Mathf.Max(0f, recoveryCooldown));
         }
+    }
+
+    public void NotifySectorArrivalForDifficultyDirector()
+    {
+        if (!enableHybridDifficultyDirector)
+        {
+            return;
+        }
+
+        sectorSignatureBeatPending = true;
+        directorRecoveryUntil = Mathf.Max(directorRecoveryUntil, SurvivalTime + Mathf.Max(0f, sectorArrivalRecoverySeconds));
+        sectorSignatureBeatDeadline = directorRecoveryUntil + Mathf.Max(5f, scriptedBeatTimeout);
+    }
+
+    private void UpdateDifficultyDirectorState()
+    {
+        if (!enableHybridDifficultyDirector)
+        {
+            return;
+        }
+
+        if (sectorSignatureBeatPending && SurvivalTime >= sectorSignatureBeatDeadline)
+        {
+            sectorSignatureBeatPending = false;
+        }
+
+        float timeout = Mathf.Max(5f, scriptedBeatTimeout);
+        if (scriptedDirectorBeat == ScriptedDirectorBeat.FirstArenaSignature &&
+            SurvivalTime >= Mathf.Max(mapEventsUnlockTime, firstArenaSignatureTime) + timeout)
+        {
+            scriptedDirectorBeat = ScriptedDirectorBeat.FirstObjective;
+        }
+        if (scriptedDirectorBeat == ScriptedDirectorBeat.FirstObjective &&
+            SurvivalTime >= Mathf.Max(firstArenaSignatureTime, firstObjectiveBeatTime) + timeout)
+        {
+            scriptedDirectorBeat = ScriptedDirectorBeat.FirstBreach;
+        }
+        if (scriptedDirectorBeat == ScriptedDirectorBeat.FirstBreach &&
+            SurvivalTime >= Mathf.Max(firstObjectiveBeatTime, firstBreachBeatTime) + timeout)
+        {
+            scriptedDirectorBeat = ScriptedDirectorBeat.FreePlay;
+        }
+    }
+
+    private bool CanDifficultyDirectorReserve(string eventKey, float expectedDuration, float pressureCost)
+    {
+        if (!enableHybridDifficultyDirector)
+        {
+            return true;
+        }
+
+        if (SurvivalTime < directorRecoveryUntil)
+        {
+            return false;
+        }
+
+        bool themeEvent = IsThemeEventKey(eventKey);
+        bool objectiveEvent = eventKey == "ChaosObjectiveNodes";
+        bool breachEvent = eventKey == "ChaosBreach";
+        float duration = Mathf.Max(0f, expectedDuration);
+
+        if (!breachEvent && Mathf.Max(0f, pressureCost) >= 0.8f &&
+            enemyController != null && enemyController.IsCurrentStateMajor)
+        {
+            return false;
+        }
+
+        if (!breachEvent && WouldOverlapBossMilestone(duration))
+        {
+            return false;
+        }
+
+        if (sectorSignatureBeatPending)
+        {
+            return themeEvent;
+        }
+
+        switch (scriptedDirectorBeat)
+        {
+            case ScriptedDirectorBeat.FirstArenaSignature:
+                return SurvivalTime >= Mathf.Max(mapEventsUnlockTime, firstArenaSignatureTime) && themeEvent;
+
+            case ScriptedDirectorBeat.FirstObjective:
+                return CanReserveBeforeOrAtScriptedBeat(
+                    objectiveEvent,
+                    Mathf.Max(firstArenaSignatureTime, firstObjectiveBeatTime),
+                    duration);
+
+            case ScriptedDirectorBeat.FirstBreach:
+                return CanReserveBeforeOrAtScriptedBeat(
+                    breachEvent,
+                    Mathf.Max(firstObjectiveBeatTime, firstBreachBeatTime),
+                    duration);
+
+            default:
+                return true;
+        }
+    }
+
+    private bool CanReserveBeforeOrAtScriptedBeat(bool requestedBeat, float beatTime, float expectedDuration)
+    {
+        if (SurvivalTime >= beatTime)
+        {
+            return requestedBeat;
+        }
+
+        if (requestedBeat)
+        {
+            return false;
+        }
+
+        float reserveFrom = beatTime - Mathf.Max(0f, scriptedBeatReserveLead);
+        return SurvivalTime < reserveFrom && SurvivalTime + expectedDuration < reserveFrom;
+    }
+
+    private void RegisterDifficultyDirectorReservation(string eventKey)
+    {
+        bool themeEvent = IsThemeEventKey(eventKey);
+        if (sectorSignatureBeatPending && themeEvent)
+        {
+            sectorSignatureBeatPending = false;
+            return;
+        }
+
+        if (scriptedDirectorBeat == ScriptedDirectorBeat.FirstArenaSignature && themeEvent)
+        {
+            scriptedDirectorBeat = ScriptedDirectorBeat.FirstObjective;
+        }
+        else if (scriptedDirectorBeat == ScriptedDirectorBeat.FirstObjective && eventKey == "ChaosObjectiveNodes")
+        {
+            scriptedDirectorBeat = ScriptedDirectorBeat.FirstBreach;
+        }
+        else if (scriptedDirectorBeat == ScriptedDirectorBeat.FirstBreach && eventKey == "ChaosBreach")
+        {
+            scriptedDirectorBeat = ScriptedDirectorBeat.FreePlay;
+        }
+    }
+
+    private bool WouldOverlapBossMilestone(float expectedDuration)
+    {
+        return WouldOverlapMilestone(bossLevelTwoUnlockTime, expectedDuration) ||
+               WouldOverlapMilestone(bossLevelThreeUnlockTime, expectedDuration);
+    }
+
+    private bool WouldOverlapMilestone(float milestone, float expectedDuration)
+    {
+        float lead = Mathf.Max(0f, bossMilestoneProtectionLead);
+        float recovery = Mathf.Max(0f, bossMilestoneRecoverySeconds);
+        return SurvivalTime <= milestone + recovery && SurvivalTime + expectedDuration >= milestone - lead;
+    }
+
+    private static bool IsThemeEventKey(string eventKey)
+    {
+        return !string.IsNullOrWhiteSpace(eventKey) && eventKey.StartsWith("Theme");
     }
 
     private void TickEventPressureBudget()
@@ -1169,6 +1361,7 @@ public class GameManager : MonoBehaviour
             if (reservation.remainingSeconds <= 0f)
             {
                 eventPressureCooldownTimer = Mathf.Max(eventPressureCooldownTimer, reservation.recoveryCooldown);
+                directorRecoveryUntil = Mathf.Max(directorRecoveryUntil, SurvivalTime + reservation.recoveryCooldown);
                 eventPressureReservations.RemoveAt(i);
                 continue;
             }
@@ -1199,8 +1392,43 @@ public class GameManager : MonoBehaviour
         float max = Mathf.Max(initial, eventPressureMaxCap);
         float start = Mathf.Max(0f, eventPressureRampStartTime);
         float full = Mathf.Max(start + 1f, eventPressureRampFullTime);
-        float t = Mathf.InverseLerp(start, full, SurvivalTime);
-        return Mathf.Lerp(initial, max, Mathf.SmoothStep(0f, 1f, t));
+        float timeRamp = Mathf.InverseLerp(start, full, SurvivalTime);
+        float t = Mathf.Min(timeRamp, GetDirectorDifficulty01());
+        float cap = Mathf.Lerp(initial, max, Mathf.SmoothStep(0f, 1f, t));
+        if (activeOperation.id == ContainmentOperationStorage.AmbientOverdriveId)
+        {
+            cap *= 0.82f;
+        }
+        return Mathf.Max(initial * 0.85f, cap);
+    }
+
+    private float GetDirectorDifficulty01()
+    {
+        float time = Mathf.Max(0f, SurvivalTime);
+        float special = Mathf.Max(1f, bossSpecialStatesUnlockTime);
+        float levelTwo = Mathf.Max(special + 1f, bossLevelTwoUnlockTime);
+        float levelThree = Mathf.Max(levelTwo + 1f, bossLevelThreeUnlockTime);
+        float normalized;
+
+        if (time < special)
+        {
+            normalized = Mathf.Lerp(0f, 0.18f, Mathf.SmoothStep(0f, 1f, time / special));
+        }
+        else if (time < levelTwo)
+        {
+            normalized = Mathf.Lerp(0.18f, 0.55f, Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(special, levelTwo, time)));
+        }
+        else if (time < levelThree)
+        {
+            normalized = Mathf.Lerp(0.55f, 0.82f, Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(levelTwo, levelThree, time)));
+        }
+        else
+        {
+            normalized = Mathf.Lerp(0.82f, 1f, Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(levelThree, levelThree + 180f, time)));
+        }
+
+        int extraSectors = arenaGenerator != null ? Mathf.Max(0, arenaGenerator.SectorLevel - 1) : 0;
+        return Mathf.Clamp01(normalized + Mathf.Min(0.14f, extraSectors * 0.028f));
     }
 
     private void HandleOptionalReload()
@@ -1403,6 +1631,30 @@ public class GameManager : MonoBehaviour
         PlayerController.SetTutorialInputLocked(false);
         Time.timeScale = 0f;
         ApplyDeveloperRunSettings();
+        InitializeDifficultyDirector();
+    }
+
+    private void InitializeDifficultyDirector()
+    {
+        directorRecoveryUntil = 0f;
+        sectorSignatureBeatPending = false;
+        sectorSignatureBeatDeadline = 0f;
+        if (!enableHybridDifficultyDirector || SurvivalTime >= firstBreachBeatTime + Mathf.Max(8f, scriptedBeatReserveLead))
+        {
+            scriptedDirectorBeat = ScriptedDirectorBeat.FreePlay;
+        }
+        else if (SurvivalTime >= firstObjectiveBeatTime)
+        {
+            scriptedDirectorBeat = ScriptedDirectorBeat.FirstBreach;
+        }
+        else if (SurvivalTime >= firstArenaSignatureTime)
+        {
+            scriptedDirectorBeat = ScriptedDirectorBeat.FirstObjective;
+        }
+        else
+        {
+            scriptedDirectorBeat = ScriptedDirectorBeat.FirstArenaSignature;
+        }
     }
 
     private void ApplyDeveloperRunSettings()
@@ -3901,6 +4153,11 @@ public class GameManager : MonoBehaviour
             return false;
         }
 
+        if (enableHybridDifficultyDirector && SurvivalTime >= nextUpgradeTime && !IsUpgradeSelectionWindowSafe())
+        {
+            return false;
+        }
+
         if (enableRunUpgrades &&
             !upgradeSelectionOpen &&
             IsRunActive &&
@@ -3916,6 +4173,15 @@ public class GameManager : MonoBehaviour
                IsRunActive &&
                SurvivalTime >= nextUpgradeTime &&
                playerController != null;
+    }
+
+    private bool IsUpgradeSelectionWindowSafe()
+    {
+        return GetCurrentEventPressureLoad() <= 0.001f &&
+               eventPressureCooldownTimer <= 0f &&
+               SurvivalTime >= directorRecoveryUntil &&
+               !IsBreachSensitiveSuppressionActive &&
+               (enemyController == null || !enemyController.IsCurrentStateMajor);
     }
 
     private void OpenUpgradeSelection()
@@ -4226,6 +4492,7 @@ public class GameManager : MonoBehaviour
         upgradeExitTimer = 0f;
         upgradeSelectedIndex = -1;
         nextUpgradeTime = SurvivalTime + Mathf.Max(8f, upgradeInterval);
+        directorRecoveryUntil = Mathf.Max(directorRecoveryUntil, SurvivalTime + Mathf.Max(0f, postUpgradeRecoverySeconds));
         Time.timeScale = 1f;
     }
 

@@ -337,6 +337,7 @@ public class EnemyController : MonoBehaviour
     public string CurrentPacingPhaseLabel => pacingPhase.ToString();
     public bool IsCurrentStateLevelTwo => IsLevelTwoState(currentState);
     public bool IsCurrentStateLevelThree => IsLevelThreeState(currentState);
+    public bool IsCurrentStateMajor => IsMajorState(currentState);
     public Vector2 CurrentVelocity => rb != null ? rb.linearVelocity : Vector2.zero;
     public bool IsLocalVersusControlled => localVersusControl;
     public float LocalVersusStateTimeRemaining => localVersusControl ? Mathf.Max(0f, localVersusStateDuration - stateTimer) : 0f;
@@ -1780,6 +1781,18 @@ public class EnemyController : MonoBehaviour
 
     private void ApplyPacingFilter(List<StateWeight> options)
     {
+        if (gameManager != null && gameManager.ShouldSuppressBossMajorStates)
+        {
+            options.RemoveAll(o => IsMajorState(o.state));
+            if (options.Count == 0)
+            {
+                options.Add(new StateWeight(AnomalyState.DirectChase, directChaseWeight));
+                options.Add(new StateWeight(AnomalyState.PredictiveIntercept, predictiveInterceptWeight));
+                options.Add(new StateWeight(AnomalyState.CutoffFlank, cutoffFlankWeight));
+            }
+            return;
+        }
+
         if (CanUseLevelThreeStates())
         {
             ApplyLevelThreePacingFilter(options);
