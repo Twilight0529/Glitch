@@ -114,6 +114,12 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private bool stateTransitionBurstEnabled = true;
     [SerializeField] private float stateTransitionBurstDuration = 0.34f;
     [SerializeField] private float stateTransitionBurstRadius = 1.35f;
+
+    [Header("Movement Deformation")]
+    [SerializeField, Range(0f, 0.4f)] private float movementStretch = 0.20f;
+    [SerializeField, Range(0f, 0.35f)] private float movementSquash = 0.13f;
+    [SerializeField, Range(0f, 0.25f)] private float accelerationDeformation = 0.09f;
+    [SerializeField] private float movementDeformationResponse = 13f;
     [SerializeField] private int stateTransitionBurstRayCount = 10;
     [SerializeField] private float stateTransitionBurstCooldown = 0.12f;
 
@@ -391,6 +397,7 @@ public class EnemyController : MonoBehaviour
 
     private Rigidbody2D rb;
     private Collider2D ownCollider;
+    private BoxCollider2D ownBoxCollider;
     private SpriteRenderer ownRenderer;
     private bool localVersusControl;
 
@@ -526,6 +533,9 @@ public class EnemyController : MonoBehaviour
     private readonly List<Transform> levelThreeTrailTransforms = new List<Transform>();
     private Vector3 baseScale = Vector3.one;
     private Color baseColor = Color.white;
+    private Vector2 baseColliderSize;
+    private Vector2 movementScaleFactor = Vector2.one;
+    private Vector2 previousVisualVelocity;
 
     private Vector2 erraticTarget;
     private Vector2 lastMoveDirection = Vector2.right;
@@ -633,6 +643,7 @@ public class EnemyController : MonoBehaviour
     {
         rb = GetComponent<Rigidbody2D>();
         ownCollider = GetComponent<Collider2D>();
+        ownBoxCollider = ownCollider as BoxCollider2D;
         ownRenderer = GetComponent<SpriteRenderer>();
 
         rb.gravityScale = 0f;
@@ -649,6 +660,10 @@ public class EnemyController : MonoBehaviour
         ownCollider.sharedMaterial = noFrictionMaterial;
 
         baseScale = transform.localScale;
+        if (ownBoxCollider != null)
+        {
+            baseColliderSize = ownBoxCollider.size;
+        }
         if (ownRenderer != null)
         {
             baseColor = ownRenderer.color;
@@ -722,6 +737,62 @@ public class EnemyController : MonoBehaviour
         levelThreeAwakened = false;
         levelThreeAwakeningTimer = 0f;
         transform.localScale = baseScale;
+        ResetMovementDeformation();
+    }
+
+    private void LateUpdate()
+    {
+        if (rb == null || breachAbsorbed || ownRenderer == null || !ownRenderer.enabled)
+        {
+            return;
+        }
+
+        UpdateMovementDeformation();
+    }
+
+    private void UpdateMovementDeformation()
+    {
+        Vector3 authoredScale = transform.localScale;
+        Vector2 velocity = rb.linearVelocity;
+        float speedReference = Mathf.Max(0.1f, baseMoveSpeed * 1.45f);
+        float speed = Mathf.Clamp01(velocity.magnitude / speedReference);
+        Vector2 direction = velocity.sqrMagnitude > 0.001f ? velocity.normalized : lastMoveDirection;
+        Vector2 absoluteDirection = new Vector2(Mathf.Abs(direction.x), Mathf.Abs(direction.y));
+
+        float velocityDelta = (velocity - previousVisualVelocity).magnitude;
+        float acceleration = Mathf.Clamp01(velocityDelta / Mathf.Max(0.1f, baseMoveSpeed));
+        float targetX = 1f + speed * (absoluteDirection.x * movementStretch - absoluteDirection.y * movementSquash);
+        float targetY = 1f + speed * (absoluteDirection.y * movementStretch - absoluteDirection.x * movementSquash);
+        targetX += acceleration * accelerationDeformation * absoluteDirection.x;
+        targetY += acceleration * accelerationDeformation * absoluteDirection.y;
+
+        Vector2 targetFactor = new Vector2(Mathf.Max(0.68f, targetX), Mathf.Max(0.68f, targetY));
+        float response = 1f - Mathf.Exp(-Mathf.Max(1f, movementDeformationResponse) * Time.unscaledDeltaTime);
+        movementScaleFactor = Vector2.Lerp(movementScaleFactor, targetFactor, response);
+        transform.localScale = new Vector3(
+            authoredScale.x * movementScaleFactor.x,
+            authoredScale.y * movementScaleFactor.y,
+            authoredScale.z);
+
+        // Mantiene estable el alcance de contacto aunque el cuerpo se estire visualmente.
+        if (ownBoxCollider != null)
+        {
+            ownBoxCollider.size = new Vector2(
+                baseColliderSize.x / Mathf.Max(0.1f, movementScaleFactor.x),
+                baseColliderSize.y / Mathf.Max(0.1f, movementScaleFactor.y));
+        }
+
+        previousVisualVelocity = velocity;
+    }
+
+    private void ResetMovementDeformation()
+    {
+        movementScaleFactor = Vector2.one;
+        previousVisualVelocity = Vector2.zero;
+        if (ownBoxCollider != null)
+        {
+            ownBoxCollider.size = baseColliderSize;
+        }
     }
 
     private void Update()
@@ -1987,6 +2058,7 @@ public class EnemyController : MonoBehaviour
         breachAbsorbed = true;
         breachLureTimer = 0f;
         rb.linearVelocity = Vector2.zero;
+        ResetMovementDeformation();
         AbsorbSplitCloneIntoBreach(breachPosition);
 
         if (ownCollider != null)
@@ -2036,6 +2108,7 @@ public class EnemyController : MonoBehaviour
         }
 
         transform.localScale = baseScale;
+        ResetMovementDeformation();
         TriggerStatePulse();
         BuildNavigationGrid();
         pathWorld.Clear();

@@ -79,6 +79,12 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float trailEmissionAtMaxSpeed = 42f;
     [SerializeField] private float trailMinVelocityToEmit = 1.1f;
 
+    [Header("Movement Deformation")]
+    [SerializeField, Range(0f, 0.35f)] private float movementStretch = 0.16f;
+    [SerializeField, Range(0f, 0.3f)] private float movementSquash = 0.10f;
+    [SerializeField, Range(0f, 0.2f)] private float accelerationDeformation = 0.07f;
+    [SerializeField] private float movementDeformationResponse = 15f;
+
     // Mejoras acumulables que permiten adaptar al jugador a eventos agresivos de la arena.
     [Header("Environmental Upgrades")]
     [SerializeField, Range(0.2f, 1f)] private float minExternalDisplacementMultiplier = 0.45f;
@@ -110,6 +116,7 @@ public class PlayerController : MonoBehaviour
 
     private Rigidbody2D rb;
     private Collider2D bodyCollider;
+    private BoxCollider2D bodyBoxCollider;
     private SpriteRenderer bodyRenderer;
     private ProceduralArenaGenerator arenaGenerator;
     private Vector2 moveInput;
@@ -148,6 +155,9 @@ public class PlayerController : MonoBehaviour
     private Color breachGlitchColor = new Color(1f, 0.42f, 0.78f, 1f);
     private Color baseBodyColor = Color.white;
     private Vector3 baseBodyScale = Vector3.one;
+    private Vector2 baseBodyColliderSize;
+    private Vector2 movementScaleFactor = Vector2.one;
+    private Vector2 previousVisualVelocity;
 
     private static bool tutorialInputLocked;
 
@@ -219,6 +229,7 @@ public class PlayerController : MonoBehaviour
     {
         rb = GetComponent<Rigidbody2D>();
         bodyCollider = GetComponent<Collider2D>();
+        bodyBoxCollider = bodyCollider as BoxCollider2D;
         bodyRenderer = GetComponent<SpriteRenderer>();
         rb.gravityScale = 0f;
         rb.freezeRotation = true;
@@ -226,6 +237,10 @@ public class PlayerController : MonoBehaviour
         localVersusParryRechargeTimer = 0f;
 
         baseBodyScale = transform.localScale;
+        if (bodyBoxCollider != null)
+        {
+            baseBodyColliderSize = bodyBoxCollider.size;
+        }
         if (bodyRenderer != null)
         {
             baseBodyColor = bodyRenderer.color;
@@ -244,6 +259,8 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
+        UpdateMovementDeformation();
+
         Vector2 contained = ClampToPlayableArena(rb.position);
         if ((contained - rb.position).sqrMagnitude <= 0.000001f)
         {
@@ -253,6 +270,51 @@ public class PlayerController : MonoBehaviour
         rb.position = contained;
         transform.position = new Vector3(contained.x, contained.y, transform.position.z);
         RemoveVelocityTowardArenaExterior(contained);
+    }
+
+    private void OnDisable()
+    {
+        movementScaleFactor = Vector2.one;
+        previousVisualVelocity = Vector2.zero;
+        if (bodyBoxCollider != null)
+        {
+            bodyBoxCollider.size = baseBodyColliderSize;
+        }
+    }
+
+    private void UpdateMovementDeformation()
+    {
+        Vector3 authoredScale = transform.localScale;
+        Vector2 velocity = rb.linearVelocity;
+        float speedReference = Mathf.Max(0.1f, moveSpeed * 1.1f);
+        float speed = Mathf.Clamp01(velocity.magnitude / speedReference);
+        Vector2 direction = velocity.sqrMagnitude > 0.001f ? velocity.normalized : lastMoveDirection;
+        Vector2 absoluteDirection = new Vector2(Mathf.Abs(direction.x), Mathf.Abs(direction.y));
+
+        float velocityDelta = (velocity - previousVisualVelocity).magnitude;
+        float acceleration = Mathf.Clamp01(velocityDelta / Mathf.Max(0.1f, moveSpeed * 0.8f));
+        float targetX = 1f + speed * (absoluteDirection.x * movementStretch - absoluteDirection.y * movementSquash);
+        float targetY = 1f + speed * (absoluteDirection.y * movementStretch - absoluteDirection.x * movementSquash);
+        targetX += acceleration * accelerationDeformation * absoluteDirection.x;
+        targetY += acceleration * accelerationDeformation * absoluteDirection.y;
+
+        Vector2 targetFactor = new Vector2(Mathf.Max(0.72f, targetX), Mathf.Max(0.72f, targetY));
+        float response = 1f - Mathf.Exp(-Mathf.Max(1f, movementDeformationResponse) * Time.unscaledDeltaTime);
+        movementScaleFactor = Vector2.Lerp(movementScaleFactor, targetFactor, response);
+        transform.localScale = new Vector3(
+            authoredScale.x * movementScaleFactor.x,
+            authoredScale.y * movementScaleFactor.y,
+            authoredScale.z);
+
+        // Compensa solo la deformacion visual para conservar el area de colision original.
+        if (bodyBoxCollider != null)
+        {
+            bodyBoxCollider.size = new Vector2(
+                baseBodyColliderSize.x / Mathf.Max(0.1f, movementScaleFactor.x),
+                baseBodyColliderSize.y / Mathf.Max(0.1f, movementScaleFactor.y));
+        }
+
+        previousVisualVelocity = velocity;
     }
 
     private void ApplySelectedMetaSkin()
