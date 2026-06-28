@@ -146,6 +146,16 @@ public class PlayerController : MonoBehaviour
     private SpriteRenderer parryRenderer;
     private GameObject parryVisual;
     private ParticleSystem movementTrail;
+    private GameObject skinPatternRoot;
+    private readonly List<SpriteRenderer> skinPatternRenderers = new List<SpriteRenderer>();
+    private readonly List<Vector3> skinPatternPositions = new List<Vector3>();
+    private readonly List<Vector3> skinPatternScales = new List<Vector3>();
+    private readonly List<Quaternion> skinPatternRotations = new List<Quaternion>();
+    private readonly List<Color> skinPatternColors = new List<Color>();
+    private MetaProgressionStorage.SkinPattern selectedSkinPattern;
+    private MetaProgressionStorage.TrailStyle selectedTrailStyle;
+    private Color selectedSkinAccent = Color.white;
+    private Color appliedTrailColor = new Color(-1f, -1f, -1f, -1f);
     private float firewallCharge;
     private float firewallChargeGainMultiplier = 1f;
     private bool deathSequenceActive;
@@ -247,6 +257,7 @@ public class PlayerController : MonoBehaviour
         }
 
         ApplySelectedMetaSkin();
+        EnsureSelectedSkinVisual();
         EnsureShieldVisual();
         EnsureParryVisual();
         EnsureMovementTrail();
@@ -254,6 +265,8 @@ public class PlayerController : MonoBehaviour
 
     private void LateUpdate()
     {
+        UpdateSelectedSkinVisual();
+
         if (deathSequenceActive || breachConsumptionActive || rb == null)
         {
             return;
@@ -319,16 +332,176 @@ public class PlayerController : MonoBehaviour
 
     private void ApplySelectedMetaSkin()
     {
-        if (!MetaProgressionStorage.TryGetSelectedSkinColors(out Color bodyColor, out Color selectedTrailColor))
+        if (!MetaProgressionStorage.TryGetSelectedSkin(out MetaProgressionStorage.UnlockDefinition skin))
         {
             return;
         }
 
-        trailColor = selectedTrailColor;
-        baseBodyColor = bodyColor;
+        trailColor = skin.bodyColor;
+        trailColor.a = Mathf.Clamp01(skin.trailColor.a);
+        baseBodyColor = skin.bodyColor;
+        selectedSkinAccent = skin.accentColor;
+        selectedSkinPattern = skin.skinPattern;
+        selectedTrailStyle = skin.trailStyle;
         if (bodyRenderer != null)
         {
-            bodyRenderer.color = bodyColor;
+            bodyRenderer.color = baseBodyColor;
+        }
+
+        SyncMovementTrailColor(baseBodyColor, true);
+    }
+
+    private void EnsureSelectedSkinVisual()
+    {
+        if (bodyRenderer == null || bodyRenderer.sprite == null)
+        {
+            return;
+        }
+
+        if (skinPatternRoot != null)
+        {
+            Destroy(skinPatternRoot);
+        }
+
+        skinPatternRenderers.Clear();
+        skinPatternPositions.Clear();
+        skinPatternScales.Clear();
+        skinPatternRotations.Clear();
+        skinPatternColors.Clear();
+
+        skinPatternRoot = new GameObject("PlayerSkinPattern");
+        skinPatternRoot.transform.SetParent(transform, false);
+
+        switch (selectedSkinPattern)
+        {
+            case MetaProgressionStorage.SkinPattern.Split:
+                AddSkinPart("Falla", Vector2.zero, new Vector2(0.11f, 0.92f), selectedSkinAccent, -12f);
+                AddSkinPart("CorteA", new Vector2(-0.30f, 0.28f), new Vector2(0.32f, 0.10f), selectedSkinAccent, -12f);
+                AddSkinPart("CorteB", new Vector2(0.28f, -0.26f), new Vector2(0.32f, 0.10f), selectedSkinAccent, -12f);
+                break;
+            case MetaProgressionStorage.SkinPattern.Circuit:
+                AddSkinPart("CircuitoH", Vector2.zero, new Vector2(0.70f, 0.08f), selectedSkinAccent);
+                AddSkinPart("CircuitoV", new Vector2(0.12f, 0.05f), new Vector2(0.08f, 0.62f), selectedSkinAccent);
+                AddSkinPart("Nodo", new Vector2(0.12f, 0.05f), new Vector2(0.20f, 0.20f), Color.Lerp(selectedSkinAccent, Color.white, 0.48f));
+                break;
+            case MetaProgressionStorage.SkinPattern.Hazard:
+                AddSkinPart("FranjaA", new Vector2(-0.28f, 0f), new Vector2(0.13f, 1.08f), selectedSkinAccent, -28f);
+                AddSkinPart("FranjaB", Vector2.zero, new Vector2(0.13f, 1.08f), selectedSkinAccent, -28f);
+                AddSkinPart("FranjaC", new Vector2(0.28f, 0f), new Vector2(0.13f, 1.08f), selectedSkinAccent, -28f);
+                break;
+            case MetaProgressionStorage.SkinPattern.Firewall:
+                AddSkinFrame(selectedSkinAccent, 0.10f, 0.80f);
+                break;
+            case MetaProgressionStorage.SkinPattern.Fracture:
+                AddSkinPart("FracturaA", new Vector2(-0.18f, 0.20f), new Vector2(0.10f, 0.62f), selectedSkinAccent, -38f);
+                AddSkinPart("FracturaB", new Vector2(0.18f, -0.18f), new Vector2(0.09f, 0.54f), selectedSkinAccent, 36f);
+                AddSkinPart("FracturaC", new Vector2(0.18f, 0.28f), new Vector2(0.26f, 0.08f), selectedSkinAccent, -12f);
+                AddSkinPart("FracturaD", new Vector2(-0.26f, -0.30f), new Vector2(0.22f, 0.07f), selectedSkinAccent, 18f);
+                break;
+            case MetaProgressionStorage.SkinPattern.Signal:
+                AddSkinPart("Escaner", new Vector2(0f, -0.28f), new Vector2(0.82f, 0.09f), selectedSkinAccent);
+                AddSkinPart("Visor", new Vector2(0f, 0.18f), new Vector2(0.54f, 0.13f), Color.Lerp(selectedSkinAccent, Color.white, 0.35f));
+                AddSkinPart("Marca", new Vector2(0.31f, -0.20f), new Vector2(0.11f, 0.22f), selectedSkinAccent);
+                break;
+            case MetaProgressionStorage.SkinPattern.Prism:
+                AddSkinPart("PrismaA", new Vector2(-0.22f, 0.22f), new Vector2(0.38f, 0.38f), selectedSkinAccent);
+                AddSkinPart("PrismaB", new Vector2(0.22f, 0.22f), new Vector2(0.38f, 0.38f), new Color(1f, 0.48f, 0.78f, 1f));
+                AddSkinPart("PrismaC", new Vector2(-0.22f, -0.22f), new Vector2(0.38f, 0.38f), new Color(0.48f, 0.72f, 1f, 1f));
+                AddSkinPart("PrismaD", new Vector2(0.22f, -0.22f), new Vector2(0.38f, 0.38f), new Color(1f, 0.86f, 0.42f, 1f));
+                break;
+            case MetaProgressionStorage.SkinPattern.Orbit:
+                AddSkinPart("Nucleo", Vector2.zero, new Vector2(0.24f, 0.24f), selectedSkinAccent);
+                AddSkinPart("OrbitaN", new Vector2(0f, 0.40f), new Vector2(0.14f, 0.14f), selectedSkinAccent);
+                AddSkinPart("OrbitaE", new Vector2(0.40f, 0f), new Vector2(0.14f, 0.14f), selectedSkinAccent);
+                AddSkinPart("OrbitaS", new Vector2(0f, -0.40f), new Vector2(0.14f, 0.14f), selectedSkinAccent);
+                AddSkinPart("OrbitaO", new Vector2(-0.40f, 0f), new Vector2(0.14f, 0.14f), selectedSkinAccent);
+                break;
+            case MetaProgressionStorage.SkinPattern.Containment:
+                AddSkinFrame(selectedSkinAccent, 0.08f, 0.50f);
+                AddSkinPart("Sello", Vector2.zero, new Vector2(0.24f, 0.24f), Color.Lerp(selectedSkinAccent, Color.white, 0.45f), 45f);
+                break;
+            default:
+                AddSkinPart("Nucleo", Vector2.zero, new Vector2(0.24f, 0.24f), selectedSkinAccent, 45f);
+                break;
+        }
+    }
+
+    private void AddSkinFrame(Color color, float thickness, float length)
+    {
+        float edge = 0.40f;
+        AddSkinPart("MarcoL", new Vector2(-edge, 0f), new Vector2(thickness, length), color);
+        AddSkinPart("MarcoR", new Vector2(edge, 0f), new Vector2(thickness, length), color);
+        AddSkinPart("MarcoT", new Vector2(0f, edge), new Vector2(length, thickness), color);
+        AddSkinPart("MarcoB", new Vector2(0f, -edge), new Vector2(length, thickness), color);
+    }
+
+    private void AddSkinPart(string partName, Vector2 position, Vector2 scale, Color color, float rotation = 0f)
+    {
+        GameObject part = new GameObject(partName);
+        part.transform.SetParent(skinPatternRoot.transform, false);
+        part.transform.localPosition = new Vector3(position.x, position.y, -0.01f);
+        part.transform.localScale = new Vector3(scale.x, scale.y, 1f);
+        part.transform.localRotation = Quaternion.Euler(0f, 0f, rotation);
+
+        SpriteRenderer renderer = part.AddComponent<SpriteRenderer>();
+        renderer.sprite = bodyRenderer.sprite;
+        renderer.color = color;
+        renderer.sortingLayerID = bodyRenderer.sortingLayerID;
+        renderer.sortingOrder = bodyRenderer.sortingOrder + 1;
+
+        skinPatternRenderers.Add(renderer);
+        skinPatternPositions.Add(part.transform.localPosition);
+        skinPatternScales.Add(part.transform.localScale);
+        skinPatternRotations.Add(part.transform.localRotation);
+        skinPatternColors.Add(color);
+    }
+
+    private void UpdateSelectedSkinVisual()
+    {
+        if (skinPatternRoot == null || bodyRenderer == null)
+        {
+            return;
+        }
+
+        float time = Time.unscaledTime;
+        float pulse = 0.5f + 0.5f * Mathf.Sin(time * 6.5f);
+        skinPatternRoot.transform.localRotation = selectedSkinPattern == MetaProgressionStorage.SkinPattern.Orbit
+            ? Quaternion.Euler(0f, 0f, time * 52f)
+            : Quaternion.identity;
+
+        for (int i = 0; i < skinPatternRenderers.Count; i++)
+        {
+            SpriteRenderer renderer = skinPatternRenderers[i];
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            Transform part = renderer.transform;
+            part.localPosition = skinPatternPositions[i];
+            part.localScale = skinPatternScales[i];
+            part.localRotation = skinPatternRotations[i];
+            Color color = skinPatternColors[i];
+
+            if (selectedSkinPattern == MetaProgressionStorage.SkinPattern.Signal && i == 0)
+            {
+                Vector3 position = skinPatternPositions[i];
+                position.y = Mathf.Lerp(-0.34f, 0.34f, Mathf.PingPong(time * 1.4f, 1f));
+                part.localPosition = position;
+            }
+            else if (selectedSkinPattern == MetaProgressionStorage.SkinPattern.Fracture)
+            {
+                Vector3 position = skinPatternPositions[i];
+                position += new Vector3(Mathf.Sin(time * 17f + i * 2.1f), Mathf.Cos(time * 13f + i), 0f) * 0.012f;
+                part.localPosition = position;
+            }
+            else if (selectedSkinPattern == MetaProgressionStorage.SkinPattern.Prism)
+            {
+                color = Color.HSVToRGB(Mathf.Repeat(time * 0.10f + i * 0.21f, 1f), 0.58f, 1f);
+            }
+
+            color.a = bodyRenderer.color.a * Mathf.Lerp(0.72f, 0.96f, pulse);
+            renderer.color = color;
         }
     }
 
@@ -1365,7 +1538,8 @@ public class PlayerController : MonoBehaviour
         main.playOnAwake = true;
         main.maxParticles = 120;
         main.scalingMode = ParticleSystemScalingMode.Local;
-        main.startColor = trailColor;
+        main.startColor = Color.white;
+        main.startRotation = new ParticleSystem.MinMaxCurve(0f, Mathf.PI * 2f);
 
         ParticleSystem.EmissionModule emission = movementTrail.emission;
         emission.rateOverTime = 0f;
@@ -1375,23 +1549,6 @@ public class PlayerController : MonoBehaviour
         shape.shapeType = ParticleSystemShapeType.Circle;
         shape.radius = 0.12f;
         shape.radiusThickness = 1f;
-
-        ParticleSystem.ColorOverLifetimeModule colorLifetime = movementTrail.colorOverLifetime;
-        colorLifetime.enabled = true;
-        Gradient colorGradient = new Gradient();
-        colorGradient.SetKeys(
-            new[]
-            {
-                new GradientColorKey(trailColor, 0f),
-                new GradientColorKey(new Color(trailColor.r * 0.85f, trailColor.g * 0.95f, trailColor.b, 1f), 1f)
-            },
-            new[]
-            {
-                new GradientAlphaKey(0.65f, 0f),
-                new GradientAlphaKey(0.25f, 0.6f),
-                new GradientAlphaKey(0f, 1f)
-            });
-        colorLifetime.color = new ParticleSystem.MinMaxGradient(colorGradient);
 
         ParticleSystem.SizeOverLifetimeModule sizeLifetime = movementTrail.sizeOverLifetime;
         sizeLifetime.enabled = true;
@@ -1407,7 +1564,88 @@ public class PlayerController : MonoBehaviour
         trailRenderer.renderMode = ParticleSystemRenderMode.Billboard;
         trailRenderer.alignment = ParticleSystemRenderSpace.View;
 
+        ConfigureMovementTrailStyle();
+        SyncMovementTrailColor(bodyRenderer != null ? bodyRenderer.color : baseBodyColor, true);
         movementTrail.Play();
+    }
+
+    private void ConfigureMovementTrailStyle()
+    {
+        if (movementTrail == null)
+        {
+            return;
+        }
+
+        ParticleSystem.MainModule main = movementTrail.main;
+        ParticleSystem.ShapeModule shape = movementTrail.shape;
+        switch (selectedTrailStyle)
+        {
+            case MetaProgressionStorage.TrailStyle.Echo:
+                main.startLifetime = Mathf.Max(0.12f, trailParticleLifetime * 1.35f);
+                main.startSize = Mathf.Max(0.04f, trailStartSize * 1.18f);
+                shape.radius = 0.15f;
+                break;
+            case MetaProgressionStorage.TrailStyle.Pixels:
+                main.startLifetime = Mathf.Max(0.10f, trailParticleLifetime * 0.88f);
+                main.startSize = Mathf.Max(0.04f, trailStartSize * 1.32f);
+                shape.radius = 0.10f;
+                break;
+            case MetaProgressionStorage.TrailStyle.Sparks:
+                main.startLifetime = Mathf.Max(0.08f, trailParticleLifetime * 0.72f);
+                main.startSize = Mathf.Max(0.03f, trailStartSize * 0.68f);
+                shape.radius = 0.17f;
+                break;
+            case MetaProgressionStorage.TrailStyle.Pulse:
+                main.startLifetime = Mathf.Max(0.12f, trailParticleLifetime * 1.12f);
+                main.startSize = Mathf.Max(0.04f, trailStartSize * 1.06f);
+                shape.radius = 0.08f;
+                break;
+            default:
+                main.startLifetime = Mathf.Max(0.08f, trailParticleLifetime);
+                main.startSize = Mathf.Max(0.03f, trailStartSize);
+                shape.radius = 0.12f;
+                break;
+        }
+    }
+
+    private void SyncMovementTrailColor(Color visibleBodyColor, bool force = false)
+    {
+        if (movementTrail == null)
+        {
+            return;
+        }
+
+        Color visualColor = visibleBodyColor;
+        visualColor.a = 1f;
+        Vector4 colorDelta = (Vector4)visualColor - (Vector4)appliedTrailColor;
+        if (!force && colorDelta.sqrMagnitude < 0.0004f)
+        {
+            return;
+        }
+
+        appliedTrailColor = visualColor;
+        ParticleSystem.MainModule main = movementTrail.main;
+        main.startColor = Color.white;
+
+        Color endColor = Color.Lerp(visualColor, Color.white, 0.12f);
+        Gradient colorGradient = new Gradient();
+        colorGradient.SetKeys(
+            new[]
+            {
+                new GradientColorKey(visualColor, 0f),
+                new GradientColorKey(visualColor, 0.62f),
+                new GradientColorKey(endColor, 1f)
+            },
+            new[]
+            {
+                new GradientAlphaKey(Mathf.Clamp01(trailColor.a), 0f),
+                new GradientAlphaKey(Mathf.Clamp01(trailColor.a * 0.48f), 0.62f),
+                new GradientAlphaKey(0f, 1f)
+            });
+
+        ParticleSystem.ColorOverLifetimeModule colorLifetime = movementTrail.colorOverLifetime;
+        colorLifetime.enabled = true;
+        colorLifetime.color = new ParticleSystem.MinMaxGradient(colorGradient);
     }
 
     private void UpdateMovementTrail(float effectiveSpeed)
@@ -1416,6 +1654,8 @@ public class PlayerController : MonoBehaviour
         {
             return;
         }
+
+        SyncMovementTrailColor(bodyRenderer != null ? bodyRenderer.color : baseBodyColor);
 
         float velocityMagnitude = rb != null ? rb.linearVelocity.magnitude : 0f;
         if (velocityMagnitude <= trailMinVelocityToEmit)
@@ -1427,7 +1667,10 @@ public class PlayerController : MonoBehaviour
 
         float normalized = Mathf.Clamp01(velocityMagnitude / Mathf.Max(0.01f, effectiveSpeed));
         float pulse = 0.85f + 0.15f * Mathf.Sin(Time.time * 18f);
-        float rate = Mathf.Lerp(8f, Mathf.Max(10f, trailEmissionAtMaxSpeed), normalized) * pulse;
+        float styleMultiplier = selectedTrailStyle == MetaProgressionStorage.TrailStyle.Sparks
+            ? 1.32f
+            : selectedTrailStyle == MetaProgressionStorage.TrailStyle.Pixels ? 0.72f : 1f;
+        float rate = Mathf.Lerp(8f, Mathf.Max(10f, trailEmissionAtMaxSpeed), normalized) * pulse * styleMultiplier;
 
         ParticleSystem.EmissionModule emission = movementTrail.emission;
         emission.rateOverTime = rate;

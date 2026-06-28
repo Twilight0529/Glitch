@@ -1328,7 +1328,7 @@ public class MainMenuController : MonoBehaviour
         float gap = 10f;
         float tabW = (tabsRect.width - gap * 2f) / 3f;
         DrawUnlockSectionTab(new Rect(tabsRect.x, tabsRect.y, tabW, tabsRect.height), MetaProgressionStorage.SectionRunUpgrades, "Mejoras");
-        DrawUnlockSectionTab(new Rect(tabsRect.x + tabW + gap, tabsRect.y, tabW, tabsRect.height), MetaProgressionStorage.SectionSkins, "Colores");
+        DrawUnlockSectionTab(new Rect(tabsRect.x + tabW + gap, tabsRect.y, tabW, tabsRect.height), MetaProgressionStorage.SectionSkins, "Skins");
         DrawUnlockSectionTab(new Rect(tabsRect.x + (tabW + gap) * 2f, tabsRect.y, tabW, tabsRect.height), AchievementStorage.SectionAchievements, "Logros");
     }
 
@@ -1499,8 +1499,7 @@ public class MainMenuController : MonoBehaviour
         if (unlock.skin)
         {
             Rect swatch = new Rect(row.x + 10f, row.y + 10f, 24f, row.height - 20f);
-            DrawSolidRect(swatch, unlock.bodyColor);
-            DrawSolidRect(new Rect(swatch.x, swatch.y, swatch.width, 2f), unlock.trailColor);
+            DrawSkinPreview(swatch, unlock);
         }
 
         GUI.Label(new Rect(textX, row.y + 4f, row.xMax - textX - 10f, 22f), unlock.title, rankingRowStyle);
@@ -1528,11 +1527,11 @@ public class MainMenuController : MonoBehaviour
         DrawSolidRect(new Rect(detailRect.x, detailRect.yMax - 2f, detailRect.width, 2f), new Color(accent.r, accent.g, accent.b, 0.30f));
 
         Rect icon = new Rect(detailRect.x + 18f, detailRect.y + 18f, 62f, 62f);
-        DrawSolidRect(icon, unlock.skin ? unlock.bodyColor : new Color(accent.r, accent.g, accent.b, 0.18f));
+        DrawSolidRect(icon, unlock.skin ? new Color(0.02f, 0.035f, 0.07f, 0.92f) : new Color(accent.r, accent.g, accent.b, 0.18f));
         DrawSolidRect(new Rect(icon.x, icon.y, icon.width, 2f), new Color(accent.r, accent.g, accent.b, 0.68f));
         if (unlock.skin)
         {
-            DrawSolidRect(new Rect(icon.x + 8f, icon.yMax - 16f, icon.width - 16f, 6f), unlock.trailColor);
+            DrawSkinPreview(new Rect(icon.x + 9f, icon.y + 9f, icon.width - 18f, icon.height - 18f), unlock);
         }
         else
         {
@@ -1568,7 +1567,7 @@ public class MainMenuController : MonoBehaviour
             if (canSelect)
             {
                 success = MetaProgressionStorage.TrySelectSkin(unlock.id);
-                unlockActionMessage = success ? $"Color activo: {unlock.title}" : "No se pudo seleccionar.";
+                unlockActionMessage = success ? $"Skin activa: {unlock.title}" : "No se pudo seleccionar.";
             }
             else if (MetaProgressionStorage.TryUnlock(unlock.id))
             {
@@ -1576,7 +1575,7 @@ public class MainMenuController : MonoBehaviour
                 if (unlock.skin)
                 {
                     MetaProgressionStorage.TrySelectSkin(unlock.id);
-                    unlockActionMessage = $"Color activo: {unlock.title}";
+                    unlockActionMessage = $"Skin activa: {unlock.title}";
                 }
                 else
                 {
@@ -1618,10 +1617,10 @@ public class MainMenuController : MonoBehaviour
         {
             if (selectedSkin)
             {
-                return "Color activo";
+                return "Skin activa";
             }
 
-            return unlocked ? "Usar color" : "Comprar color";
+            return unlocked ? "Usar skin" : "Comprar skin";
         }
 
         return unlocked ? "Desbloqueado" : "Comprar desbloqueo";
@@ -1633,13 +1632,78 @@ public class MainMenuController : MonoBehaviour
         {
             if (selectedSkin)
             {
-                return "Color activo para la proxima run.";
+                return "Skin activa para la proxima run.";
             }
 
-            return unlocked ? "Selecciona este color para usarlo." : "Compra esta paleta del jugador.";
+            return unlocked ? "Selecciona esta apariencia para usarla." : "Desbloquea este traje, patron y estela.";
         }
 
         return unlocked ? "Modulo disponible en futuras runs." : "Suma este modulo al pool de mejoras.";
+    }
+
+    private static void DrawSkinPreview(Rect rect, MetaProgressionStorage.UnlockDefinition skin)
+    {
+        DrawSolidRect(rect, skin.bodyColor);
+        Color accent = skin.accentColor;
+        float unit = Mathf.Max(1f, Mathf.Min(rect.width, rect.height) / 10f);
+
+        switch (skin.skinPattern)
+        {
+            case MetaProgressionStorage.SkinPattern.Split:
+                DrawSolidRect(new Rect(rect.center.x - unit * 0.6f, rect.y, unit * 1.2f, rect.height), accent);
+                DrawSolidRect(new Rect(rect.x, rect.y + rect.height * 0.25f, rect.width * 0.38f, unit), accent);
+                DrawSolidRect(new Rect(rect.xMax - rect.width * 0.38f, rect.y + rect.height * 0.68f, rect.width * 0.38f, unit), accent);
+                break;
+            case MetaProgressionStorage.SkinPattern.Circuit:
+                DrawSolidRect(new Rect(rect.x + unit, rect.center.y - unit * 0.45f, rect.width - unit * 2f, unit * 0.9f), accent);
+                DrawSolidRect(new Rect(rect.center.x, rect.y + unit, unit * 0.9f, rect.height - unit * 2f), accent);
+                DrawSolidRect(new Rect(rect.center.x - unit, rect.center.y - unit, unit * 2f, unit * 2f), Color.Lerp(accent, Color.white, 0.42f));
+                break;
+            case MetaProgressionStorage.SkinPattern.Hazard:
+                for (int i = 0; i < 3; i++)
+                {
+                    float x = rect.x + rect.width * (0.18f + i * 0.31f);
+                    DrawSolidRect(new Rect(x, rect.y, unit * 1.2f, rect.height), accent);
+                }
+                break;
+            case MetaProgressionStorage.SkinPattern.Firewall:
+            case MetaProgressionStorage.SkinPattern.Containment:
+                DrawSolidRect(new Rect(rect.x, rect.y, rect.width, unit), accent);
+                DrawSolidRect(new Rect(rect.x, rect.yMax - unit, rect.width, unit), accent);
+                DrawSolidRect(new Rect(rect.x, rect.y, unit, rect.height), accent);
+                DrawSolidRect(new Rect(rect.xMax - unit, rect.y, unit, rect.height), accent);
+                if (skin.skinPattern == MetaProgressionStorage.SkinPattern.Containment)
+                {
+                    DrawSolidRect(new Rect(rect.center.x - unit, rect.center.y - unit, unit * 2f, unit * 2f), Color.white);
+                }
+                break;
+            case MetaProgressionStorage.SkinPattern.Fracture:
+                DrawSolidRect(new Rect(rect.x + rect.width * 0.28f, rect.y, unit, rect.height * 0.72f), accent);
+                DrawSolidRect(new Rect(rect.x + rect.width * 0.60f, rect.y + rect.height * 0.30f, unit, rect.height * 0.70f), accent);
+                DrawSolidRect(new Rect(rect.x, rect.center.y - unit * 0.5f, rect.width * 0.42f, unit), accent);
+                break;
+            case MetaProgressionStorage.SkinPattern.Signal:
+                DrawSolidRect(new Rect(rect.x + unit, rect.y + rect.height * 0.24f, rect.width - unit * 2f, unit * 1.2f), accent);
+                DrawSolidRect(new Rect(rect.x, rect.y + rect.height * 0.68f, rect.width, unit * 0.8f), Color.Lerp(accent, Color.white, 0.28f));
+                break;
+            case MetaProgressionStorage.SkinPattern.Prism:
+                DrawSolidRect(new Rect(rect.x, rect.y, rect.width * 0.5f, rect.height * 0.5f), accent);
+                DrawSolidRect(new Rect(rect.center.x, rect.y, rect.width * 0.5f, rect.height * 0.5f), new Color(1f, 0.46f, 0.76f, 1f));
+                DrawSolidRect(new Rect(rect.x, rect.center.y, rect.width * 0.5f, rect.height * 0.5f), new Color(0.46f, 0.72f, 1f, 1f));
+                DrawSolidRect(new Rect(rect.center.x, rect.center.y, rect.width * 0.5f, rect.height * 0.5f), new Color(1f, 0.84f, 0.42f, 1f));
+                break;
+            case MetaProgressionStorage.SkinPattern.Orbit:
+                DrawSolidRect(new Rect(rect.center.x - unit, rect.center.y - unit, unit * 2f, unit * 2f), accent);
+                DrawSolidRect(new Rect(rect.center.x - unit * 0.6f, rect.y + unit, unit * 1.2f, unit * 1.2f), accent);
+                DrawSolidRect(new Rect(rect.xMax - unit * 2.2f, rect.center.y - unit * 0.6f, unit * 1.2f, unit * 1.2f), accent);
+                DrawSolidRect(new Rect(rect.x + unit, rect.center.y - unit * 0.6f, unit * 1.2f, unit * 1.2f), accent);
+                break;
+            default:
+                DrawSolidRect(new Rect(rect.center.x - unit, rect.center.y - unit, unit * 2f, unit * 2f), accent);
+                break;
+        }
+
+        DrawSolidRect(new Rect(rect.x, rect.yMax - Mathf.Max(1f, unit * 0.45f), rect.width, Mathf.Max(1f, unit * 0.45f)), skin.trailColor);
     }
 
     private void StartGameplay()

@@ -4,6 +4,29 @@ using UnityEngine;
 public static class MetaProgressionStorage
 {
     // Guarda progresion persistente entre runs: moneda obtenida por score y desbloqueos comprados.
+    public enum SkinPattern
+    {
+        Core,
+        Split,
+        Circuit,
+        Hazard,
+        Firewall,
+        Fracture,
+        Signal,
+        Prism,
+        Orbit,
+        Containment
+    }
+
+    public enum TrailStyle
+    {
+        Soft,
+        Echo,
+        Pixels,
+        Sparks,
+        Pulse
+    }
+
     public struct UnlockDefinition
     {
         public string id;
@@ -13,7 +36,10 @@ public static class MetaProgressionStorage
         public int cost;
         public bool skin;
         public Color bodyColor;
+        public Color accentColor;
         public Color trailColor;
+        public SkinPattern skinPattern;
+        public TrailStyle trailStyle;
     }
 
     public struct RunReward
@@ -52,7 +78,7 @@ public static class MetaProgressionStorage
     public const string UnlockEmergencyShield = "upgrade_emergency_shield";
     public const string UnlockParryCapacitor = "upgrade_parry_capacitor";
     public const string SectionRunUpgrades = "MEJORAS";
-    public const string SectionSkins = "COLORES";
+    public const string SectionSkins = "APARIENCIAS";
     public const string SkinDefault = "skin_default";
     public const string SkinRupturePink = "skin_rupture_pink";
     public const string SkinLabMint = "skin_lab_mint";
@@ -158,110 +184,140 @@ public static class MetaProgressionStorage
             id = SkinDefault,
             section = SectionSkins,
             title = "Cian Base",
-            description = "Color inicial del protocolo GLITCH.",
+            description = "Nucleo limpio con marca central y estela suave.",
             cost = 0,
             skin = true,
             bodyColor = new Color(0.28f, 0.88f, 1f, 1f),
-            trailColor = new Color(0.42f, 0.92f, 1f, 0.85f)
+            accentColor = new Color(0.86f, 0.98f, 1f, 1f),
+            trailColor = new Color(0.28f, 0.88f, 1f, 0.88f),
+            skinPattern = SkinPattern.Core,
+            trailStyle = TrailStyle.Soft
         },
         new UnlockDefinition
         {
             id = SkinRupturePink,
             section = SectionSkins,
             title = "Rupture Rosa",
-            description = "Paleta magenta inspirada en las cadenas de eco.",
+            description = "Traje dividido por una falla luminosa con estela de eco.",
             cost = 35,
             skin = true,
             bodyColor = new Color(1f, 0.42f, 0.78f, 1f),
-            trailColor = new Color(1f, 0.58f, 0.95f, 0.88f)
+            accentColor = new Color(0.48f, 0.12f, 0.62f, 1f),
+            trailColor = new Color(1f, 0.42f, 0.78f, 0.88f),
+            skinPattern = SkinPattern.Split,
+            trailStyle = TrailStyle.Echo
         },
         new UnlockDefinition
         {
             id = SkinLabMint,
             section = SectionSkins,
             title = "Lab Menta",
-            description = "Paleta fria de contencion y seguridad.",
+            description = "Circuito de laboratorio animado sobre el cuerpo.",
             cost = 40,
             skin = true,
             bodyColor = new Color(0.48f, 1f, 0.74f, 1f),
-            trailColor = new Color(0.58f, 1f, 0.84f, 0.88f)
+            accentColor = new Color(0.06f, 0.42f, 0.38f, 1f),
+            trailColor = new Color(0.48f, 1f, 0.74f, 0.88f),
+            skinPattern = SkinPattern.Circuit,
+            trailStyle = TrailStyle.Pulse
         },
         new UnlockDefinition
         {
             id = SkinStorageGold,
             section = SectionSkins,
             title = "Storage Dorado",
-            description = "Paleta calida de carga industrial.",
+            description = "Franjas industriales de riesgo y particulas pixeladas.",
             cost = 40,
             skin = true,
             bodyColor = new Color(1f, 0.72f, 0.34f, 1f),
-            trailColor = new Color(1f, 0.82f, 0.42f, 0.86f)
+            accentColor = new Color(0.22f, 0.14f, 0.05f, 1f),
+            trailColor = new Color(1f, 0.72f, 0.34f, 0.88f),
+            skinPattern = SkinPattern.Hazard,
+            trailStyle = TrailStyle.Pixels
         },
         new UnlockDefinition
         {
             id = SkinFirewallWhite,
             section = SectionSkins,
             title = "Firewall Blanco",
-            description = "Paleta luminosa para runs de alto contraste.",
+            description = "Armadura perimetral que pulsa al acelerar.",
             cost = 55,
             skin = true,
             bodyColor = new Color(0.92f, 0.98f, 1f, 1f),
-            trailColor = new Color(0.70f, 0.96f, 1f, 0.90f)
+            accentColor = new Color(0.18f, 0.76f, 1f, 1f),
+            trailColor = new Color(0.92f, 0.98f, 1f, 0.90f),
+            skinPattern = SkinPattern.Firewall,
+            trailStyle = TrailStyle.Pulse
         },
         new UnlockDefinition
         {
             id = SkinBreachBlack,
             section = SectionSkins,
             title = "Breach Negro",
-            description = "Cuerpo oscuro con rastro magenta para escapes de alto riesgo.",
+            description = "Cuerpo fracturado por cortes magenta inestables.",
             cost = 75,
             skin = true,
             bodyColor = new Color(0.08f, 0.06f, 0.11f, 1f),
-            trailColor = new Color(1f, 0.38f, 0.78f, 0.92f)
+            accentColor = new Color(1f, 0.38f, 0.78f, 1f),
+            trailColor = new Color(0.08f, 0.06f, 0.11f, 0.92f),
+            skinPattern = SkinPattern.Fracture,
+            trailStyle = TrailStyle.Sparks
         },
         new UnlockDefinition
         {
             id = SkinSignalRed,
             section = SectionSkins,
             title = "Senal Roja",
-            description = "Paleta agresiva inspirada en alertas de contencion.",
+            description = "Visor de alerta con linea de escaneo movil.",
             cost = 85,
             skin = true,
             bodyColor = new Color(1f, 0.26f, 0.34f, 1f),
-            trailColor = new Color(1f, 0.64f, 0.42f, 0.88f)
+            accentColor = new Color(1f, 0.88f, 0.52f, 1f),
+            trailColor = new Color(1f, 0.26f, 0.34f, 0.88f),
+            skinPattern = SkinPattern.Signal,
+            trailStyle = TrailStyle.Sparks
         },
         new UnlockDefinition
         {
             id = SkinOverdrivePrism,
             section = SectionSkins,
             title = "Prisma Overdrive",
-            description = "Color de prestigio para runs con sobrecarga ambiental.",
+            description = "Paneles cromaticos que cambian de fase durante la run.",
             cost = 105,
             skin = true,
             bodyColor = new Color(0.78f, 0.56f, 1f, 1f),
-            trailColor = new Color(0.42f, 1f, 0.92f, 0.90f)
+            accentColor = new Color(0.42f, 1f, 0.92f, 1f),
+            trailColor = new Color(0.78f, 0.56f, 1f, 0.90f),
+            skinPattern = SkinPattern.Prism,
+            trailStyle = TrailStyle.Echo
         },
         new UnlockDefinition
         {
             id = SkinVoidViolet,
             section = SectionSkins,
             title = "Vacio Violeta",
-            description = "Paleta profunda con rastro frio para persecuciones largas.",
+            description = "Nodos orbitales giran alrededor de un nucleo profundo.",
             cost = 120,
             skin = true,
             bodyColor = new Color(0.30f, 0.20f, 0.58f, 1f),
-            trailColor = new Color(0.64f, 0.92f, 1f, 0.88f)
+            accentColor = new Color(0.64f, 0.92f, 1f, 1f),
+            trailColor = new Color(0.30f, 0.20f, 0.58f, 0.88f),
+            skinPattern = SkinPattern.Orbit,
+            trailStyle = TrailStyle.Echo
         },
         new UnlockDefinition
         {
             id = SkinContainmentGold,
             section = SectionSkins,
             title = "Contencion Oro",
-            description = "Paleta premium para marcar progreso de largo plazo.",
+            description = "Traje premium con cierres de contencion y nucleo activo.",
             cost = 150,
             skin = true,
             bodyColor = new Color(1f, 0.86f, 0.42f, 1f),
-            trailColor = new Color(1f, 0.98f, 0.76f, 0.92f)
+            accentColor = new Color(1f, 0.98f, 0.76f, 1f),
+            trailColor = new Color(1f, 0.86f, 0.42f, 0.92f),
+            skinPattern = SkinPattern.Containment,
+            trailStyle = TrailStyle.Pulse
         }
     };
 
@@ -428,14 +484,19 @@ public static class MetaProgressionStorage
 
     public static bool TryGetSelectedSkinColors(out Color bodyColor, out Color trailColor)
     {
-        UnlockDefinition definition;
+        TryGetSelectedSkin(out UnlockDefinition definition);
+        bodyColor = definition.bodyColor;
+        trailColor = definition.trailColor;
+        return definition.skin;
+    }
+
+    public static bool TryGetSelectedSkin(out UnlockDefinition definition)
+    {
         if (!TryGetDefinition(GetSelectedSkinId(), out definition) || !definition.skin || !IsUnlocked(definition.id))
         {
             TryGetDefinition(SkinDefault, out definition);
         }
 
-        bodyColor = definition.bodyColor;
-        trailColor = definition.trailColor;
         return definition.skin;
     }
 
