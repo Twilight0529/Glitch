@@ -12,6 +12,7 @@ public struct RankingEntry
     public string recordedAtUtc;
 }
 
+// Ranking local simple: normaliza nombres, ordena puntajes y limita cuántas entradas quedan guardadas.
 public static class RankingStorage
 {
     // Guarda el ranking local como datos JSON dentro de PlayerPrefs.

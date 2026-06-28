@@ -1,3 +1,4 @@
+// Bandera mínima para pasar la configuración 1v1 entre menú y gameplay sin acoplar ambas escenas.
 public static class LocalVersusModeStorage
 {
     // Mantiene el modo elegido al cambiar del menu principal a la escena de juego.

@@ -1,5 +1,6 @@
 using UnityEngine;
 
+// Punto único para opciones del usuario. Sanitiza valores antes de guardarlos para que un PlayerPrefs roto no dañe el juego.
 public static class UserSettings
 {
     // Guarda y lee preferencias del jugador usando PlayerPrefs.

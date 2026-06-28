@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 
+// Construye la arena completa por código: tema, paredes, obstáculos, decoración y sistemas propios del mapa.
+// Mantiene separada la elección del tema de la colocación para que una run pueda progresar sin repetir siempre lo mismo.
 public class ProceduralArenaGenerator : MonoBehaviour
 {
     // Genera la arena completa: tema, paredes, obstaculos, detalles y eventos asociados.
@@ -146,6 +148,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
     }
 
     [ContextMenu("Generate Arena Now")]
+    // Punto de entrada para la primera arena. Elige un tema válido y arma todo desde cero.
     public void GenerateNow()
     {
         InitializeRandom();
@@ -161,6 +164,8 @@ public class ProceduralArenaGenerator : MonoBehaviour
         GenerateTheme(SelectProgressionTheme(activeTheme, sectorLevel));
     }
 
+    // Este es el orden de montaje de una arena. Si algo visual aparece detrás o un evento no encuentra raíces,
+    // conviene empezar a seguir el problema desde acá.
     private void GenerateTheme(ArenaTheme theme)
     {
         activeTheme = theme;
@@ -240,6 +245,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
         return selected;
     }
 
+    // La progresión limita la pool antes de sortear: los mapas avanzados no aparecen antes de ser descubiertos.
     private ArenaTheme SelectProgressionTheme(ArenaTheme current, int level)
     {
         List<ArenaTheme> candidates = BuildProgressionCandidates(level);
@@ -980,6 +986,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
         CreateWall("Wall_Right", new Vector2(arenaWidth * 0.5f, 0f), new Vector2(wallThickness, arenaHeight), parent);
     }
 
+    // Cada tema tiene su propia gramática de obstáculos, no solo una paleta diferente.
     private void CreateThemedObstacles(Transform parent)
     {
         switch (activeTheme)
@@ -1837,6 +1844,8 @@ public class ProceduralArenaGenerator : MonoBehaviour
         return true;
     }
 
+    // --- Validación espacial -------------------------------------------------
+    // Antes de colocar algo comprobamos bordes, corredores reservados, actores y huellas ya ocupadas.
     private bool IsValidFootprint(Rect candidate)
     {
         float minX = -arenaWidth * 0.5f + edgeClearance;
@@ -1972,6 +1981,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
         collider.offset = Vector2.zero;
     }
 
+    // La decoración no tiene colisión: aporta identidad visual sin cambiar rutas ni dificultad.
     private void CreateThemedDetails(Transform parent)
     {
         CreateArenaBackdrop(parent);

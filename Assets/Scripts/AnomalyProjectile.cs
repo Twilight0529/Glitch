@@ -1,6 +1,7 @@
 using UnityEngine;
 
 [RequireComponent(typeof(Collider2D))]
+// Proyectil compartido por varios estados: viaja, rebota o se refleja y siempre valida los bordes antes de dañar.
 public class AnomalyProjectile : MonoBehaviour
 {
     // Proyectil de la anomalia: puede ser reflejado por el parry o derrotar al jugador si no tiene defensa.

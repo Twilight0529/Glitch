@@ -5,6 +5,8 @@ using UnityEngine.SceneManagement;
 using UnityEngine.InputSystem;
 #endif
 
+// Controla todas las pantallas del menú principal y su fondo vivo.
+// Los datos persistentes vienen de los Storage; acá solamente se presentan y se traducen en acciones del jugador.
 public class MainMenuController : MonoBehaviour
 {
     // Menu principal: muestra opciones, ranking, fondo animado y transicion hacia el juego.
@@ -136,6 +138,7 @@ public class MainMenuController : MonoBehaviour
 
     private void Update()
     {
+        // Las transiciones y mensajes usan tiempo no escalado porque el menú no depende del reloj de gameplay.
         if (!introReady)
         {
             introReady = true;
@@ -218,6 +221,7 @@ public class MainMenuController : MonoBehaviour
 #endif
     }
 
+    // --- Navegación principal ------------------------------------------------
     private void DrawMainMenu()
     {
         DrawScreenFade(0.38f);
@@ -329,6 +333,8 @@ public class MainMenuController : MonoBehaviour
         DrawRankingPanel(rankingRect, sideBySide);
     }
 
+    // --- Operaciones de contención ------------------------------------------
+    // Muestra reglas previas a la run; seleccionar una no inicia nada hasta confirmar con el botón final.
     private void DrawOperationsMenu()
     {
         DrawScreenFade(0.48f);
@@ -600,6 +606,7 @@ public class MainMenuController : MonoBehaviour
         }
     }
 
+    // --- Opciones y datos de perfil -----------------------------------------
     private void DrawOptionsMenu()
     {
         DrawScreenFade(0.46f);
@@ -964,6 +971,8 @@ public class MainMenuController : MonoBehaviour
         return value;
     }
 
+    // --- Progresión, skins y logros -----------------------------------------
+    // Las tres secciones comparten layout para que el jugador aprenda una sola forma de navegar y comprar.
     private void DrawUnlocksMenu()
     {
         DrawScreenFade(0.46f);
@@ -1043,6 +1052,8 @@ public class MainMenuController : MonoBehaviour
         }
     }
 
+    // --- Herramientas internas ----------------------------------------------
+    // Este panel queda oculto en el flujo normal y permite preparar casos concretos sin jugar una run completa.
     private void DrawDeveloperMenu()
     {
         DrawScreenFade(0.52f);
@@ -1706,6 +1717,7 @@ public class MainMenuController : MonoBehaviour
         DrawSolidRect(new Rect(rect.x, rect.yMax - Mathf.Max(1f, unit * 0.45f), rect.width, Mathf.Max(1f, unit * 0.45f)), skin.trailColor);
     }
 
+    // Guarda la elección actual y entrega el control al cargador de escena.
     private void StartGameplay()
     {
         if (transitionState != MenuTransitionState.Idle)
@@ -1833,6 +1845,7 @@ public class MainMenuController : MonoBehaviour
         GUI.color = old;
     }
 
+    // El fondo funciona como historial visual: solo dibuja arenas que el perfil ya descubrió.
     private void DrawThematicBackground()
     {
         float t = Time.unscaledTime;

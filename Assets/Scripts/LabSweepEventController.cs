@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+// Eventos propios de Lab. Cambian reglas y corredores por unos segundos sin reconstruir toda la arena.
 public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
 {
     // Evento del laboratorio: mueve obstaculos y crea barridos de esterilizacion con zonas seguras.
@@ -387,6 +388,7 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
         return variants[Random.Range(0, variants.Count)];
     }
 
+    // Elige una variante, guarda el estado original del mapa y recién entonces enciende avisos y mecánica.
     private void BeginEvent()
     {
         if (centerTransform == null)

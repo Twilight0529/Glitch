@@ -5,9 +5,11 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 #endif
 
+// Es el director general de una run. Coordina tiempos, dificultad, tutoriales, contratos, HUD y cierre de partida.
+// No mueve actores por su cuenta: les marca el ritmo y recibe sus avisos para mantener todo sincronizado.
 public class GameManager : MonoBehaviour
 {
-    // Estado central de la partida: cuenta regresiva, tiempo, puntaje, interfaz y derrota.
+    // Estos tipos chicos agrupan datos que solo tienen sentido durante una run y evitan listas de variables sueltas.
     private struct ScorePopup
     {
         public int amount;
@@ -455,6 +457,8 @@ public class GameManager : MonoBehaviour
 
     private void Update()
     {
+        // Este Update funciona como una mesa de control: avanza la fase actual y delega cada sistema a su método.
+        // La lógica pesada queda afuera para que sea fácil ver qué cosas se actualizan y en qué orden.
         UpdateHudReactiveState();
 
         if (arenaGenerator == null)
@@ -765,6 +769,8 @@ public class GameManager : MonoBehaviour
             AchievementStorage.OperationsTenId);
     }
 
+    // --- Contratos de la run -------------------------------------------------
+    // Acá se crea el desafío activo, se sigue su progreso y se decide si terminó bien o venció.
     private void UpdateRunContracts()
     {
         if (!enableRunContracts || IsGameOver || !IsRunActive)
@@ -1113,6 +1119,8 @@ public class GameManager : MonoBehaviour
         GlitchAudioManager.PlayUpgradeSelect();
     }
 
+    // --- Director de dificultad y presupuesto de eventos --------------------
+    // Los eventos piden "presupuesto" antes de arrancar. Así evitamos que tres sistemas intensos exploten juntos.
     public void SuppressBreachSensitiveSystems(float seconds)
     {
         breachSensitiveSuppressionTimer = Mathf.Max(breachSensitiveSuppressionTimer, Mathf.Max(0f, seconds));
@@ -1456,6 +1464,8 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    // --- Dibujo general de interfaz -----------------------------------------
+    // OnGUI solo decide qué capa corresponde. Cada pantalla se dibuja en un método separado más abajo.
     private void OnGUI()
     {
         if (GameMenuController.ShouldHideGameplayHud || SceneTransitionController.IsFading)
@@ -1545,6 +1555,8 @@ public class GameManager : MonoBehaviour
         localVersusManager.Configure(this, playerController, enemyController);
     }
 
+    // --- Arranque de la run --------------------------------------------------
+    // Prepara referencias y recién después habilita tutorial, cuenta regresiva y juego activo.
     private void BeginStartupSequence()
     {
         runPhase = RunPhase.StartupDelay;
@@ -1879,6 +1891,8 @@ public class GameManager : MonoBehaviour
         GlitchAudioManager.PlayMenuConfirm();
     }
 
+    // --- Tutorial contextual -------------------------------------------------
+    // Observa lo que está pasando y frena justo cuando aparece una situación que vale la pena enseñar.
     private void UpdateContextTutorialTriggers()
     {
         if (contextTutorialOpen || !IsRunActive || playerController == null)
@@ -3447,6 +3461,8 @@ public class GameManager : MonoBehaviour
         GlitchAudioManager.PlayCountdownGo();
     }
 
+    // --- Cuenta regresiva y avisos urgentes ---------------------------------
+    // Estas capas son temporales y pueden ocupar el centro porque comunican algo que requiere atención inmediata.
     private void DrawCountdownOverlay()
     {
         EnsureCountdownStyles();
@@ -5020,6 +5036,8 @@ public class GameManager : MonoBehaviour
         bossStateBannerValueStyle.normal.textColor = Color.white;
     }
 
+    // --- HUD persistente -----------------------------------------------------
+    // Toda la información de consulta rápida vive en la cabina superior y comparte un mismo layout responsivo.
     private void DrawRuntimeHud()
     {
         EnsureBossStateStyles();

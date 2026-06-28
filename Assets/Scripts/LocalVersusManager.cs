@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 #endif
 
+// Adapta el modo normal al duelo local: congela la introducción, separa controles y presenta el resultado de ambos lados.
 public class LocalVersusManager : MonoBehaviour
 {
     // Administra el tiempo, la victoria y la presentacion bilateral del duelo local.

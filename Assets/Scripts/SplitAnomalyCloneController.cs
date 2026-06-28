@@ -3,6 +3,7 @@ using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody2D))]
 [RequireComponent(typeof(Collider2D))]
+// Cerebro liviano del clon de Split. Sigue la estrategia del dueño, pero mantiene movimiento y parry propios.
 public class SplitAnomalyCloneController : MonoBehaviour
 {
     // Clon temporal de la anomalia: persigue/flanquea al jugador y luego se fusiona con su anomalia original.

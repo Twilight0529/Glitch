@@ -2,6 +2,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+// Administra el contenido global de una arena: pickups, objetivos, pulsos y Breach.
+// Su trabajo principal es espaciar situaciones, pedir presupuesto al GameManager y limpiar lo que ya terminó.
 public class ArenaChaosDirector : MonoBehaviour
 {
     // Coordina sistemas secundarios de la arena: mejoras, objetos de puntaje y eventos de peligro.
@@ -159,6 +161,7 @@ public class ArenaChaosDirector : MonoBehaviour
 
     public void Configure(ProceduralArenaGenerator arenaGenerator)
     {
+        // Configure también se usa al cruzar un Breach, por eso reinicia timers y objetos de la arena anterior.
         arena = arenaGenerator;
         RefreshReferences();
         ApplySectorProgression();
@@ -216,6 +219,7 @@ public class ArenaChaosDirector : MonoBehaviour
 
     private void Update()
     {
+        // Cada sistema tiene su propio reloj, pero todos pasan por este punto para respetar bloqueos y presión global.
         if (arena == null)
         {
             arena = GetComponent<ProceduralArenaGenerator>();
@@ -500,6 +504,8 @@ public class ArenaChaosDirector : MonoBehaviour
         breachTelegraphTimer = 0f;
     }
 
+    // --- Agenda de contenido -------------------------------------------------
+    // Estos métodos solo sortean el próximo momento. La validación real ocurre cuando el timer llega a cero.
     private void SchedulePowerup()
     {
         float min = Mathf.Min(powerupIntervalRange.x, powerupIntervalRange.y);
@@ -734,6 +740,8 @@ public class ArenaChaosDirector : MonoBehaviour
         }
     }
 
+    // --- Evento de nodos -----------------------------------------------------
+    // Crea los nodos, sigue cuántos quedan y libera el presupuesto tanto al completar como al fallar.
     private bool TryStartObjectiveEvent()
     {
         if (objectiveEventActive || runtimeRoot == null)
@@ -872,6 +880,8 @@ public class ArenaChaosDirector : MonoBehaviour
         activeObjectiveNodes.Clear();
     }
 
+    // --- Evento Breach -------------------------------------------------------
+    // Es una secuencia larga: aviso, portal, barrido, transición, nueva arena y reingreso seguro de actores.
     private bool TryStartBreachEvent()
     {
         if (breachEventActive || breachTransitionActive || objectiveEventActive || activeBreachGate != null || arena == null || runtimeRoot == null)

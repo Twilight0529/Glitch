@@ -7,9 +7,11 @@ using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(Rigidbody2D))]
 [RequireComponent(typeof(Collider2D))]
+// Cerebro y cuerpo de la anomalia. Elige un estado, calcula a dónde conviene ir y ejecuta su ataque visual/mecánico.
+// Es grande porque concentra muchos estados, así que los comentarios marcan los cambios de responsabilidad importantes.
 public class EnemyController : MonoBehaviour
 {
-    // IA principal de la anomalia: selecciona estados, persigue al jugador y maneja habilidades.
+    // La máquina de estados usa este catálogo común para gameplay, UI, debug y modo versus.
     public enum AnomalyState
     {
         DirectChase,
@@ -640,6 +642,8 @@ public class EnemyController : MonoBehaviour
         public Color[] rendererColors;
     }
 
+    // --- Preparación y ciclo principal --------------------------------------
+    // Primero cacheamos componentes y dejamos una física estable; Start conecta lo que depende de otros objetos.
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
@@ -798,6 +802,8 @@ public class EnemyController : MonoBehaviour
 
     private void Update()
     {
+        // En cada frame actualizamos el estado activo, sus telegraphs y los temporizadores.
+        // El movimiento físico se resuelve aparte para que cambiar de ataque no rompa la persecución base.
         if (breachAbsorbed)
         {
             rb.linearVelocity = Vector2.zero;
@@ -1178,6 +1184,8 @@ public class EnemyController : MonoBehaviour
         }
     }
 
+    // --- Selección y ritmo de estados ---------------------------------------
+    // No se elige cualquier ataque porque sí: nivel, pacing, repeticiones y contexto modifican sus probabilidades.
     private void SelectNextState(bool forceDifferent)
     {
         emergencyDestroyerActive = false;
@@ -2553,6 +2561,8 @@ public class EnemyController : MonoBehaviour
         }
     }
 
+    // --- Apariencia por nivel ------------------------------------------------
+    // Construye las capas visuales que hacen reconocible el nivel del jefe sin depender solo de cambiarle el color.
     private void EnsureLevelAppearance()
     {
         if (levelAppearanceRoot != null)
@@ -6362,6 +6372,8 @@ public class EnemyController : MonoBehaviour
         }
     }
 
+    // --- Persecución y navegación -------------------------------------------
+    // Primero calculamos un objetivo estratégico; después el pathfinding decide cómo llegar sin chocar con todo.
     private Vector2 GetStrategicTarget()
     {
         Vector2 enemyPosition = rb.position;
@@ -6615,6 +6627,8 @@ public class EnemyController : MonoBehaviour
         return blended;
     }
 
+    // Si la anomalía deja de progresar durante varios chequeos, activa una salida de emergencia controlada.
+    // Se usan varios chequeos para no confundir un giro normal con estar realmente trabada.
     private void UpdateStuckDetection(Vector2 strategicTarget)
     {
         stuckTimer += Time.deltaTime;

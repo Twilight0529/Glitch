@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// Catálogo y memoria de logros. Recibe progreso, desbloquea una sola vez y entrega su recompensa persistente.
 public static class AchievementStorage
 {
     // Guarda logros persistentes y contadores acumulados para dar objetivos de largo plazo.

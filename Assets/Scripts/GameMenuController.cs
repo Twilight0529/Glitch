@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 #endif
 
+// Menú que aparece sobre la partida: pausa, derrota, ranking y retorno de escena sin duplicar la lógica de la run.
 public class GameMenuController : MonoBehaviour
 {
     // Capa de menu en partida: pausa, pantalla de derrota, registro de ranking y navegacion de escena.
@@ -808,7 +809,7 @@ public class GameMenuController : MonoBehaviour
         return (Time.unscaledTime - defeatStartedAtUnscaled) >= Mathf.Max(0f, defeatInputUnlockDelay);
     }
 
-    private void DrawDefeatBackdrop(float pulse, float glitch, float time) 
+    private void DrawDefeatBackdrop(float pulse, float glitch, float time)
     {
         Color ring = new Color(0.98f, 0.45f, 0.60f, 0.18f + pulse * 0.10f);
         Vector2 center = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);

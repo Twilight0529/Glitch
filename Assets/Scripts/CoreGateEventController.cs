@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// Evento propio de Core: arma una secuencia de compuertas y relés, comunica su objetivo y restaura el mapa al terminar.
 public class CoreGateEventController : MonoBehaviour, IThemedEventStatusProvider
 {
     // Data Core convierte sus compuertas en una red interactiva que el jugador puede reprogramar.

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// Mecánica central de Archive: crea anomalías móviles que atraen actores, proyectiles y objetos de forma constante.
 public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvider
 {
     // Evento de Archive: anomalías móviles capturan entidades y curvan su movimiento en órbitas visibles.

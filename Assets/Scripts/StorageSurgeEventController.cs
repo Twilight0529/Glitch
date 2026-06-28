@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+// Eventos activos de Storage. Convierte sus carriles y carga en obstáculos con ritmo propio.
 public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProvider
 {
     // Evento de Storage: reacomoda carga y activa carriles transportadores que empujan actores.
@@ -361,6 +362,7 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         return variants[Random.Range(0, variants.Count)];
     }
 
+    // Prepara una sola variante por vez y registra todo lo que deberá restaurarse al finalizar.
     private void BeginEvent()
     {
         if (centerTransform == null)

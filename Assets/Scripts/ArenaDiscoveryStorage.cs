@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// Lleva la cuenta de arenas descubiertas y decide qué temas pueden aparecer al comenzar una nueva run.
 public static class ArenaDiscoveryStorage
 {
     // Persiste las zonas conocidas y el orden en que fueron descubiertas.

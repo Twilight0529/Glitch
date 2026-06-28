@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// Guarda la regla especial elegida antes de jugar. Los sistemas consultan esta definición y aplican su parte del desafío.
 public static class ContainmentOperationStorage
 {
     // Define reglas pre-run que alteran toda la partida a cambio de mayor puntuacion.

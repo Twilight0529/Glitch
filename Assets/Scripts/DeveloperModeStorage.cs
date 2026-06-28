@@ -1,5 +1,6 @@
 using UnityEngine;
 
+// Preferencias de debug que sobreviven al cambio de escena. Nunca deberían modificar una run normal si el modo está apagado.
 public static class DeveloperModeStorage
 {
     // Preferencias ocultas de testing: se usan solo desde el panel dev del menu principal.

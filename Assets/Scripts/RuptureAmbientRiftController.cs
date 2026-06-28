@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// Vida pasiva de Rupture: abre grietas, materializa fragmentos y los retira sin mezclarlos con los eventos mayores.
 public class RuptureAmbientRiftController : MonoBehaviour
 {
     // Sistema ambiental de Rupture: grietas que materializan fragmentos temporales de realidad.

@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 
+// Genera y guarda el objetivo diario usando la fecha como semilla, así todos los accesos del día ven el mismo reto.
 public static class DailyChallengeStorage
 {
     // Operacion diaria: una meta rotativa que da una razon concreta para volver a jugar.

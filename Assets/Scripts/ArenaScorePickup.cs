@@ -4,7 +4,8 @@ using UnityEngine;
 [RequireComponent(typeof(SpriteRenderer))]
 public class ArenaScorePickup : MonoBehaviour
 {
-    // Objeto recolectable de puntaje: aparece por tiempo limitado y suma puntos al tocarlo.
+    // Este es el dato blanco que flota por la arena. Vive un rato, anima su sprite y premia al jugador al tocarlo.
+    [Header("Movimiento y presencia visual")]
     [SerializeField] private bool enableAura = false;
     [SerializeField] private float bobAmplitude = 0.08f;
     [SerializeField] private float bobSpeed = 4.5f;
@@ -12,24 +13,31 @@ public class ArenaScorePickup : MonoBehaviour
     [SerializeField] private float baseScale = 1f;
     [SerializeField] private float auraScale = 1.25f;
     [SerializeField] private float auraPulseSpeed = 3.4f;
+
+    [Header("Efecto al recogerlo")]
     [SerializeField] private int collectSparkCount = 6;
     [SerializeField] private float collectSparkDistance = 0.95f;
     [SerializeField] private float collectSparkLifetime = 0.24f;
 
+    // Estas referencias conectan el pickup con quien lo creo, la partida y sus dos capas visuales.
     private ArenaChaosDirector owner;
     private GameManager gameManager;
+    private SpriteRenderer spriteRenderer;
+    private SpriteRenderer auraRenderer;
+    private GameObject auraObject;
+
+    // Estado propio de esta instancia. Se completa desde Configure apenas aparece en la arena.
     private float lifeTimer;
     private float lifetime;
     private int scoreValue;
     private bool chargedDataCore;
     private float extraFirewallCharge;
     private Vector3 basePosition;
-    private SpriteRenderer spriteRenderer;
-    private SpriteRenderer auraRenderer;
-    private GameObject auraObject;
 
     public int ScoreValue => scoreValue;
 
+    // Los campos gravitatorios mueven el pickup por fuera de su animacion de flotado.
+    // También corremos la posición base para que el siguiente frame no lo devuelva al lugar anterior.
     public void ApplyExternalDisplacement(Vector2 delta)
     {
         if (delta.sqrMagnitude <= 0.000001f)
@@ -71,6 +79,7 @@ public class ArenaScorePickup : MonoBehaviour
 
     private void Update()
     {
+        // Primero revisamos el vencimiento. Si sigue vivo, hacemos el flotado y el pulso visual.
         lifeTimer += Time.deltaTime;
         if (lifeTimer >= lifetime)
         {
@@ -95,6 +104,7 @@ public class ArenaScorePickup : MonoBehaviour
 
         if (chargedDataCore)
         {
+            // El Data Core usa el mismo pickup, pero se ve más grande y brillante porque vale bastante más.
             spriteRenderer.color = new Color(0.58f, 1f, 0.86f, 0.98f);
             transform.localScale = Vector3.one * 1.2f;
             return;
@@ -116,6 +126,7 @@ public class ArenaScorePickup : MonoBehaviour
             return;
         }
 
+        // Repartimos cada recompensa a su dueño: el GameManager recibe score y el jugador carga Firewall.
         if (gameManager != null)
         {
             gameManager.AddScore(scoreValue);
@@ -132,6 +143,7 @@ public class ArenaScorePickup : MonoBehaviour
 
     private void OnDestroy()
     {
+        // El director lleva una lista de pickups activos; le avisamos incluso si venció sin ser recogido.
         owner?.NotifyScorePickupDestroyed(this);
     }
 
@@ -142,6 +154,7 @@ public class ArenaScorePickup : MonoBehaviour
             return;
         }
 
+        // El aura se construye por código para que el pickup no dependa de un prefab adicional.
         auraObject = new GameObject(chargedDataCore ? "DataCoreAura" : "ScoreAura");
         auraObject.transform.SetParent(transform, false);
         auraObject.transform.localPosition = Vector3.zero;
@@ -167,6 +180,7 @@ public class ArenaScorePickup : MonoBehaviour
 
     private void SpawnCollectFlash()
     {
+        // Armamos un destello central y varias chispas radiales. Cada efecto se anima solo y se destruye al terminar.
         GameObject fx = new GameObject("ScoreCollectFx");
         fx.transform.position = transform.position;
         SpriteRenderer fxRenderer = fx.AddComponent<SpriteRenderer>();
@@ -193,63 +207,4 @@ public class ArenaScorePickup : MonoBehaviour
             Destroy(spark, Mathf.Max(0.12f, collectSparkLifetime + 0.08f));
         }
     }
-}
-
-public class ScoreCollectFlash : MonoBehaviour
-{
-    private SpriteRenderer spriteRenderer;
-    private float age;
-
-    public void Configure(SpriteRenderer rendererRef)
-    {
-        spriteRenderer = rendererRef;
-    }
-
-    private void Update()
-    {
-        age += Time.deltaTime;
-        float t = Mathf.Clamp01(age / 0.28f);
-        transform.localScale = Vector3.one * Mathf.Lerp(0.35f, 1.35f, t);
-        transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Lerp(0f, 35f, t));
-        if (spriteRenderer != null)
-        {
-            spriteRenderer.color = new Color(1f, 1f, 1f, 1f - t);
-        }
-    }
-}
-
-public class ScoreCollectSparkFx : MonoBehaviour
-{
-    private SpriteRenderer spriteRenderer;
-    private Vector2 direction = Vector2.right;
-    private float distance = 1f;
-    private float life = 0.22f;
-    private float age;
-    private Vector3 origin; 
-
-    public void Configure(SpriteRenderer rendererRef, Vector2 travelDir, float travelDistance, float lifetime)
-    {
-        spriteRenderer = rendererRef;
-        direction = travelDir.sqrMagnitude > 0.001f ? travelDir.normalized : Vector2.right;
-        distance = Mathf.Max(0.1f, travelDistance);
-        life = Mathf.Max(0.08f, lifetime);
-        origin = transform.position; 
-    }
-
-    private void Update()
-    {
-        age += Time.deltaTime;
-        float t = Mathf.Clamp01(age / life);
-        float eased = 1f - Mathf.Pow(1f - t, 2f);
-        transform.position = origin + (Vector3)(direction * distance * eased);
-        transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg);
-        transform.localScale = new Vector3(Mathf.Lerp(0.12f, 0.02f, t), Mathf.Lerp(0.05f, 0.02f, t), 1f);
-        if (spriteRenderer != null)
-        {
-            Color c = spriteRenderer.color;
-            c.a = Mathf.Lerp(1f, 0f, t);
-            spriteRenderer.color = c;
-        }
-    }
-
 }

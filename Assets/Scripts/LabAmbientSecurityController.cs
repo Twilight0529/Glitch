@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// Vida pasiva de Lab: activa barreras y escaneos de seguridad por ciclos, cuidando no encerrar al jugador sin salida.
 public class LabAmbientSecurityController : MonoBehaviour
 {
     // Sistema ambiental de Lab: seguridad automatica que escanea una linea y cierra compuertas coordinadas.
@@ -17,13 +18,13 @@ public class LabAmbientSecurityController : MonoBehaviour
     [SerializeField] private Vector2 gateIntervalRange = new Vector2(5.8f, 9.4f);
     [SerializeField] private float firstGateDelayMin = 1.1f;
     [SerializeField] private float firstGateDelayMax = 2.2f;
-    [SerializeField] private int maxActiveGates = 2; 
+    [SerializeField] private int maxActiveGates = 2;
 
     [Header("Gate Timing")]
     [SerializeField] private Vector2 gateActiveHoldRange = new Vector2(7f, 10f);
     [SerializeField] private float gateTelegraphSeconds = 1.2f;
     [SerializeField] private float gateDeploySeconds = 0.75f;
-    [SerializeField] private float gateRetractSeconds = 0.85f; 
+    [SerializeField] private float gateRetractSeconds = 0.85f;
 
     [Header("Gate Shape")]
     [SerializeField] private Vector2 gateLengthRange = new Vector2(5.2f, 8.6f);

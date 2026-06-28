@@ -7,9 +7,11 @@ using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(Rigidbody2D))]
 [RequireComponent(typeof(Collider2D))]
+// Reúne todo lo que pertenece al corredor: input, movimiento, defensa, powerups y respuesta visual.
+// Los otros sistemas le piden acciones mediante métodos públicos; este componente conserva la última palabra sobre su estado.
 public class PlayerController : MonoBehaviour
 {
-    // Controla movimiento, mejoras defensivas/ofensivas y la secuencia visual de muerte.
+    // Los valores serializados están agrupados por mecánica para que se puedan balancear desde el Inspector sin buscar a ciegas.
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 11f;
     [SerializeField] private float maxBoostMultiplier = 1.9f;
@@ -235,6 +237,8 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    // --- Preparación y movimiento -------------------------------------------
+    // Cacheamos componentes una sola vez y guardamos escala/color originales porque varios efectos los modifican temporalmente.
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
@@ -295,6 +299,7 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    // Estira el sprite según velocidad y aceleración, pero compensa el collider para no cambiar el gameplay por una animación.
     private void UpdateMovementDeformation()
     {
         Vector3 authoredScale = transform.localScale;
@@ -330,6 +335,8 @@ public class PlayerController : MonoBehaviour
         previousVisualVelocity = velocity;
     }
 
+    // --- Apariencia elegida --------------------------------------------------
+    // Lee la skin persistente y arma sus piezas. El patrón es visual: nunca toca colisiones ni estadísticas.
     private void ApplySelectedMetaSkin()
     {
         if (!MetaProgressionStorage.TryGetSelectedSkin(out MetaProgressionStorage.UnlockDefinition skin))
@@ -505,8 +512,10 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    // --- Lectura de input y habilidades -------------------------------------
     private void Update()
     {
+        // Los retornos tempranos representan estados donde el jugador no debe responder: muerte, Breach o tutorial congelado.
         if (deathSequenceActive)
         {
             rb.linearVelocity = Vector2.zero;
@@ -1305,6 +1314,8 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    // --- Defensa activa ------------------------------------------------------
+    // El parry abre una ventana corta; Firewall usa una carga separada para que ambas decisiones no compitan por el mismo timer.
     private void StartParry()
     {
         if (!HasLocalVersusParryCharge)
@@ -1368,6 +1379,8 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    // --- Visuales de habilidades --------------------------------------------
+    // Se construyen una vez por código y luego solo se activan, escalan o recolorean.
     private void EnsureShieldVisual()
     {
         if (shieldVisual != null)
@@ -1515,6 +1528,8 @@ public class PlayerController : MonoBehaviour
         return c;
     }
 
+    // --- Estela de movimiento ------------------------------------------------
+    // El sistema se crea una sola vez; después ajustamos emisión y color según velocidad y apariencia visible.
     private void EnsureMovementTrail()
     {
         if (movementTrail != null || !enableMovementTrail)
@@ -1758,6 +1773,8 @@ public class PlayerController : MonoBehaviour
         breachGlitchRenderers = null;
     }
 
+    // --- Secuencia de derrota ------------------------------------------------
+    // Separa carga, destello y restos para que el GameManager pueda esperar una duración conocida antes de cerrar la run.
     private IEnumerator DeathExplosionRoutine()
     {
         speedBoostTimer = 0f;

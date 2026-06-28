@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+// Eventos activos de Rupture. Trabaja con órbitas, ecos y geometría inestable, pero respeta los bordes jugables.
 public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvider
 {
     // Evento de Rupture: rota el campo de obstaculos alrededor del centro sin cruzar los limites.
@@ -375,6 +376,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         return variants[Random.Range(0, variants.Count)];
     }
 
+    // Puede entrar con aviso normal o de inmediato desde debug; ambos caminos comparten la misma limpieza final.
     private void BeginEvent(bool forceImmediate)
     {
         if (centerTransform == null)

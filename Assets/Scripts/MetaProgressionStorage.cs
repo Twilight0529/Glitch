@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// Caja fuerte del metajuego: guarda Datos, estadísticas, módulos y la apariencia elegida entre una run y otra.
 public static class MetaProgressionStorage
 {
     // Guarda progresion persistente entre runs: moneda obtenida por score y desbloqueos comprados.

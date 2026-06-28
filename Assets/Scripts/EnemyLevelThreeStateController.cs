@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// Extensión de nivel 3: ejecuta estados complejos sin seguir inflando el bucle principal de EnemyController.
 public class EnemyLevelThreeStateController : MonoBehaviour
 {
     // Ejecuta los estados de nivel 3 sin mezclar su logica temporal y visual con la navegacion base.

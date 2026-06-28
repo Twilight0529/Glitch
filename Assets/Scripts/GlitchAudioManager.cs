@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+// Fachada de audio del proyecto. El resto del juego pide sonidos por intención y no necesita conocer AudioSources ni clips.
+// Si un clip externo no existe, este manager puede generar una versión procedural para que nunca quede una acción muda.
 public class GlitchAudioManager : MonoBehaviour
 {
     // Sintetiza una paleta sonora procedural para mantener una identidad glitch sin depender de assets externos.
@@ -59,6 +61,8 @@ public class GlitchAudioManager : MonoBehaviour
         DontDestroyOnLoad(go);
     }
 
+    // --- API de sonidos ------------------------------------------------------
+    // Estos métodos cortos son el vocabulario sonoro del juego y mantienen nombres/volúmenes centralizados.
     public static void PlayScorePickup(Vector3 position) => Play("score_pickup", 0.42f, 1f, position);
     public static void PlayPowerupSpawn(Vector3 position) => Play("powerup_spawn", 0.36f, 1f, position);
 
@@ -280,6 +284,8 @@ public class GlitchAudioManager : MonoBehaviour
         instance.RefreshReferences();
     }
 
+    // --- Montaje de fuentes --------------------------------------------------
+    // Separamos SFX, ambiente, tensión y capas musicales para mezclar cada familia sin pisar las demás.
     private void Awake()
     {
         if (instance != null && instance != this)
@@ -461,6 +467,7 @@ public class GlitchAudioManager : MonoBehaviour
         source.pitch = Mathf.MoveTowards(source.pitch, Mathf.Clamp(targetPitch, 0.45f, 1.75f), dt * Mathf.Max(0.01f, pitchRate));
     }
 
+    // Busca una fuente libre del pequeño pool y reproduce el clip con su posición y variación de pitch.
     private void PlayInternal(string clipName, float volume, float pitch, Vector3 position)
     {
         if (sfxSources == null || sfxSources.Length == 0)
@@ -513,6 +520,8 @@ public class GlitchAudioManager : MonoBehaviour
         return clip;
     }
 
+    // --- Síntesis de respaldo -----------------------------------------------
+    // Cada nombre conocido tiene una receta simple; es un fallback, no reemplaza música o assets producidos.
     private AudioClip BuildClip(string clipName)
     {
         switch (clipName)
