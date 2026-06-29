@@ -86,6 +86,12 @@ public class GlitchAudioManager : MonoBehaviour
     public static void PlayGhostDash(Vector3 position) => Play("ghost_dash", 0.58f, 1f, position);
     public static void PlayParryStart(Vector3 position) => Play("parry_start", 0.52f, 1f, position);
     public static void PlayParrySuccess(Vector3 position) => Play("parry_success", 0.78f, 1f, position);
+    public static void PlayStateHijackCapture(Vector3 position) => Play("state_hijack_capture", 0.72f, 1f, position);
+    public static void PlayStateHijackActivate(Vector3 position)
+    {
+        BoostMusic(0.22f, 0.8f);
+        Play("state_hijack_activate", 0.82f, 1f, position);
+    }
     public static void PlayProjectileReflect(Vector3 position) => Play("projectile_reflect", 0.48f, 1f, position);
     public static void PlayFirewallReady(Vector3 position) => Play("firewall_ready", 0.58f, 1f, position);
     public static void PlayFirewallBurst(Vector3 position)
@@ -552,6 +558,10 @@ public class GlitchAudioManager : MonoBehaviour
                 return CreateClip(clipName, 0.24f, ParryStart);
             case "parry_success":
                 return CreateClip(clipName, 0.42f, ParrySuccess);
+            case "state_hijack_capture":
+                return CreateClip(clipName, 0.46f, UpgradeOpen);
+            case "state_hijack_activate":
+                return CreateClip(clipName, 0.62f, FirewallBurst);
             case "projectile_reflect":
                 return CreateClip(clipName, 0.22f, ProjectileReflect);
             case "firewall_ready":

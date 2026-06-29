@@ -505,6 +505,8 @@ public class EnemyController : MonoBehaviour
     private float sectorResponseMultiplier = 1f;
     private float parryStunTimer;
     private float parryKnockbackTimer;
+    private float hijackDecoyTimer;
+    private Vector2 hijackDecoyPosition;
     private float breachLureTimer;
     private Vector2 breachLureTarget;
     private bool breachAbsorbed;
@@ -826,6 +828,10 @@ public class EnemyController : MonoBehaviour
         }
 
         RecordReplaySample();
+        if (hijackDecoyTimer > 0f)
+        {
+            hijackDecoyTimer -= Time.deltaTime;
+        }
         HandleStateSwitch();
         UpdatePatternInternals();
         UpdateStateAbilities();
@@ -2069,6 +2075,7 @@ public class EnemyController : MonoBehaviour
 
     public void GuideTowardBreach(Vector2 breachTarget, float duration)
     {
+        hijackDecoyTimer = 0f;
         breachLureTarget = breachTarget;
         breachLureTimer = Mathf.Max(breachLureTimer, Mathf.Max(0.1f, duration));
         CancelSplitMergeForBreach();
@@ -3841,6 +3848,72 @@ public class EnemyController : MonoBehaviour
         int extraSectors = Mathf.Max(0, sectorLevel - 1);
         sectorSpeedMultiplier = 1f + Mathf.Min(0.28f, extraSectors * 0.04f);
         sectorResponseMultiplier = 1f + Mathf.Min(0.36f, extraSectors * 0.055f);
+    }
+
+    public void ApplyHijackDecoy(Vector2 decoyPosition, float seconds)
+    {
+        if (breachAbsorbed || seconds <= 0f)
+        {
+            return;
+        }
+
+        hijackDecoyPosition = ClampToArena(decoyPosition);
+        hijackDecoyTimer = Mathf.Max(hijackDecoyTimer, seconds);
+        pathWorld.Clear();
+        pathIndex = 0;
+    }
+
+    public int BreakObstaclesForHijack(Vector2 center, float radius, int maxCount)
+    {
+        Collider2D[] hits = Physics2D.OverlapCircleAll(center, Mathf.Max(0.2f, radius), obstacleMask);
+        System.Array.Sort(hits, (a, b) =>
+            Vector2.SqrMagnitude((Vector2)a.bounds.center - center).CompareTo(
+                Vector2.SqrMagnitude((Vector2)b.bounds.center - center)));
+
+        int broken = 0;
+        HashSet<GameObject> visited = new HashSet<GameObject>();
+        for (int i = 0; i < hits.Length && broken < Mathf.Max(1, maxCount); i++)
+        {
+            Collider2D candidate = hits[i];
+            if (!CanDestroyThisCollider(candidate) || !IsHijackBreakableObstacle(candidate))
+            {
+                continue;
+            }
+
+            GameObject target = candidate.gameObject;
+            if (!visited.Add(target))
+            {
+                continue;
+            }
+
+            BeginDestroyFracture(target);
+            broken++;
+        }
+
+        if (broken > 0)
+        {
+            BuildNavigationGrid();
+            pathWorld.Clear();
+            pathIndex = 0;
+        }
+
+        return broken;
+    }
+
+    private static bool IsHijackBreakableObstacle(Collider2D candidate)
+    {
+        Transform current = candidate != null ? candidate.transform : null;
+        while (current != null)
+        {
+            if (current.name == "Obstacles" || current.name == "DynamicObstacles")
+            {
+                return true;
+            }
+
+            current = current.parent;
+        }
+
+        return false;
     }
 
     public void ApplyParryImpact(Vector2 impactPosition, Vector2 pushDirection)
@@ -6382,6 +6455,10 @@ public class EnemyController : MonoBehaviour
         {
             return breachLureTarget;
         }
+        if (hijackDecoyTimer > 0f)
+        {
+            return hijackDecoyPosition;
+        }
 
         switch (currentPattern)
         {
@@ -7317,6 +7394,7 @@ public class EnemyController : MonoBehaviour
         {
             if (hitPlayer.TryParryHit(rb.position, out Vector2 parryDirection))
             {
+                hitPlayer.CaptureHijackState(CurrentState);
                 ApplyParryImpact(hitPlayer.GetPosition(), parryDirection);
                 return;
             }
@@ -7354,6 +7432,7 @@ public class EnemyController : MonoBehaviour
         {
             if (hitPlayer.TryParryHit(rb.position, out Vector2 parryDirection))
             {
+                hitPlayer.CaptureHijackState(CurrentState);
                 ApplyParryImpact(hitPlayer.GetPosition(), parryDirection);
                 return;
             }

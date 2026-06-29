@@ -37,6 +37,10 @@ public class SplitAnomalyCloneController : MonoBehaviour
     private Vector2 stuckCheckPosition;
     private int stuckChecks;
 
+    public EnemyController.AnomalyState OwnerState => owner != null
+        ? owner.CurrentState
+        : EnemyController.AnomalyState.Split;
+
     public Vector2 GetCurrentPosition()
     {
         return rb != null ? rb.position : (Vector2)transform.position;
@@ -471,6 +475,7 @@ public class SplitAnomalyCloneController : MonoBehaviour
             PlayerController hitPlayer = collision.collider.GetComponent<PlayerController>();
             if (hitPlayer != null && hitPlayer.TryParryHit(rb.position, out Vector2 parryDirection))
             {
+                hitPlayer.CaptureHijackState(OwnerState);
                 ApplyParryImpact(hitPlayer.GetPosition(), parryDirection);
                 return;
             }
@@ -496,6 +501,7 @@ public class SplitAnomalyCloneController : MonoBehaviour
             PlayerController hitPlayer = other.GetComponent<PlayerController>();
             if (hitPlayer != null && hitPlayer.TryParryHit(rb.position, out Vector2 parryDirection))
             {
+                hitPlayer.CaptureHijackState(OwnerState);
                 ApplyParryImpact(hitPlayer.GetPosition(), parryDirection);
                 return;
             }

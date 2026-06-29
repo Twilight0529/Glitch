@@ -147,6 +147,7 @@ public class PlayerController : MonoBehaviour
     private float localVersusParryRechargeTimer;
     private SpriteRenderer parryRenderer;
     private GameObject parryVisual;
+    private PlayerStateHijack stateHijack;
     private ParticleSystem movementTrail;
     private GameObject skinPatternRoot;
     private readonly List<SpriteRenderer> skinPatternRenderers = new List<SpriteRenderer>();
@@ -211,6 +212,10 @@ public class PlayerController : MonoBehaviour
     public float FirewallChargeNormalized => Mathf.Clamp01(firewallCharge / FirewallChargeMax);
     public bool IsFirewallBurstReady => firewallCharge >= FirewallChargeMax;
     public float FirewallBurstRadius => firewallBurstRadius;
+    public bool HasStoredHijack => stateHijack != null && stateHijack.HasStoredAbility;
+    public string StoredHijackLabel => stateHijack != null ? stateHijack.StoredLabel : "SIN CAPTURA";
+    public string StoredHijackHint => stateHijack != null ? stateHijack.StoredHint : string.Empty;
+    public Color StoredHijackColor => stateHijack != null ? stateHijack.StoredColor : new Color(0.42f, 0.56f, 0.72f, 1f);
     public string ActivePowerupLabel
     {
         get
@@ -245,6 +250,12 @@ public class PlayerController : MonoBehaviour
         bodyCollider = GetComponent<Collider2D>();
         bodyBoxCollider = bodyCollider as BoxCollider2D;
         bodyRenderer = GetComponent<SpriteRenderer>();
+        stateHijack = GetComponent<PlayerStateHijack>();
+        if (stateHijack == null)
+        {
+            stateHijack = gameObject.AddComponent<PlayerStateHijack>();
+        }
+        stateHijack.Configure(this);
         rb.gravityScale = 0f;
         rb.freezeRotation = true;
         localVersusParryCharges = Mathf.Max(1, localVersusParryChargesMax);
@@ -560,6 +571,10 @@ public class PlayerController : MonoBehaviour
         {
             TryActivateFirewallBurst();
         }
+        if (WasStateHijackPressed())
+        {
+            stateHijack?.TryActivate();
+        }
 
         moveInput = ReadMoveInput().normalized;
         if (moveInput.sqrMagnitude > 0.001f)
@@ -666,6 +681,22 @@ public class PlayerController : MonoBehaviour
 #if ENABLE_LEGACY_INPUT_MANAGER
         return Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.E) ||
                (!LocalVersusModeStorage.IsLocalVersus && Input.GetMouseButtonDown(0));
+#else
+        return false;
+#endif
+    }
+
+    private static bool WasStateHijackPressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null && keyboard.fKey.wasPressedThisFrame)
+        {
+            return true;
+        }
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.F);
 #else
         return false;
 #endif
@@ -1106,6 +1137,16 @@ public class PlayerController : MonoBehaviour
         return true;
     }
 
+    public void CaptureHijackState(EnemyController.AnomalyState state)
+    {
+        stateHijack?.TryCapture(state);
+    }
+
+    public bool TryActivateStateHijackFromTutorial()
+    {
+        return stateHijack != null && stateHijack.TryActivate();
+    }
+
     public bool StartDeathExplosion()
     {
         if (deathSequenceActive)
@@ -1366,6 +1407,7 @@ public class PlayerController : MonoBehaviour
             EnemyController enemy = hit.GetComponent<EnemyController>();
             if (enemy != null && TryParryHit(enemy.transform.position, out Vector2 parryDirection))
             {
+                CaptureHijackState(enemy.CurrentState);
                 enemy.ApplyParryImpact(GetPosition(), parryDirection);
                 return;
             }
@@ -1373,6 +1415,7 @@ public class PlayerController : MonoBehaviour
             SplitAnomalyCloneController clone = hit.GetComponent<SplitAnomalyCloneController>();
             if (clone != null && TryParryHit(clone.transform.position, out Vector2 cloneParryDirection))
             {
+                CaptureHijackState(clone.OwnerState);
                 clone.ApplyParryImpact(GetPosition(), cloneParryDirection);
                 return;
             }

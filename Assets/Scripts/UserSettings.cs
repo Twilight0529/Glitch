@@ -16,7 +16,8 @@ public static class UserSettings
     public const string ContextTutorialKey = "glitch_context_tutorial";
     private const string ContextTutorialSeenPrefix = "glitch_context_tutorial_seen_";
     private const string ContextTutorialProgressVersionKey = "glitch_context_tutorial_progress_version";
-    private const int CurrentContextTutorialProgressVersion = 2;
+    private const string ContextTutorialDynamicRegistryKey = "glitch_context_tutorial_dynamic_keys";
+    private const int CurrentContextTutorialProgressVersion = 3;
     private static readonly string[] ContextTutorialKeys =
     {
         "movement",
@@ -27,7 +28,11 @@ public static class UserSettings
         "powerup",
         "upgrade",
         "arena_event",
-        "breach"
+        "breach",
+        "state_hijack_unlock",
+        "run_contract",
+        "boss_state",
+        "state_hijack"
     };
 
     public const float DefaultMasterVolume = 0.8f;
@@ -185,7 +190,28 @@ public static class UserSettings
         }
 
         PlayerPrefs.SetInt(ContextTutorialSeenPrefix + tutorialKey, 1);
+        RegisterDynamicTutorialKey(tutorialKey);
         PlayerPrefs.Save();
+    }
+
+    private static void RegisterDynamicTutorialKey(string tutorialKey)
+    {
+        if (!tutorialKey.Contains("_"))
+        {
+            return;
+        }
+
+        string registry = PlayerPrefs.GetString(ContextTutorialDynamicRegistryKey, string.Empty);
+        string marker = $"|{tutorialKey}|";
+        string wrapped = $"|{registry}|";
+        if (wrapped.Contains(marker))
+        {
+            return;
+        }
+
+        PlayerPrefs.SetString(
+            ContextTutorialDynamicRegistryKey,
+            string.IsNullOrWhiteSpace(registry) ? tutorialKey : $"{registry}|{tutorialKey}");
     }
 
     public static void EnsureContextTutorialProgressVersion()
@@ -200,6 +226,7 @@ public static class UserSettings
         {
             PlayerPrefs.DeleteKey(ContextTutorialSeenPrefix + ContextTutorialKeys[i]);
         }
+        DeleteDynamicTutorialProgress();
 
         PlayerPrefs.SetInt(ContextTutorialProgressVersionKey, CurrentContextTutorialProgressVersion);
         PlayerPrefs.Save();
@@ -214,8 +241,24 @@ public static class UserSettings
         {
             PlayerPrefs.DeleteKey(ContextTutorialSeenPrefix + ContextTutorialKeys[i]);
         }
+        DeleteDynamicTutorialProgress();
 
         PlayerPrefs.Save();
+    }
+
+    private static void DeleteDynamicTutorialProgress()
+    {
+        string registry = PlayerPrefs.GetString(ContextTutorialDynamicRegistryKey, string.Empty);
+        string[] keys = registry.Split('|');
+        for (int i = 0; i < keys.Length; i++)
+        {
+            if (!string.IsNullOrWhiteSpace(keys[i]))
+            {
+                PlayerPrefs.DeleteKey(ContextTutorialSeenPrefix + keys[i]);
+            }
+        }
+
+        PlayerPrefs.DeleteKey(ContextTutorialDynamicRegistryKey);
     }
 
     public static void ResetOptions()

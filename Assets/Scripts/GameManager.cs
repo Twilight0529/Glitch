@@ -27,6 +27,7 @@ public class GameManager : MonoBehaviour
         public Rect focus;
         public Rect dash;
         public Rect firewall;
+        public Rect hijack;
     }
 
     private enum RunPhase
@@ -58,7 +59,11 @@ public class GameManager : MonoBehaviour
         Powerup,
         Upgrade,
         ArenaEvent,
-        Breach
+        Breach,
+        RunContract,
+        BossState,
+        StateHijackUnlock,
+        StateHijack
     }
 
     private enum PlayerUpgradeKind
@@ -172,6 +177,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float bossSpecialStatesUnlockTime = 30f;
     [SerializeField] private float bossLevelTwoUnlockTime = 150f;
     [SerializeField] private float bossLevelThreeUnlockTime = 300f;
+    [SerializeField] private float stateHijackUnlockTime = 150f;
     [SerializeField] private float mapEventsUnlockTime = 60f;
     [SerializeField] private float containmentPulseUnlockTime = 90f;
 
@@ -271,6 +277,8 @@ public class GameManager : MonoBehaviour
     public bool AreBossSpecialStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && (devForceBossLevelTwo || devForceBossLevelThree || SurvivalTime >= Mathf.Max(0f, bossSpecialStatesUnlockTime));
     public bool AreBossLevelTwoStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && (devForceBossLevelTwo || devForceBossLevelThree || SurvivalTime >= Mathf.Max(bossSpecialStatesUnlockTime, bossLevelTwoUnlockTime));
     public bool AreBossLevelThreeStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && (devForceBossLevelThree || SurvivalTime >= Mathf.Max(bossLevelTwoUnlockTime, bossLevelThreeUnlockTime));
+    public bool IsStateHijackUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive &&
+        (devForceBossLevelTwo || devForceBossLevelThree || SurvivalTime >= Mathf.Max(bossLevelTwoUnlockTime, stateHijackUnlockTime));
     public bool AreMapEventsUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, mapEventsUnlockTime);
     public bool IsContainmentPulseUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && SurvivalTime >= Mathf.Max(0f, containmentPulseUnlockTime);
     public bool IsContainmentPulsePressureActive => chaosDirector != null && chaosDirector.IsContainmentPulsePressureActive;
@@ -368,6 +376,11 @@ public class GameManager : MonoBehaviour
     private string achievementToastHeader;
     private int achievementToastReward;
     private float achievementToastTimer;
+    private float stateHijackNoticeTimer;
+    private string stateHijackNoticeLabel;
+    private string stateHijackNoticeVerb;
+    private string stateHijackNoticeHint;
+    private Color stateHijackNoticeColor = Color.white;
     private bool upgradeSelectionOpen;
     private bool upgradeSelectionClosing;
     private float upgradeSelectionAge;
@@ -415,8 +428,8 @@ public class GameManager : MonoBehaviour
     private bool contextScorePickupShown;
     private bool contextPowerupShown;
     private bool contextUpgradeShown;
-    private bool contextArenaEventShown;
     private bool contextBreachShown;
+    private bool contextStateHijackUnlockShown;
     private bool operationPlayerModifiersApplied;
     private bool operationEnemyModifiersApplied;
     private bool devForceBossLevelTwo;
@@ -546,6 +559,10 @@ public class GameManager : MonoBehaviour
         if (achievementToastTimer > 0f)
         {
             achievementToastTimer -= Time.unscaledDeltaTime;
+        }
+        if (stateHijackNoticeTimer > 0f)
+        {
+            stateHijackNoticeTimer -= Time.unscaledDeltaTime;
         }
         if (breachSensitiveSuppressionTimer > 0f)
         {
@@ -718,6 +735,24 @@ public class GameManager : MonoBehaviour
             AchievementStorage.ParrySeventyFiveId,
             AchievementStorage.ParryOneHundredFiftyId);
         TryAddDailyChallengeProgress(DailyChallengeStorage.ChallengeKind.Parry, 1);
+    }
+
+    public void NotifyStateHijackCaptured(string abilityLabel, string abilityHint, Color color)
+    {
+        stateHijackNoticeLabel = abilityLabel;
+        stateHijackNoticeVerb = "ESTADO CAPTURADO";
+        stateHijackNoticeHint = abilityHint;
+        stateHijackNoticeColor = color;
+        stateHijackNoticeTimer = 2.8f;
+    }
+
+    public void NotifyStateHijackActivated(string abilityLabel, Color color)
+    {
+        stateHijackNoticeLabel = abilityLabel;
+        stateHijackNoticeVerb = "HIJACK EJECUTADO";
+        stateHijackNoticeHint = string.Empty;
+        stateHijackNoticeColor = color;
+        stateHijackNoticeTimer = 1.8f;
     }
 
     public void NotifyFirewallBurstActivated()
@@ -1648,8 +1683,8 @@ public class GameManager : MonoBehaviour
         contextScorePickupShown = false;
         contextPowerupShown = false;
         contextUpgradeShown = false;
-        contextArenaEventShown = false;
         contextBreachShown = false;
+        contextStateHijackUnlockShown = false;
         PlayerController.SetTutorialInputLocked(false);
         Time.timeScale = 0f;
         ApplyDeveloperRunSettings();
@@ -1935,14 +1970,88 @@ public class GameManager : MonoBehaviour
             return;
         }
 
+        if (IsStateHijackUnlocked && !contextStateHijackUnlockShown && bossLevelTwoIntroTimer <= 0f)
+        {
+            TryOpenContextTutorial(ContextTutorialKind.StateHijackUnlock);
+            return;
+        }
+
+        if (hasActiveContract)
+        {
+            string contractKey = $"Contract:{activeContract.kind}";
+            if (TryOpenContextTutorial(
+                    ContextTutorialKind.RunContract,
+                    contractKey,
+                    activeContract.title,
+                    GetRunContractTutorialHint(activeContract.kind)))
+            {
+                return;
+            }
+        }
+
+        if (IsStateHijackUnlocked && playerController.HasStoredHijack)
+        {
+            string hijackKey = $"Hijack:{playerController.StoredHijackLabel}";
+            if (TryOpenContextTutorial(
+                    ContextTutorialKind.StateHijack,
+                    hijackKey,
+                    playerController.StoredHijackLabel,
+                    playerController.StoredHijackHint))
+            {
+                return;
+            }
+        }
+
+        if (enemyController != null && IsBossSpecialState(enemyController.CurrentStateLabel))
+        {
+            string stateRaw = enemyController.CurrentStateLabel;
+            if (TryOpenContextTutorial(
+                    ContextTutorialKind.BossState,
+                    $"Boss:{stateRaw}",
+                    ToBossStateLabel(stateRaw),
+                    GetBossStateTutorialHint(stateRaw)))
+            {
+                return;
+            }
+        }
+
         if (SurvivalTime >= mapEventsUnlockTime && TryGetContextEventTutorialInfo(out string eventLabel, out string eventHint))
         {
-            string eventKey = $"{levelType}:{eventLabel}:{eventHint}";
+            string eventKey = $"{levelType}:{NormalizeTutorialIdentity(eventLabel)}:{NormalizeTutorialIdentity(eventHint)}";
             if (!contextArenaEventTutorialsShown.Contains(eventKey))
             {
                 TryOpenContextTutorial(ContextTutorialKind.ArenaEvent, eventKey, eventLabel, eventHint);
             }
         }
+    }
+
+    private static string NormalizeTutorialIdentity(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        System.Text.StringBuilder builder = new System.Text.StringBuilder(value.Length);
+        bool previousWasNumber = false;
+        for (int i = 0; i < value.Length; i++)
+        {
+            char character = value[i];
+            if (char.IsDigit(character))
+            {
+                if (!previousWasNumber)
+                {
+                    builder.Append('#');
+                }
+                previousWasNumber = true;
+                continue;
+            }
+
+            previousWasNumber = false;
+            builder.Append(char.ToUpperInvariant(character));
+        }
+
+        return builder.ToString();
     }
 
     private bool TryGetContextEventTutorialInfo(out string label, out string hint)
@@ -2011,6 +2120,51 @@ public class GameManager : MonoBehaviour
         return "Evento de mapa activo: lee la alerta visual y responde con movimiento antes de que el mapa te encierre.";
     }
 
+    private static string GetRunContractTutorialHint(RunContractKind kind)
+    {
+        switch (kind)
+        {
+            case RunContractKind.Survive:
+                return "Sobrevivi hasta completar el tiempo indicado. No hace falta recoger nada: prioriza rutas seguras.";
+            case RunContractKind.Score:
+                return "Suma el puntaje pedido antes de que venza el contrato. Los datos y Data Cores aceleran el objetivo.";
+            case RunContractKind.Pickups:
+                return "Recoge la cantidad indicada de powerups. El riesgo esta en desviarte de una ruta segura para buscarlos.";
+            case RunContractKind.Parry:
+                return "Conecta parries exitosos contra amenazas reales. Un parry al aire no cuenta para el contrato.";
+            case RunContractKind.FirewallBurst:
+                return "Carga y activa Firewall Burst la cantidad indicada antes de que termine el reloj.";
+            default:
+                return "Completa el objetivo indicado antes de que venza su temporizador.";
+        }
+    }
+
+    private static string GetBossStateTutorialHint(string state)
+    {
+        switch (state)
+        {
+            case "Split": return "Aparece un clon que busca encerrarte desde otro angulo. Mantene ambos a la vista y recorda que el parry afecta a los dos.";
+            case "ExpansionShoot": return "La anomalia dispara alrededor suyo. Busca huecos entre proyectiles y evita quedarte pegado a un obstaculo.";
+            case "SpeedSurge": return "La persecucion acelera mucho durante unos segundos. Abri distancia temprano y guarda Dash para corregir una mala ruta.";
+            case "WeaveHunter": return "El jefe alterna laterales para cortar tu trayectoria. Cambia de direccion despues de que comprometa su curva.";
+            case "Destroyer": return "La anomalia puede romper obstáculos de su camino. Las paredes dejan de ser refugios confiables durante este estado.";
+            case "PhaseBlink": return "Primero marca el destino y despues se teletransporta. Sali del area anunciada antes del impacto.";
+            case "PincerBarrage": return "Dos lineas de disparo intentan cerrarse sobre vos. Escapa por el eje abierto antes de que ambas pinzas disparen.";
+            case "SignalJam": return "La señal prepara una alteracion de control. Lee el telegraph y evita maniobras finas durante la descarga.";
+            case "OrbitBarrage": return "Las zonas orbitales explotan despues del aviso. No cruces su radio al final del conteo y conserva una salida libre.";
+            case "ReplayPredator": return "Un fantasma repite tu recorrido anterior. No vuelvas sobre tus propios pasos mientras el eco siga activo.";
+            case "ChecksumLattice": return "Segui la secuencia de nodos resaltados. Resolverla encierra al jefe; tocar un nodo incorrecto castiga el intento.";
+            case "InputDesync": return "Tus entradas pueden desplazarte de forma inesperada. Usa pulsaciones cortas y alejate de los bordes hasta recuperar sincronía.";
+            case "MapRecompile": return "El jefe mueve obstáculos para cortar tu ruta futura. Observa las posiciones marcadas y cambia de corredor antes del cierre.";
+            case "SignalPossession": return "Una señal intenta atraerte hacia una trampa. Mantene distancia del foco y no sigas su señuelo visual.";
+            case "PhaseContract": return "Cumpli la condición visual dentro del tiempo de gracia. El radio mostrado indica la distancia exacta que debe respetarse.";
+            case "AdaptiveCountermeasure": return "La anomalia estudia tu forma de moverte y castiga la repetición. Alterna ritmo, dirección y pausas breves.";
+            case "SignalTether": return "Un vínculo altera tu vector de movimiento. Rompe la distancia del enlace antes de que pueda reposicionarte.";
+            case "BlindspotProtocol": return "El ataque aprovecha el lado que no estas observando. Mantenete en movimiento y rota alrededor del jefe para negar el punto ciego.";
+            default: return "Lee el telegraph de color antes de reaccionar: cada estado anuncia su zona y momento de peligro.";
+        }
+    }
+
     private bool TryOpenContextTutorial(ContextTutorialKind kind, string eventKey = null, string eventLabel = null, string eventHint = null)
     {
         if (kind == ContextTutorialKind.None || contextTutorialOpen || introTutorialOpen || upgradeSelectionOpen || IsGameOver)
@@ -2036,8 +2190,12 @@ public class GameManager : MonoBehaviour
         contextTutorialTimer = 0f;
         contextTutorialActionFlash = 0.2f;
         contextTutorialEventKey = eventKey ?? string.Empty;
-        contextTutorialEventLabel = kind == ContextTutorialKind.ArenaEvent ? eventLabel ?? GetThemedEventLabel() : string.Empty;
-        contextTutorialEventHint = kind == ContextTutorialKind.ArenaEvent ? eventHint ?? GetThemedEventHint() : string.Empty;
+        bool usesDynamicContext = kind == ContextTutorialKind.ArenaEvent ||
+                                  kind == ContextTutorialKind.RunContract ||
+                                  kind == ContextTutorialKind.BossState ||
+                                  kind == ContextTutorialKind.StateHijack;
+        contextTutorialEventLabel = usesDynamicContext ? eventLabel ?? GetThemedEventLabel() : string.Empty;
+        contextTutorialEventHint = usesDynamicContext ? eventHint ?? GetThemedEventHint() : string.Empty;
         contextMoveWPressed = false;
         contextMoveAPressed = false;
         contextMoveSPressed = false;
@@ -2051,7 +2209,7 @@ public class GameManager : MonoBehaviour
 
     private bool HasContextTutorialBeenShown(ContextTutorialKind kind, string eventKey)
     {
-        string settingsKey = GetContextTutorialSettingsKey(kind);
+        string settingsKey = GetContextTutorialSettingsKey(kind, eventKey);
         if (UserSettings.HasSeenContextTutorial(settingsKey))
         {
             return true;
@@ -2074,9 +2232,14 @@ public class GameManager : MonoBehaviour
             case ContextTutorialKind.Upgrade:
                 return contextUpgradeShown;
             case ContextTutorialKind.ArenaEvent:
-                return contextArenaEventShown;
+            case ContextTutorialKind.RunContract:
+            case ContextTutorialKind.BossState:
+            case ContextTutorialKind.StateHijack:
+                return !string.IsNullOrWhiteSpace(eventKey) && contextArenaEventTutorialsShown.Contains(eventKey);
             case ContextTutorialKind.Breach:
                 return contextBreachShown;
+            case ContextTutorialKind.StateHijackUnlock:
+                return contextStateHijackUnlockShown;
             default:
                 return true;
         }
@@ -2084,7 +2247,7 @@ public class GameManager : MonoBehaviour
 
     private void MarkContextTutorialCompleted(ContextTutorialKind kind, string eventKey)
     {
-        string settingsKey = GetContextTutorialSettingsKey(kind);
+        string settingsKey = GetContextTutorialSettingsKey(kind, eventKey);
         UserSettings.MarkContextTutorialSeen(settingsKey);
         MarkContextTutorialOpenedThisRun(kind, eventKey);
     }
@@ -2115,7 +2278,9 @@ public class GameManager : MonoBehaviour
                 contextUpgradeShown = true;
                 break;
             case ContextTutorialKind.ArenaEvent:
-                contextArenaEventShown = true;
+            case ContextTutorialKind.RunContract:
+            case ContextTutorialKind.BossState:
+            case ContextTutorialKind.StateHijack:
                 if (!string.IsNullOrWhiteSpace(eventKey))
                 {
                     contextArenaEventTutorialsShown.Add(eventKey);
@@ -2124,10 +2289,13 @@ public class GameManager : MonoBehaviour
             case ContextTutorialKind.Breach:
                 contextBreachShown = true;
                 break;
+            case ContextTutorialKind.StateHijackUnlock:
+                contextStateHijackUnlockShown = true;
+                break;
         }
     }
 
-    private static string GetContextTutorialSettingsKey(ContextTutorialKind kind)
+    private static string GetContextTutorialSettingsKey(ContextTutorialKind kind, string eventKey = null)
     {
         switch (kind)
         {
@@ -2146,11 +2314,35 @@ public class GameManager : MonoBehaviour
             case ContextTutorialKind.Upgrade:
                 return "upgrade";
             case ContextTutorialKind.ArenaEvent:
-                return "arena_event";
+                return BuildDynamicContextTutorialKey("arena_event", eventKey);
             case ContextTutorialKind.Breach:
                 return "breach";
+            case ContextTutorialKind.RunContract:
+                return BuildDynamicContextTutorialKey("run_contract", eventKey);
+            case ContextTutorialKind.BossState:
+                return BuildDynamicContextTutorialKey("boss_state", eventKey);
+            case ContextTutorialKind.StateHijackUnlock:
+                return "state_hijack_unlock";
+            case ContextTutorialKind.StateHijack:
+                return BuildDynamicContextTutorialKey("state_hijack", eventKey);
             default:
                 return string.Empty;
+        }
+    }
+
+    private static string BuildDynamicContextTutorialKey(string prefix, string value)
+    {
+        unchecked
+        {
+            uint hash = 2166136261;
+            string source = value ?? string.Empty;
+            for (int i = 0; i < source.Length; i++)
+            {
+                hash ^= source[i];
+                hash *= 16777619;
+            }
+
+            return $"{prefix}_{hash:x8}";
         }
     }
 
@@ -2212,6 +2404,17 @@ public class GameManager : MonoBehaviour
                 return;
             }
         }
+        else if (contextTutorialKind == ContextTutorialKind.StateHijack)
+        {
+            if (WasTutorialStateHijackPressed())
+            {
+                contextTutorialProgress = 1f;
+                contextTutorialActionFlash = 0.34f;
+                CloseContextTutorial(playConfirm: false);
+                playerController?.TryActivateStateHijackFromTutorial();
+                return;
+            }
+        }
         else if (contextTutorialKind == ContextTutorialKind.ArenaEvent || contextTutorialKind == ContextTutorialKind.Breach)
         {
             Vector2 move = ReadTutorialMoveInput();
@@ -2244,7 +2447,10 @@ public class GameManager : MonoBehaviour
     {
         return kind == ContextTutorialKind.ScorePickup ||
                kind == ContextTutorialKind.Powerup ||
-               kind == ContextTutorialKind.Upgrade;
+               kind == ContextTutorialKind.Upgrade ||
+               kind == ContextTutorialKind.RunContract ||
+               kind == ContextTutorialKind.BossState ||
+               kind == ContextTutorialKind.StateHijackUnlock;
     }
 
     private void CloseContextTutorial(bool playConfirm = true)
@@ -2474,6 +2680,14 @@ public class GameManager : MonoBehaviour
                 return string.IsNullOrWhiteSpace(contextTutorialEventLabel) ? "Regla temporal de arena" : contextTutorialEventLabel;
             case ContextTutorialKind.Breach:
                 return "Breach activo: busca la salida";
+            case ContextTutorialKind.RunContract:
+                return string.IsNullOrWhiteSpace(contextTutorialEventLabel) ? "Contrato de la run" : contextTutorialEventLabel;
+            case ContextTutorialKind.BossState:
+                return string.IsNullOrWhiteSpace(contextTutorialEventLabel) ? "Nuevo protocolo de la anomalia" : contextTutorialEventLabel;
+            case ContextTutorialKind.StateHijackUnlock:
+                return "State Hijack desbloqueado";
+            case ContextTutorialKind.StateHijack:
+                return string.IsNullOrWhiteSpace(contextTutorialEventLabel) ? "Estado capturado" : contextTutorialEventLabel;
             default:
                 return "Movimiento bajo presion";
         }
@@ -2501,6 +2715,14 @@ public class GameManager : MonoBehaviour
                     : contextTutorialEventHint;
             case ContextTutorialKind.Breach:
                 return "La brecha abre una salida entre arenas. Segui el indicador hacia el portal antes de que el barrido glitch consuma el mapa.";
+            case ContextTutorialKind.RunContract:
+            case ContextTutorialKind.BossState:
+            case ContextTutorialKind.StateHijack:
+                return string.IsNullOrWhiteSpace(contextTutorialEventHint)
+                    ? "Lee la señal visual y prepara tu siguiente decisión antes de reanudar."
+                    : contextTutorialEventHint;
+            case ContextTutorialKind.StateHijackUnlock:
+                return "La anomalia evoluciono y ahora podes copiar su estado. Hace un parry directo al jefe para guardar una version util de su mecanica.";
             default:
                 return "Podes mantener dos direcciones a la vez. Las diagonales te ayudan a rodear obstaculos y romper persecuciones simples.";
         }
@@ -2524,7 +2746,12 @@ public class GameManager : MonoBehaviour
             case ContextTutorialKind.ScorePickup:
             case ContextTutorialKind.Powerup:
             case ContextTutorialKind.Upgrade:
+            case ContextTutorialKind.RunContract:
+            case ContextTutorialKind.BossState:
+            case ContextTutorialKind.StateHijackUnlock:
                 return "Lee la senal y haz click para continuar la run.";
+            case ContextTutorialKind.StateHijack:
+                return "Presiona F para ejecutar ahora la habilidad capturada.";
             default:
                 return "Usa el input indicado por la mecanica.";
         }
@@ -2551,6 +2778,14 @@ public class GameManager : MonoBehaviour
                 return "Click: confirmar powerup";
             case ContextTutorialKind.Upgrade:
                 return "Click: abrir alteraciones";
+            case ContextTutorialKind.RunContract:
+                return "Click: confirmar objetivo";
+            case ContextTutorialKind.BossState:
+                return "Click: confirmar lectura del ataque";
+            case ContextTutorialKind.StateHijackUnlock:
+                return "Parry directo: capturar | F: ejecutar";
+            case ContextTutorialKind.StateHijack:
+                return "Input real: F";
             default:
                 return "Entrenamiento contextual";
         }
@@ -2576,6 +2811,15 @@ public class GameManager : MonoBehaviour
                 return new Color(1f, 0.50f, 0.86f, 1f);
             case ContextTutorialKind.Breach:
                 return new Color(0.46f, 0.96f, 1f, 1f);
+            case ContextTutorialKind.RunContract:
+                return new Color(0.72f, 0.90f, 1f, 1f);
+            case ContextTutorialKind.BossState:
+                return enemyController != null ? GetBossStateColor(enemyController.CurrentStateLabel) : new Color(1f, 0.46f, 0.68f, 1f);
+            case ContextTutorialKind.StateHijackUnlock:
+            case ContextTutorialKind.StateHijack:
+                return playerController != null && playerController.HasStoredHijack
+                    ? playerController.StoredHijackColor
+                    : new Color(0.54f, 0.96f, 1f, 1f);
             default:
                 return new Color(0.43f, 0.94f, 1f, 1f);
         }
@@ -2605,6 +2849,16 @@ public class GameManager : MonoBehaviour
             case ContextTutorialKind.Breach:
                 DrawIntroEventsDemo(rect, accent);
                 break;
+            case ContextTutorialKind.RunContract:
+                DrawContextUpgradeDemo(rect, accent);
+                break;
+            case ContextTutorialKind.BossState:
+                DrawContextBossStateDemo(rect, accent);
+                break;
+            case ContextTutorialKind.StateHijackUnlock:
+            case ContextTutorialKind.StateHijack:
+                DrawContextStateHijackDemo(rect, accent);
+                break;
             default:
                 DrawIntroMovementDemo(rect, accent);
                 break;
@@ -2630,6 +2884,43 @@ public class GameManager : MonoBehaviour
         DrawSolidRect(new Rect(center.x - 58f, center.y - 3f, 88f, 6f), new Color(accent.r, accent.g, accent.b, 0.30f + pulse * 0.26f));
         DrawSolidRect(new Rect(center.x + 60f, center.y - 18f, 30f, 36f), new Color(1f, 0.38f, 0.52f, 0.76f));
         DrawTutorialLabel(new Rect(rect.x + 20f, rect.yMax - 34f, rect.width - 40f, 24f), "SHIFT = FANTASMA BREVE");
+    }
+
+    private void DrawContextStateHijackDemo(Rect rect, Color accent)
+    {
+        DrawTutorialGrid(rect, accent);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 7f);
+        Rect enemy = new Rect(rect.x + (38f * hudScale), rect.center.y - (24f * hudScale), 48f * hudScale, 48f * hudScale);
+        Rect player = new Rect(rect.xMax - (86f * hudScale), rect.center.y - (18f * hudScale), 36f * hudScale, 36f * hudScale);
+        DrawSolidRect(enemy, new Color(1f, 0.30f, 0.46f, 0.92f));
+        DrawTutorialRing(enemy.center, 34f * hudScale + pulse * 5f * hudScale, accent, 0.48f);
+        DrawSolidRect(player, new Color(0.30f, 0.88f, 1f, 0.98f));
+
+        Vector2 midpoint = Vector2.Lerp(enemy.center, player.center, 0.52f);
+        DrawContextLine(enemy.center, player.center, accent);
+        Rect captured = new Rect(midpoint.x - (25f * hudScale), midpoint.y - (25f * hudScale), 50f * hudScale, 50f * hudScale);
+        DrawTutorialFrame(captured, new Color(accent.r, accent.g, accent.b, 0.82f), 3f * hudScale);
+        GUI.Label(captured, "F", BuildFittedSingleLineStyle(upgradeTitleStyle, "F", captured.width, captured.height, 14));
+        DrawTutorialLabel(new Rect(rect.x + 20f, rect.yMax - 38f, rect.width - 40f, 24f), "PARRY: COPIAR   |   F: EJECUTAR");
+    }
+
+    private void DrawContextBossStateDemo(Rect rect, Color accent)
+    {
+        DrawTutorialGrid(rect, accent);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 6.5f);
+        Vector2 center = rect.center;
+        DrawTutorialRing(center, 76f + pulse * 9f, accent, 0.48f);
+        DrawTutorialRing(center, 48f, new Color(accent.r, accent.g, accent.b, 0.72f), 0.38f);
+        DrawSolidRect(new Rect(center.x - 22f, center.y - 22f, 44f, 44f), new Color(1f, 0.30f, 0.46f, 0.94f));
+        for (int i = 0; i < 8; i++)
+        {
+            float angle = (Time.unscaledTime * 34f + i * 45f) * Mathf.Deg2Rad;
+            Vector2 direction = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+            Vector2 position = center + direction * (88f + pulse * 6f);
+            DrawSolidRect(new Rect(position.x - 7f, position.y - 3f, 14f, 6f), new Color(accent.r, accent.g, accent.b, 0.72f));
+        }
+
+        DrawTutorialLabel(new Rect(rect.x + 20f, rect.yMax - 38f, rect.width - 40f, 24f), "LEE EL TELEGRAPH ANTES DE MOVERTE");
     }
 
     private void DrawContextUpgradeDemo(Rect rect, Color accent)
@@ -3112,6 +3403,22 @@ public class GameManager : MonoBehaviour
 #endif
 #if ENABLE_LEGACY_INPUT_MANAGER
         return Input.GetKeyDown(KeyCode.Q) || Input.GetKeyDown(KeyCode.R) || Input.GetMouseButtonDown(1);
+#else
+        return false;
+#endif
+    }
+
+    private static bool WasTutorialStateHijackPressed()
+    {
+#if ENABLE_INPUT_SYSTEM
+        Keyboard keyboard = Keyboard.current;
+        if (keyboard != null && keyboard.fKey.wasPressedThisFrame)
+        {
+            return true;
+        }
+#endif
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.F);
 #else
         return false;
 #endif
@@ -5085,7 +5392,9 @@ public class GameManager : MonoBehaviour
         DrawOperationHud(s);
         DrawGhostDashDock(s);
         DrawFirewallChargeDock(s);
+        DrawStateHijackDock(s);
         DrawAchievementToast(s);
+        DrawStateHijackNotice(s);
 
         if (enableReactiveHudFx)
         {
@@ -5110,7 +5419,7 @@ public class GameManager : MonoBehaviour
         DrawSolidRect(new Rect(topBand.x, topBand.y, 3f * s, topBand.height), new Color(accent.r, accent.g, accent.b, 0.48f));
         DrawSolidRect(new Rect(topBand.xMax - (3f * s), topBand.y, 3f * s, topBand.height), new Color(accent.r, accent.g, accent.b, 0.34f));
 
-        Rect[] zones = { layout.metrics, layout.sector, layout.focus, layout.dash, layout.firewall };
+        Rect[] zones = { layout.metrics, layout.sector, layout.focus, layout.dash, layout.firewall, layout.hijack };
         for (int i = 0; i < zones.Length; i++)
         {
             float zoneAlpha = i % 2 == 0 ? 0.10f : 0.055f;
@@ -5170,11 +5479,12 @@ public class GameManager : MonoBehaviour
         Rect bar = GetHudTopBand(s);
         float usableX = bar.x + (4f * s);
         float usableWidth = bar.width - (8f * s);
-        float metricsWidth = usableWidth * 0.22f;
-        float sectorWidth = usableWidth * 0.14f;
-        float focusWidth = usableWidth * 0.30f;
-        float dashWidth = usableWidth * 0.17f;
-        float firewallWidth = usableWidth - metricsWidth - sectorWidth - focusWidth - dashWidth;
+        float metricsWidth = usableWidth * 0.20f;
+        float sectorWidth = usableWidth * 0.12f;
+        float focusWidth = usableWidth * 0.25f;
+        float dashWidth = usableWidth * 0.14f;
+        float firewallWidth = usableWidth * 0.14f;
+        float hijackWidth = usableWidth - metricsWidth - sectorWidth - focusWidth - dashWidth - firewallWidth;
 
         HudTopLayout layout = new HudTopLayout();
         layout.bar = bar;
@@ -5183,7 +5493,41 @@ public class GameManager : MonoBehaviour
         layout.focus = new Rect(layout.sector.xMax, layout.metrics.y, focusWidth, layout.metrics.height);
         layout.dash = new Rect(layout.focus.xMax, layout.metrics.y, dashWidth, layout.metrics.height);
         layout.firewall = new Rect(layout.dash.xMax, layout.metrics.y, firewallWidth, layout.metrics.height);
+        layout.hijack = new Rect(layout.firewall.xMax, layout.metrics.y, hijackWidth, layout.metrics.height);
         return layout;
+    }
+
+    private void DrawStateHijackNotice(float s)
+    {
+        if (stateHijackNoticeTimer <= 0f || string.IsNullOrWhiteSpace(stateHijackNoticeLabel))
+        {
+            return;
+        }
+
+        float enter = Mathf.Clamp01((2.8f - stateHijackNoticeTimer) / 0.18f);
+        float exit = Mathf.Clamp01(stateHijackNoticeTimer / 0.28f);
+        float alpha = Mathf.Min(enter, exit);
+        Rect topBand = GetHudTopBand(s);
+        float width = Mathf.Min(320f * s, topBand.width * 0.34f);
+        float panelHeight = string.IsNullOrWhiteSpace(stateHijackNoticeHint) ? 48f * s : 62f * s;
+        Rect panel = new Rect(topBand.xMax - width, topBand.yMax + (8f * s), width, panelHeight);
+        Color color = stateHijackNoticeColor;
+
+        DrawSolidRect(panel, new Color(0.02f, 0.03f, 0.065f, 0.86f * alpha));
+        DrawSolidRect(new Rect(panel.x, panel.y, 3f * s, panel.height), new Color(color.r, color.g, color.b, 0.86f * alpha));
+        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 2f * s), new Color(color.r, color.g, color.b, 0.44f * alpha));
+        Color old = GUI.color;
+        GUI.color = new Color(1f, 1f, 1f, alpha);
+        GUI.Label(new Rect(panel.x + (12f * s), panel.y + (3f * s), panel.width - (24f * s), 17f * s), stateHijackNoticeVerb, hudLabelStyle);
+        string value = $"{stateHijackNoticeLabel}  |  F";
+        Rect valueRect = new Rect(panel.x + (12f * s), panel.y + (19f * s), panel.width - (24f * s), 25f * s);
+        GUI.Label(valueRect, value, BuildFittedSingleLineStyle(hudValueStyle, value, valueRect.width, valueRect.height, Mathf.RoundToInt(9f * s)));
+        if (!string.IsNullOrWhiteSpace(stateHijackNoticeHint))
+        {
+            Rect hintRect = new Rect(panel.x + (12f * s), panel.y + (42f * s), panel.width - (24f * s), 16f * s);
+            GUI.Label(hintRect, stateHijackNoticeHint, BuildFittedSingleLineStyle(hudLabelStyle, stateHijackNoticeHint, hintRect.width, hintRect.height, Mathf.RoundToInt(7f * s)));
+        }
+        GUI.color = old;
     }
 
     private void DrawAchievementToast(float s)
@@ -5375,6 +5719,37 @@ public class GameManager : MonoBehaviour
         Rect inputRect = new Rect(background.xMax + (5f * s), panel.y + (8f * s), inputWidth, 26f * s);
         DrawSolidRect(inputRect, new Color(accent.r, accent.g, accent.b, ready ? 0.24f : 0.12f));
         GUI.Label(inputRect, input, BuildFittedSingleLineStyle(hudChipStyle, input, inputRect.width - (6f * s), inputRect.height, Mathf.RoundToInt(8f * s)));
+    }
+
+    private void DrawStateHijackDock(float s)
+    {
+        if (playerController == null || LocalVersusModeStorage.IsLocalVersus || !IsStateHijackUnlocked)
+        {
+            return;
+        }
+
+        HudTopLayout layout = GetHudTopLayout(s);
+        Rect panel = new Rect(
+            layout.hijack.x + (8f * s),
+            layout.hijack.y + (7f * s),
+            layout.hijack.width - (16f * s),
+            layout.hijack.height - (17f * s));
+        bool stored = playerController.HasStoredHijack;
+        Color accent = stored ? playerController.StoredHijackColor : new Color(0.30f, 0.44f, 0.62f, 1f);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (stored ? 8.5f : 2.2f));
+
+        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, stored ? 0.58f + pulse * 0.22f : 0.24f));
+        Rect icon = new Rect(panel.x + (4f * s), panel.y + (10f * s), 22f * s, 22f * s);
+        DrawHudMetricIcon(icon, "hijack", accent);
+
+        float keyWidth = Mathf.Min(34f * s, panel.width * 0.24f);
+        Rect keyRect = new Rect(panel.xMax - keyWidth, panel.y + (8f * s), keyWidth, 26f * s);
+        DrawSolidRect(keyRect, new Color(accent.r, accent.g, accent.b, stored ? 0.24f + pulse * 0.10f : 0.08f));
+        GUI.Label(keyRect, "F", BuildFittedSingleLineStyle(hudChipStyle, "F", keyRect.width, keyRect.height, Mathf.RoundToInt(9f * s)));
+
+        string label = stored ? playerController.StoredHijackLabel : "PARRY AL JEFE";
+        Rect labelRect = new Rect(icon.xMax + (6f * s), panel.y + (7f * s), keyRect.x - icon.xMax - (11f * s), 29f * s);
+        GUI.Label(labelRect, label, BuildFittedSingleLineStyle(hudChipStyle, label, labelRect.width, labelRect.height, Mathf.RoundToInt(7f * s)));
     }
 
     private float GetFirewallRailY(float s, float panelH)
@@ -5580,6 +5955,15 @@ public class GameManager : MonoBehaviour
             DrawSolidRect(new Rect(rect.xMax - unit * 4f, rect.y + unit * 3f, unit * 2f, rect.height - unit * 6f), color);
             DrawSolidRect(new Rect(rect.x + unit * 3f, rect.yMax - unit * 4f, rect.width - unit * 6f, unit * 2f), color);
             DrawSolidRect(new Rect(rect.center.x - unit, rect.yMax - unit * 3f, unit * 2f, unit * 2f), color);
+            return;
+        }
+
+        if (icon == "hijack")
+        {
+            DrawSolidRect(new Rect(rect.x, rect.y + unit, rect.width * 0.42f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.xMax - rect.width * 0.42f, rect.yMax - unit * 3f, rect.width * 0.42f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.center.x - unit, rect.y + unit * 2f, unit * 2f, rect.height - unit * 4f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.center.y - unit, rect.width - unit * 4f, unit * 2f), color);
             return;
         }
 
