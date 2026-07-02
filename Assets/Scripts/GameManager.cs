@@ -58,9 +58,9 @@ public class GameManager : MonoBehaviour
         ScorePickup,
         Powerup,
         Upgrade,
+        Interface,
         ArenaEvent,
         Breach,
-        RunContract,
         BossState,
         StateHijackUnlock,
         StateHijack
@@ -428,6 +428,7 @@ public class GameManager : MonoBehaviour
     private bool contextScorePickupShown;
     private bool contextPowerupShown;
     private bool contextUpgradeShown;
+    private bool contextInterfaceShown;
     private bool contextBreachShown;
     private bool contextStateHijackUnlockShown;
     private bool operationPlayerModifiersApplied;
@@ -1683,6 +1684,7 @@ public class GameManager : MonoBehaviour
         contextScorePickupShown = false;
         contextPowerupShown = false;
         contextUpgradeShown = false;
+        contextInterfaceShown = false;
         contextBreachShown = false;
         contextStateHijackUnlockShown = false;
         PlayerController.SetTutorialInputLocked(false);
@@ -1976,14 +1978,9 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        if (hasActiveContract)
+        if (!contextInterfaceShown && SurvivalTime >= 1f)
         {
-            string contractKey = $"Contract:{activeContract.kind}";
-            if (TryOpenContextTutorial(
-                    ContextTutorialKind.RunContract,
-                    contractKey,
-                    activeContract.title,
-                    GetRunContractTutorialHint(activeContract.kind)))
+            if (TryOpenContextTutorial(ContextTutorialKind.Interface))
             {
                 return;
             }
@@ -2017,7 +2014,9 @@ public class GameManager : MonoBehaviour
 
         if (SurvivalTime >= mapEventsUnlockTime && TryGetContextEventTutorialInfo(out string eventLabel, out string eventHint))
         {
-            string eventKey = $"{levelType}:{NormalizeTutorialIdentity(eventLabel)}:{NormalizeTutorialIdentity(eventHint)}";
+            // La identidad depende del sector y del evento, no de un hint que puede variar
+            // durante sus distintas fases. Asi cada evento se enseña una sola vez.
+            string eventKey = $"{levelType}:{NormalizeTutorialIdentity(eventLabel)}";
             if (!contextArenaEventTutorialsShown.Contains(eventKey))
             {
                 TryOpenContextTutorial(ContextTutorialKind.ArenaEvent, eventKey, eventLabel, eventHint);
@@ -2120,25 +2119,6 @@ public class GameManager : MonoBehaviour
         return "Evento de mapa activo: lee la alerta visual y responde con movimiento antes de que el mapa te encierre.";
     }
 
-    private static string GetRunContractTutorialHint(RunContractKind kind)
-    {
-        switch (kind)
-        {
-            case RunContractKind.Survive:
-                return "Sobrevivi hasta completar el tiempo indicado. No hace falta recoger nada: prioriza rutas seguras.";
-            case RunContractKind.Score:
-                return "Suma el puntaje pedido antes de que venza el contrato. Los datos y Data Cores aceleran el objetivo.";
-            case RunContractKind.Pickups:
-                return "Recoge la cantidad indicada de powerups. El riesgo esta en desviarte de una ruta segura para buscarlos.";
-            case RunContractKind.Parry:
-                return "Conecta parries exitosos contra amenazas reales. Un parry al aire no cuenta para el contrato.";
-            case RunContractKind.FirewallBurst:
-                return "Carga y activa Firewall Burst la cantidad indicada antes de que termine el reloj.";
-            default:
-                return "Completa el objetivo indicado antes de que venza su temporizador.";
-        }
-    }
-
     private static string GetBossStateTutorialHint(string state)
     {
         switch (state)
@@ -2191,7 +2171,6 @@ public class GameManager : MonoBehaviour
         contextTutorialActionFlash = 0.2f;
         contextTutorialEventKey = eventKey ?? string.Empty;
         bool usesDynamicContext = kind == ContextTutorialKind.ArenaEvent ||
-                                  kind == ContextTutorialKind.RunContract ||
                                   kind == ContextTutorialKind.BossState ||
                                   kind == ContextTutorialKind.StateHijack;
         contextTutorialEventLabel = usesDynamicContext ? eventLabel ?? GetThemedEventLabel() : string.Empty;
@@ -2231,8 +2210,9 @@ public class GameManager : MonoBehaviour
                 return contextPowerupShown;
             case ContextTutorialKind.Upgrade:
                 return contextUpgradeShown;
+            case ContextTutorialKind.Interface:
+                return contextInterfaceShown;
             case ContextTutorialKind.ArenaEvent:
-            case ContextTutorialKind.RunContract:
             case ContextTutorialKind.BossState:
             case ContextTutorialKind.StateHijack:
                 return !string.IsNullOrWhiteSpace(eventKey) && contextArenaEventTutorialsShown.Contains(eventKey);
@@ -2277,8 +2257,10 @@ public class GameManager : MonoBehaviour
             case ContextTutorialKind.Upgrade:
                 contextUpgradeShown = true;
                 break;
+            case ContextTutorialKind.Interface:
+                contextInterfaceShown = true;
+                break;
             case ContextTutorialKind.ArenaEvent:
-            case ContextTutorialKind.RunContract:
             case ContextTutorialKind.BossState:
             case ContextTutorialKind.StateHijack:
                 if (!string.IsNullOrWhiteSpace(eventKey))
@@ -2313,12 +2295,12 @@ public class GameManager : MonoBehaviour
                 return "powerup";
             case ContextTutorialKind.Upgrade:
                 return "upgrade";
+            case ContextTutorialKind.Interface:
+                return "interface";
             case ContextTutorialKind.ArenaEvent:
                 return BuildDynamicContextTutorialKey("arena_event", eventKey);
             case ContextTutorialKind.Breach:
                 return "breach";
-            case ContextTutorialKind.RunContract:
-                return BuildDynamicContextTutorialKey("run_contract", eventKey);
             case ContextTutorialKind.BossState:
                 return BuildDynamicContextTutorialKey("boss_state", eventKey);
             case ContextTutorialKind.StateHijackUnlock:
@@ -2448,7 +2430,7 @@ public class GameManager : MonoBehaviour
         return kind == ContextTutorialKind.ScorePickup ||
                kind == ContextTutorialKind.Powerup ||
                kind == ContextTutorialKind.Upgrade ||
-               kind == ContextTutorialKind.RunContract ||
+               kind == ContextTutorialKind.Interface ||
                kind == ContextTutorialKind.BossState ||
                kind == ContextTutorialKind.StateHijackUnlock;
     }
@@ -2676,12 +2658,12 @@ public class GameManager : MonoBehaviour
                 return "Powerup instalado";
             case ContextTutorialKind.Upgrade:
                 return "Alteraciones de run";
+            case ContextTutorialKind.Interface:
+                return "Como leer la interfaz";
             case ContextTutorialKind.ArenaEvent:
                 return string.IsNullOrWhiteSpace(contextTutorialEventLabel) ? "Regla temporal de arena" : contextTutorialEventLabel;
             case ContextTutorialKind.Breach:
                 return "Breach activo: busca la salida";
-            case ContextTutorialKind.RunContract:
-                return string.IsNullOrWhiteSpace(contextTutorialEventLabel) ? "Contrato de la run" : contextTutorialEventLabel;
             case ContextTutorialKind.BossState:
                 return string.IsNullOrWhiteSpace(contextTutorialEventLabel) ? "Nuevo protocolo de la anomalia" : contextTutorialEventLabel;
             case ContextTutorialKind.StateHijackUnlock:
@@ -2709,13 +2691,14 @@ public class GameManager : MonoBehaviour
                 return "Los powerups cambian tu estado temporal. El rayo acelera, el escudo absorbe un golpe y el nucleo compacto te achica, aunque reduce tu velocidad.";
             case ContextTutorialKind.Upgrade:
                 return "Las alteraciones cambian tu build durante la run. Mira categoria, impacto y rareza: no siempre gana la mejora mas ofensiva.";
+            case ContextTutorialKind.Interface:
+                return "La franja superior resume tiempo, puntaje y sector. Las barras muestran Dash, Firewall y habilidades; los objetivos temporales y eventos aparecen como avisos separados. No necesitas memorizar cada contrato: lee su meta y progreso en el HUD.";
             case ContextTutorialKind.ArenaEvent:
                 return string.IsNullOrWhiteSpace(contextTutorialEventHint)
                     ? "Las arenas anuncian reglas temporales con color, flechas y zonas activas. Reacciona apenas aparece la alerta."
                     : contextTutorialEventHint;
             case ContextTutorialKind.Breach:
                 return "La brecha abre una salida entre arenas. Segui el indicador hacia el portal antes de que el barrido glitch consuma el mapa.";
-            case ContextTutorialKind.RunContract:
             case ContextTutorialKind.BossState:
             case ContextTutorialKind.StateHijack:
                 return string.IsNullOrWhiteSpace(contextTutorialEventHint)
@@ -2746,7 +2729,7 @@ public class GameManager : MonoBehaviour
             case ContextTutorialKind.ScorePickup:
             case ContextTutorialKind.Powerup:
             case ContextTutorialKind.Upgrade:
-            case ContextTutorialKind.RunContract:
+            case ContextTutorialKind.Interface:
             case ContextTutorialKind.BossState:
             case ContextTutorialKind.StateHijackUnlock:
                 return "Lee la senal y haz click para continuar la run.";
@@ -2778,8 +2761,8 @@ public class GameManager : MonoBehaviour
                 return "Click: confirmar powerup";
             case ContextTutorialKind.Upgrade:
                 return "Click: abrir alteraciones";
-            case ContextTutorialKind.RunContract:
-                return "Click: confirmar objetivo";
+            case ContextTutorialKind.Interface:
+                return "Click: confirmar lectura del HUD";
             case ContextTutorialKind.BossState:
                 return "Click: confirmar lectura del ataque";
             case ContextTutorialKind.StateHijackUnlock:
@@ -2807,12 +2790,12 @@ public class GameManager : MonoBehaviour
                 return new Color(0.55f, 1f, 0.78f, 1f);
             case ContextTutorialKind.Upgrade:
                 return new Color(0.72f, 0.58f, 1f, 1f);
+            case ContextTutorialKind.Interface:
+                return new Color(0.46f, 0.88f, 1f, 1f);
             case ContextTutorialKind.ArenaEvent:
                 return new Color(1f, 0.50f, 0.86f, 1f);
             case ContextTutorialKind.Breach:
                 return new Color(0.46f, 0.96f, 1f, 1f);
-            case ContextTutorialKind.RunContract:
-                return new Color(0.72f, 0.90f, 1f, 1f);
             case ContextTutorialKind.BossState:
                 return enemyController != null ? GetBossStateColor(enemyController.CurrentStateLabel) : new Color(1f, 0.46f, 0.68f, 1f);
             case ContextTutorialKind.StateHijackUnlock:
@@ -2845,12 +2828,12 @@ public class GameManager : MonoBehaviour
             case ContextTutorialKind.Upgrade:
                 DrawContextUpgradeDemo(rect, accent);
                 break;
+            case ContextTutorialKind.Interface:
+                DrawContextInterfaceDemo(rect, accent);
+                break;
             case ContextTutorialKind.ArenaEvent:
             case ContextTutorialKind.Breach:
                 DrawIntroEventsDemo(rect, accent);
-                break;
-            case ContextTutorialKind.RunContract:
-                DrawContextUpgradeDemo(rect, accent);
                 break;
             case ContextTutorialKind.BossState:
                 DrawContextBossStateDemo(rect, accent);
@@ -2938,6 +2921,36 @@ public class GameManager : MonoBehaviour
             DrawSolidRect(new Rect(card.x + 12f, card.yMax - 38f, card.width - 24f, 20f), new Color(0.08f, 0.16f, 0.25f, 0.88f));
         }
         DrawTutorialLabel(new Rect(rect.x + 20f, rect.yMax - 34f, rect.width - 40f, 24f), "ELIGE BUILD, NO SOLO BONUS");
+    }
+
+    private void DrawContextInterfaceDemo(Rect rect, Color accent)
+    {
+        DrawTutorialGrid(rect, accent);
+
+        Rect topBar = new Rect(rect.x + 24f, rect.y + 22f, rect.width - 48f, 38f);
+        DrawSolidRect(topBar, new Color(0.025f, 0.045f, 0.082f, 0.94f));
+        DrawTutorialFrame(topBar, new Color(accent.r, accent.g, accent.b, 0.62f), 2f);
+
+        float chipWidth = (topBar.width - 28f) / 3f;
+        for (int i = 0; i < 3; i++)
+        {
+            Rect chip = new Rect(topBar.x + 8f + i * (chipWidth + 6f), topBar.y + 8f, chipWidth, 22f);
+            DrawSolidRect(chip, new Color(accent.r, accent.g, accent.b, i == 1 ? 0.26f : 0.14f));
+        }
+
+        Rect abilityPanel = new Rect(rect.x + 34f, rect.y + 78f, rect.width * 0.42f, 66f);
+        DrawSolidRect(abilityPanel, new Color(0.025f, 0.040f, 0.075f, 0.92f));
+        DrawTutorialFrame(abilityPanel, new Color(0.46f, 0.96f, 1f, 0.52f), 2f);
+        DrawSolidRect(new Rect(abilityPanel.x + 12f, abilityPanel.y + 15f, abilityPanel.width - 24f, 8f), new Color(0.46f, 0.96f, 1f, 0.74f));
+        DrawSolidRect(new Rect(abilityPanel.x + 12f, abilityPanel.y + 39f, (abilityPanel.width - 24f) * 0.68f, 8f), new Color(1f, 0.82f, 0.42f, 0.82f));
+
+        Rect objectivePanel = new Rect(rect.xMax - rect.width * 0.43f - 34f, rect.y + 78f, rect.width * 0.43f, 66f);
+        DrawSolidRect(objectivePanel, new Color(0.025f, 0.040f, 0.075f, 0.92f));
+        DrawTutorialFrame(objectivePanel, new Color(1f, 0.54f, 0.82f, 0.52f), 2f);
+        DrawSolidRect(new Rect(objectivePanel.x + 12f, objectivePanel.y + 14f, objectivePanel.width - 24f, 10f), new Color(1f, 0.54f, 0.82f, 0.28f));
+        DrawSolidRect(new Rect(objectivePanel.x + 12f, objectivePanel.y + 38f, (objectivePanel.width - 24f) * 0.54f, 9f), new Color(1f, 0.76f, 0.38f, 0.78f));
+
+        DrawTutorialLabel(new Rect(rect.x + 20f, rect.yMax - 34f, rect.width - 40f, 24f), "ARRIBA: RUN   |   BARRAS: RECURSOS   |   AVISOS: OBJETIVOS");
     }
 
     private void AdvanceIntroTutorialStep()

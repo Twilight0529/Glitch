@@ -27,10 +27,10 @@ public static class UserSettings
         "score_pickup",
         "powerup",
         "upgrade",
+        "interface",
         "arena_event",
         "breach",
         "state_hijack_unlock",
-        "run_contract",
         "boss_state",
         "state_hijack"
     };
