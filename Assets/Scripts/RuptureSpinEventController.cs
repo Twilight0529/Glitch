@@ -28,6 +28,11 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         public ObstacleBinding binding;
         public Vector2 startOffset;
         public float startRotationZ;
+        public float orbitRadiusX;
+        public float orbitRadiusY;
+        public float orbitStartAngleRad;
+        public float orbitSpeedMultiplier;
+        public bool orbitEnabled;
         public bool dynamicWasEnabled;
         public SpriteRenderer[] renderers;
         public Color[] baseColors;
@@ -48,7 +53,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
     [SerializeField, Range(0.5f, 0.99f)] private float safeAngleFactor = 0.92f;
     [SerializeField] private float angleSampleStep = 0.75f;
     [SerializeField] private Vector2 spinMultiplierRange = new Vector2(0.8f, 1.25f);
-    [SerializeField] private Vector2 angularSpeedRange = new Vector2(8f, 16f);
+    [SerializeField] private Vector2 angularSpeedRange = new Vector2(18f, 28f);
     [SerializeField] private Vector2 directionChangeIntervalRange = new Vector2(0.9f, 4.5f);
     [SerializeField] private float angularAcceleration = 22f;
     [SerializeField] private float angularDeceleration = 30f;
@@ -404,7 +409,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
 
         if (currentVariant == RuptureEventVariant.SpinMotion)
         {
-            // Guarda offsets desde el centro para rotar todo el campo de obstaculos como una estructura.
+            // Convierte la distribucion concentrica de Rupture en bandas orbitales elipticas.
             Vector2 center = centerTransform.position;
             for (int i = 0; i < obstacles.Count; i++)
             {
@@ -430,6 +435,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
                     renderers = binding.transform.GetComponentsInChildren<SpriteRenderer>(includeInactive: true),
                     baseColors = null
                 };
+                ConfigureOrbitSnapshot(ref snapshot);
                 snapshot.baseColors = CaptureBaseColors(snapshot.renderers);
 
                 snapshots.Add(snapshot);
@@ -444,15 +450,6 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
                 return;
             }
 
-            // Limita los angulos antes de mover para evitar que los obstaculos crucen paredes.
-            safePositiveAngleDeg = Mathf.Min(maxSweepAngle, ComputeSafeSweepAngle(1f) * safeAngleFactor);
-            safeNegativeAngleDeg = Mathf.Min(maxSweepAngle, ComputeSafeSweepAngle(-1f) * safeAngleFactor);
-            if (safePositiveAngleDeg < minSweepAngle && safeNegativeAngleDeg < minSweepAngle)
-            {
-                EndEvent(restoreControllers: true);
-                ScheduleNextEvent();
-                return;
-            }
         }
 
         currentAngleDeg = 0f;
@@ -493,12 +490,6 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
 
         if (currentVariant == RuptureEventVariant.SpinMotion)
         {
-            directionChangeTimer -= dt;
-            if (directionChangeTimer <= 0f)
-            {
-                ChooseNextDirectionAndSpeed(forceDirectionChange: true);
-            }
-
             float gateIn = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress / 0.14f));
             float gateOut = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((1f - progress) / 0.22f));
             float envelope = gateIn * gateOut;
@@ -508,24 +499,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
             float response = Mathf.Abs(targetSpeed) > Mathf.Abs(currentAngularSpeedDeg) ? angularAcceleration : angularDeceleration;
             currentAngularSpeedDeg = Mathf.MoveTowards(currentAngularSpeedDeg, targetSpeed, response * dt);
 
-            float candidateAngle = currentAngleDeg + currentAngularSpeedDeg * dt;
-            float maxPositive = Mathf.Max(minSweepAngle, safePositiveAngleDeg);
-            float maxNegative = Mathf.Max(minSweepAngle, safeNegativeAngleDeg);
-
-            if (candidateAngle > maxPositive)
-            {
-                candidateAngle = maxPositive;
-                currentAngularSpeedDeg = -Mathf.Abs(currentAngularSpeedDeg) * 0.35f;
-                ChooseNextDirectionAndSpeed(forceDirectionChange: true, forcedSign: -1f);
-            }
-            else if (candidateAngle < -maxNegative)
-            {
-                candidateAngle = -maxNegative;
-                currentAngularSpeedDeg = Mathf.Abs(currentAngularSpeedDeg) * 0.35f;
-                ChooseNextDirectionAndSpeed(forceDirectionChange: true, forcedSign: 1f);
-            }
-
-            currentAngleDeg = candidateAngle;
+            currentAngleDeg = Mathf.Repeat(currentAngleDeg + currentAngularSpeedDeg * dt, 360f);
             ApplyAngle(currentAngleDeg);
             ApplyActiveColorPulse(progress);
         }
@@ -586,8 +560,6 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
 
         Vector2 center = centerTransform.position;
         float angleRad = angleDeg * Mathf.Deg2Rad;
-        float cos = Mathf.Cos(angleRad);
-        float sin = Mathf.Sin(angleRad);
 
         for (int i = 0; i < snapshots.Count; i++)
         {
@@ -598,12 +570,16 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
                 continue;
             }
 
-            Vector2 start = snapshot.startOffset;
-            Vector2 rotated = new Vector2(
-                start.x * cos - start.y * sin,
-                start.x * sin + start.y * cos);
+            if (!snapshot.orbitEnabled)
+            {
+                continue;
+            }
 
-            Vector2 targetPosition = center + rotated;
+            float orbitAngle = snapshot.orbitStartAngleRad + angleRad * snapshot.orbitSpeedMultiplier;
+            Vector2 orbitalOffset = new Vector2(
+                Mathf.Cos(orbitAngle) * snapshot.orbitRadiusX,
+                Mathf.Sin(orbitAngle) * snapshot.orbitRadiusY);
+            Vector2 targetPosition = center + orbitalOffset;
             float margin = binding.obstacleRadius + boundsPadding;
             targetPosition.x = Mathf.Clamp(targetPosition.x, interiorLeft + margin, interiorRight - margin);
             targetPosition.y = Mathf.Clamp(targetPosition.y, interiorBottom + margin, interiorTop - margin);
@@ -617,7 +593,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
                 binding.transform.position = new Vector3(targetPosition.x, targetPosition.y, binding.transform.position.z);
             }
 
-            float targetRotZ = snapshot.startRotationZ + angleDeg * binding.spinMultiplier;
+            float targetRotZ = snapshot.startRotationZ + angleDeg * snapshot.orbitSpeedMultiplier * binding.spinMultiplier;
             if (binding.rigidbody != null && binding.rigidbody.bodyType == RigidbodyType2D.Kinematic)
             {
                 binding.rigidbody.MoveRotation(targetRotZ);
@@ -627,6 +603,37 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
                 binding.transform.rotation = Quaternion.Euler(0f, 0f, targetRotZ);
             }
         }
+    }
+
+    private void ConfigureOrbitSnapshot(ref ObstacleSnapshot snapshot)
+    {
+        float margin = snapshot.binding.obstacleRadius + boundsPadding;
+        float availableX = Mathf.Max(0.5f, (interiorRight - interiorLeft) * 0.5f - margin);
+        float availableY = Mathf.Max(0.5f, (interiorTop - interiorBottom) * 0.5f - margin);
+        float normalizedX = snapshot.startOffset.x / availableX;
+        float normalizedY = snapshot.startOffset.y / availableY;
+        float normalizedRadius = Mathf.Sqrt(normalizedX * normalizedX + normalizedY * normalizedY);
+
+        // El nucleo central permanece fijo: funciona como pivote visual y conserva una isla estable.
+        if (normalizedRadius < 0.10f)
+        {
+            snapshot.orbitEnabled = false;
+            snapshot.orbitRadiusX = 0f;
+            snapshot.orbitRadiusY = 0f;
+            snapshot.orbitStartAngleRad = 0f;
+            snapshot.orbitSpeedMultiplier = 0f;
+            return;
+        }
+
+        float safeRadius = Mathf.Min(normalizedRadius, 0.98f);
+        snapshot.orbitRadiusX = availableX * safeRadius;
+        snapshot.orbitRadiusY = availableY * safeRadius;
+        snapshot.orbitStartAngleRad = Mathf.Atan2(normalizedY, normalizedX);
+
+        // Objetos de una misma banda comparten velocidad, preservando sus huecos durante la orbita.
+        int band = Mathf.Clamp(Mathf.FloorToInt(safeRadius * 4f), 0, 3);
+        snapshot.orbitSpeedMultiplier = 0.82f + band * 0.12f;
+        snapshot.orbitEnabled = true;
     }
 
     private float ComputeSafeSweepAngle(float direction)
