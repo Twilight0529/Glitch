@@ -14,10 +14,7 @@ public class EnemyController : MonoBehaviour
     // La máquina de estados usa este catálogo común para gameplay, UI, debug y modo versus.
     public enum AnomalyState
     {
-        DirectChase,
-        PredictiveIntercept,
-        CutoffFlank,
-        ErraticBurst,
+        BasePursuit,
         Split,
         ExpansionShoot,
         SpeedSurge,
@@ -176,7 +173,6 @@ public class EnemyController : MonoBehaviour
     [Header("Rupture Navigation")]
     [SerializeField] private float ruptureGridRefreshInterval = 0.28f;
     [SerializeField] private float ruptureRepathInterval = 0.10f;
-    [SerializeField, Range(0.35f, 1f)] private float ruptureRepulsionMultiplier = 0.68f;
 
     [Header("Weave Hunter")]
     [SerializeField] private float weaveHunterSpeedMultiplier = 1.2f;
@@ -363,19 +359,19 @@ public class EnemyController : MonoBehaviour
 
     [Header("Local Avoidance")]
     [SerializeField] private float repulsionProbeDistance = 1.75f;
-    [SerializeField] private float repulsionWeight = 1.15f;
     [SerializeField] private int repulsionRayCount = 11;
-    [SerializeField] private float repulsionSpreadAngle = 150f;
+    [SerializeField, Range(8, 32)] private int steeringSampleCount = 20;
+    [SerializeField] private float steeringClearanceDistance = 2.1f;
 
     [Header("Anti-Stuck")]
     [SerializeField] private float stuckCheckInterval = 0.30f;
     [SerializeField] private float stuckDistanceThreshold = 0.09f;
     [SerializeField] private int stuckChecksBeforeRecovery = 2;
-    [SerializeField] private int stuckChecksBeforeEmergencyDestroyer = 5;
     [SerializeField] private float stuckTargetMinDistance = 1.4f;
     [SerializeField] private float stuckObstacleProbeRadius = 1.45f;
     [SerializeField] private float stuckEscapeDistance = 2.9f;
     [SerializeField] private float stuckEscapeVelocityBoost = 1.35f;
+    [SerializeField, Range(1, 6)] private int failedRecoveriesBeforeDestroyer = 3;
     [SerializeField] private float emergencyDestroyerDuration = 2f;
 
     [Header("Path Hysteresis")]
@@ -564,7 +560,7 @@ public class EnemyController : MonoBehaviour
     private Vector2 stuckLastStrategicTarget;
     private float stuckLastTargetDistance;
     private int stuckConsecutiveChecks;
-    private bool emergencyDestroyerActive;
+    private int failedStuckRecoveries;
     private Vector2 pendingBlockedRepathGoal;
     private float pendingBlockedRepathTimer;
     private bool hasPendingBlockedRepathGoal;
@@ -858,7 +854,7 @@ public class EnemyController : MonoBehaviour
         {
             Vector2 overrideTarget = levelThreeStateController.GetMovementOverrideTarget(player.GetPosition());
             UpdateStuckDetection(overrideTarget);
-            if (emergencyDestroyerActive || currentState == AnomalyState.Destroyer)
+            if (currentState == AnomalyState.Destroyer)
             {
                 return;
             }
@@ -885,7 +881,7 @@ public class EnemyController : MonoBehaviour
         // Reconstruye la grilla periodicamente porque eventos y el estado destructor pueden mover o quitar bloqueos.
         gridRefreshTimer += Time.deltaTime;
         float effectiveGridRefresh = navigatingRupture
-            ? Mathf.Min(gridRefreshInterval, Mathf.Max(0.08f, ruptureGridRefreshInterval))
+            ? Mathf.Min(gridRefreshInterval, Mathf.Clamp(ruptureGridRefreshInterval, 0.06f, 0.14f))
             : gridRefreshInterval;
         if (gridRefreshTimer >= effectiveGridRefresh)
         {
@@ -987,10 +983,11 @@ public class EnemyController : MonoBehaviour
                 currentState != AnomalyState.Destroyer &&
                 blockedOscillationCounter >= Mathf.Max(2, blockedOscillationThreshold))
             {
-                EnterEmergencyDestroyerFromStuck();
-                blockedOscillationCounter = 0;
-                blockedOscillationTimer = 0f;
-                return;
+                // Un objetivo que cambia detras de geometria movil no implica que el enemigo este
+                // atrapado. Refresca la navegacion sin convertir un fallo transitorio en Destroyer.
+                BuildNavigationGrid();
+                RebuildPathTo(strategicTarget);
+                ResetBlockedRepathHysteresis();
             }
 
             if (shouldRepath)
@@ -1173,17 +1170,6 @@ public class EnemyController : MonoBehaviour
 
         stateTimer += Time.deltaTime;
 
-        if (emergencyDestroyerActive)
-        {
-            if (stateTimer >= currentStateDuration)
-            {
-                emergencyDestroyerActive = false;
-                SelectNextState(forceDifferent: true);
-            }
-
-            return;
-        }
-
         if (stateTimer >= currentStateDuration)
         {
             SelectNextState(forceDifferent: true);
@@ -1194,7 +1180,6 @@ public class EnemyController : MonoBehaviour
     // No se elige cualquier ataque porque sí: nivel, pacing, repeticiones y contexto modifican sus probabilidades.
     private void SelectNextState(bool forceDifferent)
     {
-        emergencyDestroyerActive = false;
         stuckConsecutiveChecks = 0;
         ResetBlockedRepathHysteresis();
         AnomalyState previousState = currentState;
@@ -1229,7 +1214,6 @@ public class EnemyController : MonoBehaviour
             player = controlledTarget;
         }
 
-        emergencyDestroyerActive = false;
         DestroySplitCloneImmediate();
         levelThreeStateController?.ExitState();
         SelectNextLocalVersusState();
@@ -1239,7 +1223,7 @@ public class EnemyController : MonoBehaviour
     {
         AnomalyState[] options =
         {
-            AnomalyState.DirectChase,
+            AnomalyState.BasePursuit,
             AnomalyState.SpeedSurge,
             AnomalyState.Destroyer,
             AnomalyState.ExpansionShoot,
@@ -1258,7 +1242,6 @@ public class EnemyController : MonoBehaviour
 
     private void ApplyLocalVersusState(AnomalyState next, AnomalyState previous)
     {
-        emergencyDestroyerActive = false;
         stuckConsecutiveChecks = 0;
         ResetBlockedRepathHysteresis();
         currentState = next;
@@ -1566,10 +1549,6 @@ public class EnemyController : MonoBehaviour
             int minBreaks = Mathf.Max(0, Mathf.Min(destroyerMinBreaks, destroyerMaxBreaks));
             int maxBreaks = Mathf.Max(minBreaks, Mathf.Max(destroyerMinBreaks, destroyerMaxBreaks));
             destroyerBreakLimit = Random.Range(minBreaks, maxBreaks + 1);
-            if (emergencyDestroyerActive)
-            {
-                destroyerBreakLimit = Mathf.Clamp(destroyerBreakLimit, 1, 2);
-            }
             destroyerBreakCount = 0;
         }
         else
@@ -1715,10 +1694,9 @@ public class EnemyController : MonoBehaviour
     {
         List<StateWeight> fullOptions = new List<StateWeight>
         {
-            new StateWeight(AnomalyState.DirectChase, directChaseWeight),
-            new StateWeight(AnomalyState.PredictiveIntercept, predictiveInterceptWeight),
-            new StateWeight(AnomalyState.CutoffFlank, cutoffFlankWeight),
-            new StateWeight(AnomalyState.ErraticBurst, erraticBurstWeight)
+            new StateWeight(
+                AnomalyState.BasePursuit,
+                directChaseWeight + predictiveInterceptWeight + cutoffFlankWeight + erraticBurstWeight)
         };
 
         if (enableAdvancedStates)
@@ -1800,9 +1778,7 @@ public class EnemyController : MonoBehaviour
             options.RemoveAll(o => IsMajorState(o.state));
             if (options.Count == 0)
             {
-                options.Add(new StateWeight(AnomalyState.DirectChase, directChaseWeight));
-                options.Add(new StateWeight(AnomalyState.PredictiveIntercept, predictiveInterceptWeight));
-                options.Add(new StateWeight(AnomalyState.CutoffFlank, cutoffFlankWeight));
+                options.Add(new StateWeight(AnomalyState.BasePursuit, directChaseWeight + predictiveInterceptWeight + cutoffFlankWeight));
             }
             return;
         }
@@ -1855,9 +1831,7 @@ public class EnemyController : MonoBehaviour
 
     private static bool IsCalmMinorState(AnomalyState state)
     {
-        return state == AnomalyState.DirectChase ||
-               state == AnomalyState.PredictiveIntercept ||
-               state == AnomalyState.CutoffFlank;
+        return state == AnomalyState.BasePursuit;
     }
 
     private void ApplyProgressionFilter(List<StateWeight> options)
@@ -1899,8 +1873,7 @@ public class EnemyController : MonoBehaviour
                 options.RemoveAll(o => IsLevelThreeState(o.state));
                 if (options.Count == 0)
                 {
-                    options.Add(new StateWeight(AnomalyState.DirectChase, directChaseWeight));
-                    options.Add(new StateWeight(AnomalyState.PredictiveIntercept, predictiveInterceptWeight));
+                    options.Add(new StateWeight(AnomalyState.BasePursuit, directChaseWeight + predictiveInterceptWeight));
                 }
                 break;
         }
@@ -1921,8 +1894,7 @@ public class EnemyController : MonoBehaviour
                 options.RemoveAll(o => !IsCalmMinorState(o.state) && !IsBaseSpecialState(o.state) && !IsLevelTwoState(o.state));
                 if (options.Count == 0)
                 {
-                    options.Add(new StateWeight(AnomalyState.DirectChase, directChaseWeight));
-                    options.Add(new StateWeight(AnomalyState.PredictiveIntercept, predictiveInterceptWeight));
+                    options.Add(new StateWeight(AnomalyState.BasePursuit, directChaseWeight + predictiveInterceptWeight));
                 }
                 break;
         }
@@ -2279,12 +2251,8 @@ public class EnemyController : MonoBehaviour
                 return new Color(0.32f, 1f, 0.78f, 1f);
             case AnomalyState.BlindspotProtocol:
                 return new Color(1f, 0.76f, 0.28f, 1f);
-            case AnomalyState.ErraticBurst:
-                return new Color(0.74f, 0.76f, 1f, 1f);
-            case AnomalyState.CutoffFlank:
+            case AnomalyState.BasePursuit:
                 return new Color(0.65f, 0.88f, 1f, 1f);
-            case AnomalyState.PredictiveIntercept:
-                return new Color(0.85f, 0.68f, 1f, 1f);
             default:
                 return new Color(0.86f, 0.92f, 1f, 1f);
         }
@@ -3033,13 +3001,13 @@ public class EnemyController : MonoBehaviour
         switch (pacingPhase)
         {
             case PacingPhase.SustainPeak:
-                return enableAdvancedStates && CanUseSpecialStates() ? AnomalyState.SpeedSurge : AnomalyState.DirectChase;
+                return enableAdvancedStates && CanUseSpecialStates() ? AnomalyState.SpeedSurge : AnomalyState.BasePursuit;
             case PacingPhase.Relax:
-                return AnomalyState.DirectChase;
+                return AnomalyState.BasePursuit;
             case PacingPhase.PeakFade:
             case PacingPhase.BuildUp:
             default:
-                return AnomalyState.PredictiveIntercept;
+                return AnomalyState.BasePursuit;
         }
     }
 
@@ -3047,14 +3015,8 @@ public class EnemyController : MonoBehaviour
     {
         switch (state)
         {
-            case AnomalyState.DirectChase:
+            case AnomalyState.BasePursuit:
                 return BehaviorPattern.DirectChase;
-            case AnomalyState.PredictiveIntercept:
-                return BehaviorPattern.PredictiveIntercept;
-            case AnomalyState.CutoffFlank:
-                return BehaviorPattern.CutoffFlank;
-            case AnomalyState.ErraticBurst:
-                return BehaviorPattern.ErraticBurst;
             case AnomalyState.Split:
                 return BehaviorPattern.CutoffFlank;
             case AnomalyState.ExpansionShoot:
@@ -6467,6 +6429,10 @@ public class EnemyController : MonoBehaviour
                 {
                     return GetWeaveHunterTarget(enemyPosition, playerPosition);
                 }
+                if (currentState == AnomalyState.BasePursuit)
+                {
+                    return GetBasePursuitTarget(enemyPosition, playerPosition);
+                }
                 return playerPosition;
             case BehaviorPattern.PredictiveIntercept:
                 Vector2 predicted = GetPredictiveTarget(enemyPosition, playerPosition);
@@ -6493,6 +6459,29 @@ public class EnemyController : MonoBehaviour
         float leadTime = distance / enemySpeed;
         leadTime = Mathf.Clamp(leadTime, minLeadTime, maxLeadTime);
         return playerPosition + playerVelocity * leadTime;
+    }
+
+    private Vector2 GetBasePursuitTarget(Vector2 enemyPosition, Vector2 playerPosition)
+    {
+        // Frente a cobertura se persigue la celda estable del jugador; anticipar detras de una
+        // pared hace oscilar el goal del A*. Con linea limpia se permite una intercepcion corta.
+        if (!HasDirectPath(enemyPosition, playerPosition) || navigatingRupture)
+        {
+            return playerPosition;
+        }
+
+        Vector2 velocity = player.CurrentVelocity;
+        if (velocity.sqrMagnitude < 0.16f)
+        {
+            return playerPosition;
+        }
+
+        float distance = Vector2.Distance(enemyPosition, playerPosition);
+        float leadSeconds = Mathf.Lerp(0.16f, 0.48f, Mathf.InverseLerp(2f, 10f, distance));
+        Vector2 predicted = ClampToArena(playerPosition + velocity * leadSeconds);
+        return IsWalkableWorld(predicted) && HasDirectPath(enemyPosition, predicted)
+            ? predicted
+            : playerPosition;
     }
 
     private Vector2 GetCutoffTarget(Vector2 enemyPosition, Vector2 playerPosition)
@@ -6576,15 +6565,11 @@ public class EnemyController : MonoBehaviour
 
         if (!TryNearestWalkable(start, out start) || !TryNearestWalkable(goal, out goal))
         {
-            pathWorld.Clear();
-            pathIndex = 0;
             return;
         }
 
         if (!TryFindPath(start, goal, out List<Vector2Int> pathCells))
         {
-            pathWorld.Clear();
-            pathIndex = 0;
             return;
         }
 
@@ -6667,41 +6652,68 @@ public class EnemyController : MonoBehaviour
         }
 
         Vector2 dir = delta / distance;
-        RaycastHit2D hit = Physics2D.CircleCast(from, agentRadius, dir, distance, obstacleMask);
-        return !IsBlockingCollider(hit.collider);
+        return GetBlockingClearance(from, dir, distance) >= distance - 0.01f;
     }
 
     private Vector2 ApplyObstacleRepulsion(Vector2 desiredDirection)
     {
         Vector2 baseDir = desiredDirection.sqrMagnitude > 0.0001f ? desiredDirection.normalized : lastMoveDirection;
-        Vector2 repulsion = Vector2.zero;
+        int samples = Mathf.Max(8, navigatingRupture ? steeringSampleCount : repulsionRayCount);
+        float probeDistance = Mathf.Max(repulsionProbeDistance,
+            navigatingRupture ? steeringClearanceDistance : repulsionProbeDistance);
+        Vector2 velocityDir = rb.linearVelocity.sqrMagnitude > 0.04f
+            ? rb.linearVelocity.normalized
+            : lastMoveDirection;
+        Vector2 bestDirection = baseDir;
+        float bestScore = float.NegativeInfinity;
 
-        int rays = Mathf.Max(3, repulsionRayCount);
-        for (int i = 0; i < rays; i++)
+        // Context steering: evalua el circulo completo. Si el frente se cierra por un objeto movil,
+        // conserva una salida lateral estable en lugar de sumar fuerzas que pueden cancelarse.
+        for (int i = 0; i < samples; i++)
         {
-            float t = rays == 1 ? 0.5f : i / (float)(rays - 1);
-            float angle = Mathf.Lerp(-repulsionSpreadAngle * 0.5f, repulsionSpreadAngle * 0.5f, t);
-            Vector2 dir = Rotate(baseDir, angle);
+            float angle = i * (360f / samples);
+            Vector2 candidate = Rotate(baseDir, angle);
+            float clearance = GetBlockingClearance(rb.position, candidate, probeDistance);
+            float clearance01 = Mathf.Clamp01(clearance / probeDistance);
+            float goalAlignment = Vector2.Dot(candidate, baseDir);
+            float inertia = Vector2.Dot(candidate, velocityDir);
+            float reversePenalty = goalAlignment < -0.25f ? 0.35f : 0f;
+            float blockedPenalty = clearance < agentRadius * 0.45f ? 3f : 0f;
+            float score = clearance01 * 2.35f + goalAlignment * 1.25f + inertia * 0.3f - reversePenalty - blockedPenalty;
 
-            RaycastHit2D hit = Physics2D.CircleCast(rb.position, agentRadius, dir, repulsionProbeDistance, obstacleMask);
-            if (!IsBlockingCollider(hit.collider))
+            if (score > bestScore)
             {
-                continue;
+                bestScore = score;
+                bestDirection = candidate;
             }
-
-            float proximity = 1f - (hit.distance / repulsionProbeDistance);
-            Vector2 away = (rb.position - hit.point).normalized;
-            repulsion += away * proximity;
         }
 
-        if (repulsion.sqrMagnitude < 0.0001f)
+        return bestDirection.normalized;
+    }
+
+    private float GetBlockingClearance(Vector2 origin, Vector2 direction, float distance)
+    {
+        if (direction.sqrMagnitude < 0.0001f || distance <= 0f)
         {
-            return baseDir;
+            return distance;
         }
 
-        float effectiveWeight = repulsionWeight * (navigatingRupture ? ruptureRepulsionMultiplier : 1f);
-        Vector2 blended = (baseDir + repulsion.normalized * effectiveWeight).normalized;
-        return blended;
+        RaycastHit2D[] hits = Physics2D.CircleCastAll(
+            origin,
+            Mathf.Max(0.02f, agentRadius),
+            direction.normalized,
+            distance,
+            obstacleMask);
+        float nearest = distance;
+        for (int i = 0; i < hits.Length; i++)
+        {
+            if (IsBlockingCollider(hits[i].collider))
+            {
+                nearest = Mathf.Min(nearest, hits[i].distance);
+            }
+        }
+
+        return nearest;
     }
 
     // Si la anomalía deja de progresar durante varios chequeos, activa una salida de emergencia controlada.
@@ -6741,26 +6753,32 @@ public class EnemyController : MonoBehaviour
         if (!nearObstacle || !needsChase)
         {
             stuckConsecutiveChecks = 0;
+            failedStuckRecoveries = 0;
             return;
         }
 
         if (!lowProgress)
         {
             stuckConsecutiveChecks = Mathf.Max(0, stuckConsecutiveChecks - 1);
+            failedStuckRecoveries = 0;
             return;
         }
 
         stuckConsecutiveChecks++;
 
-        if (currentState != AnomalyState.Destroyer && stuckConsecutiveChecks >= Mathf.Max(2, stuckChecksBeforeEmergencyDestroyer))
-        {
-            EnterEmergencyDestroyerFromStuck();
-            return;
-        }
-
         if (stuckConsecutiveChecks >= Mathf.Max(1, stuckChecksBeforeRecovery))
         {
-            TryStuckRecovery(strategicTarget);
+            failedStuckRecoveries++;
+            if (currentState != AnomalyState.Destroyer &&
+                failedStuckRecoveries >= Mathf.Max(1, failedRecoveriesBeforeDestroyer))
+            {
+                EnterEmergencyDestroyer();
+            }
+            else
+            {
+                TryStuckRecovery(strategicTarget);
+            }
+            stuckConsecutiveChecks = 0;
         }
     }
 
@@ -6792,9 +6810,7 @@ public class EnemyController : MonoBehaviour
             desired = lastMoveDirection.sqrMagnitude > 0.0001f ? lastMoveDirection : Vector2.right;
         }
 
-        Vector2 repulsed = ApplyObstacleRepulsion(desired.normalized);
-        Vector2 jitter = Random.insideUnitCircle * 0.45f;
-        Vector2 escapeDir = repulsed + jitter;
+        Vector2 escapeDir = ApplyObstacleRepulsion(desired.normalized);
         if (escapeDir.sqrMagnitude < 0.0001f)
         {
             escapeDir = desired.normalized;
@@ -6810,29 +6826,25 @@ public class EnemyController : MonoBehaviour
         lastMoveDirection = escapeDir;
     }
 
-    private void EnterEmergencyDestroyerFromStuck()
+    private void EnterEmergencyDestroyer()
     {
-        if (currentState == AnomalyState.Destroyer || AreSpecialStatesSuppressedForBreach())
+        if (currentState == AnomalyState.Destroyer || localVersusControl)
         {
             return;
         }
 
-        AnomalyState previousState = currentState;
+        AnomalyState previous = currentState;
         currentState = AnomalyState.Destroyer;
         currentPattern = ResolvePatternForState(currentState);
         stateTimer = 0f;
-        currentStateDuration = Mathf.Max(0.4f, emergencyDestroyerDuration);
-        emergencyDestroyerActive = true;
-
-        HandleStateTransition(previousState, currentState);
-        TriggerStatePulse();
-        OnStateEntered();
-
-        BuildNavigationGrid();
-        pathWorld.Clear();
-        pathIndex = 0;
-        ResetBlockedRepathHysteresis();
+        currentStateDuration = Mathf.Max(0.5f, emergencyDestroyerDuration);
         stuckConsecutiveChecks = 0;
+        failedStuckRecoveries = 0;
+        ResetBlockedRepathHysteresis();
+        HandleStateTransition(previous, currentState);
+        TriggerStatePulse();
+        SpawnStateTransitionBurst(currentState, previous != currentState);
+        OnStateEntered();
     }
 
     private Vector2Int WorldToCell(Vector2 world)
@@ -6913,6 +6925,8 @@ public class EnemyController : MonoBehaviour
         }
 
         List<Vector2Int> open = new List<Vector2Int> { start };
+        Vector2Int closestReachable = start;
+        float closestHeuristic = Heuristic(start, goal);
         gCost[start.x, start.y] = 0f;
         fCost[start.x, start.y] = Heuristic(start, goal);
 
@@ -6939,6 +6953,12 @@ public class EnemyController : MonoBehaviour
 
             open.RemoveAt(currentIndex);
             closed[current.x, current.y] = true;
+            float currentHeuristic = Heuristic(current, goal);
+            if (currentHeuristic < closestHeuristic)
+            {
+                closestHeuristic = currentHeuristic;
+                closestReachable = current;
+            }
 
             for (int i = 0; i < NeighborOffsets.Length; i++)
             {
@@ -6979,6 +6999,14 @@ public class EnemyController : MonoBehaviour
                     open.Add(neighbor);
                 }
             }
+        }
+
+        // Los obstaculos orbitales pueden cerrar el destino durante unos frames. Avanzar hasta el
+        // nodo alcanzable mas cercano mantiene progreso y evita caer en persecucion recta sin ruta.
+        if (closestReachable != start)
+        {
+            ReconstructPath(start, closestReachable, hasParent, cameFrom, result);
+            return result.Count > 1;
         }
 
         return false;

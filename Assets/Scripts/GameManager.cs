@@ -5266,14 +5266,8 @@ public class GameManager : MonoBehaviour
 
         switch (raw)
         {
-            case "DirectChase":
-                return "Direct Chase";
-            case "PredictiveIntercept":
-                return "Predictive Intercept";
-            case "CutoffFlank":
-                return "Cutoff Flank";
-            case "ErraticBurst":
-                return "Erratic Burst";
+            case "BasePursuit":
+                return "Base Pursuit";
             case "Split":
                 return "Split";
             case "ExpansionShoot":
@@ -5368,14 +5362,8 @@ public class GameManager : MonoBehaviour
     {
         switch (raw)
         {
-            case "DirectChase":
-                return new Color(1f, 0.48f, 0.66f, 1f);
-            case "PredictiveIntercept":
-                return new Color(0.48f, 0.94f, 1f, 1f);
-            case "CutoffFlank":
-                return new Color(1f, 0.76f, 0.46f, 1f);
-            case "ErraticBurst":
-                return new Color(1f, 0.38f, 0.52f, 1f);
+            case "BasePursuit":
+                return new Color(0.48f, 0.88f, 1f, 1f);
             case "Split":
                 return new Color(0.74f, 0.76f, 1f, 1f);
             case "ExpansionShoot":
