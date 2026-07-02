@@ -265,6 +265,7 @@ public class CoreGateEventController : MonoBehaviour, IThemedEventStatusProvider
 
         ClearEventObjects();
         eventActive = true;
+        FindAnyObjectByType<GameManager>()?.NotifyThemedMapEventStarted(ActiveThemedEventLabel, ActiveThemedEventHint);
         networkOnline = false;
         networkCompleted = false;
         initialGateBuilt = false;

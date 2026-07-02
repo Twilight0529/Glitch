@@ -477,6 +477,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
 
         eventTimer = 0f;
         eventActive = true;
+        FindAnyObjectByType<GameManager>()?.NotifyThemedMapEventStarted(ActiveThemedEventLabel, ActiveThemedEventHint);
 
         if (forceImmediate)
         {

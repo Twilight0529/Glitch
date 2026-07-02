@@ -76,6 +76,9 @@ public class MainMenuController : MonoBehaviour
     private bool showOperations;
     private bool showCredits;
     private bool showDeveloperMenu;
+    private bool showPlayHub;
+    private bool showArchiveHub;
+    private bool showSystemHub;
     private bool queuedGameplayLoad;
     private int selectedUnlockIndex;
     private int selectedAchievementIndex;
@@ -155,6 +158,9 @@ public class MainMenuController : MonoBehaviour
             showStats = false;
             showOperations = false;
             showCredits = false;
+            showPlayHub = false;
+            showArchiveHub = false;
+            showSystemHub = false;
             GlitchAudioManager.PlayMenuToggle();
         }
     }
@@ -187,6 +193,18 @@ public class MainMenuController : MonoBehaviour
         else if (showCredits)
         {
             DrawCreditsMenu();
+        }
+        else if (showPlayHub)
+        {
+            DrawPlayHub();
+        }
+        else if (showArchiveHub)
+        {
+            DrawArchiveHub();
+        }
+        else if (showSystemHub)
+        {
+            DrawSystemHub();
         }
         else
         {
@@ -260,77 +278,119 @@ public class MainMenuController : MonoBehaviour
             $"{knownZones}/5", rankingScoreStyle);
 
         float commandsY = panel.y + 148f;
-        Rect playRect = new Rect(panel.x + 24f, commandsY, panel.width - 48f, 68f);
-        Rect versusRect = new Rect(panel.x + 24f, commandsY + 76f, panel.width - 48f, 60f);
-        float columnGap = 12f;
-        float compactWidth = (panel.width - 48f - columnGap) * 0.5f;
-        Rect unlocksRect = new Rect(panel.x + 24f, commandsY + 150f, compactWidth, 64f);
-        Rect statsRect = new Rect(unlocksRect.xMax + columnGap, unlocksRect.y, compactWidth, 64f);
-        Rect optionsRect = new Rect(unlocksRect.x, commandsY + 222f, compactWidth, 64f);
-        Rect creditsRect = new Rect(statsRect.x, optionsRect.y, compactWidth, 56f);
-        creditsRect.height = 64f;
-        Rect exitRect = new Rect(panel.x + 24f, commandsY + 302f, panel.width - 48f, 46f);
+        Rect playRect = new Rect(panel.x + 24f, commandsY, panel.width - 48f, 76f);
+        Rect archiveRect = new Rect(panel.x + 24f, commandsY + 88f, panel.width - 48f, 68f);
+        Rect systemRect = new Rect(panel.x + 24f, commandsY + 168f, panel.width - 48f, 68f);
+        Rect statusRect = new Rect(panel.x + 24f, commandsY + 250f, panel.width - 48f, 46f);
 
-        if (DrawMainCommandButton(playRect, "play", "INICIAR CONTENCION", string.Empty, navigationAccent, true))
+        if (DrawMainCommandButton(playRect, "play", "JUGAR", navigationAccent, true))
+        {
+            showPlayHub = true;
+            GlitchAudioManager.PlayMenuConfirm();
+        }
+        if (DrawMainCommandButton(archiveRect, "unlocks", "ARCHIVO", new Color(0.68f, 0.72f, 1f, 1f)))
+        {
+            showArchiveHub = true;
+        }
+        if (DrawMainCommandButton(systemRect, "options", "SISTEMA", new Color(0.92f, 0.58f, 1f, 1f)))
+        {
+            showSystemHub = true;
+        }
+
+        DrawSolidRect(statusRect, new Color(0.035f, 0.055f, 0.095f, 0.72f));
+        DrawSolidRect(new Rect(statusRect.x, statusRect.y, statusRect.width, 2f), new Color(navigationAccent.r, navigationAccent.g, navigationAccent.b, 0.24f));
+        GUI.Label(statusRect, "SELECCIONA UN MODULO", BuildFittedSingleLineStyle(rankingScoreStyle, "SELECCIONA UN MODULO", statusRect.width, statusRect.height, 10));
+
+        DrawRankingPanel(rankingRect, sideBySide);
+    }
+
+    private void DrawPlayHub()
+    {
+        Rect panel = DrawHubShell("JUGAR", new Color(0.48f, 0.90f, 1f, 1f));
+        Rect content = new Rect(panel.x + 26f, panel.y + 112f, panel.width - 52f, panel.height - 164f);
+        Rect singleRect = new Rect(content.x, content.y, content.width, 82f);
+        Rect versusRect = new Rect(content.x, singleRect.yMax + 14f, content.width, 82f);
+
+        if (DrawMainCommandButton(singleRect, "play", "CONTENCION", new Color(0.48f, 0.90f, 1f, 1f), true))
         {
             LocalVersusModeStorage.SelectSinglePlayer();
             selectedOperationIndex = ContainmentOperationStorage.GetDefinitionIndex(ContainmentOperationStorage.SelectedOperationId);
-            showOptions = false;
-            showUnlocks = false;
-            showStats = false;
-            showCredits = false;
             showOperations = true;
             GlitchAudioManager.PlayMenuConfirm();
         }
-        if (DrawMainCommandButton(versusRect, "duel", "DUELO LOCAL", string.Empty, navigationAccent, true))
+        if (DrawMainCommandButton(versusRect, "duel", "DUELO LOCAL", new Color(1f, 0.50f, 0.72f, 1f), true))
         {
             LocalVersusModeStorage.SelectLocalVersus();
-            showOptions = false;
-            showUnlocks = false;
-            showStats = false;
-            showCredits = false;
-            showOperations = false;
             GlitchAudioManager.PlayMenuConfirm();
             StartGameplay();
         }
-        if (DrawMainCommandButton(unlocksRect, "unlocks", "DESBLOQUEOS", string.Empty, navigationAccent))
+
+        DrawHubBackButton(panel, () => showPlayHub = false);
+    }
+
+    private void DrawArchiveHub()
+    {
+        Rect panel = DrawHubShell("ARCHIVO", new Color(0.68f, 0.72f, 1f, 1f));
+        Rect content = new Rect(panel.x + 26f, panel.y + 112f, panel.width - 52f, panel.height - 164f);
+        Rect unlocksRect = new Rect(content.x, content.y, content.width, 82f);
+        Rect statsRect = new Rect(content.x, unlocksRect.yMax + 14f, content.width, 82f);
+
+        if (DrawMainCommandButton(unlocksRect, "unlocks", "DESBLOQUEOS", new Color(0.48f, 0.94f, 1f, 1f)))
         {
-            showOptions = false;
-            showStats = false;
-            showOperations = false;
-            showCredits = false;
             showUnlocks = true;
         }
-        if (DrawMainCommandButton(statsRect, "stats", "ESTADISTICAS", string.Empty, navigationAccent))
+        if (DrawMainCommandButton(statsRect, "stats", "ESTADISTICAS", new Color(0.76f, 0.66f, 1f, 1f)))
         {
-            showOptions = false;
-            showUnlocks = false;
-            showOperations = false;
-            showCredits = false;
             showStats = true;
         }
-        if (DrawMainCommandButton(optionsRect, "options", "OPCIONES", string.Empty, navigationAccent))
+
+        DrawHubBackButton(panel, () => showArchiveHub = false);
+    }
+
+    private void DrawSystemHub()
+    {
+        Rect panel = DrawHubShell("SISTEMA", new Color(0.92f, 0.58f, 1f, 1f));
+        Rect content = new Rect(panel.x + 26f, panel.y + 112f, panel.width - 52f, panel.height - 164f);
+        Rect optionsRect = new Rect(content.x, content.y, content.width, 72f);
+        Rect creditsRect = new Rect(content.x, optionsRect.yMax + 12f, content.width, 72f);
+        Rect exitRect = new Rect(content.x, creditsRect.yMax + 12f, content.width, 58f);
+
+        if (DrawMainCommandButton(optionsRect, "options", "OPCIONES", new Color(0.58f, 0.86f, 1f, 1f)))
         {
-            showUnlocks = false;
-            showStats = false;
-            showOperations = false;
-            showCredits = false;
             showOptions = true;
         }
-        if (DrawMainCommandButton(creditsRect, "credits", "CREDITOS", string.Empty, navigationAccent))
+        if (DrawMainCommandButton(creditsRect, "credits", "CREDITOS", new Color(0.82f, 0.64f, 1f, 1f)))
         {
-            showOptions = false;
-            showUnlocks = false;
-            showStats = false;
-            showOperations = false;
             showCredits = true;
         }
-        if (DrawMainCommandButton(exitRect, "exit", "SALIR", string.Empty, new Color(0.62f, 0.70f, 0.82f, 1f)))
+        if (DrawMainCommandButton(exitRect, "exit", "SALIR", new Color(0.72f, 0.72f, 0.82f, 1f)))
         {
             ExitGame();
         }
 
-        DrawRankingPanel(rankingRect, sideBySide);
+        DrawHubBackButton(panel, () => showSystemHub = false);
+    }
+
+    private Rect DrawHubShell(string title, Color accent)
+    {
+        DrawScreenFade(0.48f);
+        float bob = Mathf.Sin(Time.unscaledTime * 1.15f) * 3f;
+        Rect panel = CenterRect(Mathf.Min(620f, Screen.width - 34f), Mathf.Min(460f, Screen.height - 34f));
+        panel.y += bob;
+        DrawPanel(panel, new Color(0.025f, 0.045f, 0.08f, 0.94f), new Color(accent.r, accent.g, accent.b, 0.58f));
+        DrawPanelFx(panel, accent, 0.12f);
+        DrawGlitchTitle(new Rect(panel.x + 24f, panel.y + 24f, panel.width - 48f, 58f), title, panelTitleStyle, 0.55f);
+        DrawSolidRect(new Rect(panel.x + 26f, panel.y + 98f, panel.width - 52f, 1f), new Color(accent.r, accent.g, accent.b, 0.28f));
+        return panel;
+    }
+
+    private void DrawHubBackButton(Rect panel, System.Action onBack)
+    {
+        Rect backRect = new Rect(panel.x + 26f, panel.yMax - 46f, 138f, 32f);
+        if (DrawAnimatedMenuButton(backRect, "VOLVER"))
+        {
+            onBack?.Invoke();
+        }
     }
 
     // --- Operaciones de contención ------------------------------------------
@@ -2334,7 +2394,6 @@ public class MainMenuController : MonoBehaviour
         Rect rect,
         string icon,
         string title,
-        string subtitle,
         Color accent,
         bool emphasis = false)
     {
@@ -2354,8 +2413,8 @@ public class MainMenuController : MonoBehaviour
         DrawSolidRect(new Rect(rect.x + 12f, rect.yMax - 1f, rect.width - 12f, 1f),
             new Color(accent.r, accent.g, accent.b, 0.18f + hover * 0.28f));
 
-        float codeWidth = emphasis ? 50f : 42f;
-        float iconSize = emphasis ? 28f : 24f;
+        float codeWidth = emphasis ? 66f : 60f;
+        float iconSize = emphasis ? 42f : 36f;
         Rect iconRect = new Rect(
             rect.x + 12f + (codeWidth - iconSize) * 0.5f,
             rect.center.y - iconSize * 0.5f,
@@ -2367,26 +2426,12 @@ public class MainMenuController : MonoBehaviour
         float arrowSpace = 34f;
         GUIStyle commandStyle = new GUIStyle(rankingRowStyle)
         {
-            alignment = string.IsNullOrWhiteSpace(subtitle) ? TextAnchor.MiddleLeft : TextAnchor.LowerLeft,
-            fontSize = emphasis ? 16 : 12,
+            alignment = TextAnchor.MiddleLeft,
+            fontSize = Mathf.RoundToInt((emphasis ? 23f : 20f) * uiScale),
             clipping = TextClipping.Clip
         };
         commandStyle.normal.textColor = Color.Lerp(new Color(0.84f, 0.90f, 1f, 0.92f), Color.white, hover);
-        float titleHeight = string.IsNullOrWhiteSpace(subtitle) ? rect.height : rect.height * 0.56f;
-        GUI.Label(new Rect(textX, rect.y + 2f, rect.xMax - textX - arrowSpace, titleHeight), title, commandStyle);
-
-        if (!string.IsNullOrWhiteSpace(subtitle))
-        {
-            GUIStyle subtitleCommand = new GUIStyle(paragraphStyle)
-            {
-                alignment = TextAnchor.UpperLeft,
-                fontSize = emphasis ? 10 : 9,
-                clipping = TextClipping.Clip
-            };
-            subtitleCommand.normal.textColor = new Color(0.68f, 0.76f, 0.88f, 0.84f);
-            GUI.Label(new Rect(textX, rect.y + titleHeight, rect.xMax - textX - arrowSpace, rect.height - titleHeight - 2f),
-                subtitle, subtitleCommand);
-        }
+        GUI.Label(new Rect(textX, rect.y + 2f, rect.xMax - textX - arrowSpace, rect.height), title, commandStyle);
 
         float arrowX = rect.xMax - 22f - hover * 5f;
         DrawSolidRect(new Rect(arrowX, rect.center.y - 1f, 12f, 2f),

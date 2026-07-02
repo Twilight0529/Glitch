@@ -446,6 +446,7 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
 
         eventTimer = 0f;
         eventActive = true;
+        FindAnyObjectByType<GameManager>()?.NotifyThemedMapEventStarted(ActiveThemedEventLabel, ActiveThemedEventHint);
     }
 
     private void TickEvent()

@@ -413,10 +413,14 @@ public class GameManager : MonoBehaviour
     private float contextTutorialProgress;
     private float contextTutorialTimer;
     private float contextTutorialActionFlash;
+    private int contextInterfacePhase;
     private float previousTimeScaleBeforeContext = 1f;
     private string contextTutorialEventKey;
     private string contextTutorialEventLabel;
     private string contextTutorialEventHint;
+    private string pendingMapEventTutorialKey;
+    private string pendingMapEventTutorialLabel;
+    private string pendingMapEventTutorialHint;
     private bool contextMoveWPressed;
     private bool contextMoveAPressed;
     private bool contextMoveSPressed;
@@ -482,6 +486,7 @@ public class GameManager : MonoBehaviour
         else if (levelType != arenaGenerator.ActiveThemeLabel)
         {
             levelType = arenaGenerator.ActiveThemeLabel;
+            themedEventStatusProvider = FindThemedEventStatusProvider();
         }
 
         if (enemyController == null)
@@ -782,6 +787,18 @@ public class GameManager : MonoBehaviour
     public void NotifyBreachTutorialOpportunity()
     {
         TryOpenContextTutorial(ContextTutorialKind.Breach);
+    }
+
+    public void NotifyThemedMapEventStarted(string eventLabel, string eventHint)
+    {
+        if (string.IsNullOrWhiteSpace(eventLabel))
+        {
+            return;
+        }
+
+        pendingMapEventTutorialLabel = eventLabel;
+        pendingMapEventTutorialHint = eventHint ?? string.Empty;
+        pendingMapEventTutorialKey = $"{levelType}:{NormalizeTutorialIdentity(eventLabel)}";
     }
 
     public void NotifyRuptureEchoTrapSuccess()
@@ -1668,9 +1685,13 @@ public class GameManager : MonoBehaviour
         contextTutorialProgress = 0f;
         contextTutorialTimer = 0f;
         contextTutorialActionFlash = 0f;
+        contextInterfacePhase = 0;
         contextTutorialEventKey = string.Empty;
         contextTutorialEventLabel = string.Empty;
         contextTutorialEventHint = string.Empty;
+        pendingMapEventTutorialKey = string.Empty;
+        pendingMapEventTutorialLabel = string.Empty;
+        pendingMapEventTutorialHint = string.Empty;
         contextMoveWPressed = false;
         contextMoveAPressed = false;
         contextMoveSPressed = false;
@@ -1943,6 +1964,14 @@ public class GameManager : MonoBehaviour
             return;
         }
 
+        if (!contextInterfaceShown && SurvivalTime >= 1f)
+        {
+            if (TryOpenContextTutorial(ContextTutorialKind.Interface))
+            {
+                return;
+            }
+        }
+
         if (!contextParryShown && enemyController != null &&
             enemyController.IsAvailableForCombatTutorial() && SurvivalTime >= 1.2f)
         {
@@ -1978,10 +2007,20 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        if (!contextInterfaceShown && SurvivalTime >= 1f)
+        if (!string.IsNullOrWhiteSpace(pendingMapEventTutorialKey))
         {
-            if (TryOpenContextTutorial(ContextTutorialKind.Interface))
+            string pendingKey = pendingMapEventTutorialKey;
+            if (HasContextTutorialBeenShown(ContextTutorialKind.ArenaEvent, pendingKey))
             {
+                ClearPendingMapEventTutorial();
+            }
+            else if (TryOpenContextTutorial(
+                         ContextTutorialKind.ArenaEvent,
+                         pendingKey,
+                         pendingMapEventTutorialLabel,
+                         pendingMapEventTutorialHint))
+            {
+                ClearPendingMapEventTutorial();
                 return;
             }
         }
@@ -2022,6 +2061,13 @@ public class GameManager : MonoBehaviour
                 TryOpenContextTutorial(ContextTutorialKind.ArenaEvent, eventKey, eventLabel, eventHint);
             }
         }
+    }
+
+    private void ClearPendingMapEventTutorial()
+    {
+        pendingMapEventTutorialKey = string.Empty;
+        pendingMapEventTutorialLabel = string.Empty;
+        pendingMapEventTutorialHint = string.Empty;
     }
 
     private static string NormalizeTutorialIdentity(string value)
@@ -2169,6 +2215,7 @@ public class GameManager : MonoBehaviour
         contextTutorialProgress = 0f;
         contextTutorialTimer = 0f;
         contextTutorialActionFlash = 0.2f;
+        contextInterfacePhase = 0;
         contextTutorialEventKey = eventKey ?? string.Empty;
         bool usesDynamicContext = kind == ContextTutorialKind.ArenaEvent ||
                                   kind == ContextTutorialKind.BossState ||
@@ -2296,9 +2343,9 @@ public class GameManager : MonoBehaviour
             case ContextTutorialKind.Upgrade:
                 return "upgrade";
             case ContextTutorialKind.Interface:
-                return "interface";
+                return "interface_v2";
             case ContextTutorialKind.ArenaEvent:
-                return BuildDynamicContextTutorialKey("arena_event", eventKey);
+                return BuildDynamicContextTutorialKey("arena_event_v2", eventKey);
             case ContextTutorialKind.Breach:
                 return "breach";
             case ContextTutorialKind.BossState:
@@ -2408,6 +2455,25 @@ public class GameManager : MonoBehaviour
                 return;
             }
         }
+        else if (contextTutorialKind == ContextTutorialKind.Interface)
+        {
+            contextTutorialProgress = (contextInterfacePhase + 1f) / GetInterfaceTutorialPhaseCount();
+            if (WasTutorialClickPressed())
+            {
+                contextTutorialActionFlash = 0.22f;
+                contextInterfacePhase++;
+                if (contextInterfacePhase >= GetInterfaceTutorialPhaseCount())
+                {
+                    contextTutorialProgress = 1f;
+                    CloseContextTutorial();
+                }
+                else
+                {
+                    GlitchAudioManager.PlayMenuHover();
+                }
+                return;
+            }
+        }
         else if (IsClickValidatedContextTutorial(contextTutorialKind))
         {
             contextTutorialProgress = Mathf.Clamp01(contextTutorialProgress + dt * 0.65f);
@@ -2469,6 +2535,12 @@ public class GameManager : MonoBehaviour
         EnsureUpgradeStyles();
         EnsureTutorialStyles();
 
+        if (contextTutorialKind == ContextTutorialKind.Interface)
+        {
+            DrawInterfaceTutorialOverlay();
+            return;
+        }
+
         Color accent = GetContextTutorialAccent();
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 3.2f);
         DrawContextFreezeFrameVignette(accent, pulse);
@@ -2504,6 +2576,116 @@ public class GameManager : MonoBehaviour
         Rect footer = new Rect(area.x, area.yMax - 32f, area.width, 30f);
         DrawSolidRect(footer, new Color(0.03f, 0.05f, 0.09f, 0.74f));
         GUI.Label(new Rect(footer.x + 10f, footer.y + 4f, footer.width - 20f, footer.height - 8f), GetContextTutorialFooter(), BuildFittedSingleLineStyle(tutorialHeaderStyle, GetContextTutorialFooter(), footer.width - 20f, footer.height - 8f, 10));
+    }
+
+    private const int InterfaceTutorialPhaseCount = 6;
+
+    private static int GetInterfaceTutorialPhaseCount()
+    {
+        return InterfaceTutorialPhaseCount;
+    }
+
+    private void DrawInterfaceTutorialOverlay()
+    {
+        float s = hudScale;
+        HudTopLayout layout = GetHudTopLayout(s);
+        int phase = Mathf.Clamp(contextInterfacePhase, 0, GetInterfaceTutorialPhaseCount() - 1);
+        Rect target = GetInterfaceTutorialTarget(layout, phase);
+        Color accent = GetInterfaceTutorialPhaseColor(phase);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4.2f);
+        float margin = Mathf.Max(5f, 7f * s);
+        Rect focus = new Rect(target.x - margin, target.y - margin, target.width + margin * 2f, target.height + margin * 2f);
+
+        // Atenua el mundo por fuera del foco, pero deja el HUD real totalmente visible.
+        Color dim = new Color(0.002f, 0.006f, 0.014f, 0.48f);
+        DrawSolidRect(new Rect(0f, 0f, Screen.width, Mathf.Max(0f, focus.y)), dim);
+        DrawSolidRect(new Rect(0f, focus.yMax, Screen.width, Mathf.Max(0f, Screen.height - focus.yMax)), dim);
+        DrawSolidRect(new Rect(0f, focus.y, Mathf.Max(0f, focus.x), focus.height), dim);
+        DrawSolidRect(new Rect(focus.xMax, focus.y, Mathf.Max(0f, Screen.width - focus.xMax), focus.height), dim);
+
+        DrawTutorialFrame(focus, new Color(accent.r, accent.g, accent.b, 0.82f + pulse * 0.16f), Mathf.Max(2f, 3f * s));
+        DrawSolidRect(new Rect(focus.x, focus.yMax + 4f, focus.width, 2f), new Color(accent.r, accent.g, accent.b, 0.62f));
+
+        float panelW = Mathf.Min(680f, Screen.width - 32f);
+        float panelH = Mathf.Clamp(Screen.height * 0.22f, 138f, 184f);
+        Rect panel = new Rect((Screen.width - panelW) * 0.5f, Screen.height - panelH - 18f, panelW, panelH);
+        DrawTutorialPanel(panel, new Color(0.012f, 0.024f, 0.048f, 0.96f), new Color(accent.r, accent.g, accent.b, 0.68f));
+
+        Rect area = new Rect(panel.x + 20f, panel.y + 14f, panel.width - 40f, panel.height - 26f);
+        string step = $"INTERFAZ  {phase + 1}/{GetInterfaceTutorialPhaseCount()}";
+        string title = GetInterfaceTutorialPhaseTitle(phase);
+        string bodyText = GetInterfaceTutorialPhaseBody(phase);
+        GUI.Label(new Rect(area.x, area.y, area.width, 18f), step,
+            BuildFittedSingleLineStyle(tutorialTinyStyle, step, area.width, 18f, 9));
+        GUI.Label(new Rect(area.x, area.y + 20f, area.width, 34f), title,
+            BuildFittedSingleLineStyle(upgradeTitleStyle, title, area.width, 34f, 16));
+
+        GUIStyle bodyStyle = new GUIStyle(tutorialBodyStyle)
+        {
+            fontSize = Mathf.Max(12, Mathf.RoundToInt(14f * hudScale)),
+            alignment = TextAnchor.UpperLeft,
+            clipping = TextClipping.Clip,
+            wordWrap = true
+        };
+        Rect body = new Rect(area.x, area.y + 58f, area.width, Mathf.Max(38f, area.height - 92f));
+        GUI.Label(body, bodyText, BuildFittedWrappedStyle(bodyStyle, bodyText, body.width, body.height, 10));
+
+        string footer = phase == GetInterfaceTutorialPhaseCount() - 1 ? "CLICK PARA TERMINAR" : "CLICK PARA CONTINUAR";
+        Rect footerRect = new Rect(area.x, area.yMax - 26f, area.width, 24f);
+        DrawSolidRect(footerRect, new Color(accent.r, accent.g, accent.b, 0.14f));
+        GUI.Label(footerRect, footer, BuildFittedSingleLineStyle(tutorialHeaderStyle, footer, footerRect.width, footerRect.height, 10));
+    }
+
+    private static Rect GetInterfaceTutorialTarget(HudTopLayout layout, int phase)
+    {
+        switch (phase)
+        {
+            case 0: return new Rect(layout.metrics.x, layout.metrics.y, layout.metrics.width * 0.5f, layout.metrics.height);
+            case 1: return new Rect(layout.metrics.center.x, layout.metrics.y, layout.metrics.width * 0.5f, layout.metrics.height);
+            case 2: return layout.hijack;
+            case 3: return layout.dash;
+            case 4: return layout.firewall;
+            default: return new Rect(layout.sector.x, layout.sector.y, layout.focus.xMax - layout.sector.x, layout.sector.height);
+        }
+    }
+
+    private static string GetInterfaceTutorialPhaseTitle(int phase)
+    {
+        switch (phase)
+        {
+            case 0: return "TIEMPO DE SUPERVIVENCIA";
+            case 1: return "PUNTAJE";
+            case 2: return "FIREWALL PARRY";
+            case 3: return "DASH FANTASMA";
+            case 4: return "CARGA FIREWALL";
+            default: return "SECTOR Y ESTADO";
+        }
+    }
+
+    private static string GetInterfaceTutorialPhaseBody(int phase)
+    {
+        switch (phase)
+        {
+            case 0: return "El reloj mide cuanto tiempo llevas sobreviviendo. La dificultad y las amenazas aumentan a medida que avanza.";
+            case 1: return "El puntaje aumenta con el tiempo, los datos recogidos y los objetivos completados. Al finalizar la run se registra en el ranking.";
+            case 2: return "Esta barra muestra la recarga del Parry. Cuando indica ESPACIO / E, podes rechazar el contacto y reflejar proyectiles.";
+            case 3: return "La barra de Dash muestra su recarga. Cuando aparece SHIFT, el Dash Fantasma esta listo para atravesar una amenaza.";
+            case 4: return "Las acciones defensivas y los pickups cargan Firewall. Al llegar al maximo, usa Q / R para liberar el Burst.";
+            default: return "El sector actual y el estado de la anomalia aparecen aqui. Los contratos y eventos temporales reutilizan esta zona para mostrar su objetivo.";
+        }
+    }
+
+    private static Color GetInterfaceTutorialPhaseColor(int phase)
+    {
+        switch (phase)
+        {
+            case 1: return new Color(0.62f, 0.82f, 1f, 1f);
+            case 2: return new Color(1f, 0.62f, 0.78f, 1f);
+            case 3: return new Color(0.55f, 1f, 0.94f, 1f);
+            case 4: return new Color(1f, 0.84f, 0.42f, 1f);
+            case 5: return new Color(0.76f, 0.66f, 1f, 1f);
+            default: return new Color(0.46f, 0.88f, 1f, 1f);
+        }
     }
 
     private void DrawContextFreezeFrameVignette(Color accent, float pulse)
@@ -4010,7 +4192,6 @@ public class GameManager : MonoBehaviour
         string warning = chaosDirector != null ? chaosDirector.ActiveWarningLabel : string.Empty;
         if (string.IsNullOrWhiteSpace(warning))
         {
-            DrawThemedEventHintOverlay();
             return;
         }
 
@@ -4026,25 +4207,6 @@ public class GameManager : MonoBehaviour
             new Color(1f, 0.56f, 0.66f, Mathf.Clamp01(alpha)),
             new Color(0.90f, 0.96f, 1f, 0.28f + pulse * 0.12f),
             new Color(1f, 0.56f, 0.66f, Mathf.Clamp01(alpha)));
-    }
-
-    private void DrawThemedEventHintOverlay()
-    {
-        string hint = GetThemedEventHint();
-        if (string.IsNullOrWhiteSpace(hint))
-        {
-            return;
-        }
-
-        EnsureWarningStyle();
-        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 6.8f);
-        DrawEventAlertPanel(
-            hint.ToUpperInvariant(),
-            Screen.height * 0.18f,
-            new Color(0.02f, 0.04f, 0.08f, 0.44f + pulse * 0.08f),
-            new Color(0.42f, 0.96f, 1f, 0.58f + pulse * 0.18f),
-            new Color(1f, 0.46f, 0.78f, 0.38f + pulse * 0.12f),
-            new Color(0.88f, 0.97f, 1f, Mathf.Lerp(0.72f, 0.96f, pulse)));
     }
 
     private void DrawEventAlertPanel(string text, float y, Color fill, Color topLine, Color bottomLine, Color textColor)
@@ -5405,7 +5567,14 @@ public class GameManager : MonoBehaviour
         DrawOperationHud(s);
         DrawGhostDashDock(s);
         DrawFirewallChargeDock(s);
-        DrawStateHijackDock(s);
+        if (IsStateHijackUnlocked)
+        {
+            DrawStateHijackDock(s);
+        }
+        else
+        {
+            DrawParryDock(s);
+        }
         DrawAchievementToast(s);
         DrawStateHijackNotice(s);
 
@@ -5680,6 +5849,38 @@ public class GameManager : MonoBehaviour
         string value = ready ? "SHIFT" : $"{Mathf.RoundToInt(normalized * 100f)}%";
         Rect valueRect = new Rect(bar.xMax + (5f * s), dock.y + (8f * s), valueWidth, 26f * s);
         GUI.Label(valueRect, value, BuildFittedSingleLineStyle(hudChipStyle, value, valueRect.width, valueRect.height, Mathf.RoundToInt(8f * s)));
+    }
+
+    private void DrawParryDock(float s)
+    {
+        if (playerController == null)
+        {
+            return;
+        }
+
+        bool ready = playerController.IsParryReady;
+        float normalized = playerController.ParryCooldownNormalized;
+        HudTopLayout layout = GetHudTopLayout(s);
+        Rect panel = new Rect(
+            layout.hijack.x + (8f * s),
+            layout.hijack.y + (7f * s),
+            layout.hijack.width - (16f * s),
+            layout.hijack.height - (17f * s));
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (ready ? 8.5f : 3.2f));
+        Color accent = ready
+            ? Color.Lerp(new Color(1f, 0.58f, 0.76f, 1f), new Color(1f, 0.88f, 0.94f, 1f), pulse)
+            : new Color(0.58f, 0.34f, 0.52f, 1f);
+
+        DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, ready ? 0.72f : 0.28f));
+        Rect icon = new Rect(panel.x + (4f * s), panel.y + (10f * s), 22f * s, 22f * s);
+        DrawHudMetricIcon(icon, "parry", accent);
+        float valueWidth = Mathf.Min(58f * s, panel.width * 0.38f);
+        Rect bar = new Rect(icon.xMax + (7f * s), panel.y + (15f * s), Mathf.Max(20f * s, panel.width - icon.width - valueWidth - (22f * s)), 10f * s);
+        DrawSolidRect(bar, new Color(0.04f, 0.06f, 0.10f, 0.78f));
+        DrawSolidRect(new Rect(bar.x, bar.y, bar.width * normalized, bar.height), new Color(accent.r, accent.g, accent.b, ready ? 0.92f : 0.64f));
+        string value = ready ? "ESP / E" : $"{Mathf.RoundToInt(normalized * 100f)}%";
+        Rect valueRect = new Rect(bar.xMax + (5f * s), panel.y + (8f * s), valueWidth, 26f * s);
+        GUI.Label(valueRect, value, BuildFittedSingleLineStyle(hudChipStyle, value, valueRect.width, valueRect.height, Mathf.RoundToInt(7f * s)));
     }
 
     private void DrawFirewallChargeDock(float s)
@@ -6019,6 +6220,17 @@ public class GameManager : MonoBehaviour
             return;
         }
 
+        if (icon == "parry")
+        {
+            DrawSolidRect(new Rect(rect.center.x - unit, rect.y + unit, unit * 2f, rect.height - unit * 2f), color);
+            DrawSolidRect(new Rect(rect.x + unit, rect.center.y - unit, rect.width - unit * 2f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.y + unit * 2f, unit * 2f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.xMax - unit * 4f, rect.y + unit * 2f, unit * 2f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.x + unit * 2f, rect.yMax - unit * 4f, unit * 2f, unit * 2f), color);
+            DrawSolidRect(new Rect(rect.xMax - unit * 4f, rect.yMax - unit * 4f, unit * 2f, unit * 2f), color);
+            return;
+        }
+
         float frameInset = unit * 1.5f;
         DrawSolidRect(new Rect(rect.x + frameInset, rect.y, rect.width - frameInset * 2f, unit), color);
         DrawSolidRect(new Rect(rect.x + frameInset, rect.yMax - unit, rect.width - frameInset * 2f, unit), color);
@@ -6052,6 +6264,34 @@ public class GameManager : MonoBehaviour
             style.fontSize = size;
             Vector2 measured = style.CalcSize(content);
             if (measured.x <= width && measured.y <= height)
+            {
+                return style;
+            }
+        }
+
+        style.fontSize = minSize;
+        return style;
+    }
+
+    private static GUIStyle BuildFittedWrappedStyle(GUIStyle baseStyle, string text, float width, float height, int minSize)
+    {
+        if (baseStyle == null || string.IsNullOrEmpty(text))
+        {
+            return baseStyle;
+        }
+
+        GUIContent content = new GUIContent(text);
+        GUIStyle style = new GUIStyle(baseStyle)
+        {
+            wordWrap = true,
+            clipping = TextClipping.Clip
+        };
+
+        int preferred = Mathf.Max(minSize, baseStyle.fontSize);
+        for (int size = preferred; size >= minSize; size--)
+        {
+            style.fontSize = size;
+            if (style.CalcHeight(content, Mathf.Max(1f, width)) <= height)
             {
                 return style;
             }

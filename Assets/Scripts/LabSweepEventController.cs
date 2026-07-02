@@ -477,6 +477,7 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
 
         eventTimer = 0f;
         eventActive = true;
+        FindAnyObjectByType<GameManager>()?.NotifyThemedMapEventStarted(ActiveThemedEventLabel, ActiveThemedEventHint);
     }
 
     private void TickEvent()

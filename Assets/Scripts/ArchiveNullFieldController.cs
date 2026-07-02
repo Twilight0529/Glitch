@@ -215,6 +215,7 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
 
         ClearAnchors();
         eventActive = true;
+        FindAnyObjectByType<GameManager>()?.NotifyThemedMapEventStarted(ActiveThemedEventLabel, ActiveThemedEventHint);
         eventTimer = 0f;
         int count = Mathf.Max(2, anchorCount);
         float radiusX = arena.ArenaWidth * 0.30f;
