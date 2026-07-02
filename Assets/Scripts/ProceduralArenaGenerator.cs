@@ -631,6 +631,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
         ConfigureThemeMapEventController("StorageSurgeEventController", activeTheme == ArenaTheme.StorageBay, obstaclesRoot, dynamicRoot);
         ConfigureThemeMapEventController("StorageAmbientCraneController", activeTheme == ArenaTheme.StorageBay, obstaclesRoot, dynamicRoot);
         ConfigureThemeMapEventController("CoreGateEventController", activeTheme == ArenaTheme.DataCore, obstaclesRoot, dynamicRoot);
+        ConfigureThemeMapEventController("CoreSpikeEventController", activeTheme == ArenaTheme.DataCore, obstaclesRoot, dynamicRoot);
         ConfigureThemeMapEventController("ArchiveNullFieldController", activeTheme == ArenaTheme.NullArchive, obstaclesRoot, dynamicRoot);
     }
 

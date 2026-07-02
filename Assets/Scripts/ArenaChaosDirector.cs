@@ -16,10 +16,12 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private float shieldDuration = 5.5f;
     [SerializeField, Range(0f, 1f)] private float shieldPickupChance = 0.35f;
     [SerializeField, Range(0f, 1f)] private float compactPickupChance = 0.24f;
+    [SerializeField, Range(0f, 1f)] private float phaseDashPickupChance = 0.20f;
     [SerializeField] private float compactDuration = 6.5f;
     [SerializeField, Range(0.35f, 0.88f)] private float compactScaleMultiplier = 0.58f;
     [SerializeField, Range(0.25f, 1f)] private float compactMoveMultiplier = 0.76f;
     [SerializeField] private int powerupScorePoints = 3;
+    [SerializeField] private float phaseDashPowerupDuration = 7f;
 
     [Header("Score Pickups")]
     [SerializeField] private bool enableScorePickups = true;
@@ -626,7 +628,7 @@ public class ArenaChaosDirector : MonoBehaviour
         col.radius = 0.34f;
 
         ArenaPowerupPickup pickup = go.AddComponent<ArenaPowerupPickup>();
-        pickup.Configure(this, kind, powerupLifetime, speedBoostMultiplier, speedBoostDuration, shieldDuration, compactDuration, compactScaleMultiplier, compactMoveMultiplier);
+        pickup.Configure(this, kind, powerupLifetime, speedBoostMultiplier, speedBoostDuration, shieldDuration, compactDuration, compactScaleMultiplier, compactMoveMultiplier, phaseDashPowerupDuration);
         activePickup = pickup;
 
         GlitchAudioManager.PlayPowerupSpawn(position);
@@ -637,12 +639,14 @@ public class ArenaChaosDirector : MonoBehaviour
     {
         float shieldChance = Mathf.Clamp01(shieldPickupChance);
         float compactChance = Mathf.Clamp01(compactPickupChance);
-        float totalSpecialChance = shieldChance + compactChance;
+        float phaseDashChance = Mathf.Clamp01(phaseDashPickupChance);
+        float totalSpecialChance = shieldChance + compactChance + phaseDashChance;
         if (totalSpecialChance > 0.92f)
         {
             float scale = 0.92f / totalSpecialChance;
             shieldChance *= scale;
             compactChance *= scale;
+            phaseDashChance *= scale;
         }
 
         float roll = Random.value;
@@ -656,6 +660,11 @@ public class ArenaChaosDirector : MonoBehaviour
             return ArenaPowerupPickup.PickupKind.Compact;
         }
 
+        if (roll < shieldChance + compactChance + phaseDashChance)
+        {
+            return ArenaPowerupPickup.PickupKind.PhaseDash;
+        }
+
         return ArenaPowerupPickup.PickupKind.SpeedBurst;
     }
 
@@ -667,6 +676,8 @@ public class ArenaChaosDirector : MonoBehaviour
                 return ShieldSpriteProvider.Get();
             case ArenaPowerupPickup.PickupKind.Compact:
                 return CompactSpriteProvider.Get();
+            case ArenaPowerupPickup.PickupKind.PhaseDash:
+                return PhaseDashSpriteProvider.Get();
             default:
                 return LightningSpriteProvider.Get();
         }
@@ -680,6 +691,8 @@ public class ArenaChaosDirector : MonoBehaviour
                 return "Shield Materialized";
             case ArenaPowerupPickup.PickupKind.Compact:
                 return "Compact Core Materialized";
+            case ArenaPowerupPickup.PickupKind.PhaseDash:
+                return "Phase Dash Materialized";
             default:
                 return "Speed Core Materialized";
         }
@@ -1303,7 +1316,7 @@ public class ArenaChaosDirector : MonoBehaviour
             return;
         }
 
-        Vector2 playerPosition = player != null ? player.GetPosition() : transform.position;
+        Vector2 playerPosition = player != null ? player.GetPosition() : (Vector2)transform.position;
         Vector2 playerForward = player != null ? player.CurrentVelocity : Vector2.zero;
         Vector2 preferredAwayDirection = pendingBreachEnemyEntryDirection;
         if (playerForward.sqrMagnitude > 0.16f)

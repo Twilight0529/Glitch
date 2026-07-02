@@ -1106,7 +1106,9 @@ public class EnemyLevelThreeStateController : MonoBehaviour
     {
         GameObject labelObject = new GameObject("LevelThreeStateLabel");
         labelObject.transform.SetParent(visualRoot.transform, false);
-        labelObject.transform.position = owner != null ? owner.GetCurrentPosition() + Vector2.up * 1.15f : transform.position;
+        labelObject.transform.position = owner != null
+            ? (Vector3)(owner.GetCurrentPosition() + Vector2.up * 1.15f)
+            : transform.position;
         stateLabel = labelObject.AddComponent<TextMesh>();
         stateLabel.text = text;
         stateLabel.anchor = TextAnchor.MiddleCenter;

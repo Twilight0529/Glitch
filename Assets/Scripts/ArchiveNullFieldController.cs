@@ -280,7 +280,7 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
             return;
         }
 
-        Vector2 center = centerTransform != null ? centerTransform.position : Vector2.zero;
+        Vector2 center = centerTransform != null ? (Vector2)centerTransform.position : Vector2.zero;
         float margin = Mathf.Max(anchorWallMargin, influenceRadius * 0.42f);
         float minX = center.x - arena.ArenaWidth * 0.5f + margin;
         float maxX = center.x + arena.ArenaWidth * 0.5f - margin;
@@ -633,7 +633,7 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
 
     private Vector2 ClampPointToArena(Vector2 point, float margin)
     {
-        Vector2 center = centerTransform != null ? centerTransform.position : Vector2.zero;
+        Vector2 center = centerTransform != null ? (Vector2)centerTransform.position : Vector2.zero;
         point.x = Mathf.Clamp(
             point.x,
             center.x - arena.ArenaWidth * 0.5f + margin,

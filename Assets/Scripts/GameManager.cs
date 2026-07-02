@@ -2870,7 +2870,7 @@ public class GameManager : MonoBehaviour
             case ContextTutorialKind.ScorePickup:
                 return "Los datos suman puntaje, cargan Firewall y alimentan la progresion meta. En runs largas, recolectar bien abre mas opciones.";
             case ContextTutorialKind.Powerup:
-                return "Los powerups cambian tu estado temporal. El rayo acelera, el escudo absorbe un golpe y el nucleo compacto te achica, aunque reduce tu velocidad.";
+                return "Los powerups cambian tu estado temporal y el HUD muestra cuanto les queda. El rayo acelera, el escudo absorbe un golpe, el nucleo compacto te achica y Phase Dash permite atravesar paredes mientras haces dash.";
             case ContextTutorialKind.Upgrade:
                 return "Las alteraciones cambian tu build durante la run. Mira categoria, impacto y rareza: no siempre gana la mejora mas ofensiva.";
             case ContextTutorialKind.Interface:
@@ -5553,6 +5553,7 @@ public class GameManager : MonoBehaviour
 
         DrawRunContractHud(s);
         DrawOperationHud(s);
+        DrawPowerupDurationHud(s);
         DrawGhostDashDock(s);
         DrawFirewallChargeDock(s);
         if (IsStateHijackUnlocked)
@@ -5804,6 +5805,72 @@ public class GameManager : MonoBehaviour
         Rect progressRect = new Rect(icon.xMax + (5f * s), panel.y, panel.width - (24f * s), panel.height);
         GUI.Label(progressRect, progress,
             BuildFittedSingleLineStyle(hudLabelStyle, progress, progressRect.width, progressRect.height, Mathf.RoundToInt(7f * s)));
+    }
+
+    private void DrawPowerupDurationHud(float s)
+    {
+        if (playerController == null || playerController.ActivePowerupLabel == "None")
+        {
+            return;
+        }
+
+        int count = 0;
+        if (playerController.HasSpeedBoost) count++;
+        if (playerController.HasShield) count++;
+        if (playerController.HasCompactMode) count++;
+        if (playerController.HasPhaseDashPowerup) count++;
+        if (count == 0) return;
+
+        Rect arenaRect = GetHudArenaScreenRect();
+        float width = Mathf.Clamp(190f * s, 170f, arenaRect.width * 0.28f);
+        float rowHeight = 27f * s;
+        Rect panel = new Rect(arenaRect.xMax - width - (10f * s), arenaRect.y + (10f * s), width, rowHeight * count + (8f * s));
+        DrawSolidRect(panel, new Color(0.008f, 0.016f, 0.034f, 0.86f));
+        DrawSolidRect(new Rect(panel.x, panel.y, 2f * s, panel.height), new Color(0.70f, 0.58f, 1f, 0.74f));
+
+        float y = panel.y + (4f * s);
+        if (playerController.HasSpeedBoost)
+        {
+            DrawPowerupTimerRow(panel, ref y, "VELOCIDAD", playerController.SpeedBoostTimeRemaining,
+                playerController.SpeedBoostTimeNormalized, LightningSpriteProvider.Get(), new Color(0.46f, 0.96f, 1f, 1f), s);
+        }
+        if (playerController.HasShield)
+        {
+            DrawPowerupTimerRow(panel, ref y, "ESCUDO", playerController.ShieldTimeRemaining,
+                playerController.ShieldTimeNormalized, ShieldSpriteProvider.Get(), new Color(1f, 0.70f, 0.90f, 1f), s);
+        }
+        if (playerController.HasCompactMode)
+        {
+            DrawPowerupTimerRow(panel, ref y, "COMPACTO", playerController.CompactTimeRemaining,
+                playerController.CompactTimeNormalized, CompactSpriteProvider.Get(), new Color(0.74f, 1f, 0.70f, 1f), s);
+        }
+        if (playerController.HasPhaseDashPowerup)
+        {
+            DrawPowerupTimerRow(panel, ref y, "PHASE DASH", playerController.PhaseDashTimeRemaining,
+                playerController.PhaseDashTimeNormalized, PhaseDashSpriteProvider.Get(), new Color(0.78f, 0.58f, 1f, 1f), s);
+        }
+    }
+
+    private void DrawPowerupTimerRow(Rect panel, ref float y, string label, float remaining, float normalized, Sprite iconSprite, Color accent, float s)
+    {
+        float rowHeight = 27f * s;
+        Rect icon = new Rect(panel.x + (9f * s), y + (3f * s), 18f * s, 18f * s);
+        Color previous = GUI.color;
+        GUI.color = accent;
+        if (iconSprite != null && iconSprite.texture != null)
+        {
+            GUI.DrawTexture(icon, iconSprite.texture, ScaleMode.ScaleToFit, true);
+        }
+        GUI.color = previous;
+
+        string value = $"{label}  {remaining:0.0}s";
+        Rect text = new Rect(icon.xMax + (7f * s), y, panel.xMax - icon.xMax - (13f * s), 18f * s);
+        GUI.Label(text, value, BuildFittedSingleLineStyle(hudChipStyle, value, text.width, text.height, Mathf.RoundToInt(8f * s)));
+
+        Rect bar = new Rect(text.x, y + (19f * s), text.width, 3f * s);
+        DrawSolidRect(bar, new Color(0.06f, 0.08f, 0.13f, 0.94f));
+        DrawSolidRect(new Rect(bar.x, bar.y, bar.width * Mathf.Clamp01(normalized), bar.height), new Color(accent.r, accent.g, accent.b, 0.90f));
+        y += rowHeight;
     }
 
     private void DrawGhostDashDock(float s)

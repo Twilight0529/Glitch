@@ -9,7 +9,8 @@ public class ArenaPowerupPickup : MonoBehaviour
     {
         SpeedBurst,
         Shield,
-        Compact
+        Compact,
+        PhaseDash
     }
 
     [SerializeField] private float bobAmplitude = 0.14f;
@@ -31,6 +32,7 @@ public class ArenaPowerupPickup : MonoBehaviour
     private float compactDuration;
     private float compactScaleMultiplier;
     private float compactMoveMultiplier;
+    private float phaseDashDuration;
     private Vector3 basePosition;
     private SpriteRenderer spriteRenderer;
     private SpriteRenderer auraRenderer;
@@ -57,7 +59,8 @@ public class ArenaPowerupPickup : MonoBehaviour
         float shieldSeconds,
         float compactSeconds,
         float compactScale,
-        float compactMove)
+        float compactMove,
+        float phaseDashSeconds)
     {
         owner = ownerController;
         kind = pickupKind;
@@ -68,6 +71,7 @@ public class ArenaPowerupPickup : MonoBehaviour
         compactDuration = Mathf.Max(0.1f, compactSeconds);
         compactScaleMultiplier = Mathf.Clamp(compactScale, 0.35f, 0.88f);
         compactMoveMultiplier = Mathf.Clamp(compactMove, 0.25f, 1f);
+        phaseDashDuration = Mathf.Max(0.5f, phaseDashSeconds);
     }
 
     private void Awake()
@@ -118,6 +122,12 @@ public class ArenaPowerupPickup : MonoBehaviour
                 spriteRenderer.size = Vector2.one * 0.62f;
                 spriteRenderer.color = new Color(0.74f, 1f, 0.70f, 0.96f);
                 break;
+            case PickupKind.PhaseDash:
+                spriteRenderer.sprite = PhaseDashSpriteProvider.Get();
+                spriteRenderer.drawMode = SpriteDrawMode.Simple;
+                spriteRenderer.size = Vector2.one * 0.62f;
+                spriteRenderer.color = new Color(0.76f, 0.58f, 1f, 0.96f);
+                break;
             default:
                 spriteRenderer.sprite = LightningSpriteProvider.Get();
                 spriteRenderer.drawMode = SpriteDrawMode.Simple;
@@ -147,6 +157,10 @@ public class ArenaPowerupPickup : MonoBehaviour
         else if (kind == PickupKind.Compact)
         {
             player.ApplyCompactMode(compactDuration, compactScaleMultiplier, compactMoveMultiplier);
+        }
+        else if (kind == PickupKind.PhaseDash)
+        {
+            player.ApplyPhaseDashPowerup(phaseDashDuration);
         }
         else
         {
@@ -234,6 +248,8 @@ public class ArenaPowerupPickup : MonoBehaviour
                 return new Color(1f, 0.70f, 0.90f, 1f);
             case PickupKind.Compact:
                 return new Color(0.74f, 1f, 0.70f, 1f);
+            case PickupKind.PhaseDash:
+                return new Color(0.78f, 0.58f, 1f, 1f);
             default:
                 return new Color(0.54f, 0.96f, 1f, 1f);
         }

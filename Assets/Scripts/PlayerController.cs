@@ -133,6 +133,13 @@ public class PlayerController : MonoBehaviour
     private float movementSlowTimer;
     private float movementSlowMultiplier = 1f;
     private float shieldTimer;
+    private float shieldDisplayDuration = 1f;
+    private float speedBoostDisplayDuration = 1f;
+    private float compactDisplayDuration = 1f;
+    private float phaseDashDisplayDuration = 1f;
+    private float phaseDashPowerupTimer;
+    private bool poweredDashPhasing;
+    private bool colliderTriggerBeforePhaseDash;
     private float shieldDurationMultiplier = 1f;
     private float externalDisplacementUpgradeMultiplier = 1f;
     private float movementSlowDurationUpgradeMultiplier = 1f;
@@ -183,6 +190,14 @@ public class PlayerController : MonoBehaviour
     public bool HasSpeedBoost => speedBoostTimer > 0f;
     public bool HasMovementSlow => movementSlowTimer > 0f;
     public bool HasCompactMode => compactTimer > 0f;
+    public float ShieldTimeRemaining => Mathf.Max(0f, shieldTimer);
+    public float SpeedBoostTimeRemaining => Mathf.Max(0f, speedBoostTimer);
+    public float CompactTimeRemaining => Mathf.Max(0f, compactTimer);
+    public float PhaseDashTimeRemaining => Mathf.Max(0f, phaseDashPowerupTimer);
+    public float ShieldTimeNormalized => Mathf.Clamp01(shieldTimer / Mathf.Max(0.1f, shieldDisplayDuration));
+    public float SpeedBoostTimeNormalized => Mathf.Clamp01(speedBoostTimer / Mathf.Max(0.1f, speedBoostDisplayDuration));
+    public float CompactTimeNormalized => Mathf.Clamp01(compactTimer / Mathf.Max(0.1f, compactDisplayDuration));
+    public float PhaseDashTimeNormalized => Mathf.Clamp01(phaseDashPowerupTimer / Mathf.Max(0.1f, phaseDashDisplayDuration));
     public bool IsParryActive => parryTimer > 0f;
     public bool IsParryReady => parryCooldownTimer <= 0f && HasLocalVersusParryCharge;
     public float ParryCooldownNormalized => IsParryReady
@@ -232,6 +247,10 @@ public class PlayerController : MonoBehaviour
             if (HasCompactMode)
             {
                 active.Add("Compact");
+            }
+            if (HasPhaseDashPowerup)
+            {
+                active.Add("Phase Dash");
             }
             if (HasMovementSlow)
             {
@@ -843,11 +862,13 @@ public class PlayerController : MonoBehaviour
     {
         speedBoostMultiplier = Mathf.Clamp(multiplier, 1f, Mathf.Max(1f, maxBoostMultiplier));
         speedBoostTimer = Mathf.Max(speedBoostTimer, Mathf.Max(0.1f, duration));
+        speedBoostDisplayDuration = Mathf.Max(speedBoostDisplayDuration, speedBoostTimer);
     }
 
     public void ApplyShield(float duration)
     {
         shieldTimer = Mathf.Max(shieldTimer, Mathf.Max(0.1f, duration * shieldDurationMultiplier));
+        shieldDisplayDuration = Mathf.Max(shieldDisplayDuration, shieldTimer);
     }
 
     public void ApplyCompactMode(float duration, float scaleMultiplier, float moveMultiplier)
@@ -860,8 +881,23 @@ public class PlayerController : MonoBehaviour
         compactScaleMultiplier = Mathf.Clamp(scaleMultiplier, 0.35f, 0.88f);
         compactMoveMultiplier = Mathf.Clamp(moveMultiplier, 0.25f, 1f);
         compactTimer = Mathf.Max(compactTimer, Mathf.Max(0.25f, duration));
+        compactDisplayDuration = Mathf.Max(compactDisplayDuration, compactTimer);
         compactPulsePhase = Random.Range(0f, Mathf.PI * 2f);
         SpawnCompactModeFx();
+    }
+
+    public bool HasPhaseDashPowerup => phaseDashPowerupTimer > 0f;
+    public bool IsIntangibleDashActive => poweredDashPhasing && ghostDashTimer > 0f;
+
+    public void ApplyPhaseDashPowerup(float duration)
+    {
+        if (deathSequenceActive || breachConsumptionActive)
+        {
+            return;
+        }
+
+        phaseDashPowerupTimer = Mathf.Max(phaseDashPowerupTimer, Mathf.Max(0.5f, duration));
+        phaseDashDisplayDuration = Mathf.Max(phaseDashDisplayDuration, phaseDashPowerupTimer);
     }
 
     public void ApplyMovementSlow(float multiplier, float duration)
@@ -896,6 +932,7 @@ public class PlayerController : MonoBehaviour
         }
 
         shieldTimer = 0f;
+        shieldDisplayDuration = 1f;
         SpawnShieldBreakFx();
         GlitchAudioManager.PlayShieldBreak(transform.position);
         return true;
@@ -1223,6 +1260,7 @@ public class PlayerController : MonoBehaviour
             {
                 speedBoostTimer = 0f;
                 speedBoostMultiplier = 1f;
+                speedBoostDisplayDuration = 1f;
             }
         }
 
@@ -1232,6 +1270,7 @@ public class PlayerController : MonoBehaviour
             if (shieldTimer < 0f)
             {
                 shieldTimer = 0f;
+                shieldDisplayDuration = 1f;
             }
         }
 
@@ -1251,6 +1290,18 @@ public class PlayerController : MonoBehaviour
             if (compactTimer < 0f)
             {
                 compactTimer = 0f;
+                compactDisplayDuration = 1f;
+            }
+        }
+
+        if (phaseDashPowerupTimer > 0f)
+        {
+            phaseDashPowerupTimer -= Time.deltaTime;
+            if (phaseDashPowerupTimer <= 0f)
+            {
+                phaseDashPowerupTimer = 0f;
+                phaseDashDisplayDuration = 1f;
+                EndPoweredDashPhasing();
             }
         }
 
@@ -1277,6 +1328,7 @@ public class PlayerController : MonoBehaviour
     {
         if (ghostDashTimer <= 0f)
         {
+            EndPoweredDashPhasing();
             return;
         }
 
@@ -1284,6 +1336,7 @@ public class PlayerController : MonoBehaviour
         if (ghostDashTimer <= 0f)
         {
             ghostDashTimer = 0f;
+            EndPoweredDashPhasing();
         }
     }
 
@@ -1306,7 +1359,34 @@ public class PlayerController : MonoBehaviour
         ghostDashCooldownTimer = Mathf.Max(0.1f, ghostDashCooldown);
         SpawnGhostDashStartFx(ghostDashDirection);
         GlitchAudioManager.PlayGhostDash(transform.position);
+        BeginPoweredDashPhasing();
         return true;
+    }
+
+    private void BeginPoweredDashPhasing()
+    {
+        if (!HasPhaseDashPowerup || bodyCollider == null || poweredDashPhasing)
+        {
+            return;
+        }
+
+        colliderTriggerBeforePhaseDash = bodyCollider.isTrigger;
+        bodyCollider.isTrigger = true;
+        poweredDashPhasing = true;
+    }
+
+    private void EndPoweredDashPhasing()
+    {
+        if (!poweredDashPhasing)
+        {
+            return;
+        }
+
+        if (bodyCollider != null)
+        {
+            bodyCollider.isTrigger = colliderTriggerBeforePhaseDash;
+        }
+        poweredDashPhasing = false;
     }
 
     private void UpdateParryTimers()
@@ -1825,6 +1905,8 @@ public class PlayerController : MonoBehaviour
         movementSlowTimer = 0f;
         movementSlowMultiplier = 1f;
         compactTimer = 0f;
+        phaseDashPowerupTimer = 0f;
+        EndPoweredDashPhasing();
         shieldTimer = 0f;
         parryTimer = 0f;
         parryCooldownTimer = 0f;
