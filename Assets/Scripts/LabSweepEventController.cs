@@ -69,11 +69,11 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
     [SerializeField] private float sterilizationEnemyBoostCooldown = 0.33f;
     [SerializeField] private float sterilizationHazardPulseSpeed = 2.4f;
     [SerializeField, Range(0.2f, 0.95f)] private float sterilizationHazardDutyCycle = 0.66f;
-    [SerializeField] private Color sterilizationColor = new Color(0.98f, 0.57f, 0.63f, 0.68f);
-    [SerializeField] private Color sterilizationTelegraphColor = new Color(1f, 0.87f, 0.55f, 0.45f);
+    [SerializeField] private Color sterilizationColor = new Color(1f, 0.28f, 0.40f, 0.68f);
+    [SerializeField] private Color sterilizationTelegraphColor = new Color(1f, 0.78f, 0.24f, 0.45f);
     [SerializeField] private float sterilizationPulseSpeed = 4.2f;
     [SerializeField] private float sterilizationTelegraphPulseSpeed = 3.1f;
-    [SerializeField] private Color sterilizationSafeColor = new Color(0.32f, 0.94f, 1f, 0.45f);
+    [SerializeField] private Color sterilizationSafeColor = new Color(0.38f, 1f, 0.66f, 0.45f);
     [SerializeField] private float sterilizationSafeMarkerThickness = 0.14f;
     [SerializeField] private float sterilizationSafePulseSpeed = 2.8f;
 
@@ -88,8 +88,8 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
     [SerializeField] private float securityGridEnemyBoostMultiplier = 1.16f;
     [SerializeField] private float securityGridEnemyBoostDuration = 0.48f;
     [SerializeField] private float securityGridEnemyBoostCooldown = 0.32f;
-    [SerializeField] private Color securityGridTelegraphColor = new Color(1f, 0.86f, 0.54f, 0.58f);
-    [SerializeField] private Color securityGridActiveColor = new Color(0.98f, 0.28f, 0.42f, 0.82f);
+    [SerializeField] private Color securityGridTelegraphColor = new Color(1f, 0.78f, 0.24f, 0.58f);
+    [SerializeField] private Color securityGridActiveColor = new Color(1f, 0.28f, 0.40f, 0.82f);
 
     [Header("Lab Distinctive Event - Containment Protocol")]
     [SerializeField] private bool enableContainmentProtocol = true;
@@ -223,6 +223,12 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
+        sterilizationTelegraphColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.45f);
+        sterilizationColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.68f);
+        sterilizationSafeColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Success, 0.45f);
+        securityGridTelegraphColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.58f);
+        securityGridActiveColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.82f);
+        containmentColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Information, 0.86f);
         centerTransform = center != null ? center : transform;
         BuildInteriorBounds();
         RebuildObstacleList(staticObstaclesRoot, dynamicObstaclesRoot);
@@ -477,7 +483,43 @@ public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
 
         eventTimer = 0f;
         eventActive = true;
-        FindAnyObjectByType<GameManager>()?.NotifyThemedMapEventStarted(ActiveThemedEventLabel, ActiveThemedEventHint);
+        FindAnyObjectByType<GameManager>()?.NotifyMapEventStarted(
+            GetTutorialEventId(),
+            GetTutorialEventLabel(),
+            GetTutorialEventDescription());
+    }
+
+    private string GetTutorialEventId()
+    {
+        switch (currentVariant)
+        {
+            case LabEventVariant.SecurityGrid: return "lab_security_grid";
+            case LabEventVariant.ContainmentProtocol: return "lab_containment_terminals";
+            default: return "lab_sterilization_sweep";
+        }
+    }
+
+    private string GetTutorialEventLabel()
+    {
+        switch (currentVariant)
+        {
+            case LabEventVariant.SecurityGrid: return "GRILLA DE SEGURIDAD";
+            case LabEventVariant.ContainmentProtocol: return "TERMINALES DE CONTENCION";
+            default: return "BARRIDO DE ESTERILIZACION";
+        }
+    }
+
+    private string GetTutorialEventDescription()
+    {
+        switch (currentVariant)
+        {
+            case LabEventVariant.SecurityGrid:
+                return "Las líneas amarillas anticipan la grilla y las rojas frenan al jugador mientras aceleran a la anomalía. Busca un espacio libre antes de que se active.";
+            case LabEventVariant.ContainmentProtocol:
+                return "Mantente sobre cada terminal celeste hasta activarla. Completa todas antes del límite para encerrar temporalmente a la anomalía y ganar Firewall.";
+            default:
+                return "Las bandas amarillas anuncian el próximo barrido; cuando cambian a rojo ralentizan al jugador. Muévete hacia los corredores verdes para evitarlo.";
+        }
     }
 
     private void TickEvent()

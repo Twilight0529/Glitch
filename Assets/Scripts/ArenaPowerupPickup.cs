@@ -97,7 +97,15 @@ public class ArenaPowerupPickup : MonoBehaviour
 
         float bob = Mathf.Sin(Time.time * bobSpeed) * bobAmplitude;
         transform.position = new Vector3(basePosition.x, basePosition.y + bob, basePosition.z);
-        transform.Rotate(0f, 0f, spinSpeed * Time.deltaTime, Space.Self);
+        // Los iconos nuevos explican una direccion o un cambio de escala; rotarlos destruye esa lectura.
+        if (kind == PickupKind.SpeedBurst || kind == PickupKind.Shield)
+        {
+            transform.Rotate(0f, 0f, spinSpeed * Time.deltaTime, Space.Self);
+        }
+        else
+        {
+            transform.localRotation = Quaternion.identity;
+        }
         UpdateAuraVisual();
     }
 
@@ -114,25 +122,25 @@ public class ArenaPowerupPickup : MonoBehaviour
                 spriteRenderer.sprite = ShieldSpriteProvider.Get();
                 spriteRenderer.drawMode = SpriteDrawMode.Simple;
                 spriteRenderer.size = Vector2.one * 0.62f;
-                spriteRenderer.color = new Color(1f, 0.66f, 0.86f, 0.95f);
+                spriteRenderer.color = GlitchUiPalette.WithAlpha(GlitchUiPalette.Special, 0.95f);
                 break;
             case PickupKind.Compact:
                 spriteRenderer.sprite = CompactSpriteProvider.Get();
                 spriteRenderer.drawMode = SpriteDrawMode.Simple;
-                spriteRenderer.size = Vector2.one * 0.62f;
-                spriteRenderer.color = new Color(0.74f, 1f, 0.70f, 0.96f);
+                spriteRenderer.size = Vector2.one * 0.68f;
+                spriteRenderer.color = GlitchUiPalette.WithAlpha(GlitchUiPalette.Success, 0.96f);
                 break;
             case PickupKind.PhaseDash:
                 spriteRenderer.sprite = PhaseDashSpriteProvider.Get();
                 spriteRenderer.drawMode = SpriteDrawMode.Simple;
-                spriteRenderer.size = Vector2.one * 0.62f;
-                spriteRenderer.color = new Color(0.76f, 0.58f, 1f, 0.96f);
+                spriteRenderer.size = Vector2.one * 0.68f;
+                spriteRenderer.color = GlitchUiPalette.WithAlpha(GlitchUiPalette.Information, 0.96f);
                 break;
             default:
                 spriteRenderer.sprite = LightningSpriteProvider.Get();
                 spriteRenderer.drawMode = SpriteDrawMode.Simple;
                 spriteRenderer.size = Vector2.one * 0.62f;
-                spriteRenderer.color = new Color(0.46f, 0.96f, 1f, 0.95f);
+                spriteRenderer.color = GlitchUiPalette.WithAlpha(GlitchUiPalette.Information, 0.95f);
                 break;
         }
     }
@@ -245,13 +253,13 @@ public class ArenaPowerupPickup : MonoBehaviour
         switch (kind)
         {
             case PickupKind.Shield:
-                return new Color(1f, 0.70f, 0.90f, 1f);
+                return GlitchUiPalette.Special;
             case PickupKind.Compact:
-                return new Color(0.74f, 1f, 0.70f, 1f);
+                return GlitchUiPalette.Success;
             case PickupKind.PhaseDash:
-                return new Color(0.78f, 0.58f, 1f, 1f);
+                return GlitchUiPalette.Information;
             default:
-                return new Color(0.54f, 0.96f, 1f, 1f);
+                return GlitchUiPalette.Information;
         }
     }
 }

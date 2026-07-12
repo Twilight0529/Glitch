@@ -25,16 +25,16 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float ghostDashSpeed = 24f;
     [SerializeField] private float ghostDashDuration = 0.18f;
     [SerializeField] private float ghostDashCooldown = 2.4f;
-    [SerializeField] private Color ghostDashColor = new Color(0.55f, 1f, 0.95f, 0.82f);
+    [SerializeField] private Color ghostDashColor = new Color(0.34f, 0.86f, 1f, 0.82f);
     [SerializeField] private int ghostDashAfterimageCount = 4;
 
     [Header("Compact Mode")]
     [SerializeField] private float compactScaleMultiplier = 0.58f;
     [SerializeField, Range(0.25f, 1f)] private float compactMoveMultiplier = 0.76f;
-    [SerializeField] private Color compactColor = new Color(0.76f, 1f, 0.74f, 0.96f);
+    [SerializeField] private Color compactColor = new Color(0.38f, 1f, 0.66f, 0.96f);
 
     [Header("Shield Visual")]
-    [SerializeField] private Color shieldColor = new Color(0.95f, 0.64f, 0.88f, 0.85f);
+    [SerializeField] private Color shieldColor = new Color(0.72f, 0.54f, 1f, 0.85f);
     [SerializeField] private float shieldPulseSpeed = 7.2f;
     [SerializeField] private float shieldRadius = 0.72f;
     [SerializeField] private float maxShieldDurationMultiplier = 1.8f;
@@ -50,8 +50,8 @@ public class PlayerController : MonoBehaviour
     [Header("Local Versus Parry")]
     [SerializeField] private int localVersusParryChargesMax = 3;
     [SerializeField] private float localVersusParryRechargeSeconds = 40f;
-    [SerializeField] private Color parryReadyColor = new Color(0.46f, 0.96f, 1f, 0.62f);
-    [SerializeField] private Color parrySuccessColor = new Color(1f, 0.96f, 0.64f, 1f);
+    [SerializeField] private Color parryReadyColor = new Color(0.72f, 0.54f, 1f, 0.72f);
+    [SerializeField] private Color parrySuccessColor = new Color(0.38f, 1f, 0.66f, 1f);
     [SerializeField] private float parryFxRadius = 1.65f;
     [SerializeField] private float parryFxDuration = 0.2f;
     [SerializeField] private int parryFxRayCount = 12;
@@ -68,14 +68,14 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float maxFirewallBurstStunDuration = 1.55f;
     [SerializeField] private float firewallBurstKnockbackMultiplier = 1.35f;
     [SerializeField] private float maxFirewallChargeGainMultiplier = 1.55f;
-    [SerializeField] private Color firewallBurstColor = new Color(0.46f, 0.96f, 1f, 1f);
-    [SerializeField] private Color firewallReadyColor = new Color(1f, 0.90f, 0.54f, 1f);
+    [SerializeField] private Color firewallBurstColor = new Color(0.34f, 0.86f, 1f, 1f);
+    [SerializeField] private Color firewallReadyColor = new Color(1f, 0.78f, 0.24f, 1f);
     [SerializeField] private int firewallBurstRayCount = 18;
 
     [Header("Movement Trail")]
     [SerializeField] private bool enableMovementTrail = true;
     [SerializeField] private float maxPermanentMoveSpeed = 15.5f;
-    [SerializeField] private Color trailColor = new Color(0.42f, 0.92f, 1f, 0.85f);
+    [SerializeField] private Color trailColor = new Color(0.34f, 0.86f, 1f, 0.85f);
     [SerializeField] private float trailParticleLifetime = 0.36f;
     [SerializeField] private float trailStartSize = 0.17f;
     [SerializeField] private float trailEmissionAtMaxSpeed = 42f;
@@ -154,6 +154,9 @@ public class PlayerController : MonoBehaviour
     private float localVersusParryRechargeTimer;
     private SpriteRenderer parryRenderer;
     private GameObject parryVisual;
+    private GameObject firewallReadyVisual;
+    private SpriteRenderer firewallReadyAuraRenderer;
+    private readonly List<SpriteRenderer> firewallReadyNodeRenderers = new List<SpriteRenderer>();
     private PlayerStateHijack stateHijack;
     private ParticleSystem movementTrail;
     private GameObject skinPatternRoot;
@@ -290,10 +293,13 @@ public class PlayerController : MonoBehaviour
             baseBodyColor = bodyRenderer.color;
         }
 
+        ApplySemanticMechanicColors();
+
         ApplySelectedMetaSkin();
         EnsureSelectedSkinVisual();
         EnsureShieldVisual();
         EnsureParryVisual();
+        EnsureFirewallReadyVisual();
         EnsureMovementTrail();
     }
 
@@ -568,6 +574,7 @@ public class PlayerController : MonoBehaviour
             UpdateParryVisual();
             UpdateGhostDashTimers();
             UpdateGhostDashVisual();
+            UpdateFirewallReadyVisual();
             UpdateMovementTrail(0f);
             return;
         }
@@ -579,6 +586,7 @@ public class PlayerController : MonoBehaviour
         UpdateParryVisual();
         UpdateGhostDashTimers();
         UpdateGhostDashVisual();
+        UpdateFirewallReadyVisual();
 
         if (WasParryPressed() && parryCooldownTimer <= 0f)
         {
@@ -963,6 +971,29 @@ public class PlayerController : MonoBehaviour
             Mathf.Max(1f, maxFirewallChargeGainMultiplier));
     }
 
+    public void ApplyContainmentClassModifiers(
+        float moveSpeedMultiplier,
+        float parryCooldownMultiplier,
+        float parryRadiusBonus,
+        float firewallGainMultiplier,
+        float hazardResistanceMultiplier)
+    {
+        moveSpeed = Mathf.Clamp(moveSpeed * Mathf.Max(0.1f, moveSpeedMultiplier), 0.1f, Mathf.Max(0.1f, maxPermanentMoveSpeed));
+        parryCooldown = Mathf.Max(0.05f, parryCooldown * Mathf.Max(0.1f, parryCooldownMultiplier));
+        parryCooldownTimer = Mathf.Min(parryCooldownTimer, parryCooldown);
+        ExpandParryRadius(parryRadiusBonus);
+        firewallChargeGainMultiplier = Mathf.Clamp(
+            firewallChargeGainMultiplier * Mathf.Max(0.1f, firewallGainMultiplier),
+            0.1f,
+            Mathf.Max(1f, maxFirewallChargeGainMultiplier));
+
+        if (hazardResistanceMultiplier < 1f)
+        {
+            ImproveHazardResistance(hazardResistanceMultiplier);
+            ImproveExternalDisplacementResistance(hazardResistanceMultiplier);
+        }
+    }
+
     public void ExpandParryRadius(float extraRadius)
     {
         parryRadius = Mathf.Min(Mathf.Max(0.2f, maxParryRadius), parryRadius + Mathf.Max(0f, extraRadius));
@@ -1112,6 +1143,10 @@ public class PlayerController : MonoBehaviour
         }
 
         firewallCharge = 0f;
+        if (firewallReadyVisual != null)
+        {
+            firewallReadyVisual.SetActive(false);
+        }
         Vector2 origin = GetPosition();
         float radius = Mathf.Max(0.5f, firewallBurstRadius);
         Collider2D[] hits = Physics2D.OverlapCircleAll(origin, radius);
@@ -1193,6 +1228,7 @@ public class PlayerController : MonoBehaviour
 
         deathSequenceActive = true;
         breachConsumptionActive = false;
+        if (firewallReadyVisual != null) firewallReadyVisual.SetActive(false);
         DestroyBreachConsumptionVisual();
         GlitchAudioManager.PlayPlayerDeath(transform.position);
         StartCoroutine(DeathExplosionRoutine());
@@ -1207,6 +1243,7 @@ public class PlayerController : MonoBehaviour
         }
 
         breachConsumptionActive = true;
+        if (firewallReadyVisual != null) firewallReadyVisual.SetActive(false);
         breachGlitchColor = glitchColor;
         speedBoostTimer = 0f;
         speedBoostMultiplier = 1f;
@@ -1357,9 +1394,9 @@ public class PlayerController : MonoBehaviour
         lastMoveDirection = ghostDashDirection;
         ghostDashTimer = Mathf.Max(0.05f, ghostDashDuration);
         ghostDashCooldownTimer = Mathf.Max(0.1f, ghostDashCooldown);
+        BeginPoweredDashPhasing();
         SpawnGhostDashStartFx(ghostDashDirection);
         GlitchAudioManager.PlayGhostDash(transform.position);
-        BeginPoweredDashPhasing();
         return true;
     }
 
@@ -1504,6 +1541,90 @@ public class PlayerController : MonoBehaviour
 
     // --- Visuales de habilidades --------------------------------------------
     // Se construyen una vez por código y luego solo se activan, escalan o recolorean.
+    private void ApplySemanticMechanicColors()
+    {
+        ghostDashColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Information, 0.82f);
+        compactColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Success, 0.96f);
+        shieldColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Special, 0.85f);
+        parryReadyColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Special, 0.72f);
+        parrySuccessColor = GlitchUiPalette.Success;
+        firewallBurstColor = GlitchUiPalette.Information;
+        firewallReadyColor = GlitchUiPalette.Alert;
+        trailColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Information, 0.85f);
+    }
+
+    private void EnsureFirewallReadyVisual()
+    {
+        if (firewallReadyVisual != null)
+        {
+            return;
+        }
+
+        firewallReadyVisual = new GameObject("FirewallReadyVisual");
+        firewallReadyVisual.transform.SetParent(transform, false);
+        firewallReadyVisual.transform.localPosition = Vector3.zero;
+
+        GameObject aura = new GameObject("Aura");
+        aura.transform.SetParent(firewallReadyVisual.transform, false);
+        firewallReadyAuraRenderer = aura.AddComponent<SpriteRenderer>();
+        firewallReadyAuraRenderer.sprite = CircleSpriteProvider.Get();
+        firewallReadyAuraRenderer.sortingOrder = 7;
+        firewallReadyAuraRenderer.color = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.08f);
+        aura.transform.localScale = Vector3.one * 1.65f;
+
+        const int nodeCount = 6;
+        for (int i = 0; i < nodeCount; i++)
+        {
+            float angle = i / (float)nodeCount * Mathf.PI * 2f;
+            GameObject node = new GameObject($"ReadyNode_{i}");
+            node.transform.SetParent(firewallReadyVisual.transform, false);
+            node.transform.localPosition = new Vector3(Mathf.Cos(angle) * 0.76f, Mathf.Sin(angle) * 0.76f, 0f);
+            node.transform.localRotation = Quaternion.Euler(0f, 0f, angle * Mathf.Rad2Deg + 45f);
+            node.transform.localScale = Vector3.one * (i % 2 == 0 ? 0.13f : 0.09f);
+            SpriteRenderer renderer = node.AddComponent<SpriteRenderer>();
+            renderer.sprite = SquareSpriteProvider.Get();
+            renderer.sortingOrder = 12;
+            renderer.color = firewallReadyColor;
+            firewallReadyNodeRenderers.Add(renderer);
+        }
+
+        firewallReadyVisual.SetActive(false);
+    }
+
+    private void UpdateFirewallReadyVisual()
+    {
+        if (firewallReadyVisual == null)
+        {
+            return;
+        }
+
+        bool visible = IsFirewallBurstReady && !deathSequenceActive && !breachConsumptionActive;
+        if (firewallReadyVisual.activeSelf != visible)
+        {
+            firewallReadyVisual.SetActive(visible);
+        }
+        if (!visible)
+        {
+            return;
+        }
+
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 7.5f);
+        firewallReadyVisual.transform.localRotation = Quaternion.Euler(0f, 0f, Time.time * 42f);
+        firewallReadyVisual.transform.localScale = Vector3.one * Mathf.Lerp(0.96f, 1.08f, pulse);
+        if (firewallReadyAuraRenderer != null)
+        {
+            firewallReadyAuraRenderer.color = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, Mathf.Lerp(0.055f, 0.14f, pulse));
+        }
+        for (int i = 0; i < firewallReadyNodeRenderers.Count; i++)
+        {
+            SpriteRenderer node = firewallReadyNodeRenderers[i];
+            if (node != null)
+            {
+                node.color = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, Mathf.Lerp(0.58f, 1f, (pulse + i * 0.17f) % 1f));
+            }
+        }
+    }
+
     private void EnsureShieldVisual()
     {
         if (shieldVisual != null)
@@ -1620,7 +1741,8 @@ public class PlayerController : MonoBehaviour
 
         float t = Mathf.Clamp01(ghostDashTimer / Mathf.Max(0.05f, ghostDashDuration));
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 38f);
-        Color c = Color.Lerp(GetCurrentBodyColor(), ghostDashColor, 0.68f + pulse * 0.20f);
+        Color dashColor = IsIntangibleDashActive ? GlitchUiPalette.Special : ghostDashColor;
+        Color c = Color.Lerp(GetCurrentBodyColor(), dashColor, 0.68f + pulse * 0.20f);
         c.a = Mathf.Lerp(0.38f, 0.74f, t);
         bodyRenderer.color = c;
         transform.localScale = targetScale * Mathf.Lerp(0.78f, 1.04f, t);
@@ -2262,6 +2384,7 @@ public class PlayerController : MonoBehaviour
     private void SpawnGhostDashStartFx(Vector2 direction)
     {
         Vector2 dashDir = direction.sqrMagnitude > 0.001f ? direction.normalized : Vector2.right;
+        Color dashFxColor = IsIntangibleDashActive ? GlitchUiPalette.Special : ghostDashColor;
         int count = Mathf.Max(2, ghostDashAfterimageCount);
         for (int i = 0; i < count; i++)
         {
@@ -2274,9 +2397,9 @@ public class PlayerController : MonoBehaviour
             SpriteRenderer sr = afterimage.AddComponent<SpriteRenderer>();
             sr.sprite = bodyRenderer != null ? bodyRenderer.sprite : SquareSpriteProvider.Get();
             sr.drawMode = bodyRenderer != null ? bodyRenderer.drawMode : SpriteDrawMode.Simple;
-            sr.color = new Color(ghostDashColor.r, ghostDashColor.g, ghostDashColor.b, Mathf.Lerp(0.46f, 0.16f, delay));
+            sr.color = new Color(dashFxColor.r, dashFxColor.g, dashFxColor.b, Mathf.Lerp(0.46f, 0.16f, delay));
             sr.sortingOrder = bodyRenderer != null ? bodyRenderer.sortingOrder - 1 : 7;
-            afterimage.AddComponent<PlayerGhostDashAfterimageFx>().Configure(sr, dashDir, Mathf.Lerp(0.18f, 0.28f, delay), ghostDashColor);
+            afterimage.AddComponent<PlayerGhostDashAfterimageFx>().Configure(sr, dashDir, Mathf.Lerp(0.18f, 0.28f, delay), dashFxColor);
             Destroy(afterimage, 0.36f);
         }
 
@@ -2287,22 +2410,23 @@ public class PlayerController : MonoBehaviour
         streakRenderer.sprite = SquareSpriteProvider.Get();
         streakRenderer.drawMode = SpriteDrawMode.Sliced;
         streakRenderer.size = new Vector2(1.15f, 0.12f);
-        streakRenderer.color = new Color(ghostDashColor.r, ghostDashColor.g, ghostDashColor.b, 0.64f);
+        streakRenderer.color = new Color(dashFxColor.r, dashFxColor.g, dashFxColor.b, 0.64f);
         streakRenderer.sortingOrder = 14;
-        streak.AddComponent<PlayerGhostDashStreakFx>().Configure(streakRenderer, dashDir, 0.24f, ghostDashColor);
+        streak.AddComponent<PlayerGhostDashStreakFx>().Configure(streakRenderer, dashDir, 0.24f, dashFxColor);
         Destroy(streak, 0.32f);
     }
 
     private void SpawnGhostDashContactFx()
     {
+        Color dashFxColor = IsIntangibleDashActive ? GlitchUiPalette.Special : ghostDashColor;
         GameObject ring = new GameObject("GhostDashContactFx");
         ring.transform.position = transform.position;
         SpriteRenderer sr = ring.AddComponent<SpriteRenderer>();
         sr.sprite = CircleSpriteProvider.Get();
-        sr.color = new Color(ghostDashColor.r, ghostDashColor.g, ghostDashColor.b, 0.52f);
+        sr.color = new Color(dashFxColor.r, dashFxColor.g, dashFxColor.b, 0.52f);
         sr.sortingOrder = 16;
         ring.transform.localScale = Vector3.one * 0.18f;
-        ring.AddComponent<PlayerParryBurstFx>().Configure(sr, 0.82f, 0.14f, ghostDashColor);
+        ring.AddComponent<PlayerParryBurstFx>().Configure(sr, 0.82f, 0.14f, dashFxColor);
         Destroy(ring, 0.22f);
     }
 

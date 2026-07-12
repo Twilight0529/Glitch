@@ -10,8 +10,8 @@ public class RuptureRiftAnchorFx : MonoBehaviour
     private float duration = 4f;
     private float age;
     private float radius = 2.4f;
-    private Color warningColor = Color.magenta;
-    private Color activeColor = Color.cyan;
+    private Color warningColor = new Color(1f, 0.78f, 0.24f, 1f);
+    private Color activeColor = new Color(1f, 0.28f, 0.40f, 1f);
 
     public void Configure(float lifeSeconds, float visualRadius, Color warning, Color active)
     {

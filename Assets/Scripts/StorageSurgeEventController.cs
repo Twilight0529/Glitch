@@ -65,8 +65,8 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
     [SerializeField] private float conveyorLaneSpacing = 0.9f;
     [SerializeField] private float conveyorPlayerPushSpeed = 4.8f;
     [SerializeField] private float conveyorEnemyPushSpeed = 3.9f;
-    [SerializeField] private Color conveyorTelegraphColor = new Color(0.47f, 0.85f, 1f, 0.34f);
-    [SerializeField] private Color conveyorActiveColor = new Color(0.26f, 0.68f, 1f, 0.6f);
+    [SerializeField] private Color conveyorTelegraphColor = new Color(1f, 0.78f, 0.24f, 0.34f);
+    [SerializeField] private Color conveyorActiveColor = new Color(1f, 0.28f, 0.40f, 0.6f);
     [SerializeField] private float conveyorPulseSpeed = 5f;
     [SerializeField] private float conveyorMarkerPulseSpeed = 6.4f;
     [SerializeField] private Vector2 conveyorMarkerSize = new Vector2(0.36f, 0.12f);
@@ -77,8 +77,8 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
     [SerializeField, Range(0.05f, 0.45f)] private float magneticCraneTelegraphFraction = 0.24f;
     [SerializeField, Range(0.02f, 0.35f)] private float magneticCraneReturnFraction = 0.16f;
     [SerializeField] private float magneticCraneLateralOffsetMax = 1.15f;
-    [SerializeField] private Color magneticCraneTelegraphColor = new Color(0.96f, 0.74f, 0.34f, 0.46f);
-    [SerializeField] private Color magneticCraneActiveColor = new Color(0.34f, 0.92f, 1f, 0.72f);
+    [SerializeField] private Color magneticCraneTelegraphColor = new Color(1f, 0.78f, 0.24f, 0.46f);
+    [SerializeField] private Color magneticCraneActiveColor = new Color(1f, 0.28f, 0.40f, 0.72f);
 
     [Header("Storage Distinctive Event - Cargo Transit")]
     [SerializeField] private bool enableCargoTransit = true;
@@ -91,8 +91,8 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
     [SerializeField] private float cargoRoutePerpendicularJitter = 0.28f;
     [SerializeField] private float cargoRouteAlongJitter = 0.32f;
     [SerializeField] private float cargoAvoidActorRadius = 2.2f;
-    [SerializeField] private Color cargoTelegraphColor = new Color(1f, 0.76f, 0.36f, 0.58f);
-    [SerializeField] private Color cargoActiveColor = new Color(0.34f, 0.78f, 1f, 0.86f);
+    [SerializeField] private Color cargoTelegraphColor = new Color(1f, 0.78f, 0.24f, 0.58f);
+    [SerializeField] private Color cargoActiveColor = new Color(1f, 0.28f, 0.40f, 0.86f);
 
     [Header("Visual Telegraph")]
     [SerializeField, Range(0f, 1f)] private float activeColorPulseStrength = 0.62f;
@@ -203,6 +203,12 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
+        conveyorTelegraphColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.34f);
+        conveyorActiveColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.60f);
+        magneticCraneTelegraphColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.46f);
+        magneticCraneActiveColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.72f);
+        cargoTelegraphColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.58f);
+        cargoActiveColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.86f);
         centerTransform = center != null ? center : transform;
         BuildInteriorBounds();
         RebuildObstacleList(staticObstaclesRoot, dynamicObstaclesRoot);
@@ -446,7 +452,43 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
 
         eventTimer = 0f;
         eventActive = true;
-        FindAnyObjectByType<GameManager>()?.NotifyThemedMapEventStarted(ActiveThemedEventLabel, ActiveThemedEventHint);
+        FindAnyObjectByType<GameManager>()?.NotifyMapEventStarted(
+            GetTutorialEventId(),
+            GetTutorialEventLabel(),
+            GetTutorialEventDescription());
+    }
+
+    private string GetTutorialEventId()
+    {
+        switch (currentVariant)
+        {
+            case StorageEventVariant.MagneticCranes: return "storage_magnetic_reorder";
+            case StorageEventVariant.CargoTransit: return "storage_cargo_transit";
+            default: return "storage_conveyor_overload";
+        }
+    }
+
+    private string GetTutorialEventLabel()
+    {
+        switch (currentVariant)
+        {
+            case StorageEventVariant.MagneticCranes: return "REORDEN MAGNETICO";
+            case StorageEventVariant.CargoTransit: return "RUTA DE CARGA";
+            default: return "TRANSPORTADORES";
+        }
+    }
+
+    private string GetTutorialEventDescription()
+    {
+        switch (currentVariant)
+        {
+            case StorageEventVariant.MagneticCranes:
+                return "Las grúas reubican obstáculos y cambian los pasillos disponibles. Observa el destino marcado y reserva una salida antes de que caiga la carga.";
+            case StorageEventVariant.CargoTransit:
+                return "Una formación de carga atraviesa el sector y deja espacios entre bloques. Alinea tu movimiento con uno de esos huecos para cruzarla.";
+            default:
+                return "Los carriles activos arrastran al jugador, la anomalía y los objetos en la dirección indicada. Compensa el empuje o cambia de carril.";
+        }
     }
 
     private void TickEvent()

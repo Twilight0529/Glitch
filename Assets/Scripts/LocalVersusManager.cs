@@ -202,7 +202,7 @@ public class LocalVersusManager : MonoBehaviour
         alertKind = kind;
         alertTitle = string.IsNullOrWhiteSpace(title) ? "ALERTA" : title.ToUpperInvariant();
         alertSubtitle = subtitle ?? string.Empty;
-        alertColor = color;
+        alertColor = kind == AlertKind.Critical ? GlitchUiPalette.Danger : GlitchUiPalette.Alert;
         alertTimer = AlertDuration;
     }
 

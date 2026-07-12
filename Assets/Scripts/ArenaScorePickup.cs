@@ -105,12 +105,12 @@ public class ArenaScorePickup : MonoBehaviour
         if (chargedDataCore)
         {
             // El Data Core usa el mismo pickup, pero se ve más grande y brillante porque vale bastante más.
-            spriteRenderer.color = new Color(0.58f, 1f, 0.86f, 0.98f);
+            spriteRenderer.color = GlitchUiPalette.WithAlpha(GlitchUiPalette.Success, 0.98f);
             transform.localScale = Vector3.one * 1.2f;
             return;
         }
 
-        spriteRenderer.color = new Color(0.97f, 0.97f, 0.98f, 0.96f);
+        spriteRenderer.color = GlitchUiPalette.WithAlpha(GlitchUiPalette.Information, 0.96f);
     }
 
     private void OnTriggerEnter2D(Collider2D other)

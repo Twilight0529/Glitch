@@ -4,6 +4,11 @@ using UnityEngine;
 // Caja fuerte del metajuego: guarda Datos, estadísticas, módulos y la apariencia elegida entre una run y otra.
 public static class MetaProgressionStorage
 {
+    public const int GradeCMinimumScore = 500;
+    public const int GradeBMinimumScore = 1200;
+    public const int GradeAMinimumScore = 2200;
+    public const int GradeSMinimumScore = 3500;
+
     // Guarda progresion persistente entre runs: moneda obtenida por score y desbloqueos comprados.
     public enum SkinPattern
     {
@@ -340,7 +345,8 @@ public static class MetaProgressionStorage
         totalRuns = Mathf.Max(0, PlayerPrefs.GetInt(LastTotalRunsKey, 0)),
         totalScore = Mathf.Max(0, PlayerPrefs.GetInt(LastTotalScoreKey, 0)),
         totalSurvivalTime = Mathf.Max(0f, PlayerPrefs.GetFloat(LastTotalTimeKey, 0f)),
-        performanceGrade = PlayerPrefs.GetString(LastGradeKey, "D")
+        // Recalcula el ultimo resultado para que records de builds anteriores respeten los umbrales actuales.
+        performanceGrade = CalculatePerformanceGrade(Mathf.Max(0, PlayerPrefs.GetInt(LastScoreKey, 0)))
     };
 
     public static CareerStats Stats => new CareerStats
@@ -371,7 +377,7 @@ public static class MetaProgressionStorage
         float totalTime = Mathf.Max(0f, PlayerPrefs.GetFloat(TotalTimeKey, 0f)) + safeTime;
         int globalBestScore = Mathf.Max(safeScore, PlayerPrefs.GetInt(GlobalBestScoreKey, 0));
         float globalBestTime = Mathf.Max(safeTime, PlayerPrefs.GetFloat(GlobalBestTimeKey, 0f));
-        string grade = CalculatePerformanceGrade(safeScore, safeTime);
+        string grade = CalculatePerformanceGrade(safeScore);
 
         PlayerPrefs.SetInt(DataKey, total);
         PlayerPrefs.SetInt(LastScoreKey, safeScore);
@@ -557,23 +563,35 @@ public static class MetaProgressionStorage
         PlayerPrefs.Save();
     }
 
-    private static string CalculatePerformanceGrade(int score, float survivalTime)
+    public static void ResetAllLocalProgress()
+    {
+        ResetProgress();
+        AchievementStorage.ResetAchievements();
+        DailyChallengeStorage.ResetCurrentChallenge();
+        RankingStorage.ResetLocalProgress();
+        ContainmentOperationStorage.ResetSelection();
+        DeveloperModeStorage.ClearRunDebugOptions();
+        UserSettings.ResetTutorialProgress();
+        RunTelemetryStorage.ResetLocalData();
+        PlayerPrefs.Save();
+    }
+
+    private static string CalculatePerformanceGrade(int score)
     {
         int safeScore = Mathf.Max(0, score);
-        float safeTime = Mathf.Max(0f, survivalTime);
-        if (safeScore >= 650 || safeTime >= 210f)
+        if (safeScore >= GradeSMinimumScore)
         {
             return "S";
         }
-        if (safeScore >= 430 || safeTime >= 150f)
+        if (safeScore >= GradeAMinimumScore)
         {
             return "A";
         }
-        if (safeScore >= 260 || safeTime >= 95f)
+        if (safeScore >= GradeBMinimumScore)
         {
             return "B";
         }
-        if (safeScore >= 120 || safeTime >= 45f)
+        if (safeScore >= GradeCMinimumScore)
         {
             return "C";
         }

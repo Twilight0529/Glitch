@@ -8,7 +8,7 @@ public class AnomalyProjectile : MonoBehaviour
     [SerializeField] private float speed = 8.5f;
     [SerializeField] private float lifetime = 3.5f;
     [SerializeField] private LayerMask obstacleMask = ~0;
-    [SerializeField] private Color reflectedColor = new Color(0.54f, 0.98f, 1f, 1f);
+    [SerializeField] private Color reflectedColor = new Color(0.38f, 1f, 0.66f, 1f);
 
     private Vector2 direction = Vector2.right;
     private GameManager gameManager;
@@ -79,6 +79,7 @@ public class AnomalyProjectile : MonoBehaviour
 
     private void Awake()
     {
+        reflectedColor = GlitchUiPalette.Success;
         spriteRenderer = GetComponent<SpriteRenderer>();
     }
 

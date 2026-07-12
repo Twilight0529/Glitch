@@ -23,11 +23,16 @@ public static class RankingStorage
     }
 
     private const string RankingKey = "glitch_ranking_table_v1";
+    private const string RankingCacheUtcKey = "glitch_ranking_cache_utc";
+    private const string PersonalBestKey = "glitch_ranking_personal_best_v2";
+    private const string PendingBestKey = "glitch_ranking_pending_best";
     private const string LastPlayerNameKey = "glitch_ranking_last_name";
+    private const string PlayerNameRegistrationKey = "glitch_player_name_registration_v1";
     private const int MaxEntries = 15;
 
     public static IReadOnlyList<RankingEntry> GetTopEntries()
     {
+        FirebaseLeaderboardService.RefreshTop();
         RankingTable table = LoadTable();
         SortAndTrim(table.entries);
         return table.entries;
@@ -45,10 +50,26 @@ public static class RankingStorage
             recordedAtUtc = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss")
         };
 
+        int previousBest = Mathf.Max(-1, PlayerPrefs.GetInt(PersonalBestKey, -1));
+        for (int i = 0; i < table.entries.Count; i++)
+        {
+            if (string.Equals(table.entries[i].playerName, entry.playerName, StringComparison.OrdinalIgnoreCase))
+                previousBest = Mathf.Max(previousBest, table.entries[i].score);
+        }
+        if (entry.score <= previousBest)
+        {
+            SaveLastPlayerName(entry.playerName);
+            return;
+        }
+
+        table.entries.RemoveAll(existing => string.Equals(existing.playerName, entry.playerName, StringComparison.OrdinalIgnoreCase));
         table.entries.Add(entry);
         SortAndTrim(table.entries);
         SaveTable(table);
         SaveLastPlayerName(entry.playerName);
+        PlayerPrefs.SetString(PendingBestKey, JsonUtility.ToJson(entry));
+        PlayerPrefs.Save();
+        FirebaseLeaderboardService.SubmitPersonalBest(entry);
     }
 
     public static string GetLastPlayerName()
@@ -62,6 +83,23 @@ public static class RankingStorage
         return SanitizeName(saved);
     }
 
+    public static bool HasSavedPlayerName()
+    {
+        if (PlayerPrefs.GetInt(PlayerNameRegistrationKey, 0) != 1) return false;
+        string saved = PlayerPrefs.GetString(LastPlayerNameKey, string.Empty);
+        return !string.IsNullOrWhiteSpace(saved) &&
+               !IsGenericPlayerName(saved);
+    }
+
+    public static void RegisterPlayerName(string value)
+    {
+        string name = SanitizeName(value);
+        if (IsGenericPlayerName(name)) return;
+        PlayerPrefs.SetString(LastPlayerNameKey, name);
+        PlayerPrefs.SetInt(PlayerNameRegistrationKey, 1);
+        PlayerPrefs.Save();
+    }
+
     public static void SaveLastPlayerName(string value)
     {
         string name = SanitizeName(value);
@@ -72,6 +110,59 @@ public static class RankingStorage
     public static void ClearEntries()
     {
         PlayerPrefs.DeleteKey(RankingKey);
+        PlayerPrefs.Save();
+    }
+
+    public static void ResetLocalProgress()
+    {
+        PlayerPrefs.DeleteKey(RankingKey);
+        PlayerPrefs.DeleteKey(RankingCacheUtcKey);
+        PlayerPrefs.DeleteKey(PersonalBestKey);
+        PlayerPrefs.DeleteKey(PendingBestKey);
+        PlayerPrefs.DeleteKey(LastPlayerNameKey);
+        PlayerPrefs.DeleteKey(PlayerNameRegistrationKey);
+        PlayerPrefs.Save();
+    }
+
+    public static bool HasFreshGlobalCache(int seconds)
+    {
+        long saved;
+        if (!long.TryParse(PlayerPrefs.GetString(RankingCacheUtcKey, "0"), out saved)) return false;
+        return DateTimeOffset.UtcNow.ToUnixTimeSeconds() - saved < Mathf.Max(1, seconds);
+    }
+
+    public static void ReplaceGlobalCache(List<RankingEntry> entries)
+    {
+        RankingTable table = new RankingTable { entries = entries ?? new List<RankingEntry>() };
+        SortAndTrim(table.entries);
+        SaveTable(table);
+        PlayerPrefs.SetString(RankingCacheUtcKey, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString());
+        PlayerPrefs.Save();
+    }
+
+    public static void UpdatePersonalBestFloor(int score)
+    {
+        int current = PlayerPrefs.GetInt(PersonalBestKey, -1);
+        if (score <= current) return;
+        PlayerPrefs.SetInt(PersonalBestKey, score);
+        PlayerPrefs.Save();
+    }
+
+    public static bool TryGetPendingBest(out RankingEntry entry)
+    {
+        string json = PlayerPrefs.GetString(PendingBestKey, string.Empty);
+        if (!string.IsNullOrWhiteSpace(json))
+        {
+            entry = JsonUtility.FromJson<RankingEntry>(json);
+            return entry.score >= 0;
+        }
+        entry = default;
+        return false;
+    }
+
+    public static void ClearPendingBest()
+    {
+        PlayerPrefs.DeleteKey(PendingBestKey);
         PlayerPrefs.Save();
     }
 
@@ -118,7 +209,7 @@ public static class RankingStorage
         }
     }
 
-    private static string SanitizeName(string value)
+    public static string SanitizePlayerName(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -133,4 +224,16 @@ public static class RankingStorage
 
         return trimmed;
     }
+
+    public static bool IsGenericPlayerName(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return true;
+        string normalized = value.Trim().Replace(" ", string.Empty);
+        return string.Equals(normalized, "Player", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(normalized, "PlayerOne", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(normalized, "Jugador", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(normalized, "JugadorUno", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string SanitizeName(string value) => SanitizePlayerName(value);
 }

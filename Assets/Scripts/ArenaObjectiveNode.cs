@@ -17,7 +17,7 @@ public class ArenaObjectiveNode : MonoBehaviour
     private GameObject progressObject;
     private GameObject ringObject;
     private GameObject markerRoot;
-    private Color nodeColor = Color.cyan;
+    private Color nodeColor = new Color(0.38f, 1f, 0.66f, 1f);
     private float activationSeconds = 1f;
     private float lifetime = 12f;
     private float lifeTimer;

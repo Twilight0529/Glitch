@@ -16,8 +16,8 @@ public class CoreSpikeEventController : MonoBehaviour, IThemedEventStatusProvide
     [SerializeField] private float actorSafetyDistance = 2.2f;
 
     [Header("Visuals")]
-    [SerializeField] private Color warningColor = new Color(1f, 0.72f, 0.18f, 0.82f);
-    [SerializeField] private Color activeColor = new Color(1f, 0.20f, 0.36f, 1f);
+    [SerializeField] private Color warningColor = new Color(1f, 0.78f, 0.24f, 0.82f);
+    [SerializeField] private Color activeColor = new Color(1f, 0.28f, 0.40f, 1f);
     [SerializeField] private float hazardPadding = 0.22f;
 
     private const string EventPressureKey = "ThemeCoreSpikes";
@@ -41,6 +41,8 @@ public class CoreSpikeEventController : MonoBehaviour, IThemedEventStatusProvide
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
+        warningColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.82f);
+        activeColor = GlitchUiPalette.Danger;
         centerTransform = center != null ? center : transform;
         obstaclesRoot = staticObstaclesRoot;
         ResolveReferences();
@@ -148,7 +150,10 @@ public class CoreSpikeEventController : MonoBehaviour, IThemedEventStatusProvide
         eventActive = true;
         hazardsArmed = false;
         eventTimer = 0f;
-        gameManager.NotifyThemedMapEventStarted(ActiveThemedEventLabel, ActiveThemedEventHint);
+        gameManager.NotifyMapEventStarted(
+            "core_spike_protocol",
+            "PROTOCOLO DE ESPINAS",
+            "Los obstáculos amarillos están por cubrirse de espinas; al cambiar a rojo causarán daño. Rodéalos o atraviésalos mientras Phase Dash esté activo.");
     }
 
     private List<Collider2D> CollectCandidates()

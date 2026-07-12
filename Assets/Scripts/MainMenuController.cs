@@ -15,14 +15,12 @@ public class MainMenuController : MonoBehaviour
     {
         public string section;
         public string title;
-        [TextArea(1, 2)] public string description;
         public string url;
 
-        public CreditLink(string section, string title, string description, string url)
+        public CreditLink(string section, string title, string url)
         {
             this.section = section;
             this.title = title;
-            this.description = description;
             this.url = url;
         }
     }
@@ -39,11 +37,12 @@ public class MainMenuController : MonoBehaviour
 
     [Header("Main Menu")]
     [SerializeField] private string gameTitle = "GLITCH";
-    [SerializeField] private string gameSubtitle = "Containment Breach";
     [SerializeField] private string gameplaySceneName = "Game";
 
     [Header("Options (Generic)")]
     [SerializeField] private float masterVolume = 0.8f;
+    [SerializeField] private float musicVolume = 0.85f;
+    [SerializeField] private float sfxVolume = 0.9f;
     [SerializeField] private float uiScale = 1f;
     [SerializeField] private float hudScale = 1.1f;
     [SerializeField] private bool fullscreen;
@@ -62,12 +61,10 @@ public class MainMenuController : MonoBehaviour
     [Header("Credits")]
     [SerializeField] private CreditLink[] creditLinks =
     {
-        new CreditLink("Proyecto", "Desarrollo y diseño", "GLITCH: Containment Breach - Franco.", string.Empty),
-        new CreditLink("Motor y herramientas", "Unity", "Motor utilizado para desarrollo, editor y runtime.", "https://unity.com/"),
-        new CreditLink("Tipografias", "Pixelmax", "Fuente pixel art utilizada en la interfaz.", "https://www.dafont.com/"),
-        new CreditLink("Tipografias", "Pixelout", "Fuente pixel art utilizada como recurso tipografico.", "https://www.dafont.com/"),
-        new CreditLink("Musica", "Glitch Stairs", "Tema incorporado para el menu principal.", "https://opengameart.org/"),
-        new CreditLink("Musica", "A Flawless Getaway", "Loop musical incorporado para gameplay.", "https://opengameart.org/")
+        new CreditLink("Herramientas", "Unity", "https://unity.com/"),
+        new CreditLink("Tipografia", "Pixelmax", "https://www.dafont.com/"),
+        new CreditLink("Musica", "Glitch Stairs — Fupi", "https://opengameart.org/content/glitch-stairs"),
+        new CreditLink("Musica", "A Flawless Getaway — Vitalezzz", "https://opengameart.org/content/a-flawless-getaway")
     };
 
     private bool showOptions;
@@ -78,7 +75,6 @@ public class MainMenuController : MonoBehaviour
     private bool showDeveloperMenu;
     private bool showPlayHub;
     private bool showArchiveHub;
-    private bool showSystemHub;
     private bool queuedGameplayLoad;
     private int selectedUnlockIndex;
     private int selectedAchievementIndex;
@@ -91,7 +87,6 @@ public class MainMenuController : MonoBehaviour
     private Font titleFont;
     private Font uiFont;
     private GUIStyle titleStyle;
-    private GUIStyle subtitleStyle;
     private GUIStyle bandLabelStyle;
     private GUIStyle buttonStyle;
     private GUIStyle panelTitleStyle;
@@ -117,9 +112,14 @@ public class MainMenuController : MonoBehaviour
     private float unlockActionMessageExpireAt;
     private string optionsActionMessage = string.Empty;
     private float optionsActionMessageExpireAt;
+    private bool clearProgressConfirmArmed;
+    private float clearProgressConfirmExpireAt;
     private string developerActionMessage = string.Empty;
     private float developerActionMessageExpireAt;
     private readonly Dictionary<string, bool> buttonHoverFlags = new Dictionary<string, bool>();
+    private bool showPlayerNameSetup;
+    private bool playerNameFieldFocused;
+    private string playerNameDraft = string.Empty;
 
     private void Awake()
     {
@@ -131,6 +131,7 @@ public class MainMenuController : MonoBehaviour
         ResolveFonts();
         NormalizeTransitionDurations();
         BeginIntroImmediateBlack();
+        showPlayerNameSetup = !RankingStorage.HasSavedPlayerName();
     }
 
     private void Start()
@@ -150,7 +151,7 @@ public class MainMenuController : MonoBehaviour
         }
 
         UpdateTransition();
-        if (WasDeveloperTogglePressed())
+        if (!showPlayerNameSetup && WasDeveloperTogglePressed())
         {
             showDeveloperMenu = !showDeveloperMenu;
             showOptions = false;
@@ -160,7 +161,6 @@ public class MainMenuController : MonoBehaviour
             showCredits = false;
             showPlayHub = false;
             showArchiveHub = false;
-            showSystemHub = false;
             GlitchAudioManager.PlayMenuToggle();
         }
     }
@@ -169,6 +169,17 @@ public class MainMenuController : MonoBehaviour
     {
         EnsureStyles();
         DrawThematicBackground();
+
+        if (showPlayerNameSetup)
+        {
+            bool previousEnabled = GUI.enabled;
+            GUI.enabled = false;
+            DrawMainMenu();
+            GUI.enabled = previousEnabled;
+            DrawPlayerNameSetup();
+            DrawTransitionBlackOverlay();
+            return;
+        }
 
         if (showOptions)
         {
@@ -202,16 +213,48 @@ public class MainMenuController : MonoBehaviour
         {
             DrawArchiveHub();
         }
-        else if (showSystemHub)
-        {
-            DrawSystemHub();
-        }
         else
         {
             DrawMainMenu();
         }
 
         DrawTransitionBlackOverlay();
+    }
+
+    private void DrawPlayerNameSetup()
+    {
+        DrawScreenFade(0.72f);
+        Rect panel = CenterRect(Mathf.Min(480f, Screen.width - 32f), 230f);
+        DrawPanel(panel, new Color(0.018f, 0.030f, 0.060f, 0.98f), GlitchUiPalette.Information);
+        Rect area = new Rect(panel.x + 28f, panel.y + 22f, panel.width - 56f, panel.height - 44f);
+        GUI.Label(new Rect(area.x, area.y, area.width, 42f), "TU NOMBRE", panelTitleStyle);
+        GUI.Label(new Rect(area.x, area.y + 48f, area.width, 26f), "Aparecerá en el ranking global.", paragraphStyle);
+
+        GUI.SetNextControlName("PlayerNameField");
+        GUIStyle fieldStyle = new GUIStyle(GUI.skin.textField)
+        {
+            font = uiFont,
+            fontSize = Mathf.Max(15, Mathf.RoundToInt(18f * uiScale)),
+            alignment = TextAnchor.MiddleCenter
+        };
+        playerNameDraft = GUI.TextField(new Rect(area.x, area.y + 82f, area.width, 42f), playerNameDraft, 16, fieldStyle);
+        if (!playerNameFieldFocused)
+        {
+            GUI.FocusControl("PlayerNameField");
+            playerNameFieldFocused = true;
+        }
+
+        string sanitized = RankingStorage.SanitizePlayerName(playerNameDraft);
+        bool valid = !RankingStorage.IsGenericPlayerName(sanitized);
+        bool confirm = GUI.Button(new Rect(area.x, area.y + 138f, area.width, 38f), "CONFIRMAR", buttonStyle);
+        Event current = Event.current;
+        if (valid && (confirm || (current.type == EventType.KeyDown && (current.keyCode == KeyCode.Return || current.keyCode == KeyCode.KeypadEnter))))
+        {
+            RankingStorage.RegisterPlayerName(sanitized);
+            showPlayerNameSetup = false;
+            GlitchAudioManager.PlayMenuConfirm();
+            current.Use();
+        }
     }
 
     private static Rect CenterRect(float width, float height)
@@ -254,71 +297,64 @@ public class MainMenuController : MonoBehaviour
         DrawPanel(panel, new Color(0.025f, 0.045f, 0.08f, 0.91f), new Color(0.47f, 0.72f, 0.92f, 0.52f));
         DrawPanelFx(panel, new Color(0.62f, 0.76f, 1f, 1f), 0.14f);
 
-        Rect titleRect = new Rect(panel.x + 22f, panel.y + 12f, panel.width - 44f, 56f);
-        Rect subtitleRect = new Rect(panel.x + 22f, panel.y + 65f, panel.width - 44f, 24f);
+        Rect titleRect = new Rect(panel.x + 22f, panel.y + 10f, panel.width - 44f, 62f);
         DrawGlitchTitle(titleRect, gameTitle, titleStyle, 1f);
-        DrawGlitchTitle(subtitleRect, gameSubtitle, subtitleStyle, 0.55f);
-        DrawSolidRect(new Rect(panel.x + 24f, panel.y + 96f, panel.width - 48f, 1f),
+        DrawSolidRect(new Rect(panel.x + 24f, panel.y + 78f, panel.width - 48f, 1f),
             new Color(0.80f, 0.90f, 1f, 0.18f));
         float markerX = panel.x + 28f + Mathf.Repeat(Time.unscaledTime * 105f, Mathf.Max(1f, panel.width - 82f));
-        DrawSolidRect(new Rect(markerX, panel.y + 95f, 30f, 3f),
+        DrawSolidRect(new Rect(markerX, panel.y + 77f, 30f, 3f),
             new Color(0.50f, 0.94f, 1f, 0.42f));
 
-        int knownZones = GetKnownZoneCount();
-        Rect telemetry = new Rect(panel.x + 24f, panel.y + 106f, panel.width - 48f, 32f);
-        DrawSolidRect(telemetry, new Color(0.04f, 0.075f, 0.12f, 0.72f));
-        Rect dataIcon = new Rect(telemetry.x + 12f, telemetry.y + 7f, 18f, 18f);
-        Color navigationAccent = new Color(0.48f, 0.86f, 1f, 1f);
-        DrawMainMenuIcon(dataIcon, "data", navigationAccent, 0f);
-        GUI.Label(new Rect(dataIcon.xMax + 8f, telemetry.y, 82f, telemetry.height),
-            MetaProgressionStorage.CurrentData.ToString(), rankingScoreStyle);
-        Rect zoneIcon = new Rect(telemetry.center.x + 18f, telemetry.y + 7f, 18f, 18f);
-        DrawMainMenuIcon(zoneIcon, "zones", navigationAccent, 0f);
-        GUI.Label(new Rect(zoneIcon.xMax + 8f, telemetry.y, 82f, telemetry.height),
-            $"{knownZones}/5", rankingScoreStyle);
-
-        float commandsY = panel.y + 148f;
+        Color navigationAccent = GlitchUiPalette.Information;
+        float commandsY = panel.y + 92f;
         Rect playRect = new Rect(panel.x + 24f, commandsY, panel.width - 48f, 76f);
         Rect archiveRect = new Rect(panel.x + 24f, commandsY + 88f, panel.width - 48f, 68f);
-        Rect systemRect = new Rect(panel.x + 24f, commandsY + 168f, panel.width - 48f, 68f);
-        Rect statusRect = new Rect(panel.x + 24f, commandsY + 250f, panel.width - 48f, 46f);
+        Rect optionsRect = new Rect(panel.x + 24f, commandsY + 168f, panel.width - 48f, 62f);
+        Rect exitRect = new Rect(panel.x + 24f, commandsY + 242f, panel.width - 48f, 50f);
 
         if (DrawMainCommandButton(playRect, "play", "JUGAR", navigationAccent, true))
         {
             showPlayHub = true;
             GlitchAudioManager.PlayMenuConfirm();
         }
-        if (DrawMainCommandButton(archiveRect, "unlocks", "ARCHIVO", new Color(0.68f, 0.72f, 1f, 1f)))
+        if (DrawMainCommandButton(archiveRect, "unlocks", "ARCHIVO", GlitchUiPalette.Special))
         {
             showArchiveHub = true;
         }
-        if (DrawMainCommandButton(systemRect, "options", "SISTEMA", new Color(0.92f, 0.58f, 1f, 1f)))
+        if (DrawMainCommandButton(optionsRect, "options", "OPCIONES", GlitchUiPalette.Information))
         {
-            showSystemHub = true;
+            showOptions = true;
+        }
+        if (DrawMainCommandButton(exitRect, "exit", "SALIR", GlitchUiPalette.Neutral))
+        {
+            ExitGame();
         }
 
-        DrawSolidRect(statusRect, new Color(0.035f, 0.055f, 0.095f, 0.72f));
-        DrawSolidRect(new Rect(statusRect.x, statusRect.y, statusRect.width, 2f), new Color(navigationAccent.r, navigationAccent.g, navigationAccent.b, 0.24f));
-        GUI.Label(statusRect, "SELECCIONA UN MODULO", BuildFittedSingleLineStyle(rankingScoreStyle, "SELECCIONA UN MODULO", statusRect.width, statusRect.height, 10));
+        Rect creditsRect = new Rect(panel.xMax - 150f, panel.yMax - 38f, 126f, 25f);
+        if (DrawTextLink(creditsRect, "CRÉDITOS", GlitchUiPalette.Special))
+        {
+            showCredits = true;
+        }
 
         DrawRankingPanel(rankingRect, sideBySide);
     }
 
     private void DrawPlayHub()
     {
-        Rect panel = DrawHubShell("JUGAR", new Color(0.48f, 0.90f, 1f, 1f));
+        Rect panel = DrawHubShell("JUGAR", GlitchUiPalette.Information);
         Rect content = new Rect(panel.x + 26f, panel.y + 112f, panel.width - 52f, panel.height - 164f);
         Rect singleRect = new Rect(content.x, content.y, content.width, 82f);
         Rect versusRect = new Rect(content.x, singleRect.yMax + 14f, content.width, 82f);
 
-        if (DrawMainCommandButton(singleRect, "play", "CONTENCION", new Color(0.48f, 0.90f, 1f, 1f), true))
+        if (DrawMainCommandButton(singleRect, "play", "CONTENCION", GlitchUiPalette.Information, true,
+                MetaProgressionStorage.CurrentData.ToString()))
         {
             LocalVersusModeStorage.SelectSinglePlayer();
             selectedOperationIndex = ContainmentOperationStorage.GetDefinitionIndex(ContainmentOperationStorage.SelectedOperationId);
             showOperations = true;
             GlitchAudioManager.PlayMenuConfirm();
         }
-        if (DrawMainCommandButton(versusRect, "duel", "DUELO LOCAL", new Color(1f, 0.50f, 0.72f, 1f), true))
+        if (DrawMainCommandButton(versusRect, "duel", "DUELO LOCAL", GlitchUiPalette.Danger, true))
         {
             LocalVersusModeStorage.SelectLocalVersus();
             GlitchAudioManager.PlayMenuConfirm();
@@ -330,7 +366,7 @@ public class MainMenuController : MonoBehaviour
 
     private void DrawArchiveHub()
     {
-        Rect panel = DrawHubShell("ARCHIVO", new Color(0.68f, 0.72f, 1f, 1f));
+        Rect panel = DrawHubShell("ARCHIVO", GlitchUiPalette.Special);
         Rect content = new Rect(panel.x + 26f, panel.y + 112f, panel.width - 52f, panel.height - 164f);
         Rect unlocksRect = new Rect(content.x, content.y, content.width, 82f);
         Rect statsRect = new Rect(content.x, unlocksRect.yMax + 14f, content.width, 82f);
@@ -345,30 +381,6 @@ public class MainMenuController : MonoBehaviour
         }
 
         DrawHubBackButton(panel, () => showArchiveHub = false);
-    }
-
-    private void DrawSystemHub()
-    {
-        Rect panel = DrawHubShell("SISTEMA", new Color(0.92f, 0.58f, 1f, 1f));
-        Rect content = new Rect(panel.x + 26f, panel.y + 112f, panel.width - 52f, panel.height - 164f);
-        Rect optionsRect = new Rect(content.x, content.y, content.width, 72f);
-        Rect creditsRect = new Rect(content.x, optionsRect.yMax + 12f, content.width, 72f);
-        Rect exitRect = new Rect(content.x, creditsRect.yMax + 12f, content.width, 58f);
-
-        if (DrawMainCommandButton(optionsRect, "options", "OPCIONES", new Color(0.58f, 0.86f, 1f, 1f)))
-        {
-            showOptions = true;
-        }
-        if (DrawMainCommandButton(creditsRect, "credits", "CREDITOS", new Color(0.82f, 0.64f, 1f, 1f)))
-        {
-            showCredits = true;
-        }
-        if (DrawMainCommandButton(exitRect, "exit", "SALIR", new Color(0.72f, 0.72f, 0.82f, 1f)))
-        {
-            ExitGame();
-        }
-
-        DrawHubBackButton(panel, () => showSystemHub = false);
     }
 
     private Rect DrawHubShell(string title, Color accent)
@@ -405,7 +417,7 @@ public class MainMenuController : MonoBehaviour
         DrawPanelFx(panel, new Color(0.50f, 0.95f, 1f, 1f), 0.11f);
 
         Rect area = new Rect(panel.x + 18f, panel.y + 16f, panel.width - 36f, panel.height - 28f);
-        GUI.Label(new Rect(area.x, area.y, area.width, 42f), "Reglas de Contencion", panelTitleStyle);
+        GUI.Label(new Rect(area.x, area.y, area.width, 42f), "CLASE", panelTitleStyle);
         DrawSolidRect(new Rect(area.x, area.y + 50f, area.width, 1f), new Color(0.70f, 0.90f, 1f, 0.24f));
 
         IReadOnlyList<ContainmentOperationStorage.OperationDefinition> operations = ContainmentOperationStorage.Definitions;
@@ -430,7 +442,7 @@ public class MainMenuController : MonoBehaviour
             DrawSolidRect(row, fill);
             DrawSolidRect(new Rect(row.x, row.y, 4f, row.height), new Color(operation.accent.r, operation.accent.g, operation.accent.b, selectedRow ? 0.92f : 0.44f));
             GUI.Label(new Rect(row.x + 12f, row.y + 4f, row.width - 24f, 23f), operation.title, BuildFittedSingleLineStyle(rankingRowStyle, operation.title, row.width - 24f, 23f, 10));
-            string state = stored ? "ACTIVA" : operation.subtitle;
+            string state = stored ? "EQUIPADA" : operation.subtitle;
             GUI.Label(new Rect(row.x + 12f, row.y + 29f, row.width - 24f, 20f), state, BuildFittedSingleLineStyle(paragraphStyle, state, row.width - 24f, 20f, 9));
             if (GUI.Button(row, GUIContent.none, GUIStyle.none))
             {
@@ -449,7 +461,7 @@ public class MainMenuController : MonoBehaviour
         }
 
         Rect startRect = new Rect(area.xMax - 230f, area.yMax - 42f, 230f, 34f);
-        if (DrawAnimatedMenuButton(startRect, "Iniciar con regla", true))
+        if (DrawAnimatedMenuButton(startRect, "ELEGIR E INICIAR", true))
         {
             LocalVersusModeStorage.SelectSinglePlayer();
             ContainmentOperationStorage.SelectOperation(selected.id);
@@ -468,18 +480,10 @@ public class MainMenuController : MonoBehaviour
         GUI.Label(new Rect(icon.xMax + 18f, detail.y + 18f, detail.width - icon.width - 54f, 34f), operation.title, BuildFittedSingleLineStyle(panelTitleStyle, operation.title, detail.width - icon.width - 54f, 34f, 16));
         GUI.Label(new Rect(icon.xMax + 18f, detail.y + 54f, detail.width - icon.width - 54f, 22f), operation.subtitle, rankingScoreStyle);
 
-        Rect description = new Rect(detail.x + 18f, detail.y + 104f, detail.width - 36f, 58f);
-        GUI.Label(
-            description,
-            operation.description,
-            BuildFittedWrappedStyle(paragraphStyle, operation.description, description.width, description.height, 10));
-
-        float y = description.yMax + 8f;
-        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 62f), "Regla", operation.rule, operation.accent);
-        y += 68f;
-        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 62f), "Presion", operation.pressure, new Color(1f, 0.58f, 0.72f, 1f));
-        y += 68f;
-        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 62f), "Recompensa", operation.reward, new Color(1f, 0.82f, 0.46f, 1f));
+        float y = detail.y + 118f;
+        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 82f), "PRO", operation.reward, GlitchUiPalette.Success);
+        y += 94f;
+        DrawOperationInfoRow(new Rect(detail.x + 18f, y, detail.width - 36f, 82f), "CONTRA", operation.pressure, GlitchUiPalette.Danger);
     }
 
     private void DrawOperationInfoRow(Rect rect, string label, string value, Color accent)
@@ -601,33 +605,21 @@ public class MainMenuController : MonoBehaviour
         }
 
         GUILayout.FlexibleSpace();
-        if (!string.IsNullOrEmpty(rankingActionMessage))
+        string leaderboardStatus = FirebaseLeaderboardService.IsConfigured
+            ? FirebaseLeaderboardService.Status
+            : "Firebase sin configurar";
+        if (!string.IsNullOrEmpty(leaderboardStatus))
         {
-            GUILayout.Label(rankingActionMessage, paragraphStyle);
+            GUILayout.Label(leaderboardStatus, paragraphStyle);
             GUILayout.Space(4f);
         }
 
-        string clearLabel = clearRankingConfirmArmed ? "Confirmar limpieza" : "Limpiar ranking";
         bool oldEnabled = GUI.enabled;
         GUI.enabled = transitionState == MenuTransitionState.Idle;
-        if (GUILayout.Button(clearLabel, buttonStyle, GUILayout.Height(30f)))
+        if (GUILayout.Button("ACTUALIZAR", buttonStyle, GUILayout.Height(30f)))
         {
-            if (clearRankingConfirmArmed)
-            {
-                GlitchAudioManager.PlayRankingSubmit();
-                RankingStorage.ClearEntries();
-                clearRankingConfirmArmed = false;
-                rankingActionMessage = "Ranking limpiado.";
-                rankingActionMessageExpireAt = Time.unscaledTime + 2.2f;
-            }
-            else
-            {
-                GlitchAudioManager.PlayMenuToggle();
-                clearRankingConfirmArmed = true;
-                clearRankingConfirmExpireAt = Time.unscaledTime + 2.8f;
-                rankingActionMessage = "Pulsa nuevamente para confirmar.";
-                rankingActionMessageExpireAt = clearRankingConfirmExpireAt;
-            }
+            GlitchAudioManager.PlayMenuToggle();
+            FirebaseLeaderboardService.RefreshTop(true);
         }
         GUI.enabled = oldEnabled;
 
@@ -637,7 +629,7 @@ public class MainMenuController : MonoBehaviour
     private void GetMainMenuLayout(out Rect mainPanel, out Rect rankingPanel, out bool sideBySide)
     {
         float mainW = Mathf.Min(570f, Screen.width - 44f);
-        float mainH = Mathf.Min(540f, Screen.height - 44f);
+        float mainH = Mathf.Min(450f, Screen.height - 44f);
         float rankW = 430f;
         float rankH = 340f;
         float gap = 26f;
@@ -680,23 +672,41 @@ public class MainMenuController : MonoBehaviour
         {
             optionsActionMessage = string.Empty;
         }
+        if (clearProgressConfirmArmed && Time.unscaledTime >= clearProgressConfirmExpireAt)
+        {
+            clearProgressConfirmArmed = false;
+        }
 
         Rect area = new Rect(panel.x + 18f, panel.y + 16f, panel.width - 36f, panel.height - 28f);
         GUI.Label(new Rect(area.x, area.y, area.width, 42f), "Opciones", panelTitleStyle);
         DrawSolidRect(new Rect(area.x, area.y + 50f, area.width, 1f), new Color(0.70f, 0.90f, 1f, 0.24f));
 
-        Rect audio = new Rect(area.x, area.y + 66f, area.width * 0.48f, 124f);
+        Rect audio = new Rect(area.x, area.y + 66f, area.width * 0.48f, 184f);
         Rect interfaceBox = new Rect(audio.xMax + 18f, audio.y, area.width - audio.width - 18f, 184f);
-        Rect display = new Rect(area.x, audio.yMax + 18f, audio.width, 156f);
+        Rect display = new Rect(area.x, audio.yMax + 18f, audio.width, 184f);
         Rect actions = new Rect(interfaceBox.x, interfaceBox.yMax + 18f, interfaceBox.width, 184f);
 
         DrawStatsSection(audio, "Audio", new Color(0.55f, 0.95f, 1f, 1f));
-        float newMaster = DrawOptionSlider(audio, 42f, "Volumen maestro", masterVolume, 0f, 1f);
+        float newMaster = DrawOptionSlider(audio, 42f, "Volumen maestro", masterVolume, 0f, 1f, true);
         if (!Mathf.Approximately(newMaster, masterVolume))
         {
             masterVolume = newMaster;
             AudioListener.volume = masterVolume;
             UserSettings.SetMasterVolume(masterVolume);
+        }
+
+        float newMusic = DrawOptionSlider(audio, 90f, "Musica", musicVolume, 0f, 1f, true);
+        if (!Mathf.Approximately(newMusic, musicVolume))
+        {
+            musicVolume = newMusic;
+            UserSettings.SetMusicVolume(musicVolume);
+        }
+
+        float newSfx = DrawOptionSlider(audio, 138f, "SFX", sfxVolume, 0f, 1f, true);
+        if (!Mathf.Approximately(newSfx, sfxVolume))
+        {
+            sfxVolume = newSfx;
+            UserSettings.SetSfxVolume(sfxVolume);
         }
 
         DrawStatsSection(interfaceBox, "Interfaz", new Color(0.74f, 0.88f, 1f, 1f));
@@ -721,7 +731,7 @@ public class MainMenuController : MonoBehaviour
             UserSettings.SetMenuMotion(menuMotionIntensity);
         }
 
-        DrawStatsSection(display, "Pantalla", new Color(1f, 0.76f, 0.50f, 1f));
+        DrawStatsSection(display, "Sistema", new Color(1f, 0.76f, 0.50f, 1f));
         bool newFullscreen = DrawOptionToggle(display, 42f, "Pantalla completa", fullscreen);
         if (newFullscreen != fullscreen)
         {
@@ -736,6 +746,30 @@ public class MainMenuController : MonoBehaviour
             vSyncEnabled = newVSync;
             UserSettings.SetVSync(vSyncEnabled);
             ApplyDisplaySettings();
+        }
+
+        Rect clearProgressRect = new Rect(display.x + 14f, display.y + 132f, display.width - 28f, 34f);
+        string clearProgressLabel = clearProgressConfirmArmed ? "CONFIRMAR BORRADO" : "Borrar progreso";
+        if (DrawAnimatedMenuButton(clearProgressRect, clearProgressLabel, danger: true))
+        {
+            if (!clearProgressConfirmArmed)
+            {
+                clearProgressConfirmArmed = true;
+                clearProgressConfirmExpireAt = Time.unscaledTime + 4f;
+                optionsActionMessage = "Confirma: borra progreso y nombre.";
+                optionsActionMessageExpireAt = clearProgressConfirmExpireAt;
+            }
+            else
+            {
+                MetaProgressionStorage.ResetAllLocalProgress();
+                clearProgressConfirmArmed = false;
+                LoadSettings();
+                showOptions = false;
+                showPlayerNameSetup = true;
+                playerNameDraft = string.Empty;
+                playerNameFieldFocused = false;
+                optionsActionMessage = string.Empty;
+            }
         }
 
         DrawStatsSection(actions, "Tutoriales", new Color(0.95f, 0.58f, 1f, 1f));
@@ -870,24 +904,15 @@ public class MainMenuController : MonoBehaviour
         GUI.Label(new Rect(area.x, area.y, area.width, 42f), "Creditos", panelTitleStyle);
         DrawSolidRect(new Rect(area.x, area.y + 50f, area.width, 1f), new Color(0.86f, 0.72f, 1f, 0.28f));
 
-        Rect intro = new Rect(area.x, area.y + 62f, area.width, 46f);
-        GUIStyle wrappedIntro = new GUIStyle(paragraphStyle)
-        {
-            wordWrap = true,
-            clipping = TextClipping.Clip
-        };
-        GUI.Label(intro, "Reconocimiento a los recursos y herramientas utilizados. Los enlaces se abren en el navegador.", wrappedIntro);
-
-        Rect listRect = new Rect(area.x, area.y + 116f, area.width, area.height - 174f);
+        Rect listRect = new Rect(area.x, area.y + 66f, area.width, area.height - 124f);
         DrawSolidRect(listRect, new Color(0.02f, 0.035f, 0.07f, 0.66f));
         DrawSolidRect(new Rect(listRect.x, listRect.y, listRect.width, 2f), new Color(0.86f, 0.72f, 1f, 0.36f));
 
         GUILayout.BeginArea(new Rect(listRect.x + 12f, listRect.y + 10f, listRect.width - 24f, listRect.height - 20f));
         creditsScroll = GUILayout.BeginScrollView(creditsScroll, false, true);
-        DrawCreditSection("Proyecto", new Color(0.48f, 0.94f, 1f, 1f));
-        DrawCreditSection("Motor y herramientas", new Color(0.82f, 0.74f, 1f, 1f));
-        DrawCreditSection("Tipografias", new Color(1f, 0.82f, 0.46f, 1f));
-        DrawCreditSection("Musica", new Color(1f, 0.56f, 0.82f, 1f));
+        DrawCreditSection("Herramientas", GlitchUiPalette.Information);
+        DrawCreditSection("Tipografia", GlitchUiPalette.Information);
+        DrawCreditSection("Musica", GlitchUiPalette.Information);
         GUILayout.EndScrollView();
         GUILayout.EndArea();
 
@@ -926,38 +951,34 @@ public class MainMenuController : MonoBehaviour
 
     private void DrawCreditEntry(CreditLink link, Color accent)
     {
-        Rect row = GUILayoutUtility.GetRect(1f, 74f, GUILayout.ExpandWidth(true));
+        Rect row = GUILayoutUtility.GetRect(1f, 46f, GUILayout.ExpandWidth(true));
         bool hasUrl = !string.IsNullOrWhiteSpace(link.url);
-        bool hovered = hasUrl && row.Contains(Event.current.mousePosition);
+        Rect linkRect = new Rect(row.x + 12f, row.y + 5f, row.width - 24f, row.height - 10f);
+        bool hovered = hasUrl && linkRect.Contains(Event.current.mousePosition);
         Color fill = hovered ? new Color(0.10f, 0.16f, 0.25f, 0.92f) : new Color(0.05f, 0.08f, 0.14f, 0.82f);
         DrawSolidRect(row, fill);
         DrawSolidRect(new Rect(row.x, row.y, 3f, row.height), new Color(accent.r, accent.g, accent.b, hovered ? 0.76f : 0.42f));
 
-        Rect titleRect = new Rect(row.x + 12f, row.y + 6f, row.width * 0.48f, 24f);
-        Rect descriptionRect = new Rect(row.x + 12f, row.y + 30f, row.width * 0.58f, 34f);
-        Rect linkRect = new Rect(row.x + row.width * 0.62f, row.y + 12f, row.width * 0.36f, 24f);
-        Rect buttonRect = new Rect(linkRect.x, row.y + 40f, linkRect.width, 26f);
-
-        GUI.Label(titleRect, link.title, BuildFittedSingleLineStyle(rankingRowStyle, link.title, titleRect.width, titleRect.height, 10));
-        GUIStyle wrapped = new GUIStyle(paragraphStyle)
-        {
-            wordWrap = true,
-            clipping = TextClipping.Clip,
-            fontSize = Mathf.Max(10, paragraphStyle.fontSize - 1)
-        };
-        GUI.Label(descriptionRect, link.description, wrapped);
-
-        string urlLabel = hasUrl ? link.url : "Credito interno";
-        GUI.Label(linkRect, urlLabel, BuildFittedSingleLineStyle(hasUrl ? creditLinkStyle : paragraphStyle, urlLabel, linkRect.width, linkRect.height, 9));
-
         bool oldEnabled = GUI.enabled;
         GUI.enabled = hasUrl && transitionState == MenuTransitionState.Idle;
-        if (GUI.Button(buttonRect, hasUrl ? "Abrir enlace" : "Sin enlace", buttonStyle))
+        GUIStyle linkStyle = new GUIStyle(creditLinkStyle)
+        {
+            alignment = TextAnchor.MiddleLeft,
+            fontSize = Mathf.RoundToInt(16f * uiScale)
+        };
+        linkStyle.normal.textColor = hovered ? Color.white : accent;
+        if (GUI.Button(linkRect, link.title, linkStyle))
         {
             GlitchAudioManager.PlayMenuConfirm();
             Application.OpenURL(link.url);
         }
         GUI.enabled = oldEnabled;
+
+        if (hovered)
+        {
+            float underlineWidth = Mathf.Min(linkRect.width, linkStyle.CalcSize(new GUIContent(link.title)).x);
+            DrawSolidRect(new Rect(linkRect.x, linkRect.yMax - 5f, underlineWidth, 1f), new Color(accent.r, accent.g, accent.b, 0.86f));
+        }
     }
 
     private int CountCreditLinks(string section)
@@ -996,13 +1017,23 @@ public class MainMenuController : MonoBehaviour
         GUI.Label(valueRect, value, BuildFittedSingleLineStyle(rankingScoreStyle, value, valueRect.width, valueRect.height, 10));
     }
 
-    private float DrawOptionSlider(Rect container, float yOffset, string label, float value, float min, float max)
+    private float DrawOptionSlider(
+        Rect container,
+        float yOffset,
+        string label,
+        float value,
+        float min,
+        float max,
+        bool showPercentage = false)
     {
         Rect labelRect = new Rect(container.x + 14f, container.y + yOffset, container.width - 28f, 22f);
         Rect sliderRect = new Rect(container.x + 14f, labelRect.yMax + 4f, container.width - 28f, 18f);
         Rect valueRect = new Rect(labelRect.x + labelRect.width - 58f, labelRect.y, 58f, labelRect.height);
         GUI.Label(new Rect(labelRect.x, labelRect.y, labelRect.width - 66f, labelRect.height), label, paragraphStyle);
-        GUI.Label(valueRect, value.ToString("0.00"), rankingScoreStyle);
+        string valueLabel = showPercentage
+            ? $"{Mathf.RoundToInt(Mathf.InverseLerp(min, max, value) * 100f)}%"
+            : value.ToString("0.00");
+        GUI.Label(valueRect, valueLabel, rankingScoreStyle);
         return GUI.HorizontalSlider(sliderRect, value, min, max);
     }
 
@@ -1468,10 +1499,12 @@ public class MainMenuController : MonoBehaviour
         }
 
         DrawSolidRect(row, fill);
-        DrawSolidRect(new Rect(row.x, row.y, row.width, 2f), unlocked ? new Color(1f, 0.84f, 0.48f, 0.60f) : new Color(0.84f, 0.58f, 1f, 0.38f));
+        DrawSolidRect(new Rect(row.x, row.y, row.width, 2f), unlocked
+            ? GlitchUiPalette.WithAlpha(GlitchUiPalette.Success, 0.60f)
+            : GlitchUiPalette.WithAlpha(GlitchUiPalette.Neutral, 0.38f));
         if (selected)
         {
-            DrawSolidRect(new Rect(row.x, row.y, 4f, row.height), new Color(1f, 0.72f, 0.92f, 0.82f));
+            DrawSolidRect(new Rect(row.x, row.y, 4f, row.height), GlitchUiPalette.WithAlpha(GlitchUiPalette.Information, 0.82f));
         }
 
         int progress = AchievementStorage.GetProgress(achievement, 0f);
@@ -1491,7 +1524,7 @@ public class MainMenuController : MonoBehaviour
         bool unlocked = AchievementStorage.IsUnlocked(achievement.id);
         int progress = AchievementStorage.GetProgress(achievement, 0f);
         float normalized = unlocked ? 1f : Mathf.Clamp01(progress / Mathf.Max(1f, achievement.target));
-        Color accent = unlocked ? new Color(1f, 0.82f, 0.46f, 1f) : new Color(0.94f, 0.58f, 1f, 1f);
+        Color accent = unlocked ? GlitchUiPalette.Success : GlitchUiPalette.Neutral;
 
         DrawSolidRect(detailRect, new Color(0.025f, 0.045f, 0.085f, 0.76f));
         DrawSolidRect(new Rect(detailRect.x, detailRect.y, detailRect.width, 2f), new Color(accent.r, accent.g, accent.b, 0.55f));
@@ -1534,8 +1567,8 @@ public class MainMenuController : MonoBehaviour
             : "Completa este objetivo para cobrar Datos y avanzar tu progreso.";
         GUIStyle noteStyle = new GUIStyle(detailParagraph);
         noteStyle.normal.textColor = unlocked
-            ? new Color(1f, 0.82f, 0.48f, 0.98f)
-            : new Color(0.82f, 0.90f, 1f, 0.94f);
+            ? GlitchUiPalette.WithAlpha(GlitchUiPalette.Success, 0.98f)
+            : GlitchUiPalette.WithAlpha(GlitchUiPalette.Neutral, 0.94f);
         if (noteHeight >= 22f)
         {
             DrawSolidRect(noteRect, noteFill);
@@ -1560,10 +1593,12 @@ public class MainMenuController : MonoBehaviour
         }
 
         DrawSolidRect(row, fill);
-        DrawSolidRect(new Rect(row.x, row.y, row.width, 2f), unlocked ? new Color(0.50f, 1f, 0.74f, 0.52f) : new Color(0.48f, 0.72f, 1f, 0.38f));
+        DrawSolidRect(new Rect(row.x, row.y, row.width, 2f), unlocked
+            ? GlitchUiPalette.WithAlpha(GlitchUiPalette.Success, 0.52f)
+            : GlitchUiPalette.WithAlpha(GlitchUiPalette.Neutral, 0.38f));
         if (selected)
         {
-            DrawSolidRect(new Rect(row.x, row.y, 4f, row.height), new Color(0.48f, 0.94f, 1f, 0.82f));
+            DrawSolidRect(new Rect(row.x, row.y, 4f, row.height), GlitchUiPalette.WithAlpha(GlitchUiPalette.Information, 0.82f));
         }
 
         float textX = row.x + (unlock.skin ? 44f : 10f);
@@ -2324,7 +2359,7 @@ public class MainMenuController : MonoBehaviour
         return clicked;
     }
 
-    private bool DrawAnimatedMenuButton(Rect rect, string label, bool primary = false)
+    private bool DrawAnimatedMenuButton(Rect rect, string label, bool primary = false, bool danger = false)
     {
         bool canInteract = transitionState == MenuTransitionState.Idle;
         bool hovered = rect.Contains(Event.current.mousePosition);
@@ -2335,21 +2370,29 @@ public class MainMenuController : MonoBehaviour
         float wobble = hovered ? Mathf.Sin(t * 7.2f) * 0.7f : 0f;
         rect.y += wobble;
 
-        Color baseFill = primary
-            ? new Color(0.10f, 0.18f, 0.28f, 0.94f)
-            : new Color(0.08f, 0.11f, 0.18f, 0.90f);
-        Color fill = Color.Lerp(baseFill, new Color(0.18f, 0.30f, 0.48f, 0.96f), hoverLerp * 0.65f);
-        Color border = Color.Lerp(
-            new Color(0.62f, 0.76f, 1f, 0.36f),
-            new Color(0.88f, 0.96f, 1f, 0.78f),
-            hoverLerp);
+        Color baseFill = danger
+            ? new Color(0.22f, 0.055f, 0.075f, 0.92f)
+            : primary
+                ? new Color(0.10f, 0.18f, 0.28f, 0.94f)
+                : new Color(0.08f, 0.11f, 0.18f, 0.90f);
+        Color hoverFill = danger
+            ? new Color(0.40f, 0.08f, 0.10f, 0.97f)
+            : new Color(0.18f, 0.30f, 0.48f, 0.96f);
+        Color fill = Color.Lerp(baseFill, hoverFill, hoverLerp * 0.65f);
+        Color border = danger
+            ? Color.Lerp(GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.54f), GlitchUiPalette.Danger, hoverLerp)
+            : Color.Lerp(
+                new Color(0.62f, 0.76f, 1f, 0.36f),
+                new Color(0.88f, 0.96f, 1f, 0.78f),
+                hoverLerp);
 
         DrawSolidRect(rect, fill);
         DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 1.5f), border);
         DrawSolidRect(new Rect(rect.x, rect.yMax - 1.5f, rect.width, 1.5f), new Color(border.r, border.g, border.b, border.a * 0.65f));
         DrawSolidRect(new Rect(rect.x, rect.y, 1.5f, rect.height), new Color(border.r, border.g, border.b, border.a * 0.8f));
         DrawSolidRect(new Rect(rect.xMax - 1.5f, rect.y, 1.5f, rect.height), new Color(border.r, border.g, border.b, border.a * 0.8f));
-        DrawSolidRect(new Rect(rect.x + 6f, rect.y + 6f, 3f, rect.height - 12f), new Color(0.84f, 0.95f, 1f, 0.24f + hoverLerp * 0.28f));
+        Color indicator = danger ? GlitchUiPalette.Danger : new Color(0.84f, 0.95f, 1f, 1f);
+        DrawSolidRect(new Rect(rect.x + 6f, rect.y + 6f, 3f, rect.height - 12f), new Color(indicator.r, indicator.g, indicator.b, 0.24f + hoverLerp * 0.28f));
 
         float shineW = Mathf.Lerp(rect.width * 0.16f, rect.width * 0.28f, hoverLerp);
         float shineX = Mathf.Repeat(t * 120f + rect.width * (primary ? 0.12f : 0.38f), rect.width + shineW) - shineW;
@@ -2365,8 +2408,8 @@ public class MainMenuController : MonoBehaviour
 
         if (hovered)
         {
-            DrawSolidRect(new Rect(rect.x - 2f, rect.y - 2f, rect.width + 4f, 2f), new Color(0.85f, 0.96f, 1f, 0.32f));
-            DrawSolidRect(new Rect(rect.x - 2f, rect.yMax, rect.width + 4f, 2f), new Color(0.85f, 0.96f, 1f, 0.24f));
+            DrawSolidRect(new Rect(rect.x - 2f, rect.y - 2f, rect.width + 4f, 2f), new Color(border.r, border.g, border.b, 0.32f));
+            DrawSolidRect(new Rect(rect.x - 2f, rect.yMax, rect.width + 4f, 2f), new Color(border.r, border.g, border.b, 0.24f));
             float waveX = rect.x + 14f + Mathf.Repeat(t * 46f, Mathf.Max(1f, rect.width - 40f));
             DrawSolidRect(new Rect(waveX, rect.y + rect.height * 0.5f - 1f, 18f, 2f), new Color(1f, 1f, 1f, 0.26f));
         }
@@ -2390,12 +2433,43 @@ public class MainMenuController : MonoBehaviour
         return clicked;
     }
 
+    private bool DrawTextLink(Rect rect, string label, Color color)
+    {
+        bool canInteract = transitionState == MenuTransitionState.Idle;
+        bool hovered = canInteract && rect.Contains(Event.current.mousePosition);
+        GUIStyle style = new GUIStyle(creditLinkStyle)
+        {
+            alignment = TextAnchor.MiddleRight,
+            fontSize = Mathf.RoundToInt(14f * uiScale)
+        };
+        style.normal.textColor = hovered ? Color.white : new Color(color.r, color.g, color.b, 0.82f);
+        GUI.Label(rect, label, style);
+        if (hovered)
+        {
+            float width = Mathf.Min(rect.width, style.CalcSize(new GUIContent(label)).x);
+            DrawSolidRect(new Rect(rect.xMax - width, rect.yMax - 3f, width, 1f), new Color(color.r, color.g, color.b, 0.88f));
+        }
+
+        if (!canInteract)
+        {
+            return false;
+        }
+
+        bool clicked = GUI.Button(rect, GUIContent.none, GUIStyle.none);
+        if (clicked)
+        {
+            GlitchAudioManager.PlayMenuConfirm();
+        }
+        return clicked;
+    }
+
     private bool DrawMainCommandButton(
         Rect rect,
         string icon,
         string title,
         Color accent,
-        bool emphasis = false)
+        bool emphasis = false,
+        string metric = null)
     {
         bool canInteract = transitionState == MenuTransitionState.Idle;
         string hoverKey = $"main_{icon}_{title}";
@@ -2431,7 +2505,29 @@ public class MainMenuController : MonoBehaviour
             clipping = TextClipping.Clip
         };
         commandStyle.normal.textColor = Color.Lerp(new Color(0.84f, 0.90f, 1f, 0.92f), Color.white, hover);
-        GUI.Label(new Rect(textX, rect.y + 2f, rect.xMax - textX - arrowSpace, rect.height), title, commandStyle);
+        float availableTextWidth = rect.xMax - textX - arrowSpace;
+        float titleWidth = Mathf.Min(availableTextWidth, commandStyle.CalcSize(new GUIContent(title)).x + (8f * uiScale));
+        GUI.Label(new Rect(textX, rect.y + 2f, titleWidth, rect.height), title, commandStyle);
+
+        if (!string.IsNullOrWhiteSpace(metric))
+        {
+            float metricX = textX + titleWidth + (8f * uiScale);
+            float metricWidth = Mathf.Max(0f, rect.xMax - metricX - arrowSpace);
+            if (metricWidth >= 78f * uiScale)
+            {
+                string metricLabel = $"DATOS  {metric}";
+                GUIStyle metricStyle = new GUIStyle(rankingScoreStyle)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontSize = Mathf.RoundToInt(14f * uiScale)
+                };
+                float chipWidth = Mathf.Min(metricWidth, metricStyle.CalcSize(new GUIContent(metricLabel)).x + (18f * uiScale));
+                Rect chip = new Rect(metricX, rect.center.y - (14f * uiScale), chipWidth, 28f * uiScale);
+                DrawSolidRect(chip, new Color(1f, 0.76f, 0.32f, 0.10f + hover * 0.06f));
+                DrawSolidRect(new Rect(chip.x, chip.yMax - 2f, chip.width, 2f), new Color(1f, 0.82f, 0.46f, 0.62f + hover * 0.24f));
+                GUI.Label(chip, metricLabel, metricStyle);
+            }
+        }
 
         float arrowX = rect.xMax - 22f - hover * 5f;
         DrawSolidRect(new Rect(arrowX, rect.center.y - 1f, 12f, 2f),
@@ -2710,15 +2806,6 @@ public class MainMenuController : MonoBehaviour
         };
         titleStyle.normal.textColor = new Color(0.94f, 0.97f, 1f, 1f);
 
-        subtitleStyle = new GUIStyle(GUI.skin.label)
-        {
-            font = uiFont,
-            fontSize = Mathf.RoundToInt(16f * uiScale),
-            fontStyle = FontStyle.Italic,
-            alignment = TextAnchor.MiddleCenter
-        };
-        subtitleStyle.normal.textColor = new Color(0.80f, 0.86f, 0.93f, 0.95f);
-
         panelTitleStyle = new GUIStyle(GUI.skin.label)
         {
             font = titleFont,
@@ -2815,6 +2902,8 @@ public class MainMenuController : MonoBehaviour
     private void LoadSettings()
     {
         masterVolume = UserSettings.GetMasterVolume();
+        musicVolume = UserSettings.GetMusicVolume();
+        sfxVolume = UserSettings.GetSfxVolume();
         uiScale = UserSettings.GetMenuUiScale();
         hudScale = UserSettings.GetHudScale();
         menuMotionIntensity = UserSettings.GetMenuMotion();

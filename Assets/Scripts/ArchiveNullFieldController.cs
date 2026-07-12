@@ -60,8 +60,8 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
     [SerializeField] private int obstaclesPerAnchor = 3;
     [SerializeField] private float obstacleCaptureRadiusMultiplier = 1.5f;
     [SerializeField] private float maximumObstacleHalfExtent = 2.2f;
-    [SerializeField] private Color telegraphColor = new Color(0.68f, 0.62f, 1f, 0.82f);
-    [SerializeField] private Color activeColor = new Color(0.44f, 0.95f, 1f, 0.92f);
+    [SerializeField] private Color telegraphColor = new Color(1f, 0.78f, 0.24f, 0.82f);
+    [SerializeField] private Color activeColor = new Color(1f, 0.28f, 0.40f, 0.92f);
 
     private readonly List<Anchor> anchors = new List<Anchor>();
     private readonly List<CapturedObstacle> capturedObstacles = new List<CapturedObstacle>();
@@ -91,6 +91,8 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
 
     public void Configure(Transform center, Transform staticRoot, Transform dynamicRoot)
     {
+        telegraphColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.82f);
+        activeColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.92f);
         centerTransform = center != null ? center : transform;
         staticObstaclesRoot = staticRoot;
         dynamicObstaclesRoot = dynamicRoot;
@@ -215,7 +217,10 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
 
         ClearAnchors();
         eventActive = true;
-        FindAnyObjectByType<GameManager>()?.NotifyThemedMapEventStarted(ActiveThemedEventLabel, ActiveThemedEventHint);
+        gameManager.NotifyMapEventStarted(
+            "archive_gravitational_well",
+            "POZO GRAVITACIONAL",
+            "Los núcleos arrastran al jugador, la anomalía, los proyectiles y objetos cercanos hasta hacerlos orbitar. Evita el centro y corrige tu ruta contra la atracción.");
         eventTimer = 0f;
         int count = Mathf.Max(2, anchorCount);
         float radiusX = arena.ArenaWidth * 0.30f;

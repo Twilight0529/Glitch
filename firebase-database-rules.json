@@ -1,0 +1,13 @@
+{
+  "rules": {
+    "leaderboard": {
+      ".read": "auth != null && query.orderByChild == 'score' && query.limitToLast <= 15",
+      ".indexOn": ["score"],
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid && newData.exists() && (!data.exists() || newData.child('score').val() > data.child('score').val())",
+        ".validate": "newData.hasChildren(['playerName','score','level','survivalTime','recordedAtUtc']) && newData.child('score').isNumber() && newData.child('score').val() >= 0 && newData.child('playerName').isString() && newData.child('playerName').val().length <= 16"
+      }
+    }
+  }
+}

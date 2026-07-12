@@ -15,8 +15,8 @@ public class StorageCraneHookFx : MonoBehaviour
     private SpriteRenderer carriageRenderer;
     private SpriteRenderer hookRenderer;
     private SpriteRenderer glowRenderer;
-    private Color warningColor = Color.yellow;
-    private Color activeColor = Color.cyan;
+    private Color warningColor = new Color(1f, 0.78f, 0.24f, 1f);
+    private Color activeColor = new Color(1f, 0.28f, 0.40f, 1f);
     private float topY;
     private float sideX;
     private float lifeSeconds = 4f;

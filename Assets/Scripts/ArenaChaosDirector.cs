@@ -54,7 +54,7 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private float pulseEnemyBoostMultiplier = 1.23f;
     [SerializeField] private float pulseEnemyBoostDuration = 1.1f;
     [SerializeField] private float pulseEnemyBoostCooldown = 0.33f;
-    [SerializeField] private Color pulseColor = new Color(1f, 0.38f, 0.53f, 0.92f);
+    [SerializeField] private Color pulseColor = new Color(1f, 0.28f, 0.40f, 0.92f);
 
     [Header("Objective Events")]
     [SerializeField] private bool enableObjectiveEvents = true;
@@ -64,7 +64,7 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private float objectiveNodeActivationSeconds = 1.15f;
     [SerializeField] private float objectiveNodeProbeRadius = 0.7f;
     [SerializeField] private int objectiveCompleteScore = 18;
-    [SerializeField] private Color objectiveNodeColor = new Color(0.50f, 0.96f, 1f, 1f);
+    [SerializeField] private Color objectiveNodeColor = new Color(0.38f, 1f, 0.66f, 1f);
 
     [Header("Breach Events")]
     [SerializeField] private bool enableBreachEvents = true;
@@ -85,7 +85,7 @@ public class ArenaChaosDirector : MonoBehaviour
     [SerializeField] private float breachSystemSuppressionWindowSeconds = 5f;
     [SerializeField] private float breachConsumedPlayerDeathDelay = 0.7f;
     [SerializeField] private float breachSweepPlayerConsumeMargin = 0.18f;
-    [SerializeField] private Color breachColor = new Color(1f, 0.42f, 0.78f, 1f);
+    [SerializeField] private Color breachColor = new Color(0.34f, 0.86f, 1f, 1f);
 
     [Header("Spawn Rules")]
     [SerializeField] private float edgePadding = 1.1f;
@@ -163,6 +163,9 @@ public class ArenaChaosDirector : MonoBehaviour
 
     public void Configure(ProceduralArenaGenerator arenaGenerator)
     {
+        pulseColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.92f);
+        objectiveNodeColor = GlitchUiPalette.Success;
+        breachColor = GlitchUiPalette.Information;
         // Configure también se usa al cruzar un Breach, por eso reinicia timers y objetos de la arena anterior.
         arena = arenaGenerator;
         RefreshReferences();
@@ -216,6 +219,20 @@ public class ArenaChaosDirector : MonoBehaviour
         if (operation.id == ContainmentOperationStorage.ExtractionId)
         {
             enablePowerups = false;
+        }
+        else if (operation.id == ContainmentOperationStorage.ChaosId)
+        {
+            powerupIntervalRange *= 0.52f;
+            scorePickupIntervalRange *= 0.48f;
+            pulseEventIntervalRange *= 0.46f;
+            objectiveEventIntervalRange *= 0.52f;
+            breachEventIntervalRange *= 0.62f;
+            scorePickupMaxAlive += 4;
+            scorePickupBurstMin += 1;
+            scorePickupBurstMax += 2;
+            pulseHazardsMin += 1;
+            pulseHazardsMax += 2;
+            objectiveNodeCount += 1;
         }
     }
 
@@ -817,6 +834,10 @@ public class ArenaChaosDirector : MonoBehaviour
         objectiveEventActive = true;
         objectiveTimer = Mathf.Max(2f, objectiveNodeLifetime);
         objectiveNodesTotal = activeObjectiveNodes.Count;
+        gameManager?.NotifyMapEventStarted(
+            "global_sync_nodes",
+            "NODOS DE SINCRONIZACION",
+            "Mantente sobre cada nodo celeste hasta completar su carga. Activa todos antes de que termine el tiempo para recibir la recompensa de puntaje.");
         RaiseWarning("Pisa los nodos celestes", 2.6f);
         RaiseEvent($"Mantener nodos 0/{activeObjectiveNodes.Count}");
         return true;
@@ -1664,6 +1685,10 @@ public class ArenaChaosDirector : MonoBehaviour
 
         // Primero avisa y despues crea peligros cerca del foco de pelea para que el evento sea esquivable.
         RaiseWarning("Containment Pulse Incoming", pulsePreWarningSeconds);
+        gameManager?.NotifyMapEventStarted(
+            "global_containment_pulse",
+            "PULSO DE CONTENCION",
+            "Los círculos amarillos anticipan zonas de pulso; al volverse rojos ralentizan al jugador y aceleran a la anomalía. Abandona el área antes de su activación.");
         if (pulsePreWarningSeconds > 0f)
         {
             yield return new WaitForSeconds(Mathf.Max(0f, pulsePreWarningSeconds));

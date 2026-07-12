@@ -22,7 +22,6 @@ public class GameMenuController : MonoBehaviour
 
     [Header("Defeat Theme")]
     [SerializeField] private string defeatTitle = "CONTAINMENT FAILURE";
-    [SerializeField] private string defeatSubtitle = "La anomalia te alcanzo.";
     [SerializeField] private float defeatPulseSpeed = 1.8f;
     [SerializeField] private float glitchJitterStrength = 6.5f;
     [SerializeField] private float glitchSplitStrength = 2.2f;
@@ -37,9 +36,6 @@ public class GameMenuController : MonoBehaviour
     [SerializeField] private Color defeatFlashColor = new Color(1f, 0.72f, 0.78f, 1f);
     [SerializeField] private Color defeatShockwaveColor = new Color(1f, 0.44f, 0.58f, 1f);
 
-    [Header("Ranking")]
-    [SerializeField] private int rankingNameMaxLength = 16;
-
     public static bool ShouldHideGameplayHud { get; private set; }
 
     private OverlayState state;
@@ -47,14 +43,9 @@ public class GameMenuController : MonoBehaviour
     private GUIStyle subtitleStyle;
     private GUIStyle bodyStyle;
     private GUIStyle buttonStyle;
-    private GUIStyle textFieldStyle;
     private GUIStyle rankingStatusStyle;
     private Font importantFont;
     private Font secondaryFont;
-    private string rankingNameInput = "Player";
-    private bool rankingSubmitted;
-    private int rankingSubmittedScore;
-    private float rankingSubmittedTime;
     private float defeatStartedAtUnscaled;
 
     private void Awake()
@@ -110,11 +101,6 @@ public class GameMenuController : MonoBehaviour
 
         if (state == OverlayState.Defeat)
         {
-            if (GetSubmitPressedThisFrame() && IsDefeatInputUnlocked())
-            {
-                TryRegisterCurrentScore();
-            }
-
             return;
         }
 
@@ -143,23 +129,6 @@ public class GameMenuController : MonoBehaviour
 
 #if ENABLE_LEGACY_INPUT_MANAGER
         return Input.GetKeyDown(KeyCode.Escape);
-#else
-        return false;
-#endif
-    }
-
-    private static bool GetSubmitPressedThisFrame()
-    {
-#if ENABLE_INPUT_SYSTEM
-        Keyboard keyboard = Keyboard.current;
-        if (keyboard != null && (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame))
-        {
-            return true;
-        }
-#endif
-
-#if ENABLE_LEGACY_INPUT_MANAGER
-        return Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.KeypadEnter);
 #else
         return false;
 #endif
@@ -274,13 +243,6 @@ public class GameMenuController : MonoBehaviour
         };
         bodyStyle.normal.textColor = new Color(0.90f, 0.93f, 1f, 0.95f);
 
-        textFieldStyle = new GUIStyle(GUI.skin.textField)
-        {
-            font = secondaryFont,
-            fontSize = 16,
-            alignment = TextAnchor.MiddleLeft
-        };
-
         rankingStatusStyle = new GUIStyle(GUI.skin.label)
         {
             font = secondaryFont,
@@ -357,13 +319,13 @@ public class GameMenuController : MonoBehaviour
         GUI.Label(title, "Audio", GetFittedSingleLineStyle(titleStyle, "Audio", title.width, 26, 18));
         DrawSolidRect(new Rect(panel.x + 20f, panel.y + 50f, panel.width - 40f, 1f), new Color(0.96f, 0.68f, 1f, 0.22f));
 
-        float music = DrawPauseVolumeSlider(panel, 72f, "Musica", UserSettings.GetMusicVolume(), new Color(0.88f, 0.58f, 1f, 1f));
+        float music = DrawPauseVolumeSlider(panel, 72f, "Musica", UserSettings.GetMusicVolume(), GlitchUiPalette.Information);
         if (!Mathf.Approximately(music, UserSettings.GetMusicVolume()))
         {
             UserSettings.SetMusicVolume(music);
         }
 
-        float sfx = DrawPauseVolumeSlider(panel, 146f, "SFX", UserSettings.GetSfxVolume(), new Color(0.48f, 0.94f, 1f, 1f));
+        float sfx = DrawPauseVolumeSlider(panel, 146f, "SFX", UserSettings.GetSfxVolume(), GlitchUiPalette.Information);
         if (!Mathf.Approximately(sfx, UserSettings.GetSfxVolume()))
         {
             UserSettings.SetSfxVolume(sfx);
@@ -463,7 +425,6 @@ public class GameMenuController : MonoBehaviour
         float introDuration = Mathf.Max(0.01f, defeatCinematicDuration);
         float introT = Mathf.Clamp01(defeatElapsed / introDuration);
         float introEase = EaseOutCubic(introT);
-
         float pulse = 0.5f + 0.5f * Mathf.Sin(t * defeatPulseSpeed);
         float glitch = Mathf.Clamp01(0.20f + pulse * 0.50f);
         float hudGlitch = glitch * Mathf.Clamp01(hudGlitchWeight);
@@ -472,7 +433,7 @@ public class GameMenuController : MonoBehaviour
         DrawDefeatCinematicIntro(defeatElapsed, introT);
         DrawDefeatBackdrop(pulse, hudGlitch, t);
 
-        Rect panel = CenterRect(Mathf.Min(640f, Screen.width - 48f), Mathf.Min(600f, Screen.height - 48f));
+        Rect panel = CenterRect(Mathf.Min(700f, Screen.width - 48f), Mathf.Min(510f, Screen.height - 48f));
         float panelScale = Mathf.Lerp(0.90f, 1f, introEase);
         if (introT < 1f)
         {
@@ -488,105 +449,145 @@ public class GameMenuController : MonoBehaviour
         panel.y += jitterY;
         DrawPanel(panel, new Color(0.07f, 0.03f, 0.06f, 0.92f), new Color(0.94f, 0.42f, 0.55f, 0.65f));
 
-        Rect area = new Rect(panel.x + 20f, panel.y + 14f, panel.width - 40f, panel.height - 24f);
-        GUILayout.BeginArea(area);
-        GUIStyle fittedTitleStyle = GetFittedSingleLineStyle(titleStyle, defeatTitle, area.width, 34, 24);
-        Rect titleRect = new Rect(0f, 0f, area.width, 48f);
+        Rect area = new Rect(panel.x + 28f, panel.y + 18f, panel.width - 56f, panel.height - 36f);
+        GUIStyle fittedTitleStyle = GetFittedSingleLineStyle(titleStyle, defeatTitle, area.width, 32, 22);
+        Rect titleRect = new Rect(area.x, area.y, area.width, 46f);
         DrawGlitchLabel(titleRect, defeatTitle, fittedTitleStyle, textGlitch * 0.30f);
-        GUILayout.Space(48f);
-        GUILayout.Space(2f);
-        Rect subtitleRect = new Rect(0f, 46f, area.width, 24f);
-        DrawGlitchLabel(subtitleRect, defeatSubtitle, subtitleStyle, textGlitch * 0.45f);
-        GUILayout.Space(24f);
-        GUILayout.Space(16f);
+        DrawSolidRect(new Rect(area.x + 24f, area.y + 52f, area.width - 48f, 1f), new Color(1f, 0.52f, 0.62f, 0.26f));
 
-        string level = gameManager != null ? gameManager.CurrentLevelTypeLabel : "Unknown";
         float time = gameManager != null ? gameManager.SurvivalTime : 0f;
         int score = gameManager != null ? gameManager.CurrentScore : 0;
         MetaProgressionStorage.RunReward reward = gameManager != null && gameManager.HasAwardedMetaReward
             ? gameManager.LastMetaReward
             : MetaProgressionStorage.LastRunReward;
+        string grade = string.IsNullOrWhiteSpace(reward.performanceGrade) ? "D" : reward.performanceGrade;
+        DrawPerformanceGrade(new Rect(area.x, area.y + 66f, area.width, 190f), grade, defeatElapsed, pulse);
 
-        GUILayout.BeginHorizontal();
-        GUILayout.BeginVertical(GUILayout.Width(area.width * 0.50f));
-        GUILayout.Label($"Tiempo sobrevivido: {time:F1}s", bodyStyle);
-        GUILayout.Label($"Puntuacion final: {score}", bodyStyle);
-        GUILayout.Label($"Datos recuperados: +{reward.dataEarned} | Total: {reward.totalData}", bodyStyle);
-        GUILayout.Label($"Rendimiento: {reward.performanceGrade} | Runs: {reward.totalRuns}", bodyStyle);
-        GUILayout.Label($"Zona: {level}", bodyStyle);
-        GUILayout.EndVertical();
+        float statY = area.y + 270f;
+        float statGap = 10f;
+        float statWidth = (area.width - statGap * 2f) / 3f;
+        DrawResultMetric(new Rect(area.x, statY, statWidth, 64f), "PUNTOS", score.ToString(), GlitchUiPalette.Information);
+        DrawResultMetric(new Rect(area.x + statWidth + statGap, statY, statWidth, 64f), "TIEMPO", $"{time:F1}s", GlitchUiPalette.Neutral);
+        DrawResultMetric(new Rect(area.x + (statWidth + statGap) * 2f, statY, statWidth, 64f), "DATOS", $"+{reward.dataEarned}", GlitchUiPalette.Success);
 
-        GUILayout.BeginVertical();
-        string recordLine = GetRunRecordLine(reward);
-        GUIStyle compactStatusStyle = GetFittedSingleLineStyle(rankingStatusStyle, recordLine, area.width * 0.43f, 13, 10);
-        if (!string.IsNullOrWhiteSpace(recordLine))
-        {
-            GUILayout.Label(recordLine, compactStatusStyle);
-        }
-        string dailyLine = $"Diaria: {DailyChallengeStorage.CurrentSummary}";
-        GUILayout.Label(dailyLine, GetFittedSingleLineStyle(rankingStatusStyle, dailyLine, area.width * 0.43f, 13, 10));
-        if (reward.contractBonusData > 0)
-        {
-            GUILayout.Label($"Bonus: +{reward.contractBonusData} datos", bodyStyle);
-        }
-        if (gameManager != null && !string.IsNullOrWhiteSpace(gameManager.CurrentOperationTitle))
-        {
-            string operationLine = $"Operacion: {gameManager.CurrentOperationTitle}";
-            GUILayout.Label(operationLine, GetFittedSingleLineStyle(bodyStyle, operationLine, area.width * 0.43f, 15, 11));
-        }
-        GUILayout.EndVertical();
-        GUILayout.EndHorizontal();
-
-        GUILayout.Space(14f);
-        GUILayout.Label("Ingresa tu nombre para el ranking:", bodyStyle);
         bool canInteract = defeatElapsed >= Mathf.Max(0f, defeatInputUnlockDelay);
         bool prevEnabled = GUI.enabled;
         GUI.enabled = canInteract;
-        rankingNameInput = GUILayout.TextField(
-            rankingNameInput ?? string.Empty,
-            Mathf.Max(1, rankingNameMaxLength),
-            textFieldStyle,
-            GUILayout.Height(30f));
-        GUI.enabled = prevEnabled;
-
-        GUILayout.Space(8f);
-        bool canRegister = canInteract && !rankingSubmitted && !string.IsNullOrWhiteSpace(rankingNameInput);
-        GUI.enabled = canRegister;
-        if (GUILayout.Button("Registrar Puntaje", buttonStyle, GUILayout.Height(36f)))
-        {
-            TryRegisterCurrentScore();
-        }
-        GUI.enabled = prevEnabled;
-
-        GUILayout.Space(4f);
-        string rankingStatusText = rankingSubmitted
-            ? $"Registrado: {rankingNameInput} | {rankingSubmittedScore} pts ({rankingSubmittedTime:F1}s)"
-            : " ";
-        GUILayout.Label(rankingStatusText, rankingStatusStyle, GUILayout.Height(22f));
-
-        GUILayout.Space(10f);
-
-        GUI.enabled = canInteract;
-        if (GUILayout.Button("Reiniciar", buttonStyle, GUILayout.Height(40f)))
+        float actionsY = area.yMax - 48f;
+        float actionWidth = (area.width - 12f) * 0.5f;
+        if (GUI.Button(new Rect(area.x, actionsY, actionWidth, 42f), "REINTENTAR", buttonStyle))
         {
             GlitchAudioManager.PlayMenuConfirm();
             RestartLevel();
         }
-
-        GUILayout.Space(10f);
-        if (GUILayout.Button("Menu Principal", buttonStyle, GUILayout.Height(40f)))
+        if (GUI.Button(new Rect(area.x + actionWidth + 12f, actionsY, actionWidth, 42f), "MENÚ", buttonStyle))
         {
             GlitchAudioManager.PlayMenuBack();
             ReturnToMainMenu();
         }
         GUI.enabled = prevEnabled;
 
-        GUILayout.EndArea();
-
         if (!canInteract)
         {
             float remaining = Mathf.Max(0f, defeatInputUnlockDelay - defeatElapsed);
             DrawDefeatHoldPrompt(remaining);
+        }
+    }
+
+    private void DrawPerformanceGrade(Rect rect, string grade, float elapsed, float pulse)
+    {
+        float reveal = EaseOutCubic(Mathf.Clamp01((elapsed - 0.28f) / 0.62f));
+        Color color = GetGradeColor(grade);
+        DrawGradeCelebrationFx(rect, color, reveal, pulse, elapsed);
+        float size = Mathf.Lerp(0.35f, 1f, reveal) + Mathf.Sin(reveal * Mathf.PI) * 0.08f;
+        Rect gradeRect = ScaleRectFromCenter(rect, size);
+        GUIStyle gradeStyle = new GUIStyle(titleStyle)
+        {
+            fontSize = Mathf.RoundToInt(Mathf.Lerp(52f, 132f, reveal)),
+            alignment = TextAnchor.MiddleCenter,
+            clipping = TextClipping.Overflow
+        };
+        gradeStyle.normal.textColor = Color.Lerp(Color.white, color, 0.72f + pulse * 0.16f);
+
+        float split = (1f - reveal) * 13f + pulse * 0.8f;
+        Color old = GUI.color;
+        GUI.color = new Color(color.r, color.g, color.b, 0.16f * reveal);
+        GUI.Label(new Rect(gradeRect.x - split, gradeRect.y, gradeRect.width, gradeRect.height), grade, gradeStyle);
+        GUI.Label(new Rect(gradeRect.x + split, gradeRect.y, gradeRect.width, gradeRect.height), grade, gradeStyle);
+        GUI.color = old;
+        DrawGlitchLabel(gradeRect, grade, gradeStyle, (1f - reveal) * 0.85f + pulse * 0.05f);
+    }
+
+    private void DrawGradeCelebrationFx(Rect rect, Color color, float reveal, float pulse, float elapsed)
+    {
+        if (reveal <= 0.001f)
+        {
+            return;
+        }
+
+        Vector2 center = rect.center;
+        float impact = 1f - Mathf.Clamp01((elapsed - 0.28f) / 0.52f);
+        float glow = (0.06f + pulse * 0.035f) * reveal;
+        for (int i = 3; i >= 1; i--)
+        {
+            float scale = i / 3f;
+            Rect halo = new Rect(
+                center.x - rect.width * 0.30f * scale,
+                center.y - rect.height * 0.42f * scale,
+                rect.width * 0.60f * scale,
+                rect.height * 0.84f * scale);
+            DrawSolidRect(halo, new Color(color.r, color.g, color.b, glow * (0.32f / i)));
+        }
+
+        float ringExpansion = Mathf.Lerp(0.20f, 1f, reveal);
+        DrawEllipseRing(center, rect.width * 0.19f * ringExpansion, rect.height * 0.42f * ringExpansion,
+            new Color(color.r, color.g, color.b, (0.22f + impact * 0.42f) * reveal));
+        DrawEllipseRing(center, rect.width * 0.31f * ringExpansion, rect.height * 0.57f * ringExpansion,
+            new Color(color.r, color.g, color.b, (0.10f + impact * 0.24f) * reveal));
+
+        float railWidth = Mathf.Lerp(0f, rect.width * 0.30f, reveal);
+        DrawSolidRect(new Rect(center.x - railWidth - 42f, center.y - 2f, railWidth, 3f),
+            new Color(color.r, color.g, color.b, 0.48f * reveal));
+        DrawSolidRect(new Rect(center.x + 42f, center.y - 2f, railWidth, 3f),
+            new Color(color.r, color.g, color.b, 0.48f * reveal));
+
+        float scanY = rect.y + Mathf.Repeat(elapsed * 96f, Mathf.Max(1f, rect.height));
+        DrawSolidRect(new Rect(rect.x + rect.width * 0.20f, scanY, rect.width * 0.60f, 2f),
+            new Color(1f, 1f, 1f, 0.12f * reveal));
+
+        for (int i = 0; i < 18; i++)
+        {
+            float angle = i / 18f * Mathf.PI * 2f + elapsed * (i % 2 == 0 ? 0.30f : -0.22f);
+            float radiusX = Mathf.Lerp(28f, rect.width * 0.34f, reveal) * (0.78f + (i % 3) * 0.10f);
+            float radiusY = Mathf.Lerp(18f, rect.height * 0.52f, reveal) * (0.78f + (i % 4) * 0.06f);
+            float x = center.x + Mathf.Cos(angle) * radiusX;
+            float y = center.y + Mathf.Sin(angle) * radiusY;
+            float spark = i % 3 == 0 ? 5f : 3f;
+            DrawSolidRect(new Rect(x - spark * 0.5f, y - spark * 0.5f, spark, spark),
+                new Color(color.r, color.g, color.b, (0.24f + pulse * 0.30f) * reveal));
+        }
+    }
+
+    private void DrawResultMetric(Rect rect, string label, string value, Color accent)
+    {
+        DrawSolidRect(rect, new Color(0.025f, 0.04f, 0.075f, 0.82f));
+        DrawSolidRect(new Rect(rect.x, rect.yMax - 3f, rect.width, 3f), new Color(accent.r, accent.g, accent.b, 0.76f));
+        GUIStyle labelStyle = new GUIStyle(rankingStatusStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Normal };
+        GUIStyle valueStyle = new GUIStyle(titleStyle) { alignment = TextAnchor.MiddleCenter, fontSize = 24 };
+        valueStyle.normal.textColor = accent;
+        GUI.Label(new Rect(rect.x + 6f, rect.y + 3f, rect.width - 12f, 18f), label, labelStyle);
+        GUI.Label(new Rect(rect.x + 6f, rect.y + 20f, rect.width - 12f, 37f), value, valueStyle);
+    }
+
+    private static Color GetGradeColor(string grade)
+    {
+        switch (grade)
+        {
+            case "S": return Color.Lerp(GlitchUiPalette.Success, Color.white, 0.34f);
+            case "A": return GlitchUiPalette.Success;
+            case "B": return GlitchUiPalette.Information;
+            case "C": return GlitchUiPalette.Special;
+            default: return GlitchUiPalette.Danger;
         }
     }
 
@@ -757,46 +758,14 @@ public class GameMenuController : MonoBehaviour
 
     private void PrepareDefeatRegistration()
     {
-        rankingSubmitted = false;
-        rankingSubmittedScore = 0;
-        rankingSubmittedTime = 0f;
-
-        string lastName = RankingStorage.GetLastPlayerName();
-        rankingNameInput = string.IsNullOrWhiteSpace(lastName) ? "Player" : lastName;
-    }
-
-    private void TryRegisterCurrentScore()
-    {
-        if (gameManager == null || rankingSubmitted)
+        if (gameManager == null || gameManager.IsLocalVersus)
         {
             return;
         }
 
-        string candidate = string.IsNullOrWhiteSpace(rankingNameInput) ? "Player" : rankingNameInput.Trim();
+        string candidate = RankingStorage.GetLastPlayerName();
         RankingStorage.AddEntry(candidate, gameManager.CurrentScore, gameManager.CurrentLevelTypeLabel, gameManager.SurvivalTime);
-        rankingNameInput = RankingStorage.GetLastPlayerName();
-        rankingSubmitted = true;
-        rankingSubmittedScore = gameManager.CurrentScore;
-        rankingSubmittedTime = gameManager.SurvivalTime;
         GlitchAudioManager.PlayRankingSubmit();
-    }
-
-    private static string GetRunRecordLine(MetaProgressionStorage.RunReward reward)
-    {
-        if (reward.newBestScore && reward.newBestTime)
-        {
-            return $"Nuevo record de zona: {reward.bestScoreForLevel} pts | {reward.bestTimeForLevel:F1}s";
-        }
-        if (reward.newBestScore)
-        {
-            return $"Nuevo record de puntuacion: {reward.bestScoreForLevel} pts";
-        }
-        if (reward.newBestTime)
-        {
-            return $"Nuevo record de supervivencia: {reward.bestTimeForLevel:F1}s";
-        }
-
-        return $"Record de zona: {reward.bestScoreForLevel} pts | {reward.bestTimeForLevel:F1}s";
     }
 
     private bool IsDefeatInputUnlocked()
@@ -1036,6 +1005,6 @@ public class GameMenuController : MonoBehaviour
             source.center.x - w * 0.5f,
             source.center.y - h * 0.5f,
             w,
-            h); 
+            h);
     }
 }

@@ -35,8 +35,8 @@ public class LabAmbientSecurityController : MonoBehaviour
     [SerializeField] private int placementAttempts = 42;
 
     [Header("Visuals")]
-    [SerializeField] private Color warningColor = new Color(1f, 0.82f, 0.42f, 0.75f);
-    [SerializeField] private Color activeColor = new Color(0.38f, 0.93f, 1f, 0.92f);
+    [SerializeField] private Color warningColor = new Color(1f, 0.78f, 0.24f, 0.75f);
+    [SerializeField] private Color activeColor = new Color(1f, 0.28f, 0.40f, 0.92f);
 
     private Transform centerTransform;
     private GameManager gameManager;
@@ -54,6 +54,8 @@ public class LabAmbientSecurityController : MonoBehaviour
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
+        warningColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.75f);
+        activeColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.92f);
         centerTransform = center != null ? center : transform;
         ApplyOperationModifiersOnce();
         RefreshReferences();
@@ -161,6 +163,10 @@ public class LabAmbientSecurityController : MonoBehaviour
                 ? new Vector3((interiorLeft + interiorRight) * 0.5f, laneCenter, 0f)
                 : new Vector3(laneCenter, (interiorBottom + interiorTop) * 0.5f, 0f);
             GlitchAudioManager.PlayLabSecurityScan(scanPosition);
+            gameManager?.NotifyMapEventStarted(
+                "lab_ambient_lockdown",
+                "CIERRE DE SEGURIDAD",
+                "El escáner amarillo marca el corredor que dos compuertas van a cerrar desde los bordes. Abandona esa línea antes de que las barreras rojas se desplieguen.");
             return true;
         }
 

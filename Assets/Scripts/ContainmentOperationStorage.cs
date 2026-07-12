@@ -1,10 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-// Guarda la regla especial elegida antes de jugar. Los sistemas consultan esta definición y aplican su parte del desafío.
+// Persiste el estilo de juego elegido antes de una run.
 public static class ContainmentOperationStorage
 {
-    // Define reglas pre-run que alteran toda la partida a cambio de mayor puntuacion.
     public struct OperationDefinition
     {
         public string id;
@@ -19,12 +18,18 @@ public static class ContainmentOperationStorage
         public Color accent;
     }
 
-    public const string NoneId = "operation_standard_protocol";
-    public const string FirewallId = "operation_firewall_protocol";
-    public const string ExtractionId = "operation_unstable_extraction";
+    public const string NoneId = "class_normal";
+    public const string AttackId = "class_attack";
+    public const string DefendId = "class_defend";
+    public const string AchieverId = "class_achiever";
+    public const string ChaosId = "class_chaos";
+
+    // Alias para partidas y logros guardados por versiones anteriores.
+    public const string FirewallId = DefendId;
+    public const string ExtractionId = AchieverId;
     public const string ContractId = "operation_contract_chain";
-    public const string BreachId = "operation_breach_runner";
-    public const string AmbientOverdriveId = "operation_ambient_overdrive";
+    public const string BreachId = AttackId;
+    public const string AmbientOverdriveId = ChaosId;
     public const string StorageLogisticsId = "operation_storage_logistics";
     public const string LabSecurityId = "operation_lab_security";
     public const string RuptureEchoId = "operation_rupture_echo";
@@ -36,80 +41,57 @@ public static class ContainmentOperationStorage
         new OperationDefinition
         {
             id = NoneId,
-            title = "Protocolo Estandar",
-            subtitle = "Run limpia",
-            description = "Sin reglas adicionales. Ideal para practicar movimiento, parry y lectura de eventos.",
-            rule = "Todos los sistemas funcionan normalmente.",
-            hudRule = "SISTEMAS NORMALES",
-            pressure = "Sin restricciones adicionales.",
-            reward = "Puntaje x1.00.",
+            title = "NORMAL",
+            subtitle = "Equilibrado",
+            hudRule = "CLASE NORMAL",
+            reward = "Todos los sistemas funcionan normalmente.",
+            pressure = "Sin bonificaciones especiales.",
             scoreMultiplier = 1f,
-            accent = new Color(0.48f, 0.90f, 1f, 1f)
+            accent = GlitchUiPalette.Information
         },
         new OperationDefinition
         {
-            id = FirewallId,
-            title = "Sistemas Degradados",
-            subtitle = "Defensa limitada",
-            description = "La anomalia interfiere con tus herramientas defensivas durante toda la operacion.",
-            rule = "El parry tarda 75% mas y Firewall carga 40% menos.",
-            hudRule = "PARRY LENTO | FIREWALL -40%",
-            pressure = "Cada defensa fallida deja una ventana de peligro mayor.",
-            reward = "Puntaje x1.30.",
+            id = AttackId,
+            title = "ATTACK",
+            subtitle = "Presión ofensiva",
+            hudRule = "CLASE ATTACK",
+            reward = "+8% velocidad, +20% carga Firewall y Parry más amplio.",
+            pressure = "La anomalía corre 12% más y cambia antes de estado.",
+            scoreMultiplier = 1.15f,
+            accent = GlitchUiPalette.Danger
+        },
+        new OperationDefinition
+        {
+            id = DefendId,
+            title = "DEFEND",
+            subtitle = "Control defensivo",
+            hudRule = "CLASE DEFEND",
+            reward = "Parry 22% más rápido, mayor radio y resistencia ambiental.",
+            pressure = "Movimiento 10% más lento.",
+            scoreMultiplier = 1f,
+            accent = GlitchUiPalette.Special
+        },
+        new OperationDefinition
+        {
+            id = AchieverId,
+            title = "ACHIEVER",
+            subtitle = "Máxima puntuación",
+            hudRule = "CLASE ACHIEVER",
+            reward = "+30% de puntuación.",
+            pressure = "No aparecen powerups.",
             scoreMultiplier = 1.30f,
-            accent = new Color(1f, 0.74f, 0.42f, 1f)
+            accent = GlitchUiPalette.Success
         },
         new OperationDefinition
         {
-            id = ExtractionId,
-            title = "Sin Suministros",
-            subtitle = "Cero powerups",
-            description = "La red de soporte queda desconectada: solo contas con movimiento, parry y tus mejoras instaladas.",
-            rule = "No aparecen powerups de velocidad, escudo ni modo compacto.",
-            hudRule = "SIN POWERUPS",
-            pressure = "No hay rescates temporales ni golpes absorbidos.",
-            reward = "Puntaje x1.35.",
-            scoreMultiplier = 1.35f,
-            accent = new Color(0.54f, 1f, 0.72f, 1f)
-        },
-        new OperationDefinition
-        {
-            id = ContractId,
-            title = "Nucleo Sin Parches",
-            subtitle = "Sin mejoras de run",
-            description = "La configuracion inicial queda sellada y no puede modificarse mientras dure la persecucion.",
-            rule = "No aparecen selecciones de mejoras durante la run.",
-            hudRule = "SIN MEJORAS DE RUN",
-            pressure = "Tu kit no escala mientras la anomalia si lo hace.",
-            reward = "Puntaje x1.40.",
-            scoreMultiplier = 1.40f,
-            accent = new Color(0.88f, 0.62f, 1f, 1f)
-        },
-        new OperationDefinition
-        {
-            id = BreachId,
-            title = "Caceria Acelerada",
-            subtitle = "Anomalia sobrecargada",
-            description = "El perseguidor recibe mas velocidad y cambia de estrategia con una cadencia mas agresiva.",
-            rule = "La anomalia corre 18% mas y sus estados rotan 18% antes.",
-            hudRule = "ANOMALIA +18% | ROTACION RAPIDA",
-            pressure = "Hay menos tiempo para crear distancia y reconocer patrones.",
-            reward = "Puntaje x1.35.",
-            scoreMultiplier = 1.35f,
-            accent = new Color(1f, 0.42f, 0.78f, 1f)
-        },
-        new OperationDefinition
-        {
-            id = AmbientOverdriveId,
-            title = "Sobrecarga Ambiental",
+            id = ChaosId,
+            title = "CHAOS",
             subtitle = "Arena hiperactiva",
-            description = "Cada arena fuerza su sistema pasivo: gruas, compuertas, fisuras, gates y campos nulos aparecen con mucha mas presencia.",
-            rule = "Los sistemas pasivos de todas las arenas se activan con mucha mas frecuencia.",
-            hudRule = "ARENA HIPERACTIVA",
-            pressure = "El espacio seguro cambia constantemente durante la persecucion.",
-            reward = "Puntaje x1.45.",
-            scoreMultiplier = 1.45f,
-            accent = new Color(1f, 0.70f, 0.36f, 1f)
+            hudRule = "CLASE CHAOS",
+            reward = "+50% puntuación y más datos, powerups y mejoras.",
+            pressure = "Todo escala antes: anomalía, estados, contratos, eventos y Breach.",
+            scoreMultiplier = 1.50f,
+            accent = GlitchUiPalette.Alert
         }
     };
 
@@ -120,30 +102,24 @@ public static class ContainmentOperationStorage
     {
         get
         {
-            if (TryGetDefinition(SelectedOperationId, out OperationDefinition operation))
-            {
-                return operation;
-            }
-
-            return definitions[0];
+            return TryGetDefinition(SelectedOperationId, out OperationDefinition operation) ? operation : definitions[0];
         }
     }
 
     public static void SelectOperation(string id)
     {
         id = NormalizeOperationId(id);
-        if (!TryGetDefinition(id, out OperationDefinition operation))
-        {
-            operation = definitions[0];
-        }
-
+        if (!TryGetDefinition(id, out OperationDefinition operation)) operation = definitions[0];
         PlayerPrefs.SetString(SelectedOperationKey, operation.id);
         PlayerPrefs.Save();
     }
 
-    public static bool IsSelected(string id)
+    public static bool IsSelected(string id) => SelectedOperation.id == NormalizeOperationId(id);
+
+    public static void ResetSelection()
     {
-        return SelectedOperation.id == NormalizeOperationId(id);
+        PlayerPrefs.DeleteKey(SelectedOperationKey);
+        PlayerPrefs.Save();
     }
 
     public static bool TryGetDefinition(string id, out OperationDefinition operation)
@@ -151,13 +127,10 @@ public static class ContainmentOperationStorage
         id = NormalizeOperationId(id);
         for (int i = 0; i < definitions.Length; i++)
         {
-            if (definitions[i].id == id)
-            {
-                operation = definitions[i];
-                return true;
-            }
+            if (definitions[i].id != id) continue;
+            operation = definitions[i];
+            return true;
         }
-
         operation = default;
         return false;
     }
@@ -165,24 +138,24 @@ public static class ContainmentOperationStorage
     public static int GetDefinitionIndex(string id)
     {
         id = NormalizeOperationId(id);
-        for (int i = 0; i < definitions.Length; i++)
-        {
-            if (definitions[i].id == id)
-            {
-                return i;
-            }
-        }
-
+        for (int i = 0; i < definitions.Length; i++) if (definitions[i].id == id) return i;
         return 0;
     }
 
     private static string NormalizeOperationId(string id)
     {
-        if (id == StorageLogisticsId || id == LabSecurityId || id == RuptureEchoId)
+        switch (id)
         {
-            return AmbientOverdriveId;
+            case "operation_firewall_protocol": return DefendId;
+            case "operation_unstable_extraction": return AchieverId;
+            case "operation_breach_runner": return AttackId;
+            case "operation_contract_chain": return AchieverId;
+            case "operation_ambient_overdrive": return ChaosId;
+            case "operation_storage_logistics":
+            case "operation_lab_security":
+            case "operation_rupture_echo": return ChaosId;
+            case "operation_standard_protocol": return NoneId;
+            default: return string.IsNullOrWhiteSpace(id) ? NoneId : id;
         }
-
-        return string.IsNullOrWhiteSpace(id) ? NoneId : id;
     }
 }

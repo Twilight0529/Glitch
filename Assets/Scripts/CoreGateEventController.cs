@@ -53,10 +53,10 @@ public class CoreGateEventController : MonoBehaviour, IThemedEventStatusProvider
 
     [Header("Visuals")]
     [SerializeField] private Color dormantColor = new Color(0.16f, 0.48f, 0.36f, 0.58f);
-    [SerializeField] private Color targetColor = new Color(0.46f, 1f, 0.68f, 1f);
-    [SerializeField] private Color completedColor = new Color(1f, 0.88f, 0.34f, 1f);
-    [SerializeField] private Color gateTelegraphColor = new Color(0.42f, 1f, 0.62f, 0.66f);
-    [SerializeField] private Color gateActiveColor = new Color(0.84f, 1f, 0.34f, 0.94f);
+    [SerializeField] private Color targetColor = new Color(0.38f, 1f, 0.66f, 1f);
+    [SerializeField] private Color completedColor = new Color(0.38f, 1f, 0.66f, 1f);
+    [SerializeField] private Color gateTelegraphColor = new Color(1f, 0.78f, 0.24f, 0.66f);
+    [SerializeField] private Color gateActiveColor = new Color(1f, 0.28f, 0.40f, 0.94f);
 
     private readonly List<GateSegment> gateSegments = new List<GateSegment>();
     private readonly List<RelayNode> relays = new List<RelayNode>();
@@ -105,6 +105,10 @@ public class CoreGateEventController : MonoBehaviour, IThemedEventStatusProvider
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
+        targetColor = GlitchUiPalette.Success;
+        completedColor = GlitchUiPalette.Success;
+        gateTelegraphColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.66f);
+        gateActiveColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.94f);
         centerTransform = center != null ? center : transform;
         arena = centerTransform.GetComponent<ProceduralArenaGenerator>();
         ResolveReferences();
@@ -265,7 +269,10 @@ public class CoreGateEventController : MonoBehaviour, IThemedEventStatusProvider
 
         ClearEventObjects();
         eventActive = true;
-        FindAnyObjectByType<GameManager>()?.NotifyThemedMapEventStarted(ActiveThemedEventLabel, ActiveThemedEventHint);
+        gameManager.NotifyMapEventStarted(
+            "core_reprogrammable_network",
+            "RED REPROGRAMABLE",
+            "Pisa únicamente el relé verde que está resaltado; cada activación recompila las compuertas. Completa la secuencia para aislar a la anomalía y ganar Firewall.");
         networkOnline = false;
         networkCompleted = false;
         initialGateBuilt = false;

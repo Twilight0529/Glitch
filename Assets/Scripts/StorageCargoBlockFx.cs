@@ -14,8 +14,8 @@ public class StorageCargoBlockFx : MonoBehaviour
     private float telegraphSeconds = 1f;
     private float activeSeconds = 3f;
     private float age;
-    private Color telegraphColor = Color.yellow;
-    private Color activeColor = Color.cyan;
+    private Color telegraphColor = new Color(1f, 0.78f, 0.24f, 1f);
+    private Color activeColor = new Color(1f, 0.28f, 0.40f, 1f);
     private bool active;
 
     public void Configure(Vector2 size, float telegraphTime, float activeTime, Color warningColor, Color liveColor)

@@ -135,6 +135,13 @@ public class GameManager : MonoBehaviour
         public float recoveryCooldown;
     }
 
+    private struct PendingMapEventTutorial
+    {
+        public string key;
+        public string label;
+        public string hint;
+    }
+
     private readonly HashSet<string> contextArenaEventTutorialsShown = new HashSet<string>();
 
     [Header("Run State")]
@@ -142,6 +149,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float reloadDelay = 1.2f;
     [SerializeField] private float startupDelaySeconds = 1f;
     [SerializeField] private int countdownSeconds = 3;
+    [SerializeField] private float countdownStepSeconds = 0.55f;
     [SerializeField] private float goFlashSeconds = 0.4f;
 
     [Header("Difficulty")]
@@ -418,9 +426,7 @@ public class GameManager : MonoBehaviour
     private string contextTutorialEventKey;
     private string contextTutorialEventLabel;
     private string contextTutorialEventHint;
-    private string pendingMapEventTutorialKey;
-    private string pendingMapEventTutorialLabel;
-    private string pendingMapEventTutorialHint;
+    private readonly List<PendingMapEventTutorial> pendingMapEventTutorials = new List<PendingMapEventTutorial>();
     private bool contextMoveWPressed;
     private bool contextMoveAPressed;
     private bool contextMoveSPressed;
@@ -465,6 +471,11 @@ public class GameManager : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (!IsGameOver && !IsLocalVersus && SurvivalTime > 0f)
+        {
+            RunTelemetryStorage.EndRun(CurrentScore, SurvivalTime, "abandoned");
+        }
+
         if (introTutorialOpen || contextTutorialOpen)
         {
             Time.timeScale = 1f;
@@ -641,6 +652,8 @@ public class GameManager : MonoBehaviour
             TrackPerformanceAchievements(LastMetaReward.performanceGrade);
         }
 
+        RunTelemetryStorage.EndRun(CurrentScore, SurvivalTime, "defeat");
+
         Debug.Log($"GAME OVER | Time Survived: {SurvivalTime:F2}s");
     }
 
@@ -712,6 +725,7 @@ public class GameManager : MonoBehaviour
 
     public void NotifyScorePickupCollected(int scoreValue)
     {
+        RunTelemetryStorage.ScorePickup();
         TryOpenContextTutorial(ContextTutorialKind.ScorePickup);
 
         NotifyContractProgress(RunContractKind.Pickups, 1);
@@ -727,11 +741,13 @@ public class GameManager : MonoBehaviour
 
     public void NotifyPowerupCollected()
     {
+        RunTelemetryStorage.Powerup();
         TryOpenContextTutorial(ContextTutorialKind.Powerup);
     }
 
     public void NotifyParrySuccess()
     {
+        RunTelemetryStorage.Parry();
         NotifyContractProgress(RunContractKind.Parry, 1);
         AdvanceCounterAchievements(
             AchievementStorage.CounterParries,
@@ -763,6 +779,7 @@ public class GameManager : MonoBehaviour
 
     public void NotifyFirewallBurstActivated()
     {
+        RunTelemetryStorage.FirewallBurst();
         AdvanceCounterAchievements(
             AchievementStorage.CounterFirewallBursts,
             1,
@@ -776,6 +793,7 @@ public class GameManager : MonoBehaviour
 
     public void NotifyBreachEscaped()
     {
+        RunTelemetryStorage.Breach();
         AdvanceCounterAchievements(
             AchievementStorage.CounterBreaches,
             1,
@@ -791,14 +809,36 @@ public class GameManager : MonoBehaviour
 
     public void NotifyThemedMapEventStarted(string eventLabel, string eventHint)
     {
-        if (string.IsNullOrWhiteSpace(eventLabel))
+        NotifyMapEventStarted($"{levelType}:{eventLabel}", eventLabel, eventHint);
+    }
+
+    public void NotifyMapEventStarted(string eventId, string eventLabel, string eventHint)
+    {
+        if (string.IsNullOrWhiteSpace(eventId) || string.IsNullOrWhiteSpace(eventLabel))
         {
             return;
         }
 
-        pendingMapEventTutorialLabel = eventLabel;
-        pendingMapEventTutorialHint = eventHint ?? string.Empty;
-        pendingMapEventTutorialKey = $"{levelType}:{NormalizeTutorialIdentity(eventLabel)}";
+        string eventKey = NormalizeTutorialIdentity(eventId);
+        if (HasContextTutorialBeenShown(ContextTutorialKind.ArenaEvent, eventKey))
+        {
+            return;
+        }
+
+        for (int i = 0; i < pendingMapEventTutorials.Count; i++)
+        {
+            if (pendingMapEventTutorials[i].key == eventKey)
+            {
+                return;
+            }
+        }
+
+        pendingMapEventTutorials.Add(new PendingMapEventTutorial
+        {
+            key = eventKey,
+            label = eventLabel,
+            hint = eventHint ?? string.Empty
+        });
     }
 
     public void NotifyRuptureEchoTrapSuccess()
@@ -967,6 +1007,7 @@ public class GameManager : MonoBehaviour
         }
 
         lastContractCompletionLabel = activeContract.title;
+        RunTelemetryStorage.ContractCompleted();
         contractCompletePulseTimer = 1.8f;
         contractDataBonusEarned += Mathf.Max(0, activeContract.dataReward);
         int reward = Mathf.Max(0, activeContract.scoreReward);
@@ -1468,7 +1509,7 @@ public class GameManager : MonoBehaviour
         float cap = Mathf.Lerp(initial, max, Mathf.SmoothStep(0f, 1f, t));
         if (activeOperation.id == ContainmentOperationStorage.AmbientOverdriveId)
         {
-            cap *= 0.82f;
+            cap *= 1.45f;
         }
         return Mathf.Max(initial * 0.85f, cap);
     }
@@ -1612,6 +1653,9 @@ public class GameManager : MonoBehaviour
     // Prepara referencias y recién después habilita tutorial, cuenta regresiva y juego activo.
     private void BeginStartupSequence()
     {
+        startupDelaySeconds = Mathf.Min(startupDelaySeconds, 0.20f);
+        countdownStepSeconds = Mathf.Clamp(countdownStepSeconds, 0.35f, 0.65f);
+        goFlashSeconds = Mathf.Min(goFlashSeconds, 0.25f);
         runPhase = RunPhase.StartupDelay;
         startupTimer = 0f;
         countdownStartValue = Mathf.Max(1, countdownSeconds);
@@ -1643,6 +1687,7 @@ public class GameManager : MonoBehaviour
         lastContractCompletionLabel = string.Empty;
         contractDataBonusEarned = 0;
         activeOperation = ContainmentOperationStorage.SelectedOperation;
+        RunTelemetryStorage.BeginRun(levelType, activeOperation.title);
         operationRunRecorded = false;
         operationPlayerModifiersApplied = false;
         operationEnemyModifiersApplied = false;
@@ -1689,9 +1734,7 @@ public class GameManager : MonoBehaviour
         contextTutorialEventKey = string.Empty;
         contextTutorialEventLabel = string.Empty;
         contextTutorialEventHint = string.Empty;
-        pendingMapEventTutorialKey = string.Empty;
-        pendingMapEventTutorialLabel = string.Empty;
-        pendingMapEventTutorialHint = string.Empty;
+        pendingMapEventTutorials.Clear();
         contextMoveWPressed = false;
         contextMoveAPressed = false;
         contextMoveSPressed = false;
@@ -1795,9 +1838,26 @@ public class GameManager : MonoBehaviour
         }
 
         operationPlayerModifiersApplied = true;
-        if (activeOperation.id == ContainmentOperationStorage.FirewallId)
+        if (activeOperation.id == ContainmentOperationStorage.AttackId)
         {
-            playerController.ApplyDefensiveSystemDegradation(1.75f, 0.60f);
+            playerController.ApplyContainmentClassModifiers(1.08f, 1f, 0.18f, 1.20f, 1f);
+        }
+        else if (activeOperation.id == ContainmentOperationStorage.DefendId)
+        {
+            playerController.ApplyContainmentClassModifiers(0.90f, 0.78f, 0.20f, 1.15f, 0.72f);
+        }
+        else if (activeOperation.id == ContainmentOperationStorage.ChaosId)
+        {
+            nextUpgradeTime = Mathf.Min(nextUpgradeTime, 18f);
+            nextContractTime = Mathf.Min(nextContractTime, 20f);
+            upgradeInterval = Mathf.Max(16f, upgradeInterval * 0.52f);
+            contractInterval = Mathf.Max(18f, contractInterval * 0.52f);
+            bossSpecialStatesUnlockTime = Mathf.Min(bossSpecialStatesUnlockTime, 15f);
+            bossLevelTwoUnlockTime = Mathf.Min(bossLevelTwoUnlockTime, 70f);
+            bossLevelThreeUnlockTime = Mathf.Min(bossLevelThreeUnlockTime, 150f);
+            stateHijackUnlockTime = Mathf.Min(stateHijackUnlockTime, 70f);
+            mapEventsUnlockTime = Mathf.Min(mapEventsUnlockTime, 15f);
+            containmentPulseUnlockTime = Mathf.Min(containmentPulseUnlockTime, 22f);
         }
     }
 
@@ -1809,9 +1869,13 @@ public class GameManager : MonoBehaviour
         }
 
         operationEnemyModifiersApplied = true;
-        if (activeOperation.id == ContainmentOperationStorage.BreachId)
+        if (activeOperation.id == ContainmentOperationStorage.AttackId)
         {
-            enemyController.ApplyContainmentOperationPressure(1.18f, 0.82f);
+            enemyController.ApplyContainmentOperationPressure(1.12f, 0.90f);
+        }
+        else if (activeOperation.id == ContainmentOperationStorage.ChaosId)
+        {
+            enemyController.ApplyContainmentOperationPressure(1.20f, 0.55f);
         }
     }
 
@@ -2007,21 +2071,25 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(pendingMapEventTutorialKey))
+        while (pendingMapEventTutorials.Count > 0)
         {
-            string pendingKey = pendingMapEventTutorialKey;
-            if (HasContextTutorialBeenShown(ContextTutorialKind.ArenaEvent, pendingKey))
+            PendingMapEventTutorial pending = pendingMapEventTutorials[0];
+            if (HasContextTutorialBeenShown(ContextTutorialKind.ArenaEvent, pending.key))
             {
-                ClearPendingMapEventTutorial();
+                pendingMapEventTutorials.RemoveAt(0);
             }
             else if (TryOpenContextTutorial(
                          ContextTutorialKind.ArenaEvent,
-                         pendingKey,
-                         pendingMapEventTutorialLabel,
-                         pendingMapEventTutorialHint))
+                         pending.key,
+                         pending.label,
+                         pending.hint))
             {
-                ClearPendingMapEventTutorial();
+                pendingMapEventTutorials.RemoveAt(0);
                 return;
+            }
+            else
+            {
+                break;
             }
         }
 
@@ -2051,23 +2119,6 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        if (SurvivalTime >= mapEventsUnlockTime && TryGetContextEventTutorialInfo(out string eventLabel, out string eventHint))
-        {
-            // La identidad depende del sector y del evento, no de un hint que puede variar
-            // durante sus distintas fases. Asi cada evento se enseña una sola vez.
-            string eventKey = $"{levelType}:{NormalizeTutorialIdentity(eventLabel)}";
-            if (!contextArenaEventTutorialsShown.Contains(eventKey))
-            {
-                TryOpenContextTutorial(ContextTutorialKind.ArenaEvent, eventKey, eventLabel, eventHint);
-            }
-        }
-    }
-
-    private void ClearPendingMapEventTutorial()
-    {
-        pendingMapEventTutorialKey = string.Empty;
-        pendingMapEventTutorialLabel = string.Empty;
-        pendingMapEventTutorialHint = string.Empty;
     }
 
     private static string NormalizeTutorialIdentity(string value)
@@ -2099,95 +2150,29 @@ public class GameManager : MonoBehaviour
         return builder.ToString();
     }
 
-    private bool TryGetContextEventTutorialInfo(out string label, out string hint)
-    {
-        label = GetThemedEventLabel();
-        hint = GetThemedEventHint();
-        if (!string.IsNullOrWhiteSpace(label))
-        {
-            return true;
-        }
-
-        string warning = chaosDirector != null ? chaosDirector.ActiveWarningLabel : string.Empty;
-        if (!string.IsNullOrWhiteSpace(warning) && ShouldTeachChaosEventLabel(warning))
-        {
-            label = warning;
-            hint = "Aviso critico del mapa: prepara movimiento y lee la zona antes de que se active.";
-            return true;
-        }
-
-        string chaosLabel = chaosDirector != null ? chaosDirector.ActiveEventLabel : string.Empty;
-        if (!string.IsNullOrWhiteSpace(chaosLabel) && chaosLabel.Contains("Sigue las flechas") && contextBreachShown)
-        {
-            return false;
-        }
-
-        if (!string.IsNullOrWhiteSpace(chaosLabel) && ShouldTeachChaosEventLabel(chaosLabel))
-        {
-            label = chaosLabel;
-            hint = GetChaosEventTutorialHint(chaosLabel);
-            return true;
-        }
-
-        return false;
-    }
-
-    private bool ShouldTeachChaosEventLabel(string label)
-    {
-        if (string.IsNullOrWhiteSpace(label))
-        {
-            return false;
-        }
-
-        return label.Contains("Mantener nodos") ||
-               label.Contains("Containment Lock") ||
-               label.Contains("Containment Pulse") ||
-               label.Contains("Sigue las flechas");
-    }
-
-    private string GetChaosEventTutorialHint(string label)
-    {
-        if (label.Contains("Mantener nodos"))
-        {
-            return "Objetivo de mapa: mantenete dentro de los nodos hasta sincronizarlos. Te cargan Firewall y dan recompensa si completas la secuencia.";
-        }
-
-        if (label.Contains("Containment Lock") || label.Contains("Containment Pulse"))
-        {
-            return "Pulso de contencion: el mapa va a imponer presion. Mira la zona activa, evita quedar encerrado y usa movimiento para reposicionarte.";
-        }
-
-        if (label.Contains("Sigue las flechas"))
-        {
-            return "Breach detectada: segui los indicadores del mapa hacia la salida antes de que el barrido avance.";
-        }
-
-        return "Evento de mapa activo: lee la alerta visual y responde con movimiento antes de que el mapa te encierre.";
-    }
-
     private static string GetBossStateTutorialHint(string state)
     {
         switch (state)
         {
-            case "Split": return "Aparece un clon que busca encerrarte desde otro angulo. Mantene ambos a la vista y recorda que el parry afecta a los dos.";
-            case "ExpansionShoot": return "La anomalia dispara alrededor suyo. Busca huecos entre proyectiles y evita quedarte pegado a un obstaculo.";
-            case "SpeedSurge": return "La persecucion acelera mucho durante unos segundos. Abri distancia temprano y guarda Dash para corregir una mala ruta.";
-            case "WeaveHunter": return "El jefe alterna laterales para cortar tu trayectoria. Cambia de direccion despues de que comprometa su curva.";
-            case "Destroyer": return "La anomalia puede romper obstáculos de su camino. Las paredes dejan de ser refugios confiables durante este estado.";
-            case "PhaseBlink": return "Primero marca el destino y despues se teletransporta. Sali del area anunciada antes del impacto.";
-            case "PincerBarrage": return "Dos lineas de disparo intentan cerrarse sobre vos. Escapa por el eje abierto antes de que ambas pinzas disparen.";
-            case "SignalJam": return "La señal prepara una alteracion de control. Lee el telegraph y evita maniobras finas durante la descarga.";
-            case "OrbitBarrage": return "Las zonas orbitales explotan despues del aviso. No cruces su radio al final del conteo y conserva una salida libre.";
-            case "ReplayPredator": return "Un fantasma repite tu recorrido anterior. No vuelvas sobre tus propios pasos mientras el eco siga activo.";
-            case "ChecksumLattice": return "Segui la secuencia de nodos resaltados. Resolverla encierra al jefe; tocar un nodo incorrecto castiga el intento.";
-            case "InputDesync": return "Tus entradas pueden desplazarte de forma inesperada. Usa pulsaciones cortas y alejate de los bordes hasta recuperar sincronía.";
-            case "MapRecompile": return "El jefe mueve obstáculos para cortar tu ruta futura. Observa las posiciones marcadas y cambia de corredor antes del cierre.";
-            case "SignalPossession": return "Una señal intenta atraerte hacia una trampa. Mantene distancia del foco y no sigas su señuelo visual.";
-            case "PhaseContract": return "Cumpli la condición visual dentro del tiempo de gracia. El radio mostrado indica la distancia exacta que debe respetarse.";
-            case "AdaptiveCountermeasure": return "La anomalia estudia tu forma de moverte y castiga la repetición. Alterna ritmo, dirección y pausas breves.";
-            case "SignalTether": return "Un vínculo altera tu vector de movimiento. Rompe la distancia del enlace antes de que pueda reposicionarte.";
-            case "BlindspotProtocol": return "El ataque aprovecha el lado que no estas observando. Mantenete en movimiento y rota alrededor del jefe para negar el punto ciego.";
-            default: return "Lee el telegraph de color antes de reaccionar: cada estado anuncia su zona y momento de peligro.";
+            case "Split": return "La anomalía se divide en dos perseguidores que pueden cerrarte rutas distintas. Mantén ambos a la vista: un buen Parry afecta a los dos.";
+            case "ExpansionShoot": return "La anomalía dispara anillos de proyectiles que se expanden. Lee la separación entre disparos y cruza por el hueco más amplio.";
+            case "SpeedSurge": return "La anomalía gana una aceleración extrema durante unos segundos. Evita correr en línea recta, usa esquinas y reserva el Dash para corregir.";
+            case "WeaveHunter": return "La persecución alterna giros rápidos y cambios de dirección. Espera su compromiso de movimiento y escapa hacia el lado contrario.";
+            case "Destroyer": return "La anomalía puede romper varios obstáculos y abrir una línea directa. No uses una pared como única defensa; prepara una segunda salida.";
+            case "PhaseBlink": return "La anomalía marca el punto donde va a reaparecer. Sal de esa zona durante el aviso y no vuelvas hasta confirmar el salto.";
+            case "PincerBarrage": return "Dos frentes de proyectiles intentan cerrarse sobre tu posición. Identifica el eje que queda abierto y escapa antes del cruce.";
+            case "SignalJam": return "La descarga vuelve menos confiable la lectura de tus controles y señales. Usa movimientos simples y evita bordes hasta que termine.";
+            case "OrbitBarrage": return "Una descarga orbital cubre el radio alrededor de la anomalía. Abandona el círculo durante el aviso y espera fuera de su alcance.";
+            case "ReplayPredator": return "La anomalía convierte parte de tu recorrido reciente en una amenaza. Cambia de ruta y evita retroceder sobre tus propios pasos.";
+            case "ChecksumLattice": return "Aparece una secuencia de nodos resaltados que debes tocar en orden. Observa la cadena completa antes de empezar a moverte.";
+            case "InputDesync": return "Tus direcciones responden de forma inestable durante el estado. Usa pulsaciones cortas, corrige de a poco y mantente lejos de los bordes.";
+            case "MapRecompile": return "El mapa marca un corredor que está por volverse peligroso. Sal de la franja amarilla antes de que la recompilación se active.";
+            case "SignalPossession": return "Un foco de señal intenta tomar control de la zona cercana. Aléjate del marcador y conserva espacio para cambiar de dirección.";
+            case "PhaseContract": return "El estado impone una condición temporal visible en el HUD. Cumple el objetivo antes del límite para evitar su penalización.";
+            case "AdaptiveCountermeasure": return "La anomalía aprende los patrones que repites con frecuencia. Alterna velocidad, dirección y recursos para no ofrecerle una respuesta predecible.";
+            case "SignalTether": return "Un enlace limita tu margen mientras permanezca conectado. Usa obstáculos como cobertura y aumenta la distancia hasta romper la señal.";
+            case "BlindspotProtocol": return "La anomalía protege un sector y deja vulnerable otro. Gira alrededor de ella, localiza el punto débil y evita quedarte en su frente.";
+            default: return "La señal visual muestra dónde actuará el estado. Lee el área marcada y decide tu movimiento antes de que termine el aviso.";
         }
     }
 
@@ -2444,7 +2429,7 @@ public class GameManager : MonoBehaviour
                 return;
             }
         }
-        else if (contextTutorialKind == ContextTutorialKind.ArenaEvent || contextTutorialKind == ContextTutorialKind.Breach)
+        else if (contextTutorialKind == ContextTutorialKind.Breach)
         {
             Vector2 move = ReadTutorialMoveInput();
             contextTutorialProgress = Mathf.Clamp01(contextTutorialProgress + dt * 0.38f);
@@ -2497,6 +2482,7 @@ public class GameManager : MonoBehaviour
                kind == ContextTutorialKind.Powerup ||
                kind == ContextTutorialKind.Upgrade ||
                kind == ContextTutorialKind.Interface ||
+               kind == ContextTutorialKind.ArenaEvent ||
                kind == ContextTutorialKind.BossState ||
                kind == ContextTutorialKind.StateHijackUnlock;
     }
@@ -2547,35 +2533,31 @@ public class GameManager : MonoBehaviour
         DrawContextWorldMarkers(accent, pulse);
 
         float panelW = Mathf.Min(540f, Screen.width - 32f);
-        float panelH = Mathf.Min(246f, Screen.height - 32f);
+        float panelH = Mathf.Min(220f, Screen.height - 32f);
         Rect panel = GetContextTutorialPanelRect(panelW, panelH);
         DrawTutorialPanel(panel, new Color(0.018f, 0.028f, 0.054f, 0.94f), new Color(accent.r, accent.g, accent.b, 0.62f + pulse * 0.16f));
 
-        Rect area = new Rect(panel.x + 18f, panel.y + 14f, panel.width - 36f, panel.height - 26f);
-        GUI.Label(new Rect(area.x, area.y, area.width, 20f), "PAUSA CONTEXTUAL", BuildFittedSingleLineStyle(tutorialTinyStyle, "PAUSA CONTEXTUAL", area.width, 20f, 9));
-        GUI.Label(new Rect(area.x, area.y + 22f, area.width, 34f), GetContextTutorialTitle(), BuildFittedSingleLineStyle(upgradeTitleStyle, GetContextTutorialTitle(), area.width, 34f, 14));
+        Rect area = new Rect(panel.x + 20f, panel.y + 16f, panel.width - 40f, panel.height - 30f);
+        GUI.Label(new Rect(area.x, area.y, area.width, 38f), GetContextTutorialTitle(), BuildFittedSingleLineStyle(upgradeTitleStyle, GetContextTutorialTitle(), area.width, 38f, 17));
 
         GUIStyle compactBody = new GUIStyle(tutorialBodyStyle)
         {
-            fontSize = Mathf.Max(11, Mathf.RoundToInt(12f * hudScale)),
+            fontSize = Mathf.Max(13, Mathf.RoundToInt(14f * hudScale)),
             clipping = TextClipping.Clip,
             wordWrap = true
         };
 
-        Rect body = new Rect(area.x, area.y + 64f, area.width, 70f);
-        GUI.Label(body, GetContextTutorialBody(), compactBody);
+        Rect body = new Rect(area.x, area.y + 44f, area.width, 76f);
+        string bodyText = GetContextTutorialBody();
+        GUI.Label(body, bodyText, BuildFittedWrappedStyle(compactBody, bodyText, body.width, body.height, 11));
 
-        Rect hint = new Rect(area.x, area.y + 140f, area.width, 30f);
+        Rect hint = new Rect(area.x, area.y + 126f, area.width, 36f);
         DrawSolidRect(hint, new Color(accent.r, accent.g, accent.b, 0.12f));
-        GUI.Label(new Rect(hint.x + 10f, hint.y + 4f, hint.width - 20f, hint.height - 8f), GetContextTutorialHint(), BuildFittedSingleLineStyle(tutorialHeaderStyle, GetContextTutorialHint(), hint.width - 20f, hint.height - 8f, 10));
+        GUI.Label(new Rect(hint.x + 12f, hint.y + 5f, hint.width - 24f, hint.height - 10f), GetContextTutorialFooter(), BuildFittedSingleLineStyle(tutorialHeaderStyle, GetContextTutorialFooter(), hint.width - 24f, hint.height - 10f, 12));
 
-        Rect progress = new Rect(area.x, area.y + 176f, area.width, 8f);
+        Rect progress = new Rect(area.x, area.yMax - 8f, area.width, 6f);
         DrawSolidRect(progress, new Color(0.03f, 0.05f, 0.09f, 0.92f));
         DrawSolidRect(new Rect(progress.x, progress.y, progress.width * Mathf.Clamp01(contextTutorialProgress), progress.height), new Color(accent.r, accent.g, accent.b, 0.92f));
-
-        Rect footer = new Rect(area.x, area.yMax - 32f, area.width, 30f);
-        DrawSolidRect(footer, new Color(0.03f, 0.05f, 0.09f, 0.74f));
-        GUI.Label(new Rect(footer.x + 10f, footer.y + 4f, footer.width - 20f, footer.height - 8f), GetContextTutorialFooter(), BuildFittedSingleLineStyle(tutorialHeaderStyle, GetContextTutorialFooter(), footer.width - 20f, footer.height - 8f, 10));
     }
 
     private const int InterfaceTutorialPhaseCount = 6;
@@ -2666,26 +2648,18 @@ public class GameManager : MonoBehaviour
     {
         switch (phase)
         {
-            case 0: return "El reloj mide cuanto tiempo llevas sobreviviendo. La dificultad y las amenazas aumentan a medida que avanza.";
-            case 1: return "El puntaje aumenta con el tiempo, los datos recogidos y los objetivos completados. Al finalizar la run se registra en el ranking.";
-            case 2: return "Esta barra muestra la recarga del Parry. Cuando indica ESPACIO / E, podes rechazar el contacto y reflejar proyectiles.";
-            case 3: return "La barra de Dash muestra su recarga. Cuando aparece SHIFT, el Dash Fantasma esta listo para atravesar una amenaza.";
-            case 4: return "Las acciones defensivas y los pickups cargan Firewall. Al llegar al maximo, usa Q / R para liberar el Burst.";
-            default: return "El sector actual y el estado de la anomalia aparecen aqui. Los contratos y eventos temporales reutilizan esta zona para mostrar su objetivo.";
+            case 0: return "Mide cuánto llevas con vida. Con el paso del tiempo aparecen estados, eventos y combinaciones más exigentes.";
+            case 1: return "Crece al sobrevivir, recoger Datos y completar objetivos. Es la base de tu clasificación final y tu progreso.";
+            case 2: return "La barra indica cuándo puedes volver a usar Parry. Actívalo con ESPACIO, E o click izquierdo justo antes del contacto.";
+            case 3: return "Muestra la recarga del Dash Fantasma. Cuando esté listo, usa SHIFT para atravesar amenazas y abrir una ruta.";
+            case 4: return "Los Parry y algunos recursos cargan Firewall. Al llenarse, usa Q, R o click derecho para liberar el Burst.";
+            default: return "Aquí ves el sector, el estado de la anomalía y el objetivo activo. Revisa esta zona cuando cambie una regla.";
         }
     }
 
     private static Color GetInterfaceTutorialPhaseColor(int phase)
     {
-        switch (phase)
-        {
-            case 1: return new Color(0.62f, 0.82f, 1f, 1f);
-            case 2: return new Color(1f, 0.62f, 0.78f, 1f);
-            case 3: return new Color(0.55f, 1f, 0.94f, 1f);
-            case 4: return new Color(1f, 0.84f, 0.42f, 1f);
-            case 5: return new Color(0.76f, 0.66f, 1f, 1f);
-            default: return new Color(0.46f, 0.88f, 1f, 1f);
-        }
+        return GlitchUiPalette.Information;
     }
 
     private void DrawContextFreezeFrameVignette(Color accent, float pulse)
@@ -2829,23 +2803,23 @@ public class GameManager : MonoBehaviour
         switch (contextTutorialKind)
         {
             case ContextTutorialKind.Parry:
-                return "La anomalia esta encima: usa Parry";
+                return "Contacto: Parry";
             case ContextTutorialKind.GhostDash:
-                return "Demasiado cerca: activa Dash Fantasma";
+                return "Cruce seguro: Dash";
             case ContextTutorialKind.Firewall:
-                return "Firewall cargado: libera el Burst";
+                return "Firewall listo";
             case ContextTutorialKind.ScorePickup:
                 return "Datos recuperados";
             case ContextTutorialKind.Powerup:
                 return "Powerup instalado";
             case ContextTutorialKind.Upgrade:
-                return "Alteraciones de run";
+                return "Elige una alteración";
             case ContextTutorialKind.Interface:
                 return "Como leer la interfaz";
             case ContextTutorialKind.ArenaEvent:
                 return string.IsNullOrWhiteSpace(contextTutorialEventLabel) ? "Regla temporal de arena" : contextTutorialEventLabel;
             case ContextTutorialKind.Breach:
-                return "Breach activo: busca la salida";
+                return "Breach: busca la salida";
             case ContextTutorialKind.BossState:
                 return string.IsNullOrWhiteSpace(contextTutorialEventLabel) ? "Nuevo protocolo de la anomalia" : contextTutorialEventLabel;
             case ContextTutorialKind.StateHijackUnlock:
@@ -2862,34 +2836,34 @@ public class GameManager : MonoBehaviour
         switch (contextTutorialKind)
         {
             case ContextTutorialKind.Parry:
-                return "El jefe ya esta en rango de contacto. Presiona Parry justo antes del golpe para cortar la persecucion, empujarlo y cargar Firewall.";
+                return "Actívalo justo antes del impacto para rechazar a la anomalía o reflejar un proyectil. Cada acierto también carga Firewall.";
             case ContextTutorialKind.GhostDash:
-                return "El Dash Fantasma te vuelve intangible por un instante y te reposiciona. Usalo para cruzar persecuciones, proyectiles o salidas estrechas.";
+                return "El Dash Fantasma te vuelve intangible frente a amenazas durante el desplazamiento. Úsalo para cruzar el peligro y reposicionarte.";
             case ContextTutorialKind.Firewall:
-                return "La barra esta completa. El Burst empuja enemigos, afecta clones y limpia proyectiles. Guardarlo demasiado tiempo te quita una salida defensiva.";
+                return "La barra está completa. El Burst empuja enemigos, destruye proyectiles cercanos y crea espacio cuando una ruta queda cerrada.";
             case ContextTutorialKind.ScorePickup:
-                return "Los datos suman puntaje, cargan Firewall y alimentan la progresion meta. En runs largas, recolectar bien abre mas opciones.";
+                return "Los Datos aumentan tu puntaje y alimentan parte de la carga Firewall. Recolectarlos también mejora las recompensas de la run.";
             case ContextTutorialKind.Powerup:
-                return "Los powerups cambian tu estado temporal y el HUD muestra cuanto les queda. El rayo acelera, el escudo absorbe un golpe, el nucleo compacto te achica y Phase Dash permite atravesar paredes mientras haces dash.";
+                return "Cada powerup modifica temporalmente una regla del jugador. Su icono y temporizador aparecen en el HUD hasta que termina el efecto.";
             case ContextTutorialKind.Upgrade:
-                return "Las alteraciones cambian tu build durante la run. Mira categoria, impacto y rareza: no siempre gana la mejora mas ofensiva.";
+                return "Las alteraciones duran toda la run y cambian una estadística concreta. Compara su beneficio con tu estilo antes de elegir.";
             case ContextTutorialKind.Interface:
                 return "La franja superior resume tiempo, puntaje y sector. Las barras muestran Dash, Firewall y habilidades; los objetivos temporales y eventos aparecen como avisos separados. No necesitas memorizar cada contrato: lee su meta y progreso en el HUD.";
             case ContextTutorialKind.ArenaEvent:
                 return string.IsNullOrWhiteSpace(contextTutorialEventHint)
-                    ? "Las arenas anuncian reglas temporales con color, flechas y zonas activas. Reacciona apenas aparece la alerta."
+                    ? "Este evento cambia temporalmente una regla de la arena. Lee primero el aviso amarillo y decide tu ruta antes de que se active."
                     : contextTutorialEventHint;
             case ContextTutorialKind.Breach:
-                return "La brecha abre una salida entre arenas. Segui el indicador hacia el portal antes de que el barrido glitch consuma el mapa.";
+                return "La brecha es una salida temporal hacia otro sector. Sigue las flechas y entra al portal antes de que el barrido alcance tu posición.";
             case ContextTutorialKind.BossState:
             case ContextTutorialKind.StateHijack:
                 return string.IsNullOrWhiteSpace(contextTutorialEventHint)
                     ? "Lee la señal visual y prepara tu siguiente decisión antes de reanudar."
                     : contextTutorialEventHint;
             case ContextTutorialKind.StateHijackUnlock:
-                return "La anomalia evoluciono y ahora podes copiar su estado. Hace un parry directo al jefe para guardar una version util de su mecanica.";
+                return "Desde este nivel, un Parry exitoso puede copiar ciertos estados de la anomalía. Guarda la habilidad capturada o ejecútala con F.";
             default:
-                return "Podes mantener dos direcciones a la vez. Las diagonales te ayudan a rodear obstaculos y romper persecuciones simples.";
+                return "Usa WASD o las flechas para moverte en ocho direcciones. Combina teclas para tomar diagonales y cambiar de ruta con rapidez.";
         }
     }
 
@@ -2906,6 +2880,7 @@ public class GameManager : MonoBehaviour
             case ContextTutorialKind.Movement:
                 return $"Presiona cada direccion: {GetContextMovementChecklistText()}";
             case ContextTutorialKind.ArenaEvent:
+                return "Lee la regla del evento y haz click para reanudar la run.";
             case ContextTutorialKind.Breach:
                 return "Usa WASD o flechas para reaccionar y recuperar el control.";
             case ContextTutorialKind.ScorePickup:
@@ -2927,30 +2902,31 @@ public class GameManager : MonoBehaviour
         switch (contextTutorialKind)
         {
             case ContextTutorialKind.Parry:
-                return "Input real: ESPACIO / E";
+                return "ESPACIO / E / CLICK IZQ.  ·  PARRY";
             case ContextTutorialKind.GhostDash:
-                return "Input real: SHIFT";
+                return "SHIFT  ·  DASH";
             case ContextTutorialKind.Firewall:
-                return "Input real: Q / R";
+                return "Q / R / CLICK DER.  ·  FIREWALL";
             case ContextTutorialKind.Movement:
-                return $"Progreso: {GetContextMovementKeyCount()}/4";
+                return $"W A S D / FLECHAS  ·  MOVERSE     {GetContextMovementKeyCount()}/4";
             case ContextTutorialKind.ArenaEvent:
+                return "CLICK  ·  REANUDAR";
             case ContextTutorialKind.Breach:
-                return "Input real: WASD / Flechas";
+                return "WASD / FLECHAS  ·  REACCIONAR";
             case ContextTutorialKind.ScorePickup:
-                return "Click: confirmar lectura";
+                return "CLICK  ·  CONTINUAR";
             case ContextTutorialKind.Powerup:
-                return "Click: confirmar powerup";
+                return "CLICK  ·  CONTINUAR";
             case ContextTutorialKind.Upgrade:
-                return "Click: abrir alteraciones";
+                return "CLICK  ·  CONTINUAR";
             case ContextTutorialKind.Interface:
-                return "Click: confirmar lectura del HUD";
+                return "CLICK  ·  SIGUIENTE";
             case ContextTutorialKind.BossState:
-                return "Click: confirmar lectura del ataque";
+                return "CLICK  ·  CONTINUAR";
             case ContextTutorialKind.StateHijackUnlock:
-                return "Parry directo: capturar | F: ejecutar";
+                return "PARRY  ·  CAPTURAR     F  ·  EJECUTAR";
             case ContextTutorialKind.StateHijack:
-                return "Input real: F";
+                return "F  ·  EJECUTAR";
             default:
                 return "Entrenamiento contextual";
         }
@@ -2961,32 +2937,32 @@ public class GameManager : MonoBehaviour
         switch (contextTutorialKind)
         {
             case ContextTutorialKind.Parry:
-                return new Color(1f, 0.62f, 0.78f, 1f);
+                return GlitchUiPalette.Information;
             case ContextTutorialKind.GhostDash:
-                return new Color(0.55f, 1f, 0.94f, 1f);
+                return GlitchUiPalette.Information;
             case ContextTutorialKind.Firewall:
-                return new Color(1f, 0.84f, 0.42f, 1f);
+                return GlitchUiPalette.Information;
             case ContextTutorialKind.ScorePickup:
-                return new Color(0.88f, 0.98f, 1f, 1f);
+                return GlitchUiPalette.Success;
             case ContextTutorialKind.Powerup:
-                return new Color(0.55f, 1f, 0.78f, 1f);
+                return GlitchUiPalette.Success;
             case ContextTutorialKind.Upgrade:
-                return new Color(0.72f, 0.58f, 1f, 1f);
+                return GlitchUiPalette.Special;
             case ContextTutorialKind.Interface:
-                return new Color(0.46f, 0.88f, 1f, 1f);
+                return GlitchUiPalette.Information;
             case ContextTutorialKind.ArenaEvent:
-                return new Color(1f, 0.50f, 0.86f, 1f);
+                return GlitchUiPalette.Alert;
             case ContextTutorialKind.Breach:
-                return new Color(0.46f, 0.96f, 1f, 1f);
+                return GlitchUiPalette.Information;
             case ContextTutorialKind.BossState:
-                return enemyController != null ? GetBossStateColor(enemyController.CurrentStateLabel) : new Color(1f, 0.46f, 0.68f, 1f);
+                return GlitchUiPalette.Alert;
             case ContextTutorialKind.StateHijackUnlock:
             case ContextTutorialKind.StateHijack:
                 return playerController != null && playerController.HasStoredHijack
                     ? playerController.StoredHijackColor
-                    : new Color(0.54f, 0.96f, 1f, 1f);
+                    : GlitchUiPalette.Special;
             default:
-                return new Color(0.43f, 0.94f, 1f, 1f);
+                return GlitchUiPalette.Information;
         }
     }
 
@@ -3198,17 +3174,17 @@ public class GameManager : MonoBehaviour
         switch (introTutorialStep)
         {
             case IntroTutorialStep.Parry:
-                return "Presiona ESPACIO, E o click izquierdo para abrir la ventana de parry. Si lo haces al contacto, empujas a la anomalia y cargas Firewall.";
+                return "Activa Parry justo antes del contacto. Rechaza a la anomalía, refleja proyectiles y carga Firewall; si fallas, deberá recargarse.";
             case IntroTutorialStep.Firewall:
-                return "Presiona Q, R o click derecho para practicar el Burst. En partida solo se activa cuando la barra de Firewall esta llena.";
+                return "Los Parry cargan la barra de Firewall. Cuando esté llena, libera el Burst para empujar enemigos y limpiar proyectiles cercanos.";
             case IntroTutorialStep.Resources:
-                return "Los datos dan puntaje y progresion meta. Los powerups cambian tu ritmo: rayo para velocidad, escudo para absorber un golpe y nucleo compacto para esquivar mejor a cambio de velocidad. Presiona ESPACIO para confirmar.";
+                return "Recoge Datos para sumar puntaje, cargar Firewall y avanzar en la progresión. Los powerups conceden ventajas temporales visibles en el HUD.";
             case IntroTutorialStep.ArenaEvents:
-                return "Cuando aparezcan flechas, barridos o brechas, leelos como ordenes urgentes del mapa. Sigue la direccion segura y evita quedarte dentro del glitch. Presiona ESPACIO para confirmar.";
+                return "El amarillo anticipa un peligro y el rojo indica que ya está activo. Los marcadores celestes o verdes señalan objetivos y rutas útiles.";
             case IntroTutorialStep.Ready:
-                return "Ya conoces lo basico. Ahora empieza la cuenta regresiva real y la anomalia entra en juego.";
+                return "Ya conoces las señales esenciales. Sobrevive, observa los cambios de la arena y adapta tu ruta antes de quedar encerrado.";
             default:
-                return "Presiona W, A, S y D una vez para registrar las direcciones basicas. Durante la run puedes combinar dos direcciones para moverte en diagonal.";
+                return "Usa W A S D o las flechas para moverte en ocho direcciones. Combina dos teclas para tomar diagonales y corregir tu ruta.";
         }
     }
 
@@ -3217,9 +3193,9 @@ public class GameManager : MonoBehaviour
         switch (introTutorialStep)
         {
             case IntroTutorialStep.Parry:
-                return IsIntroStepComplete() ? "Parry registrado." : "Input esperado: ESPACIO / E / click izquierdo.";
+                return IsIntroStepComplete() ? "Parry registrado." : "ESPACIO / E / CLICK IZQUIERDO";
             case IntroTutorialStep.Firewall:
-                return IsIntroStepComplete() ? "Burst registrado." : "Input esperado: Q / R / click derecho.";
+                return IsIntroStepComplete() ? "Firewall registrado." : "Q / R / CLICK DERECHO";
             case IntroTutorialStep.Resources:
                 return IsIntroStepComplete() ? "Lectura confirmada." : "Observa los iconos y confirma con ESPACIO o click.";
             case IntroTutorialStep.ArenaEvents:
@@ -3259,13 +3235,15 @@ public class GameManager : MonoBehaviour
         DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 2f), new Color(accent.r, accent.g, accent.b, 0.72f));
 
         Rect kicker = new Rect(rect.x + 18f, rect.y + 18f, rect.width - 36f, 24f);
-        GUI.Label(kicker, "ENTRENAMIENTO INTERACTIVO", BuildFittedSingleLineStyle(tutorialTinyStyle, "ENTRENAMIENTO INTERACTIVO", kicker.width, kicker.height, 9));
+        string stepLabel = $"PASO {(int)introTutorialStep + 1} / 6";
+        GUI.Label(kicker, stepLabel, BuildFittedSingleLineStyle(tutorialTinyStyle, stepLabel, kicker.width, kicker.height, 10));
 
         Rect title = new Rect(rect.x + 18f, rect.y + 48f, rect.width - 36f, 42f);
         GUI.Label(title, GetIntroStepTitle(), BuildFittedSingleLineStyle(upgradeTitleStyle, GetIntroStepTitle(), title.width, title.height, 18));
 
-        Rect body = new Rect(rect.x + 18f, rect.y + 106f, rect.width - 36f, 118f);
-        GUI.Label(body, GetIntroStepInstruction(), tutorialBodyStyle);
+        Rect body = new Rect(rect.x + 18f, rect.y + 106f, rect.width - 36f, 82f);
+        GUIStyle introBody = new GUIStyle(tutorialBodyStyle) { fontSize = Mathf.Max(13, Mathf.RoundToInt(15f * hudScale)) };
+        GUI.Label(body, GetIntroStepInstruction(), introBody);
 
         Rect hint = new Rect(rect.x + 18f, rect.yMax - 118f, rect.width - 36f, 34f);
         DrawSolidRect(hint, new Color(accent.r, accent.g, accent.b, 0.12f));
@@ -3334,8 +3312,9 @@ public class GameManager : MonoBehaviour
         DrawSolidRect(new Rect(center.x - 13f, center.y - 13f, 26f, 26f), new Color(0.30f, 0.88f, 1f, 1f));
         DrawSolidRect(new Rect(rect.x + 38f, center.y - 12f, 24f, 24f), new Color(1f, 0.22f, 0.32f, 1f));
         DrawArrowLine(new Vector2(rect.x + 70f, center.y), new Vector2(center.x - 28f, center.y), new Color(1f, 0.62f, 0.74f, 1f));
-        DrawKey(new Rect(rect.xMax - 132f, rect.yMax - 48f, 58f, 28f), "ESP", accent);
-        DrawKey(new Rect(rect.xMax - 66f, rect.yMax - 48f, 46f, 28f), "E", accent);
+        DrawKey(new Rect(rect.xMax - 216f, rect.yMax - 48f, 58f, 28f), "ESP", accent);
+        DrawKey(new Rect(rect.xMax - 150f, rect.yMax - 48f, 42f, 28f), "E", accent);
+        DrawKey(new Rect(rect.xMax - 100f, rect.yMax - 48f, 80f, 28f), "CLICK IZQ", accent);
     }
 
     private void DrawIntroFirewallDemo(Rect rect, Color accent)
@@ -3356,8 +3335,9 @@ public class GameManager : MonoBehaviour
         Rect bar = new Rect(rect.x + 34f, rect.yMax - 44f, rect.width - 68f, 12f);
         DrawSolidRect(bar, new Color(0.03f, 0.04f, 0.08f, 0.92f));
         DrawSolidRect(new Rect(bar.x, bar.y, bar.width, bar.height), new Color(1f, 0.84f, 0.42f, 0.88f));
-        DrawKey(new Rect(rect.xMax - 120f, rect.y + 22f, 44f, 30f), "Q", accent);
-        DrawKey(new Rect(rect.xMax - 68f, rect.y + 22f, 44f, 30f), "R", accent);
+        DrawKey(new Rect(rect.xMax - 194f, rect.y + 22f, 40f, 30f), "Q", accent);
+        DrawKey(new Rect(rect.xMax - 146f, rect.y + 22f, 40f, 30f), "R", accent);
+        DrawKey(new Rect(rect.xMax - 98f, rect.y + 22f, 78f, 30f), "CLICK DER", accent);
     }
 
     private void DrawIntroResourcesDemo(Rect rect, Color accent)
@@ -3706,15 +3686,16 @@ public class GameManager : MonoBehaviour
         DrawArrowLine(new Vector2(rect.x + 40f, center.y - 25f), new Vector2(center.x - 18f, center.y - 8f), new Color(1f, 0.56f, 0.65f, 1f));
 
         float keyGap = 6f;
-        float keyW = Mathf.Floor((rect.width - 28f - (keyGap * 2f)) / 3f);
+        float keyW = Mathf.Floor((rect.width - 34f - (keyGap * 3f)) / 4f);
         float keyY = rect.yMax - 48f;
         Rect parryLabel = new Rect(rect.x + 10f, keyY - 18f, (keyW * 2f) + keyGap, 16f);
-        Rect burstLabel = new Rect(rect.x + 10f + ((keyW + keyGap) * 2f), keyY - 18f, keyW, 16f);
+        Rect burstLabel = new Rect(rect.x + 10f + ((keyW + keyGap) * 2f), keyY - 18f, (keyW * 2f) + keyGap, 16f);
         DrawTutorialLabel(parryLabel, "PARRY");
         DrawTutorialLabel(burstLabel, "BURST");
         DrawKey(new Rect(rect.x + 10f, keyY, keyW, 24f), "ESP", accent);
         DrawKey(new Rect(rect.x + 10f + keyW + keyGap, keyY, keyW, 24f), "E", accent);
         DrawKey(new Rect(rect.x + 10f + ((keyW + keyGap) * 2f), keyY, keyW, 24f), "Q/R", new Color(1f, 0.86f, 0.46f, 1f));
+        DrawKey(new Rect(rect.x + 10f + ((keyW + keyGap) * 3f), keyY, keyW, 24f), "IZQ/DER", new Color(1f, 0.86f, 0.46f, 1f));
 
         Rect charge = new Rect(rect.x + 14f, rect.yMax - 18f, rect.width - 28f, 7f);
         DrawSolidRect(charge, new Color(0.04f, 0.06f, 0.10f, 0.92f));
@@ -3913,7 +3894,7 @@ public class GameManager : MonoBehaviour
         {
             countdownElapsed += dt;
             PlayCountdownTickIfNeeded();
-            if (countdownElapsed >= countdownStartValue)
+            if (countdownElapsed >= countdownStartValue * countdownStepSeconds)
             {
                 runPhase = RunPhase.GoFlash;
                 goFlashTimer = 0f;
@@ -3941,7 +3922,7 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        int remaining = countdownStartValue - Mathf.FloorToInt(countdownElapsed);
+        int remaining = countdownStartValue - Mathf.FloorToInt(countdownElapsed / Mathf.Max(0.05f, countdownStepSeconds));
         remaining = Mathf.Clamp(remaining, 1, countdownStartValue);
         if (remaining == lastCountdownCueValue)
         {
@@ -3979,19 +3960,19 @@ public class GameManager : MonoBehaviour
         if (runPhase == RunPhase.StartupDelay)
         {
             main = string.Empty;
-            sub = "Inicializando contencion";
+            sub = string.Empty;
         }
         else if (runPhase == RunPhase.GoFlash)
         {
             main = "GO";
-            sub = "Corre";
+            sub = "SALIDA";
         }
         else
         {
-            int remaining = countdownStartValue - Mathf.FloorToInt(countdownElapsed);
+            int remaining = countdownStartValue - Mathf.FloorToInt(countdownElapsed / Mathf.Max(0.05f, countdownStepSeconds));
             remaining = Mathf.Clamp(remaining, 1, countdownStartValue);
             main = remaining.ToString();
-            sub = "Preparate";
+            sub = "READY";
         }
 
         float centerX = Screen.width * 0.5f;
@@ -4074,7 +4055,8 @@ public class GameManager : MonoBehaviour
             return 0f;
         }
 
-        float fractional = countdownElapsed - Mathf.Floor(countdownElapsed);
+        float step = Mathf.Max(0.05f, countdownStepSeconds);
+        float fractional = (countdownElapsed / step) - Mathf.Floor(countdownElapsed / step);
         return Mathf.Clamp01(fractional);
     }
 
@@ -4203,10 +4185,10 @@ public class GameManager : MonoBehaviour
         DrawEventAlertPanel(
             warning.ToUpperInvariant(),
             Screen.height * 0.2f,
-            new Color(0.10f, 0.03f, 0.06f, 0.52f),
-            new Color(1f, 0.56f, 0.66f, Mathf.Clamp01(alpha)),
-            new Color(0.90f, 0.96f, 1f, 0.28f + pulse * 0.12f),
-            new Color(1f, 0.56f, 0.66f, Mathf.Clamp01(alpha)));
+            GlitchUiPalette.WithAlpha(GlitchUiPalette.Surface, 0.78f),
+            GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, alpha),
+            GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.28f + pulse * 0.12f),
+            GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, alpha));
     }
 
     private void DrawEventAlertPanel(string text, float y, Color fill, Color topLine, Color bottomLine, Color textColor)
@@ -4982,6 +4964,7 @@ public class GameManager : MonoBehaviour
         }
 
         UpgradeChoice choice = currentUpgradeChoices[index];
+        RunTelemetryStorage.UpgradeChosen();
         ApplyUpgrade(choice.kind);
         AddScore(Mathf.Max(0, upgradeScoreBonus));
         GlitchAudioManager.PlayUpgradeSelect();
@@ -5247,11 +5230,11 @@ public class GameManager : MonoBehaviour
         switch (rarity)
         {
             case "CRITICO":
-                return new Color(1f, 0.54f, 0.72f, 1f);
+                return GlitchUiPalette.Danger;
             case "INESTABLE":
-                return new Color(1f, 0.78f, 0.42f, 1f);
+                return GlitchUiPalette.Special;
             case "COMUN":
-                return new Color(0.62f, 0.92f, 1f, 1f);
+                return GlitchUiPalette.Information;
             default:
                 return fallback;
         }
@@ -5360,49 +5343,7 @@ public class GameManager : MonoBehaviour
 
     private static Color GetBossStateColor(string raw)
     {
-        switch (raw)
-        {
-            case "BasePursuit":
-                return new Color(0.48f, 0.88f, 1f, 1f);
-            case "Split":
-                return new Color(0.74f, 0.76f, 1f, 1f);
-            case "ExpansionShoot":
-                return new Color(1f, 0.50f, 0.72f, 1f);
-            case "SpeedSurge":
-                return new Color(0.98f, 0.94f, 0.58f, 1f);
-            case "WeaveHunter":
-                return new Color(0.85f, 0.68f, 1f, 1f);
-            case "Destroyer":
-                return new Color(1f, 0.86f, 0.88f, 1f);
-            case "PhaseBlink":
-                return new Color(0.58f, 1f, 0.92f, 1f);
-            case "PincerBarrage":
-                return new Color(0.92f, 0.62f, 1f, 1f);
-            case "SignalJam":
-                return new Color(1f, 0.78f, 0.42f, 1f);
-            case "OrbitBarrage":
-                return new Color(0.58f, 0.82f, 1f, 1f);
-            case "ReplayPredator":
-                return new Color(1f, 0.42f, 0.76f, 1f);
-            case "ChecksumLattice":
-                return new Color(1f, 0.82f, 0.34f, 1f);
-            case "InputDesync":
-                return new Color(0.66f, 0.74f, 1f, 1f);
-            case "MapRecompile":
-                return new Color(0.92f, 0.62f, 1f, 1f);
-            case "SignalPossession":
-                return new Color(0.76f, 1f, 0.54f, 1f);
-            case "PhaseContract":
-                return new Color(1f, 0.84f, 0.46f, 1f);
-            case "AdaptiveCountermeasure":
-                return new Color(1f, 0.35f, 0.72f, 1f);
-            case "SignalTether":
-                return new Color(0.32f, 1f, 0.78f, 1f);
-            case "BlindspotProtocol":
-                return new Color(1f, 0.76f, 0.28f, 1f);
-            default:
-                return new Color(1f, 0.76f, 0.82f, 1f);
-        }
+        return raw == "BasePursuit" ? GlitchUiPalette.Information : GlitchUiPalette.Alert;
     }
 
     private void EnsureBossStateStyles()
@@ -5793,15 +5734,16 @@ public class GameManager : MonoBehaviour
             layout.sector.y + layout.sector.height * 0.50f,
             layout.sector.width - (18f * s),
             Mathf.Max(22f * s, layout.sector.height * 0.34f));
-        Color accent;
-        GetHudThemeColors(out _, out accent);
+        Color accent = activeOperation.accent;
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 3.2f);
 
         DrawSolidRect(new Rect(panel.x, panel.yMax - (1f * s), panel.width, 1f * s), new Color(accent.r, accent.g, accent.b, 0.25f + pulse * 0.10f));
 
         Rect icon = new Rect(panel.x + (2f * s), panel.y + (5f * s), 15f * s, 15f * s);
         DrawHudMetricIcon(icon, "rule", accent);
-        string progress = $"REGLA  x{activeOperation.scoreMultiplier:0.00}";
+        string progress = activeOperation.scoreMultiplier > 1f
+            ? $"{activeOperation.title}  x{activeOperation.scoreMultiplier:0.00}"
+            : activeOperation.title;
         Rect progressRect = new Rect(icon.xMax + (5f * s), panel.y, panel.width - (24f * s), panel.height);
         GUI.Label(progressRect, progress,
             BuildFittedSingleLineStyle(hudLabelStyle, progress, progressRect.width, progressRect.height, Mathf.RoundToInt(7f * s)));
@@ -5832,22 +5774,22 @@ public class GameManager : MonoBehaviour
         if (playerController.HasSpeedBoost)
         {
             DrawPowerupTimerRow(panel, ref y, "VELOCIDAD", playerController.SpeedBoostTimeRemaining,
-                playerController.SpeedBoostTimeNormalized, LightningSpriteProvider.Get(), new Color(0.46f, 0.96f, 1f, 1f), s);
+                playerController.SpeedBoostTimeNormalized, LightningSpriteProvider.Get(), GlitchUiPalette.Information, s);
         }
         if (playerController.HasShield)
         {
             DrawPowerupTimerRow(panel, ref y, "ESCUDO", playerController.ShieldTimeRemaining,
-                playerController.ShieldTimeNormalized, ShieldSpriteProvider.Get(), new Color(1f, 0.70f, 0.90f, 1f), s);
+                playerController.ShieldTimeNormalized, ShieldSpriteProvider.Get(), GlitchUiPalette.Special, s);
         }
         if (playerController.HasCompactMode)
         {
             DrawPowerupTimerRow(panel, ref y, "COMPACTO", playerController.CompactTimeRemaining,
-                playerController.CompactTimeNormalized, CompactSpriteProvider.Get(), new Color(0.74f, 1f, 0.70f, 1f), s);
+                playerController.CompactTimeNormalized, CompactSpriteProvider.Get(), GlitchUiPalette.Success, s);
         }
         if (playerController.HasPhaseDashPowerup)
         {
             DrawPowerupTimerRow(panel, ref y, "PHASE DASH", playerController.PhaseDashTimeRemaining,
-                playerController.PhaseDashTimeNormalized, PhaseDashSpriteProvider.Get(), new Color(0.78f, 0.58f, 1f, 1f), s);
+                playerController.PhaseDashTimeNormalized, PhaseDashSpriteProvider.Get(), GlitchUiPalette.Information, s);
         }
     }
 
@@ -5890,8 +5832,8 @@ public class GameManager : MonoBehaviour
             layout.dash.height - (17f * s));
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (ready ? 9f : 3.5f));
         Color accent = ready
-            ? Color.Lerp(new Color(0.55f, 1f, 0.94f, 1f), new Color(0.92f, 1f, 1f, 1f), pulse)
-            : new Color(0.26f, 0.52f, 0.72f, 1f);
+            ? Color.Lerp(GlitchUiPalette.Information, Color.white, pulse * 0.35f)
+            : GlitchUiPalette.WithAlpha(GlitchUiPalette.Information, 0.58f);
 
         DrawSolidRect(new Rect(dock.x, dock.y, dock.width, 2f * s), new Color(accent.r, accent.g, accent.b, ready ? 0.72f : 0.28f));
 
@@ -5923,8 +5865,8 @@ public class GameManager : MonoBehaviour
             layout.hijack.height - (17f * s));
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (ready ? 8.5f : 3.2f));
         Color accent = ready
-            ? Color.Lerp(new Color(1f, 0.58f, 0.76f, 1f), new Color(1f, 0.88f, 0.94f, 1f), pulse)
-            : new Color(0.58f, 0.34f, 0.52f, 1f);
+            ? Color.Lerp(GlitchUiPalette.Special, Color.white, pulse * 0.30f)
+            : GlitchUiPalette.WithAlpha(GlitchUiPalette.Special, 0.56f);
 
         DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, ready ? 0.72f : 0.28f));
         Rect icon = new Rect(panel.x + (4f * s), panel.y + (10f * s), 22f * s, 22f * s);
@@ -5948,8 +5890,8 @@ public class GameManager : MonoBehaviour
         float normalized = playerController.FirewallChargeNormalized;
         bool ready = playerController.IsFirewallBurstReady;
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (ready ? 11f : 4.2f));
-        Color readyAccent = Color.Lerp(new Color(0.42f, 0.96f, 1f, 1f), new Color(1f, 0.84f, 0.42f, 1f), pulse);
-        Color accent = ready ? readyAccent : Color.Lerp(new Color(0.28f, 0.56f, 0.86f, 1f), new Color(0.48f, 0.94f, 1f, 1f), normalized);
+        Color readyAccent = Color.Lerp(GlitchUiPalette.Alert, Color.white, pulse * 0.24f);
+        Color accent = ready ? readyAccent : GlitchUiPalette.WithAlpha(GlitchUiPalette.Information, Mathf.Lerp(0.52f, 1f, normalized));
 
         HudTopLayout layout = GetHudTopLayout(s);
         Rect panel = new Rect(
@@ -5971,8 +5913,8 @@ public class GameManager : MonoBehaviour
         Rect background = new Rect(icon.xMax + (7f * s), panel.y + (15f * s), Mathf.Max(24f * s, panel.width - icon.width - inputWidth - (22f * s)), 11f * s);
         DrawSolidRect(background, new Color(0.04f, 0.06f, 0.10f, 0.88f));
         Color fill = ready
-            ? Color.Lerp(new Color(0.45f, 0.95f, 1f, 0.95f), new Color(1f, 0.88f, 0.48f, 1f), pulse)
-            : Color.Lerp(new Color(0.22f, 0.48f, 0.74f, 0.82f), new Color(0.45f, 0.95f, 1f, 0.95f), normalized);
+            ? Color.Lerp(GlitchUiPalette.Alert, Color.white, pulse * 0.20f)
+            : GlitchUiPalette.WithAlpha(GlitchUiPalette.Information, Mathf.Lerp(0.48f, 0.95f, normalized));
         float fillW = background.width * normalized;
         DrawSolidRect(new Rect(background.x, background.y, fillW, background.height), fill);
         DrawSolidRect(new Rect(background.x, background.y, background.width, 1f), new Color(0.85f, 0.92f, 1f, 0.18f));

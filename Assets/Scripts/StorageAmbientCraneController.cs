@@ -43,8 +43,8 @@ public class StorageAmbientCraneController : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float removeCargoChance = 0.22f;
 
     [Header("Visuals")]
-    [SerializeField] private Color craneWarningColor = new Color(1f, 0.76f, 0.34f, 0.72f);
-    [SerializeField] private Color craneActiveColor = new Color(0.36f, 0.88f, 1f, 0.92f);
+    [SerializeField] private Color craneWarningColor = new Color(1f, 0.78f, 0.24f, 0.72f);
+    [SerializeField] private Color craneActiveColor = new Color(1f, 0.28f, 0.40f, 0.92f);
     [SerializeField] private Color cargoBodyColor = new Color(0.44f, 0.35f, 0.23f, 0.94f);
     [SerializeField] private Color cargoAccentColor = new Color(0.95f, 0.72f, 0.38f, 0.9f);
 
@@ -81,6 +81,8 @@ public class StorageAmbientCraneController : MonoBehaviour
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
+        craneWarningColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.72f);
+        craneActiveColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.92f);
         centerTransform = center != null ? center : transform;
         obstaclesRoot = staticObstaclesRoot;
         dynamicRoot = dynamicObstaclesRoot != null ? dynamicObstaclesRoot : staticObstaclesRoot;
@@ -281,6 +283,10 @@ public class StorageAmbientCraneController : MonoBehaviour
         float sideX = operationFromLeft ? interiorLeft : interiorRight;
         activeHook.ConfigureSide(targetObject.transform, sideX, operationFromLeft, operationDuration, telegraphFraction, craneWarningColor, craneActiveColor);
         GlitchAudioManager.PlayStorageCraneStart(targetObject.transform.position);
+        gameManager?.NotifyMapEventStarted(
+            "storage_ambient_crane",
+            "GRUA DE CARGA",
+            "El gancho amarillo anticipa qué objeto va a mover, agregar o retirar la grúa. No cruces su recorrido y revisa el nuevo espacio cuando termine.");
     }
 
     private void TickOperation()

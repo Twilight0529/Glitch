@@ -29,8 +29,8 @@ public class RuptureAmbientRiftController : MonoBehaviour
     [SerializeField] private float dissolveSeconds = 1.25f;
 
     [Header("Visuals")]
-    [SerializeField] private Color warningColor = new Color(0.82f, 0.28f, 0.86f, 0.46f);
-    [SerializeField] private Color activeColor = new Color(0.34f, 0.78f, 0.92f, 0.56f);
+    [SerializeField] private Color warningColor = new Color(1f, 0.78f, 0.24f, 0.54f);
+    [SerializeField] private Color activeColor = new Color(1f, 0.28f, 0.40f, 0.66f);
 
     private Transform centerTransform;
     private Transform dynamicRoot;
@@ -49,6 +49,8 @@ public class RuptureAmbientRiftController : MonoBehaviour
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
+        warningColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.54f);
+        activeColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.66f);
         centerTransform = center != null ? center : transform;
         dynamicRoot = dynamicObstaclesRoot != null ? dynamicObstaclesRoot : centerTransform;
         ApplyOperationModifiersOnce();
@@ -145,6 +147,11 @@ public class RuptureAmbientRiftController : MonoBehaviour
             {
                 SpawnFragment(fragments[i], solidHold);
             }
+
+            gameManager?.NotifyMapEventStarted(
+                "rupture_ambient_fragments",
+                "FRAGMENTOS DE RUPTURA",
+                "Las grietas amarillas anuncian fragmentos que pronto se volverán obstáculos sólidos. Sal de su trayectoria y vuelve a leer la ruta cuando se materialicen.");
 
             return true;
         }

@@ -2,7 +2,7 @@ using UnityEngine;
 
 public static class PhaseDashSpriteProvider
 {
-    // Portal fracturado con doble chevron: comunica avance y atravesamiento sin reutilizar otro powerup.
+    // Cuerpo, ecos y una barrera atravesada: la silueta explica la mecanica sin depender del nombre.
     private static Sprite cached;
 
     public static Sprite Get()
@@ -31,7 +31,7 @@ public static class PhaseDashSpriteProvider
                     for (int sx = 0; sx < samples; sx++)
                     {
                         Vector2 p = new Vector2(x + (sx + 0.5f) / samples, y + (sy + 0.5f) / samples);
-                        if (IsFilled(p)) coverage += 1f;
+                        coverage += GetCoverage(p);
                     }
                 }
                 coverage /= samples * samples;
@@ -45,24 +45,40 @@ public static class PhaseDashSpriteProvider
         return cached;
     }
 
-    private static bool IsFilled(Vector2 p)
+    private static float GetCoverage(Vector2 point)
     {
-        Vector2 centered = p - new Vector2(31.5f, 31.5f);
-        float diamond = Mathf.Abs(centered.x) + Mathf.Abs(centered.y);
-        bool brokenPortal = diamond <= 27f && diamond >= 18f &&
-                            !(centered.x < -7f && Mathf.Abs(centered.y) < 5f);
+        // La pared queda visible por debajo de la trayectoria que la cruza.
+        if (point.x >= 29f && point.x <= 35f && point.y >= 6f && point.y <= 58f)
+        {
+            return 0.38f;
+        }
 
-        bool frontChevron = Chevron(p, 22f, 32f, 15f, 6f);
-        bool rearChevron = Chevron(p, 10f, 32f, 11f, 4.5f);
-        bool phaseCore = centered.sqrMagnitude <= 19f;
-        return brokenPortal || frontChevron || rearChevron || phaseCore;
-    }
+        if (point.x >= 9f && point.x <= 48f && Mathf.Abs(point.y - 32f) <= 2.2f)
+        {
+            return 0.70f;
+        }
 
-    private static bool Chevron(Vector2 p, float centerX, float centerY, float height, float thickness)
-    {
-        float localX = p.x - centerX;
-        float localY = Mathf.Abs(p.y - centerY);
-        float ridge = localX + height - localY;
-        return localX >= -height && localX <= height && ridge >= 0f && ridge <= thickness;
+        float ghostRear = Mathf.Abs(point.x - 14f) + Mathf.Abs(point.y - 32f);
+        if (ghostRear <= 5.5f)
+        {
+            return 0.34f;
+        }
+
+        float ghostFront = Mathf.Abs(point.x - 23f) + Mathf.Abs(point.y - 32f);
+        if (ghostFront <= 6.5f)
+        {
+            return 0.58f;
+        }
+
+        float player = Mathf.Abs(point.x - 46f) + Mathf.Abs(point.y - 32f);
+        if (player <= 9f)
+        {
+            return 1f;
+        }
+
+        // Una punta corta fija la direccion sin competir con la silueta del jugador.
+        bool directionTip = point.x >= 50f && point.x <= 59f &&
+                            Mathf.Abs(point.y - 32f) <= (59f - point.x) * 0.62f;
+        return directionTip ? 0.94f : 0f;
     }
 }

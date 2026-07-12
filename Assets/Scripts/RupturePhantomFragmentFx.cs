@@ -12,8 +12,8 @@ public class RupturePhantomFragmentFx : MonoBehaviour
     private readonly SpriteRenderer[] tearRenderers = new SpriteRenderer[8];
 
     private Vector2 fragmentSize = Vector2.one;
-    private Color warningColor = Color.magenta;
-    private Color activeColor = Color.cyan;
+    private Color warningColor = new Color(1f, 0.78f, 0.24f, 1f);
+    private Color activeColor = new Color(1f, 0.28f, 0.40f, 1f);
     private float duration = 5f;
     private float telegraphEndFraction = 0.2f;
     private float materializeEndFraction = 0.34f;

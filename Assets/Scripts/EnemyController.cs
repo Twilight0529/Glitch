@@ -128,10 +128,10 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float expansionShootProjectileSpeed = 9.5f;
     [SerializeField] private float expansionShootProjectileLifetime = 3.2f;
     [SerializeField] private float expansionShootSpawnRadius = 0.7f;
-    [SerializeField] private Color expansionShootProjectileColor = new Color(1f, 0.48f, 0.63f, 1f);
+    [SerializeField] private Color expansionShootProjectileColor = new Color(1f, 0.28f, 0.40f, 1f);
     [SerializeField] private Vector2 expansionShootProjectileSize = new Vector2(0.24f, 0.24f);
     [SerializeField] private float expansionShootTelegraphLeadTime = 0.6f;
-    [SerializeField] private Color expansionShootTelegraphColor = new Color(1f, 0.50f, 0.68f, 0.8f);
+    [SerializeField] private Color expansionShootTelegraphColor = new Color(1f, 0.78f, 0.24f, 0.8f);
     [SerializeField] private float expansionShootTelegraphPulseSpeed = 8.5f;
     [SerializeField] private float expansionShootTelegraphRingRadius = 0.9f;
     [SerializeField] private Vector2 expansionShootTelegraphTickSize = new Vector2(0.22f, 0.06f);
@@ -148,7 +148,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private Color splitCloneColor = new Color(1f, 0.30f, 0.42f, 0.92f);
 
     [Header("Split Merge Telegraph")]
-    [SerializeField] private Color splitMergeTelegraphColor = new Color(1f, 0.73f, 0.82f, 0.92f);
+    [SerializeField] private Color splitMergeTelegraphColor = new Color(1f, 0.78f, 0.24f, 0.92f);
     [SerializeField] private float splitMergeTelegraphPulseSpeed = 7.8f;
     [SerializeField] private float splitMergeTelegraphRingRadius = 0.34f;
     [SerializeField] private int splitMergeTelegraphSegments = 8;
@@ -160,13 +160,13 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float destroyerTouchCooldown = 0.06f;
     [SerializeField, Range(0f, 1f)] private float destroyerRepulsionFactor = 0.12f;
     [SerializeField] private float destroyerFractureDuration = 0.12f;
-    [SerializeField] private Color destroyerFractureFlashColor = new Color(1f, 0.82f, 0.86f, 1f);
+    [SerializeField] private Color destroyerFractureFlashColor = new Color(1f, 0.28f, 0.40f, 1f);
     [SerializeField, Range(0.1f, 1f)] private float destroyerFractureEndScale = 0.2f;
     [SerializeField] private float destroyerFractureSpinDegrees = 25f;
     [SerializeField] private float destroyerRespawnDelay = 8f;
     [SerializeField] private float destroyerRespawnWarningLeadTime = 2f;
     [SerializeField] private float destroyerRespawnWarningPulseSpeed = 7.5f;
-    [SerializeField] private Color destroyerRespawnWarningColor = new Color(1f, 0.72f, 0.84f, 0.85f);
+    [SerializeField] private Color destroyerRespawnWarningColor = new Color(1f, 0.78f, 0.24f, 0.85f);
     [SerializeField] private float destroyerForwardBreakDistance = 1.15f;
     [SerializeField] private float destroyerForwardBreakRadiusMultiplier = 0.82f;
 
@@ -186,7 +186,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float phaseBlinkDistanceFromPlayer = 3.0f;
     [SerializeField] private float phaseBlinkProbeRadius = 0.52f;
     [SerializeField] private int phaseBlinkPlacementAttempts = 18;
-    [SerializeField] private Color phaseBlinkColor = new Color(0.66f, 1f, 0.92f, 0.92f);
+    [SerializeField] private Color phaseBlinkColor = new Color(1f, 0.78f, 0.24f, 0.92f);
 
     [Header("Level 2 - Pincer Barrage")]
     [SerializeField] private float pincerBarrageInterval = 2.2f;
@@ -195,7 +195,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float pincerSpawnDistance = 6.2f;
     [SerializeField] private float pincerVerticalSpread = 2.4f;
     [SerializeField] private float pincerProjectileSpeedMultiplier = 1.08f;
-    [SerializeField] private Color pincerProjectileColor = new Color(0.92f, 0.62f, 1f, 1f);
+    [SerializeField] private Color pincerProjectileColor = new Color(1f, 0.28f, 0.40f, 1f);
 
     [Header("Level 2 - Signal Jam")]
     [SerializeField] private float signalJamInterval = 2.75f;
@@ -203,7 +203,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float signalJamRadius = 2.55f;
     [SerializeField] private float signalJamSlowMultiplier = 0.48f;
     [SerializeField] private float signalJamSlowDuration = 1.05f;
-    [SerializeField] private Color signalJamColor = new Color(1f, 0.78f, 0.42f, 0.94f);
+    [SerializeField] private Color signalJamColor = new Color(1f, 0.28f, 0.40f, 0.94f);
 
     [Header("Level 2 - Orbit Barrage")]
     [SerializeField] private float orbitBarrageInterval = 2.55f;
@@ -211,7 +211,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private int orbitBarrageProjectileCount = 8;
     [SerializeField] private float orbitBarrageSpawnRadius = 2.55f;
     [SerializeField] private float orbitBarrageProjectileSpeedMultiplier = 0.92f;
-    [SerializeField] private Color orbitBarrageProjectileColor = new Color(0.58f, 0.82f, 1f, 1f);
+    [SerializeField] private Color orbitBarrageProjectileColor = new Color(1f, 0.28f, 0.40f, 1f);
 
     [Header("Level 2 - Replay Predator")]
     [SerializeField] private float replaySampleInterval = 0.12f;
@@ -221,7 +221,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private int replayPredatorEchoCount = 8;
     [SerializeField] private float replayPredatorEchoRadius = 0.48f;
     [SerializeField] private float replayPredatorGhostTravelSeconds = 1.35f;
-    [SerializeField] private Color replayPredatorColor = new Color(1f, 0.42f, 0.76f, 0.92f);
+    [SerializeField] private Color replayPredatorColor = new Color(1f, 0.28f, 0.40f, 0.92f);
 
     [Header("Level 2 - Checksum Lattice")]
     [SerializeField] private float checksumLatticeInterval = 6.2f;
@@ -235,9 +235,9 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float checksumLatticePenaltySlowMultiplier = 0.46f;
     [SerializeField] private float checksumLatticePenaltyDuration = 1.3f;
     [SerializeField] private float checksumLatticePenaltyPull = 1.2f;
-    [SerializeField] private Color checksumLatticeNodeColor = new Color(0.36f, 0.86f, 1f, 0.88f);
-    [SerializeField] private Color checksumLatticeActiveColor = new Color(1f, 0.82f, 0.34f, 1f);
-    [SerializeField] private Color checksumLatticeFailColor = new Color(1f, 0.34f, 0.72f, 0.95f);
+    [SerializeField] private Color checksumLatticeNodeColor = new Color(0.34f, 0.86f, 1f, 0.88f);
+    [SerializeField] private Color checksumLatticeActiveColor = new Color(0.38f, 1f, 0.66f, 1f);
+    [SerializeField] private Color checksumLatticeFailColor = new Color(1f, 0.28f, 0.40f, 0.95f);
 
     [Header("Level 2 - Input Desync")]
     [SerializeField] private float inputDesyncInterval = 1.25f;
@@ -245,7 +245,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float inputDesyncDisplacement = 1.15f;
     [SerializeField] private float inputDesyncSlowMultiplier = 0.82f;
     [SerializeField] private float inputDesyncSlowDuration = 0.36f;
-    [SerializeField] private Color inputDesyncColor = new Color(0.66f, 0.74f, 1f, 0.88f);
+    [SerializeField] private Color inputDesyncColor = new Color(1f, 0.28f, 0.40f, 0.88f);
 
     [Header("Level 2 - Map Recompile")]
     [SerializeField] private float mapRecompileInterval = 5.4f;
@@ -259,7 +259,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float mapRecompileMaxObstaclePullDistance = 7.5f;
     [SerializeField] private float mapRecompileHighSpeedThreshold = 7.5f;
     [SerializeField] private float mapRecompileFarDistanceThreshold = 6.4f;
-    [SerializeField] private Color mapRecompileColor = new Color(0.92f, 0.62f, 1f, 0.92f);
+    [SerializeField] private Color mapRecompileColor = new Color(1f, 0.28f, 0.40f, 0.92f);
 
     [Header("Level 2 - Signal Possession")]
     [SerializeField] private float signalPossessionInterval = 4.8f;
@@ -267,7 +267,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float signalPossessionArmSeconds = 0.7f;
     [SerializeField] private float signalPossessionRadius = 1.55f;
     [SerializeField] private int signalPossessionProjectileCount = 7;
-    [SerializeField] private Color signalPossessionColor = new Color(0.76f, 1f, 0.54f, 0.95f);
+    [SerializeField] private Color signalPossessionColor = new Color(1f, 0.28f, 0.40f, 0.95f);
 
     [Header("Level 2 - Phase Contract")]
     [SerializeField] private float phaseContractInterval = 5.6f;
@@ -278,7 +278,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float phaseContractRewardStun = 1.1f;
     [SerializeField] private float phaseContractPenaltySlow = 0.48f;
     [SerializeField] private float phaseContractPenaltyDuration = 1.3f;
-    [SerializeField] private Color phaseContractColor = new Color(1f, 0.84f, 0.46f, 0.92f);
+    [SerializeField] private Color phaseContractColor = new Color(1f, 0.28f, 0.40f, 0.92f);
 
     [Header("Level 2 Awakening FX")]
     [SerializeField] private float levelTwoAwakeningDuration = 2.35f;
@@ -302,7 +302,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField, Min(0f)] private float splitWeight = 0.7f;
     [SerializeField, Min(0f)] private float expansionShootWeight = 0.8f;
     [SerializeField, Min(0f)] private float speedSurgeWeight = 0.9f;
-    [SerializeField, Min(0f)] private float weaveHunterWeight = 0.65f;
+    [SerializeField, Min(0f)] private float weaveHunterWeight = 0.04f;
     [SerializeField, Min(0f)] private float destroyerWeight = 0.75f;
     [SerializeField, Min(0f)] private float phaseBlinkWeight = 0.72f;
     [SerializeField, Min(0f)] private float pincerBarrageWeight = 0.68f;
@@ -428,6 +428,7 @@ public class EnemyController : MonoBehaviour
     private readonly HashSet<int> destroyerDestroyedIds = new HashSet<int>();
     private readonly HashSet<int> destroyerPendingRespawnIds = new HashSet<int>();
     private float weaveHunterTimer;
+    private float weaveHunterCooldownUntil;
     private float weaveHunterSideSign = 1f;
     private float phaseBlinkTimer;
     private bool phaseBlinkCharging;
@@ -644,6 +645,24 @@ public class EnemyController : MonoBehaviour
     // Primero cacheamos componentes y dejamos una física estable; Start conecta lo que depende de otros objetos.
     private void Awake()
     {
+        expansionShootProjectileColor = GlitchUiPalette.Danger;
+        expansionShootTelegraphColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.80f);
+        splitCloneColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.92f);
+        splitMergeTelegraphColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.92f);
+        destroyerFractureFlashColor = GlitchUiPalette.Danger;
+        destroyerRespawnWarningColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.85f);
+        phaseBlinkColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.92f);
+        pincerProjectileColor = GlitchUiPalette.Danger;
+        signalJamColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.94f);
+        orbitBarrageProjectileColor = GlitchUiPalette.Danger;
+        replayPredatorColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.92f);
+        checksumLatticeNodeColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Information, 0.88f);
+        checksumLatticeActiveColor = GlitchUiPalette.Success;
+        checksumLatticeFailColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.95f);
+        inputDesyncColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.88f);
+        mapRecompileColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.92f);
+        signalPossessionColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.95f);
+        phaseContractColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.92f);
         rb = GetComponent<Rigidbody2D>();
         ownCollider = GetComponent<Collider2D>();
         ownBoxCollider = ownCollider as BoxCollider2D;
@@ -1185,6 +1204,10 @@ public class EnemyController : MonoBehaviour
         AnomalyState previousState = currentState;
         AnomalyState nextState = PickWeightedState(forceDifferent);
         currentState = nextState;
+        if (currentState == AnomalyState.WeaveHunter)
+        {
+            weaveHunterCooldownUntil = Time.time + 45f;
+        }
         currentPattern = ResolvePatternForState(currentState);
         stateTimer = 0f;
 
@@ -1412,7 +1435,8 @@ public class EnemyController : MonoBehaviour
             durationMultiplier *= Mathf.Clamp(chaosMinorDurationMultiplier, 0.4f, 1f);
         }
 
-        return Mathf.Max(0.6f, baseInterval * durationMultiplier);
+        float duration = Mathf.Max(0.6f, baseInterval * durationMultiplier);
+        return state == AnomalyState.WeaveHunter ? Mathf.Max(5f, duration) : duration;
     }
 
     public void ApplyContainmentOperationPressure(float speedMultiplier, float stateDurationMultiplier)
@@ -1721,9 +1745,15 @@ public class EnemyController : MonoBehaviour
             fullOptions.Add(new StateWeight(AnomalyState.BlindspotProtocol, blindspotProtocolWeight));
         }
 
+        if (Time.time < weaveHunterCooldownUntil)
+        {
+            fullOptions.RemoveAll(o => o.state == AnomalyState.WeaveHunter);
+        }
+
         ApplyProgressionFilter(fullOptions);
         ApplyLevelTwoPriority(fullOptions);
         ApplyLevelThreePriority(fullOptions);
+        ApplyGlobalStateIncidenceCaps(fullOptions);
 
         List<StateWeight> filtered = new List<StateWeight>(fullOptions);
         ApplyPacingFilter(filtered);
@@ -1769,6 +1799,27 @@ public class EnemyController : MonoBehaviour
         }
 
         return options[options.Count - 1].state;
+    }
+
+    private static void ApplyGlobalStateIncidenceCaps(List<StateWeight> options)
+    {
+        if (options == null)
+        {
+            return;
+        }
+
+        const float weaveHunterMaximumWeight = 0.04f;
+        for (int i = 0; i < options.Count; i++)
+        {
+            if (options[i].state != AnomalyState.WeaveHunter)
+            {
+                continue;
+            }
+
+            StateWeight option = options[i];
+            option.weight = Mathf.Min(option.weight, weaveHunterMaximumWeight);
+            options[i] = option;
+        }
     }
 
     private void ApplyPacingFilter(List<StateWeight> options)
@@ -7765,9 +7816,9 @@ public class ChecksumLatticeFx : MonoBehaviour
     private int sequenceStep;
     private bool resolved;
     private bool sceneColorsRestored;
-    private Color nodeColor = Color.cyan;
-    private Color activeColor = Color.yellow;
-    private Color failColor = Color.magenta;
+    private Color nodeColor = new Color(0.34f, 0.86f, 1f, 1f);
+    private Color activeColor = new Color(0.38f, 1f, 0.66f, 1f);
+    private Color failColor = new Color(1f, 0.28f, 0.40f, 1f);
 
     private struct RendererColorSnapshot
     {

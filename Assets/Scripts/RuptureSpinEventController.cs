@@ -78,8 +78,8 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
     [SerializeField] private float riftEchoTrapStunDuration = 1.2f;
     [SerializeField] private float riftEchoAnchorFirewallReward = 2f;
     [SerializeField] private float riftEchoTrapFirewallReward = 11f;
-    [SerializeField] private Color riftEchoTelegraphColor = new Color(0.95f, 0.42f, 1f, 0.42f);
-    [SerializeField] private Color riftEchoActiveColor = new Color(0.42f, 0.96f, 1f, 0.76f);
+    [SerializeField] private Color riftEchoTelegraphColor = new Color(1f, 0.78f, 0.24f, 0.42f);
+    [SerializeField] private Color riftEchoActiveColor = new Color(1f, 0.28f, 0.40f, 0.76f);
 
     [Header("Rupture Distinctive Event - Echo Portals")]
     [SerializeField] private bool enableEchoPortals = true;
@@ -90,7 +90,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
     [SerializeField] private float echoTrapStunDuration = 1.15f;
     [SerializeField] private float echoFirewallReward = 8f;
     [SerializeField] private float echoSuccessLabelSeconds = 1.25f;
-    [SerializeField] private Color echoPortalColor = new Color(0.48f, 0.96f, 1f, 0.9f);
+    [SerializeField] private Color echoPortalColor = new Color(0.34f, 0.86f, 1f, 0.9f);
 
     [Header("Event Pressure")]
     [SerializeField] private float eventPressureCost = 1f;
@@ -204,6 +204,9 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
 
     public void Configure(Transform center, Transform staticObstaclesRoot, Transform dynamicObstaclesRoot)
     {
+        riftEchoTelegraphColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.42f);
+        riftEchoActiveColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.76f);
+        echoPortalColor = GlitchUiPalette.WithAlpha(GlitchUiPalette.Information, 0.90f);
         centerTransform = center != null ? center : transform;
         BuildInteriorBounds();
         RebuildObstacleList(staticObstaclesRoot, dynamicObstaclesRoot);
@@ -474,11 +477,47 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
 
         eventTimer = 0f;
         eventActive = true;
-        FindAnyObjectByType<GameManager>()?.NotifyThemedMapEventStarted(ActiveThemedEventLabel, ActiveThemedEventHint);
+        FindAnyObjectByType<GameManager>()?.NotifyMapEventStarted(
+            GetTutorialEventId(),
+            GetTutorialEventLabel(),
+            GetTutorialEventDescription());
 
         if (forceImmediate)
         {
             nextEventTimer = Mathf.Max(intervalMin * Mathf.Max(0.1f, cadenceIntervalMultiplier), 0.45f);
+        }
+    }
+
+    private string GetTutorialEventId()
+    {
+        switch (currentVariant)
+        {
+            case RuptureEventVariant.RiftEchoes: return "rupture_echo_chain";
+            case RuptureEventVariant.EchoPortals: return "rupture_echo_portals";
+            default: return "rupture_spin_motion";
+        }
+    }
+
+    private string GetTutorialEventLabel()
+    {
+        switch (currentVariant)
+        {
+            case RuptureEventVariant.RiftEchoes: return "CADENA DE ECOS";
+            case RuptureEventVariant.EchoPortals: return "PORTALES DE ECO";
+            default: return "RUPTURA ROTATIVA";
+        }
+    }
+
+    private string GetTutorialEventDescription()
+    {
+        switch (currentVariant)
+        {
+            case RuptureEventVariant.RiftEchoes:
+                return "Toca dos ecos para unirlos con una línea de resonancia. Haz que la anomalía cruce esa línea para aturdirla y cargar Firewall.";
+            case RuptureEventVariant.EchoPortals:
+                return "Cruza uno de los portales celestes para reaparecer en el otro y dejar un eco. Atrae a la anomalía hacia esa trampa.";
+            default:
+                return "Los objetos de Rupture comienzan a orbitar alrededor del centro. Lee su ritmo y cruza por los huecos que abre el movimiento.";
         }
     }
 

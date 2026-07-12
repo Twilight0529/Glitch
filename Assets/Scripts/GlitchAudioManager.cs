@@ -111,8 +111,8 @@ public class GlitchAudioManager : MonoBehaviour
     public static void PlayPauseOpen() => Play("pause_open", 0.54f, 1f, Vector3.zero);
     public static void PlayPauseClose() => Play("pause_close", 0.42f, 1f, Vector3.zero);
     public static void PlayRankingSubmit() => Play("ranking_submit", 0.58f, 1f, Vector3.zero);
-    public static void PlayCountdownTick(int remaining) => Play("countdown_tick", 0.74f, Mathf.Lerp(1.12f, 0.92f, Mathf.Clamp01((remaining - 1f) / 3f)), Vector3.zero);
-    public static void PlayCountdownGo() => Play("countdown_go", 0.88f, 1f, Vector3.zero);
+    public static void PlayCountdownTick(int remaining) => Play("countdown_tick", 0.78f, Mathf.Lerp(1.18f, 0.94f, Mathf.Clamp01((remaining - 1f) / 2f)), Vector3.zero);
+    public static void PlayCountdownGo() => Play("countdown_go", 0.94f, 1.08f, Vector3.zero);
     public static void PlayBreachWarning(Vector3 position)
     {
         BoostMusic(0.26f, 1.6f);
@@ -595,9 +595,9 @@ public class GlitchAudioManager : MonoBehaviour
             case "ranking_submit":
                 return CreateClip(clipName, 0.42f, RankingSubmit);
             case "countdown_tick":
-                return CreateClip(clipName, 0.36f, CountdownTick);
+                return CreateClip(clipName, 0.18f, CountdownTick);
             case "countdown_go":
-                return CreateClip(clipName, 0.62f, CountdownGo);
+                return CreateClip(clipName, 0.42f, CountdownGo);
             case "state_split":
                 return CreateClip(clipName, 0.48f, StateSplit);
             case "state_expansion":
@@ -954,23 +954,21 @@ public class GlitchAudioManager : MonoBehaviour
 
     private static float CountdownTick(float t, int i)
     {
-        float d = 0.36f;
-        float hit = Mathf.Exp(-t * 18f);
-        float ring = Envelope(t, d, 0.002f, 0.17f);
-        float tone = Sine(Mathf.Lerp(520f, 940f, Mathf.Clamp01(t / d)), t) * 0.20f * ring;
-        float low = Sine(78f, t) * 0.34f * hit;
-        float bit = Noise(i, 57.2f) * 0.08f * Gate(t, 18f, 0.32f) * ring;
-        return SoftClip(low + tone + bit);
+        float d = 0.18f;
+        float e = Envelope(t, d, 0.001f, 0.055f);
+        float startLight = (Square(720f, t) * 0.25f + Sine(720f, t) * 0.22f) * e;
+        float click = Noise(i, 57.2f) * 0.10f * Mathf.Exp(-t * 38f);
+        return SoftClip(startLight + click);
     }
 
     private static float CountdownGo(float t, int i)
     {
-        float d = 0.62f;
-        float e = Envelope(t, d, 0.006f, 0.22f);
-        float punch = Sine(92f, t) * 0.50f * Mathf.Exp(-t * 8f);
-        float rise = Sine(Mathf.Lerp(360f, 1480f, Mathf.Clamp01(t / d)), t) * 0.24f * e;
-        float staticSnap = Noise(i, 58.9f) * 0.18f * Mathf.Exp(-t * 12f);
-        return SoftClip(punch + rise + staticSnap);
+        float d = 0.42f;
+        float e = Envelope(t, d, 0.002f, 0.12f);
+        float greenLight = (Square(1080f, t) * 0.24f + Sine(1080f, t) * 0.28f) * e;
+        float launch = Sine(Mathf.Lerp(140f, 72f, Mathf.Clamp01(t / 0.20f)), t) * 0.48f * Mathf.Exp(-t * 7f);
+        float snap = Noise(i, 58.9f) * 0.14f * Mathf.Exp(-t * 22f);
+        return SoftClip(greenLight + launch + snap);
     }
 
     private static float StateMinor(float t, int i)

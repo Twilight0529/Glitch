@@ -57,12 +57,12 @@ public class EnemyLevelThreeStateController : MonoBehaviour
     [SerializeField] private Vector2 blindspotRadiusRange = new Vector2(3.5f, 7.2f);
 
     [Header("Visual Language")]
-    [SerializeField] private Color adaptiveColor = new Color(1f, 0.35f, 0.72f, 1f);
-    [SerializeField] private Color vectorColor = new Color(0.32f, 1f, 0.78f, 1f);
-    [SerializeField] private Color topologyColorA = new Color(0.38f, 0.82f, 1f, 1f);
-    [SerializeField] private Color topologyColorB = new Color(1f, 0.48f, 0.84f, 1f);
+    [SerializeField] private Color adaptiveColor = new Color(1f, 0.28f, 0.40f, 1f);
+    [SerializeField] private Color vectorColor = new Color(1f, 0.28f, 0.40f, 1f);
+    [SerializeField] private Color topologyColorA = new Color(1f, 0.28f, 0.40f, 1f);
+    [SerializeField] private Color topologyColorB = new Color(1f, 0.28f, 0.40f, 0.78f);
     [SerializeField] private Color blindspotChargeColor = new Color(1f, 0.76f, 0.28f, 1f);
-    [SerializeField] private Color blindspotRouteColor = new Color(0.58f, 0.48f, 1f, 1f);
+    [SerializeField] private Color blindspotRouteColor = new Color(1f, 0.28f, 0.40f, 1f);
 
     private EnemyController owner;
     private PlayerController player;
@@ -158,6 +158,12 @@ public class EnemyLevelThreeStateController : MonoBehaviour
 
     public void Configure(EnemyController ownerReference, PlayerController playerReference, GameManager managerReference)
     {
+        adaptiveColor = GlitchUiPalette.Danger;
+        vectorColor = GlitchUiPalette.Danger;
+        topologyColorA = GlitchUiPalette.Danger;
+        topologyColorB = GlitchUiPalette.WithAlpha(GlitchUiPalette.Danger, 0.78f);
+        blindspotChargeColor = GlitchUiPalette.Alert;
+        blindspotRouteColor = GlitchUiPalette.Danger;
         owner = ownerReference;
         player = playerReference;
         gameManager = managerReference;
