@@ -154,6 +154,7 @@ public class CoreSpikeEventController : MonoBehaviour, IThemedEventStatusProvide
             "core_spike_protocol",
             "PROTOCOLO DE ESPINAS",
             "Los obstáculos amarillos están por cubrirse de espinas; al cambiar a rojo causarán daño. Rodéalos o atraviésalos mientras Phase Dash esté activo.");
+        GlitchAudioManager.PlayCoreSpikes(transform.position);
     }
 
     private List<Collider2D> CollectCandidates()

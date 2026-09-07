@@ -4421,7 +4421,7 @@ public class GameManager : MonoBehaviour
         {
             enemyController.ForceLevelThreeStateForDebug();
         }
-        GlitchAudioManager.PlayBossLevelTwoAwaken(enemyController.transform.position);
+        GlitchAudioManager.PlayBossLevelThreeAwaken(enemyController.transform.position);
     }
 
     private void DrawStatePulseOverlay()

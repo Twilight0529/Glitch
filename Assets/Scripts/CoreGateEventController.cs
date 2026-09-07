@@ -139,7 +139,7 @@ public class CoreGateEventController : MonoBehaviour, IThemedEventStatusProvider
         previousRelayIndex = activeRelayIndex;
         completedRelayCount++;
         SpawnRelayBurst(relay.position, completedColor, 1.25f);
-        GlitchAudioManager.PlayLabGateLock(relay.position);
+        GlitchAudioManager.PlayCoreRelay(relay.position);
 
         if (completedRelayCount >= Mathf.Max(1, requiredRelays))
         {
@@ -227,7 +227,7 @@ public class CoreGateEventController : MonoBehaviour, IThemedEventStatusProvider
             initialGateBuilt = true;
             RebuildTacticalGate();
             EnableActiveRelay();
-            GlitchAudioManager.PlayLabSecurityScan(centerTransform.position);
+            GlitchAudioManager.PlayCoreNetworkOnline(centerTransform.position);
         }
 
         UpdateRelayVisuals();
@@ -282,6 +282,7 @@ public class CoreGateEventController : MonoBehaviour, IThemedEventStatusProvider
         previousRelayIndex = -1;
         CreateRelayNetwork();
         SelectNextRelay();
+        GlitchAudioManager.PlayCoreNetworkStart(centerTransform.position);
     }
 
     private void CreateRelayNetwork()
@@ -716,7 +717,7 @@ public class CoreGateEventController : MonoBehaviour, IThemedEventStatusProvider
         networkOnline = false;
         networkCompleted = false;
         ScheduleNextEvent();
-        GlitchAudioManager.PlayLabGateRelease(centerTransform != null ? centerTransform.position : Vector3.zero);
+        GlitchAudioManager.PlayCoreRelease(centerTransform != null ? centerTransform.position : Vector3.zero);
     }
 
     private void ClearEventObjects()

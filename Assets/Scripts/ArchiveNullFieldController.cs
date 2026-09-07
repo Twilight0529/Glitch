@@ -236,6 +236,7 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
         }
 
         CaptureNearbyObstacles();
+        GlitchAudioManager.PlayArchiveNullField(centerTransform != null ? centerTransform.position : transform.position);
     }
 
     private void CreateAnchor(Vector2 position, int index)

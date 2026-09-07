@@ -1,0 +1,7 @@
+Track: Singularity (action version)
+Author: Vitalezzz
+Source: https://opengameart.org/content/singularity-0
+License: CC0 1.0 Universal (Public Domain Dedication)
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+
+The action version is included as the high-pressure level music for Glitch.

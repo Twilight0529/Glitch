@@ -80,7 +80,8 @@ public class MainMenuController : MonoBehaviour
         new CreditLink("Tipografia", "Pixelmax", "https://www.dafont.com/"),
         new CreditLink("Musica", "Glitch Stairs — Fupi", "https://opengameart.org/content/glitch-stairs"),
         new CreditLink("Musica", "A Flawless Getaway — Vitalezzz", "https://opengameart.org/content/a-flawless-getaway"),
-        new CreditLink("Musica", "Empacotatron — Fupi", "https://opengameart.org/content/empacotatron")
+        new CreditLink("Musica", "Empacotatron — Fupi", "https://opengameart.org/content/empacotatron"),
+        new CreditLink("Musica", "Singularity — Vitalezzz", "https://opengameart.org/content/singularity-0")
     };
 
     private bool showOptions;
