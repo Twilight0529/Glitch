@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
@@ -164,9 +165,53 @@ public class ProceduralArenaGenerator : MonoBehaviour
         GenerateTheme(SelectProgressionTheme(activeTheme, sectorLevel));
     }
 
+    // La reconstruccion de un sector puede crear cientos de objetos. Repartir sus bloques principales
+    // entre frames evita concentrar todo el costo en el instante en que deberia verse la transicion.
+    public IEnumerator GenerateBreachShiftRoutine()
+    {
+        InitializeRandom();
+        sectorLevel++;
+        ArenaTheme nextTheme = SelectProgressionTheme(activeTheme, sectorLevel);
+
+        PrepareThemeGeneration(nextTheme);
+        yield return null;
+
+        CreateGenerationRoots(out Transform boundsRoot, out Transform obstaclesRoot, out Transform dynamicRoot, out Transform detailsRoot);
+        CreateArenaBounds(boundsRoot);
+        yield return null;
+
+        CreateThemedObstacles(obstaclesRoot);
+        yield return null;
+
+        CreateThemedDynamicObstacles(dynamicRoot);
+        yield return null;
+
+        CreateThemedDetails(detailsRoot);
+        yield return null;
+
+        ConfigureThemeMapEvents(obstaclesRoot, dynamicRoot);
+        yield return null;
+        ConfigureChaosSystems();
+    }
+
     // Este es el orden de montaje de una arena. Si algo visual aparece detrás o un evento no encuentra raíces,
     // conviene empezar a seguir el problema desde acá.
     private void GenerateTheme(ArenaTheme theme)
+    {
+        PrepareThemeGeneration(theme);
+        CreateGenerationRoots(out Transform boundsRoot, out Transform obstaclesRoot, out Transform dynamicRoot, out Transform detailsRoot);
+
+        CreateArenaBounds(boundsRoot);
+        CreateThemedObstacles(obstaclesRoot);
+        CreateThemedDynamicObstacles(dynamicRoot);
+        CreateThemedDetails(detailsRoot);
+
+        // Los controladores de tema se agregan despues de crear la geometria para guardar referencias seguras.
+        ConfigureThemeMapEvents(obstaclesRoot, dynamicRoot);
+        ConfigureChaosSystems();
+    }
+
+    private void PrepareThemeGeneration(ArenaTheme theme)
     {
         activeTheme = theme;
         visitedThemes.Add(activeTheme);
@@ -195,27 +240,25 @@ public class ProceduralArenaGenerator : MonoBehaviour
         {
             BuildRuptureAnchors();
         }
+    }
 
-        Transform boundsRoot = new GameObject(BoundsRootName).transform;
+    private void CreateGenerationRoots(
+        out Transform boundsRoot,
+        out Transform obstaclesRoot,
+        out Transform dynamicRoot,
+        out Transform detailsRoot)
+    {
+        boundsRoot = new GameObject(BoundsRootName).transform;
         boundsRoot.SetParent(transform, false);
 
-        Transform obstaclesRoot = new GameObject(ObstaclesRootName).transform;
+        obstaclesRoot = new GameObject(ObstaclesRootName).transform;
         obstaclesRoot.SetParent(transform, false);
 
-        Transform dynamicRoot = new GameObject(DynamicRootName).transform;
+        dynamicRoot = new GameObject(DynamicRootName).transform;
         dynamicRoot.SetParent(transform, false);
 
-        Transform detailsRoot = new GameObject(DetailsRootName).transform;
+        detailsRoot = new GameObject(DetailsRootName).transform;
         detailsRoot.SetParent(transform, false);
-
-        CreateArenaBounds(boundsRoot);
-        CreateThemedObstacles(obstaclesRoot);
-        CreateThemedDynamicObstacles(dynamicRoot);
-        CreateThemedDetails(detailsRoot);
-
-        // Los controladores de tema se agregan despues de crear la geometria para guardar referencias seguras.
-        ConfigureThemeMapEvents(obstaclesRoot, dynamicRoot);
-        ConfigureChaosSystems();
     }
 
     private ArenaTheme SelectDifferentTheme(ArenaTheme current)
@@ -2521,6 +2564,71 @@ public class ProceduralArenaGenerator : MonoBehaviour
             SpriteRenderer sr = decalGo.GetComponent<SpriteRenderer>();
             decalGo.AddComponent<ArenaAmbientPulseFx>().Configure(sr, decal, decal.a * 0.45f, decal.a * 1.2f, Range(0.35f, 1.1f), Range(0f, 10f), Vector2.zero, 0f);
         }
+
+        CreateSurfaceMotionAccent(obstacle, size, baseColor);
+    }
+
+    private void CreateSurfaceMotionAccent(GameObject obstacle, Vector2 size, Color baseColor)
+    {
+        // Solo las superficies con espacio de lectura reciben movimiento. En Rupture la densidad
+        // es menor porque ya existen muchos fragmentos; nunca se agregan componentes a las guias.
+        float longestSide = Mathf.Max(size.x, size.y);
+        float shortestSide = Mathf.Min(size.x, size.y);
+        if (longestSide < 1.45f || shortestSide < 0.48f)
+        {
+            return;
+        }
+
+        float chance;
+        switch (activeTheme)
+        {
+            case ArenaTheme.ContainmentLab:
+                chance = 0.42f;
+                break;
+            case ArenaTheme.StorageBay:
+                chance = 0.34f;
+                break;
+            case ArenaTheme.RuptureZone:
+                chance = 0.24f;
+                break;
+            case ArenaTheme.DataCore:
+                chance = 0.48f;
+                break;
+            default:
+                chance = 0.32f;
+                break;
+        }
+
+        if (Range(0f, 1f) > chance)
+        {
+            return;
+        }
+
+        bool horizontal = size.x >= size.y;
+        Vector2 axis = horizontal ? Vector2.right : Vector2.up;
+        float travelDistance = Mathf.Max(0.18f, longestSide * 0.58f);
+        Vector2 accentSize = horizontal
+            ? new Vector2(Mathf.Clamp(size.x * 0.14f, 0.18f, 0.46f), 0.065f)
+            : new Vector2(0.065f, Mathf.Clamp(size.y * 0.14f, 0.18f, 0.46f));
+
+        Color motionColor = Color.Lerp(palette.dynamic, Color.white, activeTheme == ArenaTheme.DataCore ? 0.18f : 0.08f);
+        motionColor.a = Mathf.Clamp01(Mathf.Max(0.24f, baseColor.a * 0.72f));
+        GameObject accent = CreateChildVisual(
+            obstacle.transform,
+            $"SurfaceMotion_{activeTheme}",
+            Vector2.zero,
+            accentSize,
+            motionColor,
+            5);
+
+        SpriteRenderer renderer = accent.GetComponent<SpriteRenderer>();
+        accent.AddComponent<SurfaceMotionFx>().Configure(
+            renderer,
+            activeTheme,
+            axis,
+            travelDistance,
+            motionColor,
+            Range(0f, 1f));
     }
 
     private static GameObject CreateChildVisual(Transform parent, string name, Vector2 localPosition, Vector2 size, Color color, int sortingOrder)

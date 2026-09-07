@@ -13,9 +13,6 @@ public class ArenaPowerupPickup : MonoBehaviour
         PhaseDash
     }
 
-    [SerializeField] private float bobAmplitude = 0.14f;
-    [SerializeField] private float bobSpeed = 3.2f;
-    [SerializeField] private float spinSpeed = 75f;
     [SerializeField] private float auraPulseSpeed = 4.8f;
     [SerializeField] private float auraScale = 1.95f;
     [SerializeField] private int collectBurstRayCount = 10;
@@ -33,10 +30,10 @@ public class ArenaPowerupPickup : MonoBehaviour
     private float compactScaleMultiplier;
     private float compactMoveMultiplier;
     private float phaseDashDuration;
-    private Vector3 basePosition;
     private SpriteRenderer spriteRenderer;
     private SpriteRenderer auraRenderer;
     private GameObject auraObject;
+    private WorldObjectAnimationFx animationFx;
 
     public PickupKind Kind => kind;
 
@@ -47,7 +44,7 @@ public class ArenaPowerupPickup : MonoBehaviour
             return;
         }
 
-        basePosition += (Vector3)delta;
+        transform.position += (Vector3)delta;
     }
 
     public void Configure(
@@ -72,12 +69,23 @@ public class ArenaPowerupPickup : MonoBehaviour
         compactScaleMultiplier = Mathf.Clamp(compactScale, 0.35f, 0.88f);
         compactMoveMultiplier = Mathf.Clamp(compactMove, 0.25f, 1f);
         phaseDashDuration = Mathf.Max(0.5f, phaseDashSeconds);
+        ApplyVisualTheme();
+        animationFx?.SetLifetimeState(lifeTimer, lifetime);
     }
 
     private void Awake()
     {
-        spriteRenderer = GetComponent<SpriteRenderer>();
-        basePosition = transform.position;
+        SpriteRenderer sourceRenderer = GetComponent<SpriteRenderer>();
+        animationFx = GetComponent<WorldObjectAnimationFx>();
+        if (animationFx == null)
+        {
+            animationFx = gameObject.AddComponent<WorldObjectAnimationFx>();
+        }
+
+        spriteRenderer = animationFx.Initialize(
+            sourceRenderer,
+            WorldObjectAnimationFx.VisualKind.PowerupSpeed,
+            GlitchUiPalette.Information);
         EnsureAuraVisual();
     }
 
@@ -95,17 +103,7 @@ public class ArenaPowerupPickup : MonoBehaviour
             return;
         }
 
-        float bob = Mathf.Sin(Time.time * bobSpeed) * bobAmplitude;
-        transform.position = new Vector3(basePosition.x, basePosition.y + bob, basePosition.z);
-        // Los iconos nuevos explican una direccion o un cambio de escala; rotarlos destruye esa lectura.
-        if (kind == PickupKind.SpeedBurst || kind == PickupKind.Shield)
-        {
-            transform.Rotate(0f, 0f, spinSpeed * Time.deltaTime, Space.Self);
-        }
-        else
-        {
-            transform.localRotation = Quaternion.identity;
-        }
+        animationFx?.SetLifetimeState(lifeTimer, lifetime);
         UpdateAuraVisual();
     }
 
@@ -143,6 +141,9 @@ public class ArenaPowerupPickup : MonoBehaviour
                 spriteRenderer.color = GlitchUiPalette.WithAlpha(GlitchUiPalette.Information, 0.95f);
                 break;
         }
+
+        animationFx?.SetStyle(GetVisualKind(kind), GetThemeColor());
+        animationFx?.SetContentScale(1f);
     }
 
     private void OnTriggerEnter2D(Collider2D other)
@@ -190,12 +191,17 @@ public class ArenaPowerupPickup : MonoBehaviour
 
     private void EnsureAuraVisual()
     {
+        if (auraObject != null)
+        {
+            return;
+        }
+
         auraObject = new GameObject("PowerupAura");
-        auraObject.transform.SetParent(transform, false);
+        auraObject.transform.SetParent(animationFx != null ? animationFx.VisualRoot : transform, false);
         auraObject.transform.localPosition = Vector3.zero;
         auraObject.transform.localScale = Vector3.one * Mathf.Max(1.1f, auraScale);
         auraRenderer = auraObject.AddComponent<SpriteRenderer>();
-        auraRenderer.sprite = CircleSpriteProvider.Get();
+        auraRenderer.sprite = ContainmentRingSpriteProvider.Get();
         auraRenderer.sortingOrder = 11;
         auraRenderer.color = new Color(1f, 1f, 1f, 0.18f);
     }
@@ -207,11 +213,11 @@ public class ArenaPowerupPickup : MonoBehaviour
             return;
         }
 
-        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * auraPulseSpeed);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(lifeTimer * auraPulseSpeed);
         Color tint = GetThemeColor();
 
         float lifeN = 1f - Mathf.Clamp01(lifeTimer / Mathf.Max(0.01f, lifetime));
-        float warn = lifeN < 0.25f ? 0.45f + 0.55f * Mathf.Sin(Time.time * 18f) : 1f;
+        float warn = lifeN < 0.25f ? 0.45f + 0.55f * Mathf.Sin(lifeTimer * 18f) : 1f;
         auraRenderer.color = new Color(tint.r, tint.g, tint.b, (0.10f + pulse * 0.24f) * warn);
         auraObject.transform.localScale = Vector3.one * auraScale * Mathf.Lerp(0.9f, 1.12f, pulse);
     }
@@ -223,7 +229,7 @@ public class ArenaPowerupPickup : MonoBehaviour
         GameObject ring = new GameObject("PowerupCollectRingFx");
         ring.transform.position = transform.position;
         SpriteRenderer ringRenderer = ring.AddComponent<SpriteRenderer>();
-        ringRenderer.sprite = CircleSpriteProvider.Get();
+        ringRenderer.sprite = ContainmentRingSpriteProvider.Get();
         ringRenderer.sortingOrder = 14;
         ringRenderer.color = new Color(burstColor.r, burstColor.g, burstColor.b, 0.88f);
         ring.transform.localScale = Vector3.one * 0.28f;
@@ -260,6 +266,21 @@ public class ArenaPowerupPickup : MonoBehaviour
                 return GlitchUiPalette.Information;
             default:
                 return GlitchUiPalette.Information;
+        }
+    }
+
+    private static WorldObjectAnimationFx.VisualKind GetVisualKind(PickupKind pickupKind)
+    {
+        switch (pickupKind)
+        {
+            case PickupKind.Shield:
+                return WorldObjectAnimationFx.VisualKind.PowerupShield;
+            case PickupKind.Compact:
+                return WorldObjectAnimationFx.VisualKind.PowerupCompact;
+            case PickupKind.PhaseDash:
+                return WorldObjectAnimationFx.VisualKind.PowerupPhaseDash;
+            default:
+                return WorldObjectAnimationFx.VisualKind.PowerupSpeed;
         }
     }
 }

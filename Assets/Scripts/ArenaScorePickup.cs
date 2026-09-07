@@ -7,8 +7,6 @@ public class ArenaScorePickup : MonoBehaviour
     // Este es el dato blanco que flota por la arena. Vive un rato, anima su sprite y premia al jugador al tocarlo.
     [Header("Movimiento y presencia visual")]
     [SerializeField] private bool enableAura = false;
-    [SerializeField] private float bobAmplitude = 0.08f;
-    [SerializeField] private float bobSpeed = 4.5f;
     [SerializeField] private float pulseSpeed = 5.4f;
     [SerializeField] private float baseScale = 1f;
     [SerializeField] private float auraScale = 1.25f;
@@ -25,6 +23,7 @@ public class ArenaScorePickup : MonoBehaviour
     private SpriteRenderer spriteRenderer;
     private SpriteRenderer auraRenderer;
     private GameObject auraObject;
+    private WorldObjectAnimationFx animationFx;
 
     // Estado propio de esta instancia. Se completa desde Configure apenas aparece en la arena.
     private float lifeTimer;
@@ -32,12 +31,10 @@ public class ArenaScorePickup : MonoBehaviour
     private int scoreValue;
     private bool chargedDataCore;
     private float extraFirewallCharge;
-    private Vector3 basePosition;
 
     public int ScoreValue => scoreValue;
 
-    // Los campos gravitatorios mueven el pickup por fuera de su animacion de flotado.
-    // También corremos la posición base para que el siguiente frame no lo devuelva al lugar anterior.
+    // Los campos gravitatorios mueven el root fisico; el flotado ocurre solo en su hijo visual.
     public void ApplyExternalDisplacement(Vector2 delta)
     {
         if (delta.sqrMagnitude <= 0.000001f)
@@ -45,7 +42,7 @@ public class ArenaScorePickup : MonoBehaviour
             return;
         }
 
-        basePosition += (Vector3)delta;
+        transform.position += (Vector3)delta;
     }
 
     public void Configure(ArenaChaosDirector ownerController, GameManager manager, int points, float lifeSeconds, bool dataCore = false, float firewallChargeBonus = 0f)
@@ -64,12 +61,22 @@ public class ArenaScorePickup : MonoBehaviour
         }
 
         ApplyVisual();
+        animationFx?.SetLifetimeState(lifeTimer, lifetime);
     }
 
     private void Awake()
     {
-        spriteRenderer = GetComponent<SpriteRenderer>();
-        basePosition = transform.position;
+        SpriteRenderer sourceRenderer = GetComponent<SpriteRenderer>();
+        animationFx = GetComponent<WorldObjectAnimationFx>();
+        if (animationFx == null)
+        {
+            animationFx = gameObject.AddComponent<WorldObjectAnimationFx>();
+        }
+
+        spriteRenderer = animationFx.Initialize(
+            sourceRenderer,
+            WorldObjectAnimationFx.VisualKind.Score,
+            GlitchUiPalette.Information);
         if (enableAura || chargedDataCore)
         {
             EnsureAura();
@@ -87,11 +94,8 @@ public class ArenaScorePickup : MonoBehaviour
             return;
         }
 
-        float bob = Mathf.Sin(Time.time * bobSpeed) * bobAmplitude;
-        transform.position = new Vector3(basePosition.x, basePosition.y + bob, basePosition.z);
-
-        float pulse = 0.9f + 0.12f * (0.5f + 0.5f * Mathf.Sin(Time.time * pulseSpeed));
-        transform.localScale = Vector3.one * (baseScale * pulse);
+        animationFx?.SetLifetimeState(lifeTimer, lifetime);
+        float pulse = 0.9f + 0.12f * (0.5f + 0.5f * Mathf.Sin(lifeTimer * pulseSpeed));
         UpdateAura(pulse);
     }
 
@@ -106,11 +110,14 @@ public class ArenaScorePickup : MonoBehaviour
         {
             // El Data Core usa el mismo pickup, pero se ve más grande y brillante porque vale bastante más.
             spriteRenderer.color = GlitchUiPalette.WithAlpha(GlitchUiPalette.Success, 0.98f);
-            transform.localScale = Vector3.one * 1.2f;
+            animationFx?.SetStyle(WorldObjectAnimationFx.VisualKind.DataCore, GlitchUiPalette.Success);
+            animationFx?.SetContentScale(baseScale);
             return;
         }
 
         spriteRenderer.color = GlitchUiPalette.WithAlpha(GlitchUiPalette.Information, 0.96f);
+        animationFx?.SetStyle(WorldObjectAnimationFx.VisualKind.Score, GlitchUiPalette.Information);
+        animationFx?.SetContentScale(baseScale);
     }
 
     private void OnTriggerEnter2D(Collider2D other)
@@ -156,7 +163,7 @@ public class ArenaScorePickup : MonoBehaviour
 
         // El aura se construye por código para que el pickup no dependa de un prefab adicional.
         auraObject = new GameObject(chargedDataCore ? "DataCoreAura" : "ScoreAura");
-        auraObject.transform.SetParent(transform, false);
+        auraObject.transform.SetParent(animationFx != null ? animationFx.VisualRoot : transform, false);
         auraObject.transform.localPosition = Vector3.zero;
         auraObject.transform.localScale = Vector3.one * Mathf.Max(1f, auraScale);
         auraRenderer = auraObject.AddComponent<SpriteRenderer>();
@@ -172,7 +179,7 @@ public class ArenaScorePickup : MonoBehaviour
             return;
         }
 
-        float auraPulse = 0.65f + 0.35f * (0.5f + 0.5f * Mathf.Sin(Time.time * auraPulseSpeed));
+        float auraPulse = 0.65f + 0.35f * (0.5f + 0.5f * Mathf.Sin(lifeTimer * auraPulseSpeed));
         Color auraColor = chargedDataCore ? new Color(0.58f, 1f, 0.86f, 1f) : new Color(0.82f, 0.95f, 1f, 1f);
         auraRenderer.color = new Color(auraColor.r, auraColor.g, auraColor.b, 0.06f + auraPulse * (chargedDataCore ? 0.22f : 0.12f));
         auraObject.transform.localScale = Vector3.one * auraScale * (chargedDataCore ? 1.22f : 1f) * Mathf.Lerp(0.88f, 1.12f, auraPulse * pulse);

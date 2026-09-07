@@ -1,0 +1,7 @@
+Track: Empacotatron (loop)
+Author: Fupi
+Source: https://opengameart.org/content/empacotatron
+License: CC0 1.0 Universal (Public Domain Dedication)
+License URL: https://creativecommons.org/publicdomain/zero/1.0/
+
+The loop version is included as the alternate authored level music for Glitch.

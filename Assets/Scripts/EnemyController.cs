@@ -330,6 +330,13 @@ public class EnemyController : MonoBehaviour
     [SerializeField, Range(0.02f, 1f)] private float levelThreeMinorStatePriorityMultiplier = 0.2f;
 
     public AnomalyState CurrentState => currentState;
+    public float CurrentStateNormalized => currentStateDuration > 0.0001f
+        ? Mathf.Clamp01(stateTimer / currentStateDuration)
+        : 0f;
+    public Color CurrentStateColor => GetStateColor(currentState);
+    public SpriteRenderer BodyRenderer => visualAnimator != null && visualAnimator.BodyRenderer != null
+        ? visualAnimator.BodyRenderer
+        : ownRenderer;
     public string CurrentStateLabel => currentState.ToString();
     public PacingPhase CurrentPacingPhase => pacingPhase;
     public string CurrentPacingPhaseLabel => pacingPhase.ToString();
@@ -398,6 +405,8 @@ public class EnemyController : MonoBehaviour
     private Collider2D ownCollider;
     private BoxCollider2D ownBoxCollider;
     private SpriteRenderer ownRenderer;
+    private SpriteRenderer sourceRenderer;
+    private EnemyVisualAnimator visualAnimator;
     private bool localVersusControl;
 
     private AnomalyState currentState;
@@ -666,7 +675,8 @@ public class EnemyController : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         ownCollider = GetComponent<Collider2D>();
         ownBoxCollider = ownCollider as BoxCollider2D;
-        ownRenderer = GetComponent<SpriteRenderer>();
+        sourceRenderer = GetComponent<SpriteRenderer>();
+        ownRenderer = sourceRenderer;
 
         rb.gravityScale = 0f;
         rb.freezeRotation = true;
@@ -686,9 +696,17 @@ public class EnemyController : MonoBehaviour
         {
             baseColliderSize = ownBoxCollider.size;
         }
-        if (ownRenderer != null)
+        if (sourceRenderer != null)
         {
-            baseColor = ownRenderer.color;
+            baseColor = sourceRenderer.color;
+            visualAnimator = GetComponent<EnemyVisualAnimator>();
+            if (visualAnimator == null)
+            {
+                visualAnimator = gameObject.AddComponent<EnemyVisualAnimator>();
+            }
+
+            ownRenderer = visualAnimator.Initialize(this, sourceRenderer);
+            visualAnimator.SetBasePresentation(baseColor, Vector3.one);
         }
 
         levelThreeStateController = GetComponent<EnemyLevelThreeStateController>();
@@ -754,6 +772,8 @@ public class EnemyController : MonoBehaviour
             ownRenderer.color = baseColor;
         }
 
+        visualAnimator?.ResetVisuals();
+
         levelTwoAwakened = false;
         levelTwoAwakeningTimer = 0f;
         levelThreeAwakened = false;
@@ -774,7 +794,6 @@ public class EnemyController : MonoBehaviour
 
     private void UpdateMovementDeformation()
     {
-        Vector3 authoredScale = transform.localScale;
         Vector2 velocity = rb.linearVelocity;
         float speedReference = Mathf.Max(0.1f, baseMoveSpeed * 1.45f);
         float speed = Mathf.Clamp01(velocity.magnitude / speedReference);
@@ -789,20 +808,13 @@ public class EnemyController : MonoBehaviour
         targetY += acceleration * accelerationDeformation * absoluteDirection.y;
 
         Vector2 targetFactor = new Vector2(Mathf.Max(0.68f, targetX), Mathf.Max(0.68f, targetY));
-        float response = 1f - Mathf.Exp(-Mathf.Max(1f, movementDeformationResponse) * Time.unscaledDeltaTime);
+        float response = 1f - Mathf.Exp(-Mathf.Max(1f, movementDeformationResponse) * Time.deltaTime);
         movementScaleFactor = Vector2.Lerp(movementScaleFactor, targetFactor, response);
-        transform.localScale = new Vector3(
-            authoredScale.x * movementScaleFactor.x,
-            authoredScale.y * movementScaleFactor.y,
-            authoredScale.z);
-
-        // Mantiene estable el alcance de contacto aunque el cuerpo se estire visualmente.
-        if (ownBoxCollider != null)
-        {
-            ownBoxCollider.size = new Vector2(
-                baseColliderSize.x / Mathf.Max(0.1f, movementScaleFactor.x),
-                baseColliderSize.y / Mathf.Max(0.1f, movementScaleFactor.y));
-        }
+        visualAnimator?.SetMovementPresentation(
+            movementScaleFactor,
+            direction,
+            speed,
+            acceleration);
 
         previousVisualVelocity = velocity;
     }
@@ -815,6 +827,8 @@ public class EnemyController : MonoBehaviour
         {
             ownBoxCollider.size = baseColliderSize;
         }
+
+        visualAnimator?.SetMovementPresentation(Vector2.one, lastMoveDirection, 0f, 0f);
     }
 
     private void Update()
@@ -1658,6 +1672,12 @@ public class EnemyController : MonoBehaviour
 
     private void HandleStateTransition(AnomalyState previous, AnomalyState next)
     {
+        visualAnimator?.PlayStateTransition(previous, next);
+        if (previous != next)
+        {
+            GameFeelDirector.StateShift(rb != null ? rb.position : (Vector2)transform.position, GetStateColor(next));
+        }
+
         if (levelThreeStateController != null && levelThreeStateController.IsActive && previous != next)
         {
             levelThreeStateController?.ExitState();
@@ -2121,6 +2141,7 @@ public class EnemyController : MonoBehaviour
         {
             ownRenderer.enabled = false;
         }
+        visualAnimator?.SetPresentationVisible(false);
         if (levelAppearanceRoot != null)
         {
             levelAppearanceRoot.SetActive(false);
@@ -2153,6 +2174,7 @@ public class EnemyController : MonoBehaviour
             ownRenderer.enabled = true;
             ownRenderer.color = baseColor;
         }
+        visualAnimator?.SetPresentationVisible(true);
         if (levelAppearanceRoot != null)
         {
             levelAppearanceRoot.SetActive(true);
@@ -2331,8 +2353,9 @@ public class EnemyController : MonoBehaviour
 
         if (!statePulseFxEnabled || statePulseTimer <= 0f)
         {
-            ownRenderer.color = visualBaseColor;
-            transform.localScale = visualBaseScale;
+            visualAnimator?.SetBasePresentation(
+                visualBaseColor,
+                GetVisualScaleFactor(visualBaseScale));
             return;
         }
 
@@ -2344,8 +2367,19 @@ public class EnemyController : MonoBehaviour
 
         Color boosted = Color.Lerp(visualBaseColor, Color.white, lighten);
         boosted.a = visualBaseColor.a;
-        ownRenderer.color = boosted;
-        transform.localScale = visualBaseScale * scale;
+        visualAnimator?.SetBasePresentation(
+            boosted,
+            GetVisualScaleFactor(visualBaseScale) * scale);
+    }
+
+    private Vector3 GetVisualScaleFactor(Vector3 desiredScale)
+    {
+        float baseX = Mathf.Abs(baseScale.x) > 0.0001f ? baseScale.x : 1f;
+        float baseY = Mathf.Abs(baseScale.y) > 0.0001f ? baseScale.y : 1f;
+        return new Vector3(
+            desiredScale.x / baseX,
+            desiredScale.y / baseY,
+            1f);
     }
 
     private Color GetCurrentVisualBaseColor()
@@ -2598,7 +2632,10 @@ public class EnemyController : MonoBehaviour
 
         int baseOrder = ownRenderer != null ? ownRenderer.sortingOrder : 10;
         levelAppearanceRoot = new GameObject("AnomalyLevelAppearance");
-        levelAppearanceRoot.transform.SetParent(transform, false);
+        Transform appearanceParent = visualAnimator != null && visualAnimator.VisualPivot != null
+            ? visualAnimator.VisualPivot
+            : transform;
+        levelAppearanceRoot.transform.SetParent(appearanceParent, false);
 
         levelTwoAppearanceRoot = new GameObject("LevelTwoFrame");
         levelTwoAppearanceRoot.transform.SetParent(levelAppearanceRoot.transform, false);
@@ -3215,6 +3252,7 @@ public class EnemyController : MonoBehaviour
         {
             phaseBlinkCharging = true;
             phaseBlinkTarget = PickPhaseBlinkTarget();
+            PlayVisualAction(0.55f);
             GlitchAudioManager.PlayEnemyPhaseBlinkCharge(transform.position);
         }
 
@@ -3253,6 +3291,7 @@ public class EnemyController : MonoBehaviour
         {
             pincerBarrageCharging = true;
             ComputePincerSpawnPoints(out pincerLeftSpawn, out pincerRightSpawn);
+            PlayVisualAction(0.55f);
             GlitchAudioManager.PlayEnemyPincerCharge(transform.position);
         }
 
@@ -3291,6 +3330,7 @@ public class EnemyController : MonoBehaviour
         {
             signalJamCharging = true;
             signalJamCenter = PickSignalJamCenter();
+            PlayVisualAction(0.55f);
             GlitchAudioManager.PlayEnemySignalJamCharge(transform.position);
         }
 
@@ -3330,6 +3370,7 @@ public class EnemyController : MonoBehaviour
             orbitBarrageCharging = true;
             orbitBarrageCenter = PickOrbitBarrageCenter();
             orbitBarrageDirectionSign = Random.value < 0.5f ? -1 : 1;
+            PlayVisualAction(0.55f);
             GlitchAudioManager.PlayEnemyOrbitBarrageCharge(transform.position);
         }
 
@@ -3765,6 +3806,7 @@ public class EnemyController : MonoBehaviour
         }
 
         SpawnLevelTwoRadialBurst(origin, 1.15f, new Color(1f, 0.72f, 0.30f, 1f), "BlindspotAmbush");
+        PlayVisualAction(1f);
         GlitchAudioManager.PlayEnemyOrbitBarrageFire(origin);
     }
 
@@ -3943,6 +3985,7 @@ public class EnemyController : MonoBehaviour
         parryStunTimer = Mathf.Max(parryStunTimer, Mathf.Max(0.04f, parryStunDuration));
         parryKnockbackTimer = Mathf.Max(0.02f, parryKnockbackDuration);
         rb.linearVelocity = direction * Mathf.Max(0.1f, parryKnockbackSpeed);
+        visualAnimator?.PlayImpact(1f);
         TriggerStatePulse();
         SpawnParryImpactBurst();
         GlitchAudioManager.PlayEnemyParried(transform.position);
@@ -3962,6 +4005,7 @@ public class EnemyController : MonoBehaviour
         parryStunTimer = Mathf.Max(parryStunTimer, Mathf.Max(0.08f, stunSeconds));
         parryKnockbackTimer = Mathf.Max(parryKnockbackTimer, Mathf.Max(0.08f, parryKnockbackDuration * 1.75f));
         rb.linearVelocity = direction.normalized * Mathf.Max(0.1f, parryKnockbackSpeed * Mathf.Max(0.1f, knockbackMultiplier) * force);
+        visualAnimator?.PlayImpact(1.25f);
         TriggerStatePulse();
         SpawnParryImpactBurst();
         GlitchAudioManager.PlayEnemyParried(transform.position);
@@ -3977,6 +4021,7 @@ public class EnemyController : MonoBehaviour
         parryStunTimer = Mathf.Max(parryStunTimer, Mathf.Max(0.08f, seconds));
         parryKnockbackTimer = 0f;
         rb.linearVelocity = Vector2.zero;
+        visualAnimator?.PlayImpact(0.8f);
 
         if (splitClone != null)
         {
@@ -3986,6 +4031,11 @@ public class EnemyController : MonoBehaviour
         TriggerStatePulse();
         SpawnParryImpactBurst();
         GlitchAudioManager.PlayEnemyParried(transform.position);
+    }
+
+    public void PlayVisualAction(float strength = 1f)
+    {
+        visualAnimator?.PlayAction(strength);
     }
 
     private bool TickParryStun()
@@ -4291,6 +4341,7 @@ public class EnemyController : MonoBehaviour
 
     private void FireExpansionShoot()
     {
+        PlayVisualAction(1f);
         float projectileMultiplier = chaosDriveEnabled ? chaosExpansionProjectileMultiplier : 1f;
         int count = Mathf.Max(4, Mathf.RoundToInt(expansionShootProjectileCount * Mathf.Max(1f, projectileMultiplier)));
         float spawnRadius = Mathf.Max(0.05f, expansionShootSpawnRadius);
@@ -4394,6 +4445,7 @@ public class EnemyController : MonoBehaviour
         }
         transform.position = new Vector3(target.x, target.y, transform.position.z);
         SpawnPhaseBlinkBurst(target, 1f);
+        PlayVisualAction(1f);
         TriggerStatePulse();
         GlitchAudioManager.PlayEnemyPhaseBlinkArrive(transform.position);
     }
@@ -4812,6 +4864,7 @@ public class EnemyController : MonoBehaviour
             CreateProjectile(rightPos, rightDir, pincerProjectileColor, expansionShootProjectileSize * 0.92f, pincerProjectileSpeedMultiplier);
         }
 
+        PlayVisualAction(1f);
         GlitchAudioManager.PlayEnemyPincerFire(transform.position);
     }
 
@@ -5007,6 +5060,7 @@ public class EnemyController : MonoBehaviour
         }
 
         SpawnSignalJamBurst(signalJamCenter, radius);
+        PlayVisualAction(1f);
         GlitchAudioManager.PlayEnemySignalJamFire(new Vector3(signalJamCenter.x, signalJamCenter.y, transform.position.z));
     }
 
@@ -5252,6 +5306,7 @@ public class EnemyController : MonoBehaviour
         }
 
         SpawnLevelTwoRadialBurst(orbitBarrageCenter, radius * 0.55f, orbitBarrageProjectileColor, "OrbitBarrage");
+        PlayVisualAction(1f);
         GlitchAudioManager.PlayEnemyOrbitBarrageFire(new Vector3(orbitBarrageCenter.x, orbitBarrageCenter.y, transform.position.z));
     }
 
@@ -7168,6 +7223,7 @@ public class EnemyController : MonoBehaviour
 
         destroyerBreakCount++;
         destroyerTouchCooldownTimer = Mathf.Max(0f, destroyerTouchCooldown);
+        PlayVisualAction(1.2f);
         BeginDestroyFracture(target);
 
         BuildNavigationGrid();

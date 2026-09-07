@@ -47,6 +47,7 @@ public class GameMenuController : MonoBehaviour
     private Font importantFont;
     private Font secondaryFont;
     private float defeatStartedAtUnscaled;
+    private float overlayEnteredAtUnscaled;
 
     private void Awake()
     {
@@ -143,6 +144,10 @@ public class GameMenuController : MonoBehaviour
             PrepareDefeatRegistration();
             defeatStartedAtUnscaled = Time.unscaledTime;
         }
+        if (state != OverlayState.Playing && state != previousState)
+        {
+            overlayEnteredAtUnscaled = Time.unscaledTime;
+        }
 
         bool gameplayActive = state == OverlayState.Playing;
 
@@ -200,12 +205,54 @@ public class GameMenuController : MonoBehaviour
 
         if (state == OverlayState.Paused)
         {
+            Matrix4x4 previousMatrix = GUI.matrix;
+            Color previousColor = GUI.color;
+            bool previousEnabled = GUI.enabled;
+            float entrance = ApplyPauseEntrance(previousMatrix, previousColor);
             DrawPauseMenu();
+            GUI.matrix = previousMatrix;
+            GUI.color = previousColor;
+            GUI.enabled = previousEnabled;
+            DrawPauseEntranceFx(entrance);
         }
         else if (state == OverlayState.Defeat)
         {
             DrawDefeatMenu();
         }
+    }
+
+    private float ApplyPauseEntrance(Matrix4x4 previousMatrix, Color previousColor)
+    {
+        float progress = Mathf.Clamp01((Time.unscaledTime - overlayEnteredAtUnscaled) / 0.24f);
+        float eased = 1f - Mathf.Pow(1f - progress, 3f);
+        float scale = Mathf.Lerp(0.955f, 1f, eased);
+        float offsetY = Mathf.Lerp(24f, 0f, eased);
+        Vector3 center = new Vector3(Screen.width * 0.5f, Screen.height * 0.5f, 0f);
+        Matrix4x4 entrance = Matrix4x4.TRS(
+            center + Vector3.up * offsetY,
+            Quaternion.identity,
+            new Vector3(scale, scale, 1f)) * Matrix4x4.Translate(-center);
+        GUI.matrix = entrance * previousMatrix;
+        GUI.color = previousColor * new Color(1f, 1f, 1f, Mathf.SmoothStep(0.05f, 1f, eased));
+        if (progress < 0.82f)
+        {
+            GUI.enabled = false;
+        }
+        return progress;
+    }
+
+    private static void DrawPauseEntranceFx(float progress)
+    {
+        if (progress >= 0.999f)
+        {
+            return;
+        }
+
+        float envelope = Mathf.Sin(Mathf.Clamp01(progress) * Mathf.PI);
+        float y = Mathf.Lerp(Screen.height * 0.30f, Screen.height * 0.70f, progress);
+        Color accent = GlitchUiPalette.Information;
+        DrawSolidRect(new Rect(0f, y, Screen.width, 2f), new Color(accent.r, accent.g, accent.b, envelope * 0.38f));
+        DrawSolidRect(new Rect(0f, y - 12f, Screen.width, 12f), new Color(accent.r, accent.g, accent.b, envelope * 0.025f));
     }
 
     private void EnsureStyles()

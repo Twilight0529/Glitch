@@ -14,6 +14,7 @@ public class SplitAnomalyCloneController : MonoBehaviour
 
     private Rigidbody2D rb;
     private Collider2D ownCollider;
+    private SplitCloneVisualAnimator visualAnimator;
 
     private float moveSpeed = 3f;
     private float velocityResponsiveness = 20f;
@@ -47,6 +48,8 @@ public class SplitAnomalyCloneController : MonoBehaviour
     }
 
     public Vector2 CurrentVelocity => rb != null ? rb.linearVelocity : Vector2.zero;
+    public bool IsMergeActive => splitMergeActive;
+    public SpriteRenderer BodyRenderer => visualAnimator != null ? visualAnimator.BodyRenderer : GetComponent<SpriteRenderer>();
 
     public void ApplyExternalDisplacement(Vector2 delta)
     {
@@ -84,8 +87,13 @@ public class SplitAnomalyCloneController : MonoBehaviour
 
     public void SetSplitState(bool active, bool merging)
     {
+        bool mergeStarted = merging && !splitMergeActive;
         splitStateActive = active;
         splitMergeActive = merging;
+        if (mergeStarted)
+        {
+            visualAnimator?.PlayAction(0.85f);
+        }
     }
 
     public void ApplyParryImpact(Vector2 impactPosition, Vector2 pushDirection)
@@ -107,6 +115,7 @@ public class SplitAnomalyCloneController : MonoBehaviour
             rb.linearVelocity = direction.normalized * Mathf.Max(0.1f, moveSpeed * parryKnockbackSpeedMultiplier);
         }
 
+        visualAnimator?.PlayImpact(1f);
         GlitchAudioManager.PlayEnemyParried(transform.position);
     }
 
@@ -129,6 +138,7 @@ public class SplitAnomalyCloneController : MonoBehaviour
             rb.linearVelocity = direction.normalized * Mathf.Max(0.1f, moveSpeed * 2.35f * Mathf.Max(0.1f, knockbackMultiplier) * force);
         }
 
+        visualAnimator?.PlayImpact(1.25f);
         GlitchAudioManager.PlayEnemyParried(transform.position);
     }
 
@@ -142,6 +152,7 @@ public class SplitAnomalyCloneController : MonoBehaviour
             rb.linearVelocity = Vector2.zero;
         }
 
+        visualAnimator?.PlayImpact(0.8f);
         GlitchAudioManager.PlayEnemyParried(transform.position);
     }
 
@@ -178,6 +189,17 @@ public class SplitAnomalyCloneController : MonoBehaviour
     {
         rb = GetComponent<Rigidbody2D>();
         ownCollider = GetComponent<Collider2D>();
+        SpriteRenderer sourceRenderer = GetComponent<SpriteRenderer>();
+        if (sourceRenderer != null)
+        {
+            visualAnimator = GetComponent<SplitCloneVisualAnimator>();
+            if (visualAnimator == null)
+            {
+                visualAnimator = gameObject.AddComponent<SplitCloneVisualAnimator>();
+            }
+
+            visualAnimator.Initialize(this, sourceRenderer);
+        }
     }
 
     private void Update()

@@ -451,6 +451,8 @@ public class GameManager : MonoBehaviour
     private float storageRunTime;
     private float ruptureRunTime;
     private LocalVersusManager localVersusManager;
+    private bool hudWasActiveLastGui;
+    private float hudRevealStartedAtUnscaled;
 
     private void Awake()
     {
@@ -644,6 +646,8 @@ public class GameManager : MonoBehaviour
 
         IsGameOver = true;
         runPhase = RunPhase.Active;
+        Vector2 defeatPosition = playerController != null ? playerController.GetPosition() : Vector2.zero;
+        GameFeelDirector.Critical(defeatPosition, Vector2.zero, GlitchUiPalette.Danger, 1.25f);
         RecordOperationRun();
         if (!HasAwardedMetaReward)
         {
@@ -1579,6 +1583,13 @@ public class GameManager : MonoBehaviour
             return;
         }
 
+        bool hudActive = runPhase == RunPhase.Active;
+        if (hudActive && !hudWasActiveLastGui)
+        {
+            hudRevealStartedAtUnscaled = Time.unscaledTime;
+        }
+        hudWasActiveLastGui = hudActive;
+
         if (introTutorialOpen)
         {
             DrawIntroTutorialOverlay();
@@ -1589,8 +1600,7 @@ public class GameManager : MonoBehaviour
         {
             if (runPhase == RunPhase.Active)
             {
-                DrawRuntimeHud();
-                DrawBossStateHud();
+                DrawAnimatedRuntimeHudBundle();
                 DrawStatePulseOverlay();
                 DrawBossLevelTwoIntroOverlay();
                 DrawBossLevelThreeIntroOverlay();
@@ -1604,8 +1614,7 @@ public class GameManager : MonoBehaviour
 
         if (runPhase == RunPhase.Active)
         {
-            DrawRuntimeHud();
-            DrawBossStateHud();
+            DrawAnimatedRuntimeHudBundle();
             DrawStatePulseOverlay();
             DrawBossLevelTwoIntroOverlay();
             DrawBossLevelThreeIntroOverlay();
@@ -1617,6 +1626,33 @@ public class GameManager : MonoBehaviour
         if (runPhase == RunPhase.StartupDelay || runPhase == RunPhase.Countdown || runPhase == RunPhase.GoFlash)
         {
             DrawCountdownOverlay();
+        }
+    }
+
+    private void DrawAnimatedRuntimeHudBundle()
+    {
+        float progress = Mathf.Clamp01((Time.unscaledTime - hudRevealStartedAtUnscaled) / 0.52f);
+        float eased = 1f - Mathf.Pow(1f - progress, 3f);
+        Matrix4x4 previousMatrix = GUI.matrix;
+        Color previousColor = GUI.color;
+        if (progress < 0.999f)
+        {
+            GUI.matrix = Matrix4x4.Translate(Vector3.up * Mathf.Lerp(-34f, 0f, eased)) * previousMatrix;
+            GUI.color = previousColor * new Color(1f, 1f, 1f, Mathf.SmoothStep(0.04f, 1f, eased));
+        }
+
+        DrawRuntimeHud();
+        DrawBossStateHud();
+        GUI.matrix = previousMatrix;
+        GUI.color = previousColor;
+
+        if (progress < 0.999f)
+        {
+            float envelope = Mathf.Sin(progress * Mathf.PI);
+            Color accent = GlitchUiPalette.Information;
+            float scanX = Mathf.Lerp(0f, Screen.width, eased);
+            DrawSolidRect(new Rect(scanX, 0f, 2f, 118f), new Color(accent.r, accent.g, accent.b, envelope * 0.62f));
+            DrawSolidRect(new Rect(Mathf.Max(0f, scanX - 80f), 116f, 80f, 2f), new Color(accent.r, accent.g, accent.b, envelope * 0.22f));
         }
     }
 

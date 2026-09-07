@@ -14,6 +14,11 @@ public class ArenaBreachTransitionFx : MonoBehaviour
     private Color tint = Color.magenta;
     private float duration = 0.8f;
     private float age;
+    private float revealAge;
+    private bool revealRequested;
+
+    public bool IsCovered => age >= GetCloseDuration();
+    public bool IsComplete { get; private set; }
 
     public void Configure(ProceduralArenaGenerator arena, float seconds, Color color)
     {
@@ -27,15 +32,34 @@ public class ArenaBreachTransitionFx : MonoBehaviour
         CreateVisuals();
     }
 
+    public void BeginReveal()
+    {
+        if (revealRequested)
+        {
+            return;
+        }
+
+        revealRequested = true;
+        revealAge = 0f;
+    }
+
     private void Update()
     {
-        age += Time.deltaTime;
-        float t = Mathf.Clamp01(age / duration);
-        float close = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / 0.38f));
-        float open = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((t - 0.62f) / 0.38f));
+        float delta = Time.unscaledDeltaTime;
+        age += delta;
+        if (revealRequested)
+        {
+            revealAge += delta;
+        }
+
+        float close = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(age / GetCloseDuration()));
+        float open = revealRequested
+            ? Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(revealAge / GetRevealDuration()))
+            : 0f;
         float cover = close * (1f - open);
-        float impact = Mathf.Sin(t * Mathf.PI);
-        float noise = 0.5f + 0.5f * Mathf.Sin(Time.time * 26f);
+        float impact = revealRequested ? 1f - open : close;
+        float visualTime = Time.unscaledTime;
+        float noise = 0.5f + 0.5f * Mathf.Sin(visualTime * 26f);
 
         if (blackoutRenderer != null)
         {
@@ -49,9 +73,9 @@ public class ArenaBreachTransitionFx : MonoBehaviour
 
         if (coreRenderer != null)
         {
-            coreRenderer.transform.rotation = Quaternion.Euler(0f, 0f, Time.time * 140f);
+            coreRenderer.transform.rotation = Quaternion.Euler(0f, 0f, visualTime * 140f);
             coreRenderer.transform.localScale = Vector3.one * Mathf.Lerp(0.8f, 2.7f, impact);
-            coreRenderer.color = new Color(1f, 0.9f, 1f, Mathf.Lerp(0.15f, 0.72f, impact) * (1f - Mathf.Abs(t - 0.5f)));
+            coreRenderer.color = new Color(1f, 0.9f, 1f, Mathf.Lerp(0.08f, 0.72f, impact) * cover);
         }
 
         UpdateShutters(cover, noise);
@@ -66,16 +90,27 @@ public class ArenaBreachTransitionFx : MonoBehaviour
             }
 
             float y = Mathf.Lerp(-arenaSize.y * 0.5f, arenaSize.y * 0.5f, (i + 0.5f) / bars.Length);
-            float drift = Mathf.Sin(Time.time * (10f + i) + i) * Mathf.Lerp(0.2f, 1.0f, cover);
+            float drift = Mathf.Sin(visualTime * (10f + i) + i) * Mathf.Lerp(0.2f, 1.0f, cover);
             bar.transform.localPosition = new Vector3(drift, y, -0.01f);
             bar.size = new Vector2(arenaSize.x * Mathf.Lerp(0.45f, 1.18f, cover), Mathf.Lerp(0.04f, 0.22f, noise));
             bar.color = new Color(1f, 0.78f, 0.96f, Mathf.Lerp(0.04f, 0.44f, cover) * Mathf.Lerp(0.55f, 1f, noise));
         }
 
-        if (age >= duration)
+        if (revealRequested && revealAge >= GetRevealDuration())
         {
+            IsComplete = true;
             Destroy(gameObject);
         }
+    }
+
+    private float GetCloseDuration()
+    {
+        return Mathf.Max(0.08f, duration * 0.42f);
+    }
+
+    private float GetRevealDuration()
+    {
+        return Mathf.Max(0.08f, duration * 0.42f);
     }
 
     private void CreateVisuals()
@@ -178,12 +213,13 @@ public class ArenaBreachTransitionFx : MonoBehaviour
             float angle = seed * 17.13f;
             Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
             float radius = Mathf.Lerp(0.2f, maxRadius, Mathf.Repeat(seed * 0.137f + impact * 0.65f, 1f));
-            float lateral = Mathf.Sin(Time.time * (6f + seed * 0.04f)) * 0.45f;
+            float visualTime = Time.unscaledTime;
+            float lateral = Mathf.Sin(visualTime * (6f + seed * 0.04f)) * 0.45f;
             Vector2 tangent = new Vector2(-dir.y, dir.x);
             shard.transform.localPosition = (Vector3)(dir * radius + tangent * lateral);
-            shard.transform.rotation = Quaternion.Euler(0f, 0f, angle * Mathf.Rad2Deg + Time.time * Mathf.Lerp(-120f, 120f, Mathf.PerlinNoise(seed, 2.1f)));
-            shard.size = new Vector2(Mathf.Lerp(0.08f, 0.5f, noise), Mathf.Lerp(0.03f, 0.12f, Mathf.PerlinNoise(seed, Time.time * 5f)));
-            shard.color = new Color(1f, Mathf.Lerp(0.44f, 0.82f, noise), 1f, cover * Mathf.Lerp(0.08f, 0.55f, Mathf.PerlinNoise(seed + 8.4f, Time.time * 4.5f)));
+            shard.transform.rotation = Quaternion.Euler(0f, 0f, angle * Mathf.Rad2Deg + visualTime * Mathf.Lerp(-120f, 120f, Mathf.PerlinNoise(seed, 2.1f)));
+            shard.size = new Vector2(Mathf.Lerp(0.08f, 0.5f, noise), Mathf.Lerp(0.03f, 0.12f, Mathf.PerlinNoise(seed, visualTime * 5f)));
+            shard.color = new Color(1f, Mathf.Lerp(0.44f, 0.82f, noise), 1f, cover * Mathf.Lerp(0.08f, 0.55f, Mathf.PerlinNoise(seed + 8.4f, visualTime * 4.5f)));
         }
     }
 }

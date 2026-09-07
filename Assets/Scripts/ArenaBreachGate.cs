@@ -272,6 +272,7 @@ public class ArenaBreachGate : MonoBehaviour
 
     private void SpawnEnterFx()
     {
+        GameFeelDirector.Major(transform.position, transform.up, breachColor, 1.08f);
         GameObject flash = new GameObject("BreachEnterFx");
         flash.transform.position = transform.position;
         flash.transform.rotation = transform.rotation;

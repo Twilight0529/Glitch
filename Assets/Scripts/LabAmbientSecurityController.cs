@@ -414,7 +414,7 @@ public class LabAmbientSecurityController : MonoBehaviour
 
     private void RefreshReferences()
     {
-        if (gameManager == null)
+        if (gameManager == null)  
         {
             gameManager = FindAnyObjectByType<GameManager>();
         }

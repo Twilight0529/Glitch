@@ -100,6 +100,7 @@ public class PlayerStateHijack : MonoBehaviour
         storedAbility = ability;
         capturedState = state;
         Color color = GetAbilityColor(ability);
+        player.PlayStateHijackVisual(color, false);
         SpawnPulse(transform.position, color, 1.35f, 0.34f);
         GlitchAudioManager.PlayStateHijackCapture(transform.position);
         manager.NotifyStateHijackCaptured(GetAbilityLabel(ability), GetAbilityHint(ability), color);
@@ -146,6 +147,7 @@ public class PlayerStateHijack : MonoBehaviour
                 break;
         }
 
+        player.PlayStateHijackVisual(color, true);
         SpawnPulse(transform.position, color, 2.1f, 0.42f);
         GlitchAudioManager.PlayStateHijackActivate(transform.position);
         manager?.NotifyStateHijackActivated(GetAbilityLabel(ability), color);
@@ -205,10 +207,20 @@ public class PlayerStateHijack : MonoBehaviour
 
         GameObject decoy = new GameObject("HijackEchoDecoy");
         decoy.transform.position = decoyPosition;
-        SpriteRenderer source = player.GetComponent<SpriteRenderer>();
+        SpriteRenderer source = player.BodyRenderer;
         SpriteRenderer renderer = decoy.AddComponent<SpriteRenderer>();
         renderer.sprite = source != null ? source.sprite : SquareSpriteProvider.Get();
         renderer.color = new Color(color.r, color.g, color.b, 0.62f);
+        if (source != null)
+        {
+            renderer.sharedMaterial = source.sharedMaterial;
+            renderer.sortingLayerID = source.sortingLayerID;
+            renderer.drawMode = source.drawMode;
+            renderer.size = source.size;
+            renderer.flipX = source.flipX;
+            renderer.flipY = source.flipY;
+            decoy.transform.localScale = source.transform.lossyScale;
+        }
         renderer.sortingOrder = source != null ? source.sortingOrder + 1 : 12;
         decoy.AddComponent<StateHijackEchoFx>().Configure(renderer, Mathf.Max(0.5f, echoDecoyDuration), color);
     }

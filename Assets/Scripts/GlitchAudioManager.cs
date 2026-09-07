@@ -17,6 +17,9 @@ public class GlitchAudioManager : MonoBehaviour
     [SerializeField] private float menuMusicVolume = 0.34f;
     [SerializeField] private string authoredMusicResourcePath = "Audio/Music/a_flawless_getaway_loop";
     [SerializeField] private float authoredMusicVolume = 0.48f;
+    [SerializeField] private string secondaryMusicResourcePath = "Audio/Music/empacotatron_loop";
+    [SerializeField] private float secondaryMusicVolume = 0.42f;
+    [SerializeField] private float levelMusicCrossfadeSeconds = 3.2f;
     [SerializeField] private float musicFoundationVolume = 0.02f;
     [SerializeField] private float musicPulseVolume = 0.04f;
     [SerializeField] private float musicArpVolume = 0.015f;
@@ -29,6 +32,7 @@ public class GlitchAudioManager : MonoBehaviour
     private AudioSource tensionSource;
     private AudioSource menuMusicSource;
     private AudioSource authoredMusicSource;
+    private AudioSource secondaryMusicSource;
     private AudioSource musicFoundationSource;
     private AudioSource musicPulseSource;
     private AudioSource musicArpSource;
@@ -37,10 +41,14 @@ public class GlitchAudioManager : MonoBehaviour
     private int sampleRate;
     private float musicIntensityBoost;
     private float musicBreachHoldTimer;
+    private float gameplayMusicBlend;
+    private float musicDuck;
+    private int lastMusicSector;
     private AudioContext audioContext = AudioContext.None;
     private PlayerController player;
     private EnemyController enemy;
     private GameManager gameManager;
+    private ProceduralArenaGenerator arena;
 
     private enum AudioContext
     {
@@ -63,7 +71,7 @@ public class GlitchAudioManager : MonoBehaviour
 
     // --- API de sonidos ------------------------------------------------------
     // Estos métodos cortos son el vocabulario sonoro del juego y mantienen nombres/volúmenes centralizados.
-    public static void PlayScorePickup(Vector3 position) => Play("score_pickup", 0.42f, 1f, position);
+    public static void PlayScorePickup(Vector3 position) => Play("score_pickup", 0.42f, UnityEngine.Random.Range(0.94f, 1.08f), position);
     public static void PlayPowerupSpawn(Vector3 position) => Play("powerup_spawn", 0.36f, 1f, position);
 
     public static void PlayPowerupCollected(ArenaPowerupPickup.PickupKind kind, Vector3 position)
@@ -75,6 +83,9 @@ public class GlitchAudioManager : MonoBehaviour
                 break;
             case ArenaPowerupPickup.PickupKind.Compact:
                 Play("powerup_compact", 0.68f, 1f, position);
+                break;
+            case ArenaPowerupPickup.PickupKind.PhaseDash:
+                Play("powerup_phase_dash", 0.74f, 1f, position);
                 break;
             default:
                 Play("powerup_speed", 0.72f, 1f, position);
@@ -277,8 +288,10 @@ public class GlitchAudioManager : MonoBehaviour
         instance.player = null;
         instance.enemy = null;
         instance.gameManager = null;
+        instance.arena = null;
         instance.musicIntensityBoost = 0f;
         instance.musicBreachHoldTimer = 0f;
+        instance.lastMusicSector = 0;
     }
 
     public static void EnterGameplay()
@@ -287,6 +300,9 @@ public class GlitchAudioManager : MonoBehaviour
         instance.audioContext = AudioContext.Gameplay;
         instance.musicIntensityBoost = 0f;
         instance.musicBreachHoldTimer = 0f;
+        instance.musicDuck = 0f;
+        instance.gameplayMusicBlend = 0f;
+        instance.lastMusicSector = 0;
         instance.RefreshReferences();
     }
 
@@ -327,6 +343,7 @@ public class GlitchAudioManager : MonoBehaviour
         tensionSource = CreateLoopSource("ThreatLoop", "threat_loop");
         menuMusicSource = CreateResourceLoopSource("MenuMusic", menuMusicResourcePath);
         authoredMusicSource = CreateAuthoredMusicSource();
+        secondaryMusicSource = CreateResourceLoopSource("SecondaryAuthoredMusic", secondaryMusicResourcePath);
         musicFoundationSource = CreateLoopSource("MusicFoundation", "music_foundation");
         musicPulseSource = CreateLoopSource("MusicPulse", "music_pulse");
         musicArpSource = CreateLoopSource("MusicArp", "music_arp");
@@ -337,6 +354,7 @@ public class GlitchAudioManager : MonoBehaviour
         PlayLoopSource(tensionSource, loopStartTime);
         PlayLoopSource(menuMusicSource, loopStartTime);
         PlayLoopSource(authoredMusicSource, loopStartTime);
+        PlayLoopSource(secondaryMusicSource, loopStartTime);
         PlayLoopSource(musicFoundationSource, loopStartTime);
         PlayLoopSource(musicPulseSource, loopStartTime);
         PlayLoopSource(musicArpSource, loopStartTime);
@@ -416,6 +434,10 @@ public class GlitchAudioManager : MonoBehaviour
         {
             gameManager = FindAnyObjectByType<GameManager>();
         }
+        if (arena == null)
+        {
+            arena = FindAnyObjectByType<ProceduralArenaGenerator>();
+        }
     }
 
     private void UpdateReactiveAmbience()
@@ -440,6 +462,7 @@ public class GlitchAudioManager : MonoBehaviour
 
         musicIntensityBoost = Mathf.MoveTowards(musicIntensityBoost, 0f, dt * 0.42f);
         musicBreachHoldTimer = Mathf.Max(0f, musicBreachHoldTimer - dt);
+        musicDuck = Mathf.MoveTowards(musicDuck, 0f, dt * 1.55f);
 
         float progression = active && gameManager != null ? Mathf.Clamp01(gameManager.SurvivalTime / 150f) : 0f;
         float breachPressure = musicBreachHoldTimer > 0f || breachLure ? 0.34f : 0f;
@@ -450,15 +473,30 @@ public class GlitchAudioManager : MonoBehaviour
         float ambientTarget = active ? ambienceVolume : menuActive ? ambienceVolume * 0.42f : ambienceVolume * 0.18f;
         float tensionTarget = active ? tensionVolume * Mathf.SmoothStep(0f, 1f, threat) : 0f;
         float musicSetting = UserSettings.GetMusicVolume();
+        int currentMusicSector = arena != null ? arena.SectorLevel : 1;
+        bool alternateLevelTrack = gameplaySceneLive && secondaryMusicSource != null &&
+                                   currentMusicSector > 1 && currentMusicSector % 2 == 0;
+        if (gameplaySceneLive && currentMusicSector != lastMusicSector)
+        {
+            RestartIncomingLevelTrack(alternateLevelTrack ? secondaryMusicSource : authoredMusicSource);
+            lastMusicSector = currentMusicSector;
+        }
+        float crossfadeRate = 1f / Mathf.Max(0.2f, levelMusicCrossfadeSeconds);
+        gameplayMusicBlend = Mathf.MoveTowards(gameplayMusicBlend, alternateLevelTrack ? 1f : 0f, dt * crossfadeRate);
+        // Curva de potencia constante: durante el cruce no cae la energia ni se suman ambas pistas al maximo.
+        float primaryTrackGain = Mathf.Sqrt(Mathf.Clamp01(1f - gameplayMusicBlend));
+        float secondaryTrackGain = Mathf.Sqrt(Mathf.Clamp01(gameplayMusicBlend));
+        float musicClarityGain = 1f - Mathf.Clamp01(musicDuck) * 0.42f;
         MoveLoop(ambienceSource, ambientTarget * musicSetting, Mathf.Lerp(0.92f, 1.04f, threat), 0.25f, 0.15f);
         MoveLoop(tensionSource, tensionTarget * musicSetting, Mathf.Lerp(0.82f, 1.18f, threat), 0.45f, 0.3f);
 
         MoveLoop(menuMusicSource, (menuActive ? menuMusicVolume : 0f) * musicSetting, menuActive ? 1f : 0.96f, 0.28f, 0.1f);
-        MoveLoop(authoredMusicSource, (gameplaySceneLive ? authoredMusicVolume : 0f) * musicSetting, 1f, 0.22f, 0.1f);
-        MoveLoop(musicFoundationSource, (active ? musicFoundationVolume : 0f) * musicSetting, 1f, 0.28f, 0.12f);
-        MoveLoop(musicPulseSource, (active ? musicPulseVolume * Smooth01(0.12f, 0.78f, musicIntensity) : 0f) * musicSetting, Mathf.Lerp(0.98f, 1.04f, musicIntensity), 0.36f, 0.16f);
-        MoveLoop(musicArpSource, (active ? musicArpVolume * Smooth01(0.30f, 0.92f, musicIntensity) : 0f) * musicSetting, Mathf.Lerp(0.96f, 1.08f, musicIntensity), 0.34f, 0.22f);
-        MoveLoop(musicPressureSource, (active ? musicPressureVolume * Smooth01(0.52f, 1f, musicIntensity) : 0f) * musicSetting, Mathf.Lerp(0.9f, 1.12f, musicIntensity), 0.5f, 0.28f);
+        MoveLoop(authoredMusicSource, (gameplaySceneLive ? authoredMusicVolume * primaryTrackGain * musicClarityGain : 0f) * musicSetting, 1f, 0.34f, 0.1f);
+        MoveLoop(secondaryMusicSource, (gameplaySceneLive ? secondaryMusicVolume * secondaryTrackGain * musicClarityGain : 0f) * musicSetting, 1f, 0.34f, 0.1f);
+        MoveLoop(musicFoundationSource, (active ? musicFoundationVolume * musicClarityGain : 0f) * musicSetting, 1f, 0.28f, 0.12f);
+        MoveLoop(musicPulseSource, (active ? musicPulseVolume * Smooth01(0.12f, 0.78f, musicIntensity) * musicClarityGain : 0f) * musicSetting, Mathf.Lerp(0.98f, 1.04f, musicIntensity), 0.36f, 0.16f);
+        MoveLoop(musicArpSource, (active ? musicArpVolume * Smooth01(0.30f, 0.92f, musicIntensity) * musicClarityGain : 0f) * musicSetting, Mathf.Lerp(0.96f, 1.08f, musicIntensity), 0.34f, 0.22f);
+        MoveLoop(musicPressureSource, (active ? musicPressureVolume * Smooth01(0.52f, 1f, musicIntensity) * musicClarityGain : 0f) * musicSetting, Mathf.Lerp(0.9f, 1.12f, musicIntensity), 0.5f, 0.28f);
     }
 
     private static void MoveLoop(AudioSource source, float targetVolume, float targetPitch, float volumeRate, float pitchRate)
@@ -471,6 +509,20 @@ public class GlitchAudioManager : MonoBehaviour
         float dt = Time.unscaledDeltaTime;
         source.volume = Mathf.MoveTowards(source.volume, Mathf.Max(0f, targetVolume), dt * Mathf.Max(0.01f, volumeRate));
         source.pitch = Mathf.MoveTowards(source.pitch, Mathf.Clamp(targetPitch, 0.45f, 1.75f), dt * Mathf.Max(0.01f, pitchRate));
+    }
+
+    private static void RestartIncomingLevelTrack(AudioSource source)
+    {
+        if (source == null || source.clip == null)
+        {
+            return;
+        }
+
+        source.timeSamples = 0;
+        if (!source.isPlaying)
+        {
+            source.Play();
+        }
     }
 
     // Busca una fuente libre del pequeño pool y reproduce el clip con su posición y variación de pitch.
@@ -495,6 +547,10 @@ public class GlitchAudioManager : MonoBehaviour
         source.panStereo = ComputePan(position);
         source.volume = Mathf.Clamp01(volume * sfxVolume * UserSettings.GetSfxVolume());
         source.Play();
+        if (volume >= 0.72f)
+        {
+            musicDuck = Mathf.Max(musicDuck, Mathf.InverseLerp(0.72f, 1f, volume) * 0.34f + 0.08f);
+        }
     }
 
     private float ComputePan(Vector3 position)
@@ -554,6 +610,8 @@ public class GlitchAudioManager : MonoBehaviour
                 return CreateClip(clipName, 0.58f, PowerupShield);
             case "powerup_compact":
                 return CreateClip(clipName, 0.42f, PowerupCompact);
+            case "powerup_phase_dash":
+                return CreateClip(clipName, 0.58f, PowerupPhaseDash);
             case "parry_start":
                 return CreateClip(clipName, 0.24f, ParryStart);
             case "parry_success":
@@ -791,6 +849,18 @@ public class GlitchAudioManager : MonoBehaviour
         float body = Sine(118f, t) * 0.20f * Mathf.Exp(-t * 12f);
         float grit = Noise(i, 14.2f) * 0.035f * Mathf.Exp(-t * 7f);
         return SoftClip((sweep + clicks + body + grit) * e);
+    }
+
+    private static float PowerupPhaseDash(float t, int i)
+    {
+        float d = 0.58f;
+        float n = Mathf.Clamp01(t / d);
+        float e = Envelope(t, d, 0.008f, 0.20f);
+        float phaseSweep = Sine(Mathf.Lerp(310f, 1760f, Mathf.SmoothStep(0f, 1f, n)), t) * 0.24f;
+        float ghost = Sine(Mathf.Lerp(1550f, 440f, n), t + 0.012f) * 0.16f;
+        float pulse = Square(118f, t) * 0.12f * BeatDecay(t, 0.145f, 0.055f, 0f);
+        float shimmer = Crush(Sine(2240f + Mathf.Sin(t * 31f) * 180f, t), 7) * 0.08f;
+        return SoftClip((phaseSweep + ghost + pulse + shimmer + Noise(i, 15.8f) * 0.025f) * e);
     }
 
     private static float ParryStart(float t, int i)

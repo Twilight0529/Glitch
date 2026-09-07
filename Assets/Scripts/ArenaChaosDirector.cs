@@ -172,7 +172,8 @@ public class ArenaChaosDirector : MonoBehaviour
         ApplySectorProgression();
         EnsureRuntimeRoot();
         ApplyOperationModifiersOnce();
-        ClearRuntimeObjects();
+        bool preserveTransition = breachTransitionActive && activeBreachTransitionFx != null;
+        ClearRuntimeObjects(preserveTransition);
         pulseWasUnlocked = false;
         pulseEventActive = false;
         objectiveWasUnlocked = false;
@@ -474,7 +475,7 @@ public class ArenaChaosDirector : MonoBehaviour
         runtimeRoot = root.transform;
     }
 
-    private void ClearRuntimeObjects()
+    private void ClearRuntimeObjects(bool preserveBreachTransition = false)
     {
         if (runtimeRoot == null)
         {
@@ -485,6 +486,12 @@ public class ArenaChaosDirector : MonoBehaviour
         {
             Transform child = runtimeRoot.GetChild(i);
             if (child == null)
+            {
+                continue;
+            }
+
+            if (preserveBreachTransition && activeBreachTransitionFx != null &&
+                child.gameObject == activeBreachTransitionFx.gameObject)
             {
                 continue;
             }
@@ -503,7 +510,10 @@ public class ArenaChaosDirector : MonoBehaviour
         activeBreachGate = null;
         activeBreachIndicatorFx = null;
         activeBreachSweepFx = null;
-        activeBreachTransitionFx = null;
+        if (!preserveBreachTransition)
+        {
+            activeBreachTransitionFx = null;
+        }
         activeScorePickups.Clear();
         activeObjectiveNodes.Clear();
         activeWarningLabel = string.Empty;
@@ -515,8 +525,11 @@ public class ArenaChaosDirector : MonoBehaviour
         objectiveNodesTotal = 0;
         breachEventActive = false;
         breachSweepStarted = false;
-        breachTransitionActive = false;
-        pendingBreachEnemyReentry = false;
+        if (!preserveBreachTransition)
+        {
+            breachTransitionActive = false;
+            pendingBreachEnemyReentry = false;
+        }
         breachPlayerConsumed = false;
         breachEnemyAbsorbed = false;
         breachTimer = 0f;
@@ -1169,18 +1182,41 @@ public class ArenaChaosDirector : MonoBehaviour
         HideActorsForBreachTransition(breachPosition);
 
         float transitionSeconds = Mathf.Max(0.25f, breachTransitionDuration);
-        float regenerateDelay = transitionSeconds * 0.52f;
         float arrivalHoldSeconds = Mathf.Max(0f, breachArrivalHoldSeconds);
-        yield return new WaitForSeconds(regenerateDelay);
 
-        arena.GenerateBreachShift();
+        // Primero deja que el cierre llegue realmente a pantalla. La reconstruccion posterior ocurre
+        // bajo cobertura y el efecto no empieza a abrirse hasta que el nuevo sector esta listo.
+        if (activeBreachTransitionFx != null)
+        {
+            while (!activeBreachTransitionFx.IsCovered)
+            {
+                yield return null;
+            }
+        }
+        else
+        {
+            yield return new WaitForSecondsRealtime(transitionSeconds * 0.4f);
+        }
+
+        yield return new WaitForEndOfFrame();
+        yield return StartCoroutine(arena.GenerateBreachShiftRoutine());
         ApplySectorProgression();
         RepositionActorsAfterBreach(breachPosition, arrivalHoldSeconds > 0.05f, out Vector2 arrivalPosition, out Vector2 arrivalDirection);
         SpawnBreachArrivalFx(arrivalPosition, arrivalDirection);
         SpawnSectorArrivalFx();
         RaiseWarning($"SECTOR {arena.SectorLevel} | {arena.ActiveThemeLabel}", Mathf.Max(1.8f, arrivalHoldSeconds));
         RaiseEvent(arena.ActiveThemeRule);
-        yield return new WaitForSeconds(Mathf.Max(0.02f, transitionSeconds - regenerateDelay));
+
+        // El nuevo mapa recibe un frame completo antes de revelar sus renderers y colliders.
+        yield return new WaitForEndOfFrame();
+        if (activeBreachTransitionFx != null)
+        {
+            activeBreachTransitionFx.BeginReveal();
+            while (!activeBreachTransitionFx.IsComplete)
+            {
+                yield return null;
+            }
+        }
 
         if (arrivalHoldSeconds > 0f)
         {

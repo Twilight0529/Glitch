@@ -1,6 +1,7 @@
 using UnityEngine;
 
 [RequireComponent(typeof(Collider2D))]
+[RequireComponent(typeof(SpriteRenderer))]
 // Proyectil compartido por varios estados: viaja, rebota o se refleja y siempre valida los bordes antes de dañar.
 public class AnomalyProjectile : MonoBehaviour
 {
@@ -15,6 +16,7 @@ public class AnomalyProjectile : MonoBehaviour
     private float lifeTimer;
     private bool reflected;
     private SpriteRenderer spriteRenderer;
+    private WorldObjectAnimationFx animationFx;
 
     public Vector2 CurrentVelocity => direction * speed;
 
@@ -25,6 +27,8 @@ public class AnomalyProjectile : MonoBehaviour
         lifetime = Mathf.Max(0.1f, projectileLifetime);
         obstacleMask = obstacles;
         gameManager = manager;
+        transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg);
+        animationFx?.SetLifetimeState(lifeTimer, lifetime);
     }
 
     public bool TryReflectByParry(Vector2 parryOrigin)
@@ -80,7 +84,18 @@ public class AnomalyProjectile : MonoBehaviour
     private void Awake()
     {
         reflectedColor = GlitchUiPalette.Success;
-        spriteRenderer = GetComponent<SpriteRenderer>();
+        SpriteRenderer sourceRenderer = GetComponent<SpriteRenderer>();
+        animationFx = GetComponent<WorldObjectAnimationFx>();
+        if (animationFx == null)
+        {
+            animationFx = gameObject.AddComponent<WorldObjectAnimationFx>();
+        }
+
+        Color projectileTint = sourceRenderer != null ? sourceRenderer.color : GlitchUiPalette.Danger;
+        spriteRenderer = animationFx.Initialize(
+            sourceRenderer,
+            WorldObjectAnimationFx.VisualKind.Projectile,
+            projectileTint);
     }
 
     private void Update()
@@ -95,6 +110,7 @@ public class AnomalyProjectile : MonoBehaviour
         transform.position += (Vector3)(direction * speed * dt);
 
         lifeTimer += dt;
+        animationFx?.SetLifetimeState(lifeTimer, lifetime);
         if (lifeTimer >= lifetime)
         {
             Destroy(gameObject);
@@ -175,6 +191,8 @@ public class AnomalyProjectile : MonoBehaviour
             spriteRenderer.color = reflectedColor;
             spriteRenderer.sortingOrder = 13;
         }
+
+        animationFx?.PlayReflection(reflectedColor);
 
         transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg);
         GlitchAudioManager.PlayProjectileReflect(transform.position);

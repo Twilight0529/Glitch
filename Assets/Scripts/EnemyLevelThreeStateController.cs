@@ -526,6 +526,7 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         adaptivePreviousTarget = adaptiveTarget;
         adaptivePredictionEvaluationTime = Time.time + 0.8f;
         adaptivePredictionPending = true;
+        owner.PlayVisualAction(0.9f);
         UpdateStateLabel("ROUTE LEARNED", adaptiveColor);
     }
 
@@ -656,6 +657,7 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         player.ApplyExternalDisplacement(direction * pull);
         player.ApplyMovementSlow(Mathf.Lerp(0.9f, tetherPressureSlow, pressure), 0.42f);
         owner.ApplyExternalDisplacement(direction * advance);
+        owner.PlayVisualAction(Mathf.Lerp(0.45f, 0.8f, pressure));
         SpawnImpactBurst(Vector2.Lerp(enemyPosition, playerPosition, 0.5f), vectorColor, 10, Mathf.Lerp(0.8f, 1.25f, pressure));
     }
 
@@ -802,6 +804,7 @@ public class EnemyLevelThreeStateController : MonoBehaviour
         }
 
         owner.TeleportForAdvancedState(wrapped, true);
+        owner.PlayVisualAction(0.75f);
         MarkTopologyCooldown(id);
         SpawnTopologyTransfer(position, wrapped);
     }
@@ -967,6 +970,7 @@ public class EnemyLevelThreeStateController : MonoBehaviour
                 blindspotAtCover = false;
                 blindspotHiddenCharge = 0f;
                 movementOverrideVelocity = Vector2.zero;
+                owner.PlayVisualAction(0.8f);
                 SpawnImpactBurst(owner.GetCurrentPosition(), blindspotChargeColor, 16, 1.55f);
                 SelectBlindspotTarget();
             }
@@ -1166,7 +1170,7 @@ public class EnemyLevelThreeStateController : MonoBehaviour
 
     private Sprite GetOwnerSprite()
     {
-        SpriteRenderer renderer = owner != null ? owner.GetComponent<SpriteRenderer>() : null;
+        SpriteRenderer renderer = owner != null ? owner.BodyRenderer : null;
         return renderer != null && renderer.sprite != null ? renderer.sprite : SquareSpriteProvider.Get();
     }
 

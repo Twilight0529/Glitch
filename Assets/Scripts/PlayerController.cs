@@ -118,8 +118,10 @@ public class PlayerController : MonoBehaviour
 
     private Rigidbody2D rb;
     private Collider2D bodyCollider;
-    private BoxCollider2D bodyBoxCollider;
     private SpriteRenderer bodyRenderer;
+    private SpriteRenderer sourceBodyRenderer;
+    private PlayerVisualAnimator visualAnimator;
+    private Transform visualRoot;
     private ProceduralArenaGenerator arenaGenerator;
     private Vector2 moveInput;
     private Vector2 lastMoveDirection = Vector2.right;
@@ -127,7 +129,6 @@ public class PlayerController : MonoBehaviour
     private float ghostDashTimer;
     private float ghostDashCooldownTimer;
     private float compactTimer;
-    private float compactPulsePhase;
     private float speedBoostTimer;
     private float speedBoostMultiplier = 1f;
     private float movementSlowTimer;
@@ -178,16 +179,16 @@ public class PlayerController : MonoBehaviour
     private Color breachGlitchColor = new Color(1f, 0.42f, 0.78f, 1f);
     private Color baseBodyColor = Color.white;
     private Vector3 baseBodyScale = Vector3.one;
-    private Vector2 baseBodyColliderSize;
-    private Vector2 movementScaleFactor = Vector2.one;
-    private Vector2 previousVisualVelocity;
 
     private static bool tutorialInputLocked;
 
     public Vector2 CurrentVelocity => rb != null ? rb.linearVelocity : Vector2.zero;
     public Vector2 CurrentMoveInput => moveInput;
     public Vector2 LastMoveDirection => lastMoveDirection;
+    public SpriteRenderer BodyRenderer => bodyRenderer;
+    public Transform VisualRoot => visualRoot;
     public bool IsInDeathSequence => deathSequenceActive;
+    public bool IsInBreachConsumption => breachConsumptionActive;
     public float DeathExplosionDuration => Mathf.Max(0.02f, deathChargeDuration) + Mathf.Max(0.02f, deathFlashDuration) + Mathf.Max(0.02f, deathAfterglowDuration);
     public bool HasShield => shieldTimer > 0f;
     public bool HasSpeedBoost => speedBoostTimer > 0f;
@@ -270,8 +271,8 @@ public class PlayerController : MonoBehaviour
     {
         rb = GetComponent<Rigidbody2D>();
         bodyCollider = GetComponent<Collider2D>();
-        bodyBoxCollider = bodyCollider as BoxCollider2D;
-        bodyRenderer = GetComponent<SpriteRenderer>();
+        sourceBodyRenderer = GetComponent<SpriteRenderer>();
+        bodyRenderer = sourceBodyRenderer;
         stateHijack = GetComponent<PlayerStateHijack>();
         if (stateHijack == null)
         {
@@ -284,10 +285,6 @@ public class PlayerController : MonoBehaviour
         localVersusParryRechargeTimer = 0f;
 
         baseBodyScale = transform.localScale;
-        if (bodyBoxCollider != null)
-        {
-            baseBodyColliderSize = bodyBoxCollider.size;
-        }
         if (bodyRenderer != null)
         {
             baseBodyColor = bodyRenderer.color;
@@ -296,6 +293,7 @@ public class PlayerController : MonoBehaviour
         ApplySemanticMechanicColors();
 
         ApplySelectedMetaSkin();
+        EnsureVisualAnimator();
         EnsureSelectedSkinVisual();
         EnsureShieldVisual();
         EnsureParryVisual();
@@ -312,8 +310,6 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
-        UpdateMovementDeformation();
-
         Vector2 contained = ClampToPlayableArena(rb.position);
         if ((contained - rb.position).sqrMagnitude <= 0.000001f)
         {
@@ -327,48 +323,34 @@ public class PlayerController : MonoBehaviour
 
     private void OnDisable()
     {
-        movementScaleFactor = Vector2.one;
-        previousVisualVelocity = Vector2.zero;
-        if (bodyBoxCollider != null)
-        {
-            bodyBoxCollider.size = baseBodyColliderSize;
-        }
+        transform.localScale = baseBodyScale;
+        visualAnimator?.ResetVisuals();
     }
 
-    // Estira el sprite según velocidad y aceleración, pero compensa el collider para no cambiar el gameplay por una animación.
-    private void UpdateMovementDeformation()
+    // Construye una copia renderizable bajo una raiz visual. El objeto padre conserva
+    // Rigidbody2D, collider y escala de gameplay; toda deformacion vive en el hijo.
+    private void EnsureVisualAnimator()
     {
-        Vector3 authoredScale = transform.localScale;
-        Vector2 velocity = rb.linearVelocity;
-        float speedReference = Mathf.Max(0.1f, moveSpeed * 1.1f);
-        float speed = Mathf.Clamp01(velocity.magnitude / speedReference);
-        Vector2 direction = velocity.sqrMagnitude > 0.001f ? velocity.normalized : lastMoveDirection;
-        Vector2 absoluteDirection = new Vector2(Mathf.Abs(direction.x), Mathf.Abs(direction.y));
-
-        float velocityDelta = (velocity - previousVisualVelocity).magnitude;
-        float acceleration = Mathf.Clamp01(velocityDelta / Mathf.Max(0.1f, moveSpeed * 0.8f));
-        float targetX = 1f + speed * (absoluteDirection.x * movementStretch - absoluteDirection.y * movementSquash);
-        float targetY = 1f + speed * (absoluteDirection.y * movementStretch - absoluteDirection.x * movementSquash);
-        targetX += acceleration * accelerationDeformation * absoluteDirection.x;
-        targetY += acceleration * accelerationDeformation * absoluteDirection.y;
-
-        Vector2 targetFactor = new Vector2(Mathf.Max(0.72f, targetX), Mathf.Max(0.72f, targetY));
-        float response = 1f - Mathf.Exp(-Mathf.Max(1f, movementDeformationResponse) * Time.unscaledDeltaTime);
-        movementScaleFactor = Vector2.Lerp(movementScaleFactor, targetFactor, response);
-        transform.localScale = new Vector3(
-            authoredScale.x * movementScaleFactor.x,
-            authoredScale.y * movementScaleFactor.y,
-            authoredScale.z);
-
-        // Compensa solo la deformacion visual para conservar el area de colision original.
-        if (bodyBoxCollider != null)
+        if (sourceBodyRenderer == null)
         {
-            bodyBoxCollider.size = new Vector2(
-                baseBodyColliderSize.x / Mathf.Max(0.1f, movementScaleFactor.x),
-                baseBodyColliderSize.y / Mathf.Max(0.1f, movementScaleFactor.y));
+            return;
         }
 
-        previousVisualVelocity = velocity;
+        visualAnimator = GetComponent<PlayerVisualAnimator>();
+        if (visualAnimator == null)
+        {
+            visualAnimator = gameObject.AddComponent<PlayerVisualAnimator>();
+        }
+
+        bodyRenderer = visualAnimator.Initialize(this, sourceBodyRenderer);
+        visualRoot = visualAnimator.VisualRoot;
+        visualAnimator.ConfigureMovement(
+            moveSpeed,
+            movementStretch,
+            movementSquash,
+            accelerationDeformation,
+            movementDeformationResponse);
+        visualAnimator.SetBasePresentation(baseBodyColor);
     }
 
     // --- Apariencia elegida --------------------------------------------------
@@ -413,7 +395,7 @@ public class PlayerController : MonoBehaviour
         skinPatternColors.Clear();
 
         skinPatternRoot = new GameObject("PlayerSkinPattern");
-        skinPatternRoot.transform.SetParent(transform, false);
+        skinPatternRoot.transform.SetParent(visualRoot != null ? visualRoot : transform, false);
 
         switch (selectedSkinPattern)
         {
@@ -871,12 +853,14 @@ public class PlayerController : MonoBehaviour
         speedBoostMultiplier = Mathf.Clamp(multiplier, 1f, Mathf.Max(1f, maxBoostMultiplier));
         speedBoostTimer = Mathf.Max(speedBoostTimer, Mathf.Max(0.1f, duration));
         speedBoostDisplayDuration = Mathf.Max(speedBoostDisplayDuration, speedBoostTimer);
+        visualAnimator?.PlaySpeedBoost();
     }
 
     public void ApplyShield(float duration)
     {
         shieldTimer = Mathf.Max(shieldTimer, Mathf.Max(0.1f, duration * shieldDurationMultiplier));
         shieldDisplayDuration = Mathf.Max(shieldDisplayDuration, shieldTimer);
+        visualAnimator?.PlayShieldGain();
     }
 
     public void ApplyCompactMode(float duration, float scaleMultiplier, float moveMultiplier)
@@ -890,7 +874,7 @@ public class PlayerController : MonoBehaviour
         compactMoveMultiplier = Mathf.Clamp(moveMultiplier, 0.25f, 1f);
         compactTimer = Mathf.Max(compactTimer, Mathf.Max(0.25f, duration));
         compactDisplayDuration = Mathf.Max(compactDisplayDuration, compactTimer);
-        compactPulsePhase = Random.Range(0f, Mathf.PI * 2f);
+        visualAnimator?.PlayCompact();
         SpawnCompactModeFx();
     }
 
@@ -906,10 +890,12 @@ public class PlayerController : MonoBehaviour
 
         phaseDashPowerupTimer = Mathf.Max(phaseDashPowerupTimer, Mathf.Max(0.5f, duration));
         phaseDashDisplayDuration = Mathf.Max(phaseDashDisplayDuration, phaseDashPowerupTimer);
+        visualAnimator?.PlayPhaseDashReady();
     }
 
     public void ApplyMovementSlow(float multiplier, float duration)
     {
+        bool wasSlowed = HasMovementSlow;
         // La resistencia ambiental acerca el slow a velocidad normal y acorta su duracion.
         float clampedMultiplier = Mathf.Clamp(multiplier, minSlowMultiplier, 1f);
         float mitigatedMultiplier = Mathf.Lerp(1f, clampedMultiplier, Mathf.Clamp01(movementSlowSeverityUpgradeMultiplier));
@@ -918,6 +904,10 @@ public class PlayerController : MonoBehaviour
             movementSlowTimer > 0f ? movementSlowMultiplier : 1f,
             Mathf.Clamp(mitigatedMultiplier, minSlowMultiplier, 1f));
         movementSlowTimer = Mathf.Max(movementSlowTimer, mitigatedDuration);
+        if (!wasSlowed)
+        {
+            visualAnimator?.PlaySlow();
+        }
         TryConvertHazardPressureToFirewall();
     }
 
@@ -930,6 +920,7 @@ public class PlayerController : MonoBehaviour
 
         if (ghostDashTimer > 0f)
         {
+            visualAnimator?.PlayImpact(IsIntangibleDashActive ? 0.45f : 0.28f);
             SpawnGhostDashContactFx();
             return true;
         }
@@ -941,6 +932,7 @@ public class PlayerController : MonoBehaviour
 
         shieldTimer = 0f;
         shieldDisplayDuration = 1f;
+        visualAnimator?.PlayShieldBreak();
         SpawnShieldBreakFx();
         GlitchAudioManager.PlayShieldBreak(transform.position);
         return true;
@@ -1119,6 +1111,7 @@ public class PlayerController : MonoBehaviour
         if (!wasReady && IsFirewallBurstReady)
         {
             GlitchAudioManager.PlayFirewallReady(transform.position);
+            visualAnimator?.PlayFirewallReady();
             SpawnFirewallReadyFx();
         }
     }
@@ -1183,6 +1176,7 @@ public class PlayerController : MonoBehaviour
         }
 
         SpawnFirewallBurstFx(radius);
+        visualAnimator?.PlayFirewallBurst();
         GlitchAudioManager.PlayFirewallBurst(transform.position);
         FindAnyObjectByType<GameManager>()?.NotifyFirewallBurstActivated();
         return true;
@@ -1203,6 +1197,7 @@ public class PlayerController : MonoBehaviour
         parryTimer = 0f;
         parryCooldownTimer = Mathf.Max(parryCooldownTimer, Mathf.Max(0.05f, parryCooldown * 0.55f));
         AddFirewallCharge(firewallChargeFromParry);
+        visualAnimator?.PlayParrySuccess(parryDirection);
         SpawnParrySuccessFx(parryDirection);
         GlitchAudioManager.PlayParrySuccess(transform.position);
         FindAnyObjectByType<GameManager>()?.NotifyParrySuccess();
@@ -1212,6 +1207,11 @@ public class PlayerController : MonoBehaviour
     public void CaptureHijackState(EnemyController.AnomalyState state)
     {
         stateHijack?.TryCapture(state);
+    }
+
+    public void PlayStateHijackVisual(Color color, bool activated)
+    {
+        visualAnimator?.PlaySpecialPulse(color, activated ? 1.25f : 0.82f);
     }
 
     public bool TryActivateStateHijackFromTutorial()
@@ -1228,6 +1228,7 @@ public class PlayerController : MonoBehaviour
 
         deathSequenceActive = true;
         breachConsumptionActive = false;
+        visualAnimator?.BeginTerminalSequence();
         if (firewallReadyVisual != null) firewallReadyVisual.SetActive(false);
         DestroyBreachConsumptionVisual();
         GlitchAudioManager.PlayPlayerDeath(transform.position);
@@ -1243,6 +1244,7 @@ public class PlayerController : MonoBehaviour
         }
 
         breachConsumptionActive = true;
+        visualAnimator?.BeginTerminalSequence();
         if (firewallReadyVisual != null) firewallReadyVisual.SetActive(false);
         breachGlitchColor = glitchColor;
         speedBoostTimer = 0f;
@@ -1256,6 +1258,13 @@ public class PlayerController : MonoBehaviour
         ghostDashTimer = 0f;
         ghostDashCooldownTimer = 0f;
         moveInput = Vector2.zero;
+        transform.localScale = baseBodyScale;
+        if (visualRoot != null)
+        {
+            visualRoot.localPosition = Vector3.zero;
+            visualRoot.localRotation = Quaternion.identity;
+            visualRoot.localScale = Vector3.one;
+        }
 
         if (rb != null)
         {
@@ -1395,6 +1404,7 @@ public class PlayerController : MonoBehaviour
         ghostDashTimer = Mathf.Max(0.05f, ghostDashDuration);
         ghostDashCooldownTimer = Mathf.Max(0.1f, ghostDashCooldown);
         BeginPoweredDashPhasing();
+        visualAnimator?.PlayDash(ghostDashDirection, IsIntangibleDashActive);
         SpawnGhostDashStartFx(ghostDashDirection);
         GlitchAudioManager.PlayGhostDash(transform.position);
         return true;
@@ -1494,6 +1504,7 @@ public class PlayerController : MonoBehaviour
 
         parryTimer = Mathf.Max(0.04f, parryActiveDuration);
         parryCooldownTimer = Mathf.Max(0.05f, parryCooldown);
+        visualAnimator?.PlayParryStart();
         SpawnParryStartFx();
         GlitchAudioManager.PlayParryStart(transform.position);
     }
@@ -1567,7 +1578,7 @@ public class PlayerController : MonoBehaviour
         GameObject aura = new GameObject("Aura");
         aura.transform.SetParent(firewallReadyVisual.transform, false);
         firewallReadyAuraRenderer = aura.AddComponent<SpriteRenderer>();
-        firewallReadyAuraRenderer.sprite = CircleSpriteProvider.Get();
+        firewallReadyAuraRenderer.sprite = ContainmentRingSpriteProvider.Get();
         firewallReadyAuraRenderer.sortingOrder = 7;
         firewallReadyAuraRenderer.color = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.08f);
         aura.transform.localScale = Vector3.one * 1.65f;
@@ -1638,7 +1649,7 @@ public class PlayerController : MonoBehaviour
         shieldVisual.transform.localScale = Vector3.one;
 
         shieldRenderer = shieldVisual.AddComponent<SpriteRenderer>();
-        shieldRenderer.sprite = CircleSpriteProvider.Get();
+        shieldRenderer.sprite = ContainmentRingSpriteProvider.Get();
         shieldRenderer.drawMode = SpriteDrawMode.Sliced;
         shieldRenderer.size = Vector2.one * Mathf.Max(0.25f, shieldRadius * 2f);
         shieldRenderer.sortingOrder = 9;
@@ -1659,7 +1670,7 @@ public class PlayerController : MonoBehaviour
         parryVisual.transform.localScale = Vector3.one;
 
         parryRenderer = parryVisual.AddComponent<SpriteRenderer>();
-        parryRenderer.sprite = CircleSpriteProvider.Get();
+        parryRenderer.sprite = ContainmentRingSpriteProvider.Get();
         parryRenderer.drawMode = SpriteDrawMode.Sliced;
         parryRenderer.size = Vector2.one * Mathf.Max(0.25f, parryRadius * 2f);
         parryRenderer.sortingOrder = 10;
@@ -1731,21 +1742,12 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
-        Vector3 targetScale = GetCurrentBodyScale();
-        if (ghostDashTimer <= 0f)
-        {
-            bodyRenderer.color = GetCurrentBodyColor();
-            transform.localScale = targetScale;
-            return;
-        }
-
-        float t = Mathf.Clamp01(ghostDashTimer / Mathf.Max(0.05f, ghostDashDuration));
-        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 38f);
-        Color dashColor = IsIntangibleDashActive ? GlitchUiPalette.Special : ghostDashColor;
-        Color c = Color.Lerp(GetCurrentBodyColor(), dashColor, 0.68f + pulse * 0.20f);
-        c.a = Mathf.Lerp(0.38f, 0.74f, t);
+        // Compact es una regla de gameplay y por eso escala el root fisico de forma
+        // uniforme. Dash, squash/stretch y pulsos quedan en PlayerVisualAnimator.
+        transform.localScale = GetCurrentBodyScale();
+        Color c = GetCurrentBodyColor();
         bodyRenderer.color = c;
-        transform.localScale = targetScale * Mathf.Lerp(0.78f, 1.04f, t);
+        visualAnimator?.SetBasePresentation(c);
     }
 
     private Vector3 GetCurrentBodyScale()
@@ -1755,9 +1757,7 @@ public class PlayerController : MonoBehaviour
             return baseBodyScale;
         }
 
-        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 10f + compactPulsePhase);
-        float compactScale = Mathf.Clamp(compactScaleMultiplier, 0.35f, 0.88f) * Mathf.Lerp(0.96f, 1.05f, pulse);
-        return baseBodyScale * compactScale;
+        return baseBodyScale * Mathf.Clamp(compactScaleMultiplier, 0.35f, 0.88f);
     }
 
     private Color GetCurrentBodyColor()
@@ -1767,9 +1767,8 @@ public class PlayerController : MonoBehaviour
             return baseBodyColor;
         }
 
-        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 12f + compactPulsePhase);
-        Color c = Color.Lerp(baseBodyColor, compactColor, 0.52f + pulse * 0.18f);
-        c.a = Mathf.Lerp(0.76f, 0.96f, pulse);
+        Color c = Color.Lerp(baseBodyColor, compactColor, 0.58f);
+        c.a = Mathf.Min(baseBodyColor.a, 0.94f);
         return c;
     }
 
@@ -1820,6 +1819,7 @@ public class PlayerController : MonoBehaviour
 
         ParticleSystemRenderer trailRenderer = movementTrail.GetComponent<ParticleSystemRenderer>();
         trailRenderer.material = new Material(Shader.Find("Sprites/Default"));
+        trailRenderer.material.mainTexture = PlayerAvatarSpriteProvider.Get().texture;
         trailRenderer.sortingOrder = 8;
         trailRenderer.renderMode = ParticleSystemRenderMode.Billboard;
         trailRenderer.alignment = ParticleSystemRenderSpace.View;
@@ -1970,7 +1970,10 @@ public class PlayerController : MonoBehaviour
         {
             float bodyPulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * Mathf.Max(0.1f, breachGlitchPulseSpeed));
             bodyRenderer.color = Color.Lerp(baseBodyColor, breachGlitchColor, 0.46f + bodyPulse * 0.32f);
-            transform.localScale = baseBodyScale * Mathf.Lerp(0.92f, 1.08f, bodyPulse);
+            if (visualRoot != null)
+            {
+                visualRoot.localScale = Vector3.one * Mathf.Lerp(0.92f, 1.08f, bodyPulse);
+            }
         }
 
         if (breachGlitchVisual == null || breachGlitchRenderers == null)
@@ -2034,6 +2037,13 @@ public class PlayerController : MonoBehaviour
         parryCooldownTimer = 0f;
         ghostDashTimer = 0f;
         ghostDashCooldownTimer = 0f;
+        transform.localScale = baseBodyScale;
+        if (visualRoot != null)
+        {
+            visualRoot.localPosition = Vector3.zero;
+            visualRoot.localRotation = Quaternion.identity;
+            visualRoot.localScale = Vector3.one;
+        }
 
         if (rb != null)
         {
@@ -2074,7 +2084,7 @@ public class PlayerController : MonoBehaviour
         }
 
         Vector3 origin = transform.position;
-        Vector3 startScale = baseBodyScale;
+        Vector3 startScale = visualRoot != null ? visualRoot.localScale : baseBodyScale;
         Color startColor = bodyRenderer != null ? bodyRenderer.color : baseBodyColor;
 
         GameObject shockwave = CreateDeathShockwave(origin);
@@ -2093,7 +2103,15 @@ public class PlayerController : MonoBehaviour
                 bodyRenderer.color = Color.Lerp(startColor, deathChargeColor, Mathf.Lerp(0.35f, 1f, t) * (0.75f + pulse * 0.25f));
             }
 
-            transform.localScale = Vector3.Lerp(startScale, startScale * Mathf.Max(1f, deathScaleBoost), Mathf.SmoothStep(0f, 1f, t));
+            Vector3 animatedScale = Vector3.Lerp(startScale, startScale * Mathf.Max(1f, deathScaleBoost), Mathf.SmoothStep(0f, 1f, t));
+            if (visualRoot != null)
+            {
+                visualRoot.localScale = animatedScale;
+            }
+            else
+            {
+                transform.localScale = animatedScale;
+            }
             yield return null;
         }
 
@@ -2146,7 +2164,11 @@ public class PlayerController : MonoBehaviour
             }
         }
 
-        transform.localScale = startScale;
+        if (visualRoot != null)
+        {
+            visualRoot.localScale = startScale;
+        }
+        transform.localScale = baseBodyScale;
     }
 
     private void TickDeathFx(
@@ -2310,6 +2332,7 @@ public class PlayerController : MonoBehaviour
     private void SpawnParrySuccessFx(Vector2 direction)
     {
         Color burst = parrySuccessColor;
+        GameFeelDirector.Major(transform.position, direction, burst, 0.82f);
         GameObject ring = new GameObject("ParrySuccessRingFx");
         ring.transform.position = transform.position;
         SpriteRenderer ringRenderer = ring.AddComponent<SpriteRenderer>();
@@ -2354,6 +2377,7 @@ public class PlayerController : MonoBehaviour
     private void SpawnFirewallBurstFx(float radius)
     {
         Color burst = firewallBurstColor;
+        GameFeelDirector.Critical(transform.position, Vector2.zero, burst, 1.12f);
         GameObject ring = new GameObject("FirewallBurstRingFx");
         ring.transform.position = transform.position;
         SpriteRenderer ringRenderer = ring.AddComponent<SpriteRenderer>();
@@ -2385,6 +2409,7 @@ public class PlayerController : MonoBehaviour
     {
         Vector2 dashDir = direction.sqrMagnitude > 0.001f ? direction.normalized : Vector2.right;
         Color dashFxColor = IsIntangibleDashActive ? GlitchUiPalette.Special : ghostDashColor;
+        GameFeelDirector.Minor(transform.position, dashDir, dashFxColor);
         int count = Mathf.Max(2, ghostDashAfterimageCount);
         for (int i = 0; i < count; i++)
         {

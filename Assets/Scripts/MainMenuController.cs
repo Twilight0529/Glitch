@@ -33,6 +33,20 @@ public class MainMenuController : MonoBehaviour
         ExitFadeIn
     }
 
+    private enum MenuView
+    {
+        Main,
+        Play,
+        Archive,
+        Operations,
+        Options,
+        Stats,
+        Unlocks,
+        Credits,
+        Developer,
+        PlayerName
+    }
+
     private const float BandOverlayAlpha = 0.26f;
 
     [Header("Main Menu")]
@@ -57,6 +71,7 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private Color transitionBlack = Color.black;
     [Header("Menu Visuals")]
     [SerializeField] private float menuMotionIntensity = 1f;
+    [SerializeField] private float menuPageTransitionDuration = 0.30f;
 
     [Header("Credits")]
     [SerializeField] private CreditLink[] creditLinks =
@@ -64,7 +79,8 @@ public class MainMenuController : MonoBehaviour
         new CreditLink("Herramientas", "Unity", "https://unity.com/"),
         new CreditLink("Tipografia", "Pixelmax", "https://www.dafont.com/"),
         new CreditLink("Musica", "Glitch Stairs — Fupi", "https://opengameart.org/content/glitch-stairs"),
-        new CreditLink("Musica", "A Flawless Getaway — Vitalezzz", "https://opengameart.org/content/a-flawless-getaway")
+        new CreditLink("Musica", "A Flawless Getaway — Vitalezzz", "https://opengameart.org/content/a-flawless-getaway"),
+        new CreditLink("Musica", "Empacotatron — Fupi", "https://opengameart.org/content/empacotatron")
     };
 
     private bool showOptions;
@@ -120,6 +136,12 @@ public class MainMenuController : MonoBehaviour
     private bool showPlayerNameSetup;
     private bool playerNameFieldFocused;
     private string playerNameDraft = string.Empty;
+    private MenuView activeMenuView;
+    private float menuPageTransitionProgress = 1f;
+    private float menuPageTransitionDirection = 1f;
+    private float menuSelectionPulseStartedAt = -10f;
+    private Vector2 menuSelectionPulseCenter;
+    private Color menuSelectionPulseColor = Color.white;
 
     private void Awake()
     {
@@ -132,6 +154,7 @@ public class MainMenuController : MonoBehaviour
         NormalizeTransitionDurations();
         BeginIntroImmediateBlack();
         showPlayerNameSetup = !RankingStorage.HasSavedPlayerName();
+        activeMenuView = GetCurrentMenuView();
     }
 
     private void Start()
@@ -163,6 +186,8 @@ public class MainMenuController : MonoBehaviour
             showArchiveHub = false;
             GlitchAudioManager.PlayMenuToggle();
         }
+
+        UpdateMenuPageTransition();
     }
 
     private void OnGUI()
@@ -172,14 +197,19 @@ public class MainMenuController : MonoBehaviour
 
         if (showPlayerNameSetup)
         {
-            bool previousEnabled = GUI.enabled;
+            bool setupPreviousEnabled = GUI.enabled;
             GUI.enabled = false;
             DrawMainMenu();
-            GUI.enabled = previousEnabled;
+            GUI.enabled = setupPreviousEnabled;
             DrawPlayerNameSetup();
             DrawTransitionBlackOverlay();
             return;
         }
+
+        Matrix4x4 previousMatrix = GUI.matrix;
+        Color previousColor = GUI.color;
+        bool previousEnabled = GUI.enabled;
+        ApplyMenuPageTransition(previousMatrix, previousColor);
 
         if (showOptions)
         {
@@ -218,7 +248,205 @@ public class MainMenuController : MonoBehaviour
             DrawMainMenu();
         }
 
+        GUI.matrix = previousMatrix;
+        GUI.color = previousColor;
+        GUI.enabled = previousEnabled;
+        DrawMenuPageTransitionFx();
+        DrawMenuSelectionPulse();
+        DrawMenuSectionFrame();
+        DrawCursorSignalFx();
+
         DrawTransitionBlackOverlay();
+    }
+
+    private MenuView GetCurrentMenuView()
+    {
+        if (showPlayerNameSetup) return MenuView.PlayerName;
+        if (showOptions) return MenuView.Options;
+        if (showStats) return MenuView.Stats;
+        if (showOperations) return MenuView.Operations;
+        if (showDeveloperMenu) return MenuView.Developer;
+        if (showUnlocks) return MenuView.Unlocks;
+        if (showCredits) return MenuView.Credits;
+        if (showPlayHub) return MenuView.Play;
+        if (showArchiveHub) return MenuView.Archive;
+        return MenuView.Main;
+    }
+
+    private void UpdateMenuPageTransition()
+    {
+        MenuView current = GetCurrentMenuView();
+        if (current != activeMenuView)
+        {
+            int previousDepth = GetMenuViewDepth(activeMenuView);
+            int currentDepth = GetMenuViewDepth(current);
+            menuPageTransitionDirection = currentDepth >= previousDepth ? 1f : -1f;
+            activeMenuView = current;
+            menuPageTransitionProgress = 0f;
+        }
+
+        float duration = Mathf.Max(0.08f, menuPageTransitionDuration);
+        menuPageTransitionProgress = Mathf.MoveTowards(
+            menuPageTransitionProgress,
+            1f,
+            Time.unscaledDeltaTime / duration);
+    }
+
+    private static int GetMenuViewDepth(MenuView view)
+    {
+        switch (view)
+        {
+            case MenuView.Operations:
+            case MenuView.Stats:
+            case MenuView.Unlocks:
+                return 2;
+            case MenuView.PlayerName:
+                return 3;
+            case MenuView.Main:
+                return 0;
+            default:
+                return 1;
+        }
+    }
+
+    private void ApplyMenuPageTransition(Matrix4x4 previousMatrix, Color previousColor)
+    {
+        if (menuPageTransitionProgress >= 0.999f)
+        {
+            return;
+        }
+
+        float t = Mathf.Clamp01(menuPageTransitionProgress);
+        float eased = 1f - Mathf.Pow(1f - t, 3f);
+        float motion = Mathf.InverseLerp(UserSettings.MinMenuMotion, UserSettings.MaxMenuMotion, menuMotionIntensity);
+        float offset = menuPageTransitionDirection * (1f - eased) * Mathf.Lerp(18f, 52f, motion);
+        float scale = Mathf.Lerp(Mathf.Lerp(0.992f, 0.974f, motion), 1f, eased);
+        Vector3 center = new Vector3(Screen.width * 0.5f, Screen.height * 0.5f, 0f);
+        Matrix4x4 transitionMatrix = Matrix4x4.TRS(
+            center + Vector3.right * offset,
+            Quaternion.identity,
+            new Vector3(scale, scale, 1f)) * Matrix4x4.Translate(-center);
+        GUI.matrix = transitionMatrix * previousMatrix;
+        GUI.color = previousColor * new Color(1f, 1f, 1f, Mathf.SmoothStep(0.08f, 1f, eased));
+        GUI.enabled = false;
+    }
+
+    private void DrawMenuPageTransitionFx()
+    {
+        if (menuPageTransitionProgress >= 0.999f)
+        {
+            return;
+        }
+
+        float t = Mathf.Clamp01(menuPageTransitionProgress);
+        float envelope = Mathf.Sin(t * Mathf.PI);
+        Color accent = GetMenuViewAccent(activeMenuView);
+        float scanX = menuPageTransitionDirection > 0f
+            ? Mathf.Lerp(-20f, Screen.width + 20f, t)
+            : Mathf.Lerp(Screen.width + 20f, -20f, t);
+        DrawSolidRect(new Rect(scanX - 1f, 0f, 2f, Screen.height), new Color(accent.r, accent.g, accent.b, envelope * 0.68f));
+        DrawSolidRect(new Rect(scanX - 14f * menuPageTransitionDirection, 0f, 14f, Screen.height), new Color(accent.r, accent.g, accent.b, envelope * 0.035f));
+
+        for (int i = 0; i < 3; i++)
+        {
+            float y = Mathf.Repeat(Screen.height * (0.21f + i * 0.29f) + t * (37f + i * 13f), Screen.height);
+            float width = Mathf.Lerp(70f, 190f, i / 2f);
+            DrawSolidRect(
+                new Rect(scanX - width * 0.5f, y, width, 2f),
+                new Color(accent.r, accent.g, accent.b, envelope * (0.10f - i * 0.018f)));
+        }
+    }
+
+    private static Color GetMenuViewAccent(MenuView view)
+    {
+        switch (view)
+        {
+            case MenuView.Archive:
+            case MenuView.Unlocks:
+            case MenuView.Stats:
+            case MenuView.Credits:
+                return GlitchUiPalette.Special;
+            case MenuView.Operations:
+            case MenuView.Play:
+                return GlitchUiPalette.Success;
+            case MenuView.Developer:
+                return GlitchUiPalette.Danger;
+            default:
+                return GlitchUiPalette.Information;
+        }
+    }
+
+    private void DrawCursorSignalFx()
+    {
+        if (Event.current == null || transitionState != MenuTransitionState.Idle)
+        {
+            return;
+        }
+
+        Vector2 pointer = Event.current.mousePosition;
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 5.4f);
+        Color accent = GetMenuViewAccent(activeMenuView);
+        float alpha = 0.16f + pulse * 0.12f;
+        float radius = 11f + pulse * 2f;
+        DrawSolidRect(new Rect(pointer.x - radius, pointer.y - radius, 6f, 1f), new Color(accent.r, accent.g, accent.b, alpha));
+        DrawSolidRect(new Rect(pointer.x - radius, pointer.y - radius, 1f, 6f), new Color(accent.r, accent.g, accent.b, alpha));
+        DrawSolidRect(new Rect(pointer.x + radius - 6f, pointer.y + radius, 6f, 1f), new Color(accent.r, accent.g, accent.b, alpha));
+        DrawSolidRect(new Rect(pointer.x + radius, pointer.y + radius - 5f, 1f, 6f), new Color(accent.r, accent.g, accent.b, alpha));
+    }
+
+    private void RegisterMenuSelection(Rect source, Color accent)
+    {
+        menuSelectionPulseStartedAt = Time.unscaledTime;
+        menuSelectionPulseCenter = source.center;
+        menuSelectionPulseColor = accent;
+    }
+
+    private void DrawMenuSelectionPulse()
+    {
+        float progress = (Time.unscaledTime - menuSelectionPulseStartedAt) / 0.34f;
+        if (progress < 0f || progress >= 1f)
+        {
+            return;
+        }
+
+        float eased = 1f - Mathf.Pow(1f - progress, 3f);
+        float radius = Mathf.Lerp(7f, 62f, eased);
+        float alpha = (1f - progress) * (1f - progress) * 0.72f;
+        Color color = new Color(menuSelectionPulseColor.r, menuSelectionPulseColor.g, menuSelectionPulseColor.b, alpha);
+        const float segment = 13f;
+        DrawSolidRect(new Rect(menuSelectionPulseCenter.x - radius, menuSelectionPulseCenter.y - radius, segment, 2f), color);
+        DrawSolidRect(new Rect(menuSelectionPulseCenter.x - radius, menuSelectionPulseCenter.y - radius, 2f, segment), color);
+        DrawSolidRect(new Rect(menuSelectionPulseCenter.x + radius - segment, menuSelectionPulseCenter.y - radius, segment, 2f), color);
+        DrawSolidRect(new Rect(menuSelectionPulseCenter.x + radius - 2f, menuSelectionPulseCenter.y - radius, 2f, segment), color);
+        DrawSolidRect(new Rect(menuSelectionPulseCenter.x - radius, menuSelectionPulseCenter.y + radius - 2f, segment, 2f), color);
+        DrawSolidRect(new Rect(menuSelectionPulseCenter.x - radius, menuSelectionPulseCenter.y + radius - segment, 2f, segment), color);
+        DrawSolidRect(new Rect(menuSelectionPulseCenter.x + radius - segment, menuSelectionPulseCenter.y + radius - 2f, segment, 2f), color);
+        DrawSolidRect(new Rect(menuSelectionPulseCenter.x + radius - 2f, menuSelectionPulseCenter.y + radius - segment, 2f, segment), color);
+    }
+
+    private void DrawMenuSectionFrame()
+    {
+        Color accent = GetMenuViewAccent(activeMenuView);
+        float motion = Mathf.InverseLerp(UserSettings.MinMenuMotion, UserSettings.MaxMenuMotion, menuMotionIntensity);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 1.8f);
+        float alpha = 0.11f + pulse * 0.07f;
+        Color frame = new Color(accent.r, accent.g, accent.b, alpha);
+        const float margin = 10f;
+        const float corner = 30f;
+
+        DrawSolidRect(new Rect(margin, margin, corner, 2f), frame);
+        DrawSolidRect(new Rect(margin, margin, 2f, corner), frame);
+        DrawSolidRect(new Rect(Screen.width - margin - corner, margin, corner, 2f), frame);
+        DrawSolidRect(new Rect(Screen.width - margin - 2f, margin, 2f, corner), frame);
+        DrawSolidRect(new Rect(margin, Screen.height - margin - 2f, corner, 2f), frame);
+        DrawSolidRect(new Rect(margin, Screen.height - margin - corner, 2f, corner), frame);
+        DrawSolidRect(new Rect(Screen.width - margin - corner, Screen.height - margin - 2f, corner, 2f), frame);
+        DrawSolidRect(new Rect(Screen.width - margin - 2f, Screen.height - margin - corner, 2f, corner), frame);
+
+        float travelX = margin + Mathf.Repeat(Time.unscaledTime * Mathf.Lerp(34f, 76f, motion), Mathf.Max(1f, Screen.width - margin * 2f - 18f));
+        float travelY = margin + Mathf.Repeat(Time.unscaledTime * Mathf.Lerp(26f, 58f, motion) + Screen.height * 0.37f, Mathf.Max(1f, Screen.height - margin * 2f - 18f));
+        DrawSolidRect(new Rect(travelX, margin, 18f, 2f), new Color(accent.r, accent.g, accent.b, alpha * 1.65f));
+        DrawSolidRect(new Rect(Screen.width - margin - 2f, travelY, 2f, 18f), new Color(accent.r, accent.g, accent.b, alpha * 1.35f));
     }
 
     private void DrawPlayerNameSetup()
@@ -2428,6 +2656,7 @@ public class MainMenuController : MonoBehaviour
         if (clicked)
         {
             GlitchAudioManager.PlayMenuConfirm();
+            RegisterMenuSelection(rect, danger ? GlitchUiPalette.Danger : GlitchUiPalette.Information);
         }
 
         return clicked;
@@ -2459,6 +2688,7 @@ public class MainMenuController : MonoBehaviour
         if (clicked)
         {
             GlitchAudioManager.PlayMenuConfirm();
+            RegisterMenuSelection(rect, color);
         }
         return clicked;
     }
@@ -2556,6 +2786,7 @@ public class MainMenuController : MonoBehaviour
         if (clicked)
         {
             GlitchAudioManager.PlayMenuConfirm();
+            RegisterMenuSelection(rect, accent);
         }
         return clicked;
     }

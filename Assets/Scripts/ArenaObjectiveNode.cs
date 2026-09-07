@@ -13,6 +13,7 @@ public class ArenaObjectiveNode : MonoBehaviour
     private SpriteRenderer spriteRenderer;
     private SpriteRenderer progressRenderer;
     private SpriteRenderer ringRenderer;
+    private WorldObjectAnimationFx animationFx;
     private readonly SpriteRenderer[] markerRenderers = new SpriteRenderer[4];
     private GameObject progressObject;
     private GameObject ringObject;
@@ -32,11 +33,23 @@ public class ArenaObjectiveNode : MonoBehaviour
         activationSeconds = Mathf.Max(0.1f, secondsToActivate);
         lifetime = Mathf.Max(1f, lifeSeconds);
         nodeColor = tint;
+        animationFx?.SetStyle(WorldObjectAnimationFx.VisualKind.Objective, nodeColor);
+        animationFx?.SetLifetimeState(lifeTimer, lifetime);
     }
 
     private void Awake()
     {
-        spriteRenderer = GetComponent<SpriteRenderer>();
+        SpriteRenderer sourceRenderer = GetComponent<SpriteRenderer>();
+        animationFx = GetComponent<WorldObjectAnimationFx>();
+        if (animationFx == null)
+        {
+            animationFx = gameObject.AddComponent<WorldObjectAnimationFx>();
+        }
+
+        spriteRenderer = animationFx.Initialize(
+            sourceRenderer,
+            WorldObjectAnimationFx.VisualKind.Objective,
+            nodeColor);
         EnsureProgressVisual();
         EnsureRingVisual();
         EnsureMarkerVisuals();
@@ -50,6 +63,7 @@ public class ArenaObjectiveNode : MonoBehaviour
         }
 
         lifeTimer += Time.deltaTime;
+        animationFx?.SetLifetimeState(lifeTimer, lifetime);
 
         if (playerInside)
         {
@@ -93,7 +107,7 @@ public class ArenaObjectiveNode : MonoBehaviour
     private void EnsureProgressVisual()
     {
         progressObject = new GameObject("ObjectiveNodeProgress");
-        progressObject.transform.SetParent(transform, false);
+        progressObject.transform.SetParent(animationFx != null ? animationFx.VisualRoot : transform, false);
         progressObject.transform.localPosition = Vector3.zero;
         progressObject.transform.localScale = Vector3.one * 0.18f;
 
@@ -107,9 +121,9 @@ public class ArenaObjectiveNode : MonoBehaviour
     private void UpdateVisuals()
     {
         float progress = Mathf.Clamp01(activationTimer / Mathf.Max(0.01f, activationSeconds));
-        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * pulseSpeed);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(lifeTimer * pulseSpeed);
         float lifeWarn = 1f - Mathf.Clamp01(lifeTimer / Mathf.Max(0.01f, lifetime));
-        float warnPulse = lifeWarn < 0.28f ? 0.45f + 0.55f * Mathf.Sin(Time.time * 18f) : 1f;
+        float warnPulse = lifeWarn < 0.28f ? 0.45f + 0.55f * Mathf.Sin(lifeTimer * 18f) : 1f;
 
         if (spriteRenderer != null)
         {
@@ -117,7 +131,8 @@ public class ArenaObjectiveNode : MonoBehaviour
             spriteRenderer.color = new Color(nodeColor.r, nodeColor.g, nodeColor.b, alpha);
         }
 
-        transform.localScale = Vector3.one * Mathf.Lerp(idleScale, activeScale, Mathf.Max(progress, pulse * 0.18f));
+        animationFx?.SetContentScale(Mathf.Lerp(idleScale, activeScale, Mathf.Max(progress, pulse * 0.18f)));
+        animationFx?.SetActivity(playerInside ? Mathf.Max(0.35f, progress) : progress * 0.5f);
 
         if (progressRenderer != null)
         {
@@ -140,7 +155,7 @@ public class ArenaObjectiveNode : MonoBehaviour
     private void EnsureRingVisual()
     {
         ringObject = new GameObject("ObjectiveNodeHoldRing");
-        ringObject.transform.SetParent(transform, false);
+        ringObject.transform.SetParent(animationFx != null ? animationFx.VisualRoot : transform, false);
         ringObject.transform.localPosition = Vector3.zero;
         ringObject.transform.localScale = Vector3.one * 1.35f;
 
@@ -154,7 +169,7 @@ public class ArenaObjectiveNode : MonoBehaviour
     private void EnsureMarkerVisuals()
     {
         markerRoot = new GameObject("ObjectiveNodeDirectionMarkers");
-        markerRoot.transform.SetParent(transform, false);
+        markerRoot.transform.SetParent(animationFx != null ? animationFx.VisualRoot : transform, false);
         markerRoot.transform.localPosition = Vector3.zero;
 
         for (int i = 0; i < markerRenderers.Length; i++)
@@ -174,7 +189,7 @@ public class ArenaObjectiveNode : MonoBehaviour
             return;
         }
 
-        markerRoot.transform.rotation = Quaternion.Euler(0f, 0f, Time.time * (playerInside ? 90f : 45f));
+        markerRoot.transform.localRotation = Quaternion.Euler(0f, 0f, lifeTimer * (playerInside ? 90f : 45f));
         float radius = Mathf.Lerp(0.98f, 0.64f, progress) + pulse * 0.12f;
         float alpha = Mathf.Lerp(0.36f, 0.86f, playerInside ? 1f : pulse) * warnPulse;
 
