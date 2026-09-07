@@ -24,6 +24,7 @@ public sealed class GameFeelDirector : MonoBehaviour
     private float zoomDuration;
     private float zoomStrength;
     private float environmentPulse;
+    private float transientVisualLoad;
     private Vector2 pulseOrigin;
     private Color pulseColor = Color.white;
     private readonly Transform[] ambientParticles = new Transform[AmbientParticleCount];
@@ -46,8 +47,9 @@ public sealed class GameFeelDirector : MonoBehaviour
     {
         GameFeelDirector director = Ensure();
         if (director == null) return;
-        director.AddImpulse(0.035f, 0.09f, direction, 0f, 0f);
-        director.EmitEnvironmentPulse(position, color, 0.35f);
+        float density = director.ReserveEffect(0.12f, false);
+        director.AddImpulse(0.035f * density, 0.09f, direction, 0f, 0f);
+        director.EmitEnvironmentPulse(position, color, 0.35f * density);
     }
 
     public static void Major(Vector2 position, Vector2 direction, Color color, float scale = 1f)
@@ -55,8 +57,9 @@ public sealed class GameFeelDirector : MonoBehaviour
         GameFeelDirector director = Ensure();
         if (director == null) return;
         float safeScale = Mathf.Clamp(scale, 0.35f, 1.5f);
-        director.AddImpulse(0.11f * safeScale, 0.18f, direction, 0.12f * safeScale, 0.22f);
-        director.EmitEnvironmentPulse(position, color, 0.72f * safeScale);
+        float density = director.ReserveEffect(0.34f * safeScale, false);
+        director.AddImpulse(0.11f * safeScale * density, 0.18f, direction, 0.12f * safeScale * density, 0.22f);
+        director.EmitEnvironmentPulse(position, color, 0.72f * safeScale * density);
     }
 
     public static void Critical(Vector2 position, Vector2 direction, Color color, float scale = 1f)
@@ -64,17 +67,70 @@ public sealed class GameFeelDirector : MonoBehaviour
         GameFeelDirector director = Ensure();
         if (director == null) return;
         float safeScale = Mathf.Clamp(scale, 0.5f, 1.6f);
-        director.AddImpulse(0.18f * safeScale, 0.27f, direction, 0.22f * safeScale, 0.32f);
-        director.EmitEnvironmentPulse(position, color, safeScale);
+        float density = director.ReserveEffect(0.62f * safeScale, true);
+        director.AddImpulse(0.18f * safeScale * density, 0.27f, direction, 0.22f * safeScale * density, 0.32f);
+        director.EmitEnvironmentPulse(position, color, safeScale * density);
         director.TryHitStop(0.030f);
     }
 
-    public static void StateShift(Vector2 position, Color color)
+    public static void StateShift(Vector2 position, Color color, float scale = 1f, Vector2 direction = default)
     {
         GameFeelDirector director = Ensure();
         if (director == null) return;
-        director.AddImpulse(0.045f, 0.13f, Vector2.zero, 0.055f, 0.18f);
-        director.EmitEnvironmentPulse(position, color, 0.52f);
+        float safeScale = Mathf.Clamp(scale, 0.35f, 1.25f);
+        float density = director.ReserveEffect(0.22f * safeScale, false);
+        director.AddImpulse(0.045f * safeScale * density, 0.13f, direction, 0.055f * safeScale * density, 0.18f);
+        director.EmitEnvironmentPulse(position, color, 0.52f * safeScale * density);
+    }
+
+    public static void ParryImpact(Vector2 position, Vector2 direction, Color color)
+    {
+        GameFeelDirector director = Ensure();
+        if (director == null) return;
+        float density = director.ReserveEffect(0.38f, true);
+        director.AddImpulse(0.105f * density, 0.14f, direction, 0.075f * density, 0.17f);
+        director.EmitEnvironmentPulse(position, color, 0.78f * density);
+    }
+
+    public static void FirewallImpact(Vector2 position, Color color)
+    {
+        GameFeelDirector director = Ensure();
+        if (director == null) return;
+        float density = director.ReserveEffect(0.72f, true);
+        director.AddImpulse(0.19f * density, 0.28f, Vector2.zero, 0.24f * density, 0.34f);
+        director.EmitEnvironmentPulse(position, color, 1.15f * density);
+        director.TryHitStop(0.030f);
+    }
+
+    public static void ShieldBreak(Vector2 position, Vector2 incomingDirection, Color color)
+    {
+        GameFeelDirector director = Ensure();
+        if (director == null) return;
+        float density = director.ReserveEffect(0.30f, true);
+        director.AddImpulse(0.082f * density, 0.12f, incomingDirection, 0.035f * density, 0.12f);
+        director.EmitEnvironmentPulse(position, color, 0.62f * density);
+    }
+
+    public static void ProjectileReflection(Vector2 position, Vector2 direction, Color color)
+    {
+        GameFeelDirector director = Ensure();
+        if (director == null) return;
+        float density = director.ReserveEffect(0.18f, false);
+        director.AddImpulse(0.048f * density, 0.075f, direction, 0f, 0f);
+        director.EmitEnvironmentPulse(position, color, 0.42f * density);
+    }
+
+    public static bool TryReserveCosmetic(float cost)
+    {
+        GameFeelDirector director = instance;
+        if (director == null) return true;
+        return director.ReserveEffect(Mathf.Max(0.01f, cost), false) >= 0.46f;
+    }
+
+    public static float CosmeticDensity(float cost)
+    {
+        GameFeelDirector director = instance;
+        return director == null ? 1f : director.ReserveEffect(Mathf.Max(0.01f, cost), false);
     }
 
     private static GameFeelDirector Ensure()
@@ -116,13 +172,22 @@ public sealed class GameFeelDirector : MonoBehaviour
 
     private void AddImpulse(float strength, float duration, Vector2 direction, float zoom, float zoomTime)
     {
-        shakeStrength = Mathf.Max(shakeStrength, Mathf.Max(0f, strength));
+        float motionScale = Mathf.Clamp(UserSettings.GetMenuMotion(), UserSettings.MinMenuMotion, UserSettings.MaxMenuMotion);
+        shakeStrength = Mathf.Max(shakeStrength, Mathf.Max(0f, strength) * motionScale);
         shakeDuration = Mathf.Max(shakeDuration, Mathf.Max(0.02f, duration));
         shakeRemaining = Mathf.Max(shakeRemaining, shakeDuration);
         shakeDirection = direction.sqrMagnitude > 0.001f ? direction.normalized : Vector2.zero;
-        zoomStrength = Mathf.Max(zoomStrength, Mathf.Max(0f, zoom));
+        zoomStrength = Mathf.Max(zoomStrength, Mathf.Max(0f, zoom) * motionScale);
         zoomDuration = Mathf.Max(zoomDuration, Mathf.Max(0.02f, zoomTime));
         zoomRemaining = Mathf.Max(zoomRemaining, zoomDuration);
+    }
+
+    private float ReserveEffect(float cost, bool critical)
+    {
+        float saturation = Mathf.InverseLerp(1.25f, 3.4f, transientVisualLoad);
+        float density = Mathf.Lerp(1f, critical ? 0.68f : 0.34f, saturation);
+        transientVisualLoad = Mathf.Min(4.5f, transientVisualLoad + Mathf.Max(0f, cost));
+        return density;
     }
 
     private void EmitEnvironmentPulse(Vector2 position, Color color, float strength)
@@ -172,6 +237,7 @@ public sealed class GameFeelDirector : MonoBehaviour
         UpdateCameraFeedback();
         UpdateAmbientParticles();
         environmentPulse = Mathf.MoveTowards(environmentPulse, 0f, Time.unscaledDeltaTime * 2.8f);
+        transientVisualLoad = Mathf.MoveTowards(transientVisualLoad, 0f, Time.unscaledDeltaTime * 2.35f);
     }
 
     private void RestoreCameraOffsets()

@@ -18,6 +18,7 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
     }
 
     private const int NodeCount = 8;
+    private const int MotionEchoCount = 7;
 
     private EnemyController owner;
     private SpriteRenderer sourceRenderer;
@@ -31,6 +32,14 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
     private Transform faceRoot;
     private SpriteRenderer leftEyeRenderer;
     private SpriteRenderer rightEyeRenderer;
+    private Transform signatureRoot;
+    private SpriteRenderer signatureRingRenderer;
+    private SpriteRenderer signatureGlyphRenderer;
+    private Transform motionEchoRoot;
+    private readonly SpriteRenderer[] motionEchoRenderers = new SpriteRenderer[MotionEchoCount];
+    private readonly float[] motionEchoTimers = new float[MotionEchoCount];
+    private readonly float[] motionEchoDurations = new float[MotionEchoCount];
+    private readonly Color[] motionEchoColors = new Color[MotionEchoCount];
 
     private Color authoredBaseColor = Color.white;
     private Vector3 authoredPulseScale = Vector3.one;
@@ -49,6 +58,11 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
     private Vector2 smoothedLookDirection = Vector2.right;
     private bool presentationVisible = true;
     private EnemyController.AnomalyState lastState;
+    private float signatureTimer;
+    private float signatureDuration;
+    private float motionEchoCooldown;
+    private int motionEchoCursor;
+    private bool forceMotionEcho;
     private bool initialized;
 
     public SpriteRenderer BodyRenderer => bodyRenderer;
@@ -68,6 +82,7 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         initialized = bodyRenderer != null;
         lastState = owner != null ? owner.CurrentState : EnemyController.AnomalyState.BasePursuit;
         transitionPulse = 1f;
+        ConfigureStateSignature(lastState);
         return bodyRenderer != null ? bodyRenderer : sourceRenderer;
     }
 
@@ -97,6 +112,7 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         lastState = next;
         transitionPulse = 1f;
         transitionStrength = previous == next ? 0.45f : 1f;
+        ConfigureStateSignature(next);
         PlayAction(previous == next ? 0.35f : 0.58f);
     }
 
@@ -112,6 +128,11 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         float clampedStrength = Mathf.Clamp(strength, 0.2f, 1.5f);
         actionStrength = actionPulse > 0f ? Mathf.Max(actionStrength, clampedStrength) : clampedStrength;
         actionPulse = 1f;
+        if (owner != null && EnemyStatePresentationCatalog.Get(owner.CurrentState).trailStrength > 0.08f)
+        {
+            forceMotionEcho = true;
+            motionEchoCooldown = 0f;
+        }
     }
 
     public void SetPresentationVisible(bool visible)
@@ -120,6 +141,10 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         if (bodyRenderer != null)
         {
             bodyRenderer.enabled = visible;
+        }
+        if (!visible)
+        {
+            ClearMotionEchoes();
         }
         SetOrnamentsEnabled(visible);
     }
@@ -135,6 +160,9 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         transitionStrength = 1f;
         impactStrength = 1f;
         actionStrength = 1f;
+        signatureTimer = 0f;
+        motionEchoCooldown = 0f;
+        ClearMotionEchoes();
         if (visualPivot != null)
         {
             visualPivot.localPosition = Vector3.zero;
@@ -161,6 +189,7 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         // Precalcula los cuadros para que cambiar de contorno no genere texturas
         // durante la persecucion.
         CompactSlimeSpriteProvider.Warmup();
+        AnomalyStateGlyphSpriteProvider.Warmup();
         // Una unica silueta compacta evita que la masa se lea como un racimo.
         bodyRenderer.sprite = CompactSlimeSpriteProvider.Get();
         bodyRenderer.drawMode = SpriteDrawMode.Simple;
@@ -187,6 +216,16 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         leftEyeRenderer = CreateRenderer("LeftEye", SlimeEyeSpriteProvider.Get(), bodyOrder + 4, faceRoot);
         rightEyeRenderer = CreateRenderer("RightEye", SlimeEyeSpriteProvider.Get(), bodyOrder + 4, faceRoot);
         rightEyeRenderer.flipX = true;
+
+        GameObject signatureObject = new GameObject("StateSignature");
+        signatureObject.transform.SetParent(transform, false);
+        signatureRoot = signatureObject.transform;
+        signatureRingRenderer = CreateRenderer("SignatureRing", ContainmentRingSpriteProvider.Get(), bodyOrder + 5, signatureRoot);
+        signatureGlyphRenderer = CreateRenderer("SignatureGlyph", AnomalyStateGlyphSpriteProvider.Get(EnemyStatePresentationCatalog.Glyph.Pursuit), bodyOrder + 6, signatureRoot);
+        signatureRingRenderer.enabled = false;
+        signatureGlyphRenderer.enabled = false;
+
+        CreateMotionEchoRig(bodyOrder);
 
         sourceRenderer.enabled = false;
     }
@@ -236,6 +275,7 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         SetOrnamentsEnabled(visible);
         if (!visible)
         {
+            ClearMotionEchoes();
             return;
         }
 
@@ -245,11 +285,14 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
             return;
         }
 
+        motionIntensity = UserSettings.GetMenuMotion();
         float intensity = Mathf.Clamp(motionIntensity, UserSettings.MinMenuMotion, UserSettings.MaxMenuMotion);
         animationClock += dt * Mathf.Lerp(0.78f, 1.24f, Mathf.InverseLerp(UserSettings.MinMenuMotion, UserSettings.MaxMenuMotion, intensity));
         transitionPulse = Mathf.MoveTowards(transitionPulse, 0f, dt * 3.8f);
         impactPulse = Mathf.MoveTowards(impactPulse, 0f, dt * 6.8f);
         actionPulse = Mathf.MoveTowards(actionPulse, 0f, dt * 4.8f);
+        signatureTimer = Mathf.Max(0f, signatureTimer - dt);
+        motionEchoCooldown = Mathf.Max(0f, motionEchoCooldown - dt);
 
         EnemyController.AnomalyState state = owner.CurrentState;
         if (state != lastState)
@@ -262,13 +305,14 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
 
     private void UpdatePresentation(EnemyController.AnomalyState state, float intensity)
     {
+        EnemyStatePresentationCatalog.Profile profile = EnemyStatePresentationCatalog.Get(state);
         float stateProgress = owner.CurrentStateNormalized;
         float stateEnvelope = Mathf.Sin(stateProgress * Mathf.PI);
         float anticipation = 1f - Mathf.SmoothStep(0f, 0.22f, stateProgress);
         float execution = Mathf.SmoothStep(0.16f, 0.42f, stateProgress) * (1f - Mathf.SmoothStep(0.72f, 1f, stateProgress));
         float recovery = Mathf.SmoothStep(0.76f, 1f, stateProgress);
         float idle = Mathf.Sin(animationClock * 2.8f);
-        float fast = Mathf.Sin(animationClock * 8.5f);
+        float fast = Mathf.Sin(animationClock * profile.rhythm);
         float transitionEnvelope = Mathf.Sin((1f - Mathf.Clamp01(transitionPulse)) * Mathf.PI) * transitionStrength;
         float impactEnvelope = Mathf.Sin((1f - Mathf.Clamp01(impactPulse)) * Mathf.PI) * impactStrength;
         float actionEnvelope = Mathf.Sin((1f - Mathf.Clamp01(actionPulse)) * Mathf.PI) * actionStrength;
@@ -461,6 +505,9 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
                 break;
         }
 
+        float signatureProgress = signatureDuration > 0.001f ? Mathf.Clamp01(signatureTimer / signatureDuration) : 0f;
+        float silhouetteEnvelope = Mathf.SmoothStep(0f, 1f, signatureProgress);
+        stateScale = Vector2.Scale(stateScale, Vector2.Lerp(Vector2.one, profile.introSilhouette, silhouetteEnvelope * 0.72f));
         stateOffset *= amplitude;
         stateRotation *= amplitude;
         float idleScale = 1f + idle * 0.012f * amplitude;
@@ -503,11 +550,13 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         bodyColor.a = authoredBaseColor.a * Mathf.Clamp01(bodyAlpha);
         bodyRenderer.color = bodyColor;
 
-        UpdateSlimeIdentity(bodyColor, accent, actionEnvelope, impactEnvelope, amplitude);
-        UpdateOrnaments(accent, nodePattern, visibleNodes, nodeRadius, nodeSpin, haloScale, coreScale, fast, actionEnvelope, impactEnvelope);
+        UpdateSlimeIdentity(state, bodyColor, accent, actionEnvelope, impactEnvelope, amplitude);
+        UpdateOrnaments(accent, nodePattern, visibleNodes, nodeRadius, nodeSpin, haloScale, coreScale, fast, actionEnvelope, impactEnvelope, profile.ornamentPulse);
+        UpdateStateSignature(profile, accent, amplitude);
+        UpdateMotionEchoes(profile, bodyColor, amplitude);
     }
 
-    private void UpdateSlimeIdentity(Color bodyColor, Color accent, float actionEnvelope, float impactEnvelope, float amplitude)
+    private void UpdateSlimeIdentity(EnemyController.AnomalyState state, Color bodyColor, Color accent, float actionEnvelope, float impactEnvelope, float amplitude)
     {
         Vector2 targetLook = movementDirection.sqrMagnitude > 0.001f ? movementDirection.normalized : Vector2.right;
         float lookResponse = 1f - Mathf.Exp(-8.5f * Time.deltaTime);
@@ -543,10 +592,10 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
             1.05f - speedNormalized * 0.016f - settle * 0.021f - stepCompression * 0.78f - accelerationKick * 0.62f - impactEnvelope * 0.038f,
             1f);
 
-        UpdateSlimeFace(actionEnvelope, impactEnvelope, bodyColor.a);
+        UpdateSlimeFace(state, actionEnvelope, impactEnvelope, bodyColor.a);
     }
 
-    private void UpdateSlimeFace(float actionEnvelope, float impactEnvelope, float bodyAlpha)
+    private void UpdateSlimeFace(EnemyController.AnomalyState state, float actionEnvelope, float impactEnvelope, float bodyAlpha)
     {
         if (faceRoot == null)
         {
@@ -566,11 +615,59 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         float blink = Mathf.Abs(Mathf.Sin(animationClock * 0.73f + 0.4f)) > 0.985f ? 0.24f : 1f;
         float eyeHeight = Mathf.Lerp(0.17f, 0.20f, actionEnvelope) * blink;
         float eyeWidth = Mathf.Lerp(0.31f, 0.26f, impactEnvelope);
+        float eyeSlant = 0f;
+
+        switch (state)
+        {
+            case EnemyController.AnomalyState.Split:
+                spacing += 0.045f;
+                eyeSlant = 8f;
+                break;
+            case EnemyController.AnomalyState.ExpansionShoot:
+            case EnemyController.AnomalyState.PincerBarrage:
+                eyeHeight *= 0.68f;
+                eyeSlant = 14f;
+                break;
+            case EnemyController.AnomalyState.SpeedSurge:
+            case EnemyController.AnomalyState.WeaveHunter:
+                faceCenter += smoothedLookDirection * 0.035f;
+                eyeHeight *= 0.82f;
+                eyeSlant = 9f;
+                break;
+            case EnemyController.AnomalyState.Destroyer:
+            case EnemyController.AnomalyState.AdaptiveCountermeasure:
+                eyeHeight *= 0.62f;
+                eyeWidth *= 1.10f;
+                eyeSlant = 18f;
+                break;
+            case EnemyController.AnomalyState.SignalJam:
+            case EnemyController.AnomalyState.InputDesync:
+                break;
+            case EnemyController.AnomalyState.PhaseBlink:
+            case EnemyController.AnomalyState.BlindspotProtocol:
+                bodyAlpha *= 0.72f + Mathf.Abs(Mathf.Sin(animationClock * 11f)) * 0.28f;
+                break;
+            case EnemyController.AnomalyState.SignalPossession:
+            case EnemyController.AnomalyState.SignalTether:
+                spacing *= 0.72f;
+                eyeHeight *= 1.16f;
+                break;
+        }
+
+        leftPosition = faceCenter - Vector2.right * spacing;
+        rightPosition = faceCenter + Vector2.right * spacing;
+        if (state == EnemyController.AnomalyState.SignalJam || state == EnemyController.AnomalyState.InputDesync)
+        {
+            leftPosition.y += Mathf.Sin(animationClock * 17f) * 0.035f;
+            rightPosition.y -= Mathf.Sin(animationClock * 13f) * 0.035f;
+        }
 
         Color eyeColor = Color.white;
         eyeColor.a = Mathf.Clamp01(bodyAlpha * 0.94f);
         ConfigureEye(leftEyeRenderer, leftPosition, eyeWidth, eyeHeight, eyeColor);
         ConfigureEye(rightEyeRenderer, rightPosition, eyeWidth, eyeHeight, eyeColor);
+        leftEyeRenderer.transform.localRotation = Quaternion.Euler(0f, 0f, eyeSlant);
+        rightEyeRenderer.transform.localRotation = Quaternion.Euler(0f, 0f, -eyeSlant);
     }
 
     private static void ConfigureEye(SpriteRenderer renderer, Vector2 position, float width, float height, Color color)
@@ -597,7 +694,8 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         float coreScale,
         float fast,
         float actionEnvelope,
-        float impactEnvelope)
+        float impactEnvelope,
+        float ornamentPulse)
     {
         if (shadowRenderer != null)
         {
@@ -608,7 +706,7 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
 
         if (haloRenderer != null)
         {
-            float pulse = 1f + Mathf.Sin(animationClock * 4.2f) * 0.035f;
+            float pulse = 1f + Mathf.Sin(animationClock * (3.8f + ornamentPulse * 2.4f)) * (0.022f + ornamentPulse * 0.020f);
             haloRenderer.transform.localPosition = Vector3.zero;
             haloRenderer.transform.localRotation = Quaternion.identity;
             float silhouetteBorderScale = 1.08f + (haloScale - 1.25f) * 0.22f;
@@ -729,6 +827,144 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         {
             if (leftEyeRenderer != null) leftEyeRenderer.enabled = false;
             if (rightEyeRenderer != null) rightEyeRenderer.enabled = false;
+            if (signatureRingRenderer != null) signatureRingRenderer.enabled = false;
+            if (signatureGlyphRenderer != null) signatureGlyphRenderer.enabled = false;
+        }
+    }
+
+    private void ConfigureStateSignature(EnemyController.AnomalyState state)
+    {
+        EnemyStatePresentationCatalog.Profile profile = EnemyStatePresentationCatalog.Get(state);
+        signatureDuration = Mathf.Max(0f, profile.signatureSeconds);
+        signatureTimer = profile.ShowsSignature ? signatureDuration : 0f;
+        if (signatureGlyphRenderer != null)
+        {
+            signatureGlyphRenderer.sprite = AnomalyStateGlyphSpriteProvider.Get(profile.glyph);
+        }
+    }
+
+    private void UpdateStateSignature(EnemyStatePresentationCatalog.Profile profile, Color accent, float amplitude)
+    {
+        if (signatureRoot == null || signatureRingRenderer == null || signatureGlyphRenderer == null)
+        {
+            return;
+        }
+
+        bool visible = profile.ShowsSignature && signatureTimer > 0f && presentationVisible;
+        signatureRingRenderer.enabled = visible;
+        signatureGlyphRenderer.enabled = visible;
+        if (!visible)
+        {
+            return;
+        }
+
+        float remaining = Mathf.Clamp01(signatureTimer / Mathf.Max(0.01f, signatureDuration));
+        float elapsed = 1f - remaining;
+        float fade = Mathf.SmoothStep(0f, 1f, Mathf.Min(elapsed * 8f, remaining * 3.4f));
+        float tierScale = profile.tier >= 3 ? 0.86f : profile.tier == 2 ? 0.93f : 1f;
+        float pop = 0.82f + Mathf.Sin(Mathf.Clamp01(elapsed * 1.7f) * Mathf.PI * 0.5f) * 0.18f;
+        signatureRoot.localPosition = new Vector3(0f, 1.13f + Mathf.Sin(animationClock * 4.4f) * 0.025f * amplitude, 0f);
+        signatureRoot.localRotation = Quaternion.identity;
+        signatureRoot.localScale = Vector3.one * tierScale * pop;
+
+        Color warning = Color.Lerp(GlitchUiPalette.Alert, accent, Mathf.SmoothStep(0.32f, 0.92f, elapsed));
+        signatureRingRenderer.transform.localPosition = Vector3.zero;
+        signatureRingRenderer.transform.localRotation = Quaternion.Euler(0f, 0f, animationClock * 52f);
+        signatureRingRenderer.transform.localScale = Vector3.one * 0.82f;
+        signatureRingRenderer.color = GlitchUiPalette.WithAlpha(warning, fade * 0.45f);
+        signatureGlyphRenderer.transform.localPosition = Vector3.zero;
+        signatureGlyphRenderer.transform.localRotation = Quaternion.identity;
+        signatureGlyphRenderer.transform.localScale = Vector3.one * 0.58f;
+        signatureGlyphRenderer.color = GlitchUiPalette.WithAlpha(Color.Lerp(warning, Color.white, 0.18f), fade * 0.96f);
+    }
+
+    private void CreateMotionEchoRig(int bodyOrder)
+    {
+        GameObject root = new GameObject($"{name}_MotionEchoPool");
+        motionEchoRoot = root.transform;
+        for (int i = 0; i < motionEchoRenderers.Length; i++)
+        {
+            GameObject echo = new GameObject($"Echo_{i:00}");
+            echo.transform.SetParent(motionEchoRoot, false);
+            SpriteRenderer renderer = echo.AddComponent<SpriteRenderer>();
+            CopyRenderer(sourceRenderer, renderer);
+            renderer.sprite = CompactSlimeSpriteProvider.Get();
+            renderer.sortingOrder = bodyOrder - 2;
+            renderer.enabled = false;
+            motionEchoRenderers[i] = renderer;
+        }
+    }
+
+    private void UpdateMotionEchoes(EnemyStatePresentationCatalog.Profile profile, Color bodyColor, float amplitude)
+    {
+        float dt = Time.deltaTime;
+        for (int i = 0; i < motionEchoRenderers.Length; i++)
+        {
+            SpriteRenderer echo = motionEchoRenderers[i];
+            if (echo == null || motionEchoTimers[i] <= 0f)
+            {
+                if (echo != null) echo.enabled = false;
+                continue;
+            }
+
+            motionEchoTimers[i] = Mathf.Max(0f, motionEchoTimers[i] - dt);
+            float normalized = motionEchoTimers[i] / Mathf.Max(0.01f, motionEchoDurations[i]);
+            Color color = motionEchoColors[i];
+            color.a *= normalized * normalized;
+            echo.color = color;
+            echo.transform.localScale *= 1f - dt * 0.22f;
+            echo.enabled = motionEchoTimers[i] > 0f;
+        }
+
+        bool forced = forceMotionEcho;
+        float motionPreference = Mathf.Clamp(motionIntensity / Mathf.Max(0.01f, UserSettings.DefaultMenuMotion), 0.35f, 1.30f);
+        float strength = profile.trailStrength * Mathf.Lerp(0.45f, 1f, speedNormalized) * motionPreference;
+        if (strength <= 0.08f || (!forced && speedNormalized < 0.34f) || motionEchoCooldown > 0f || bodyRenderer == null)
+        {
+            return;
+        }
+
+        float interval = Mathf.Lerp(0.13f, 0.045f, Mathf.Clamp01(strength * speedNormalized));
+        motionEchoCooldown = interval;
+        if (!GameFeelDirector.TryReserveCosmetic(0.11f))
+        {
+            forceMotionEcho = false;
+            return;
+        }
+
+        forceMotionEcho = false;
+
+        int index = motionEchoCursor++ % motionEchoRenderers.Length;
+        SpriteRenderer target = motionEchoRenderers[index];
+        if (target == null) return;
+        float duration = Mathf.Lerp(0.13f, 0.27f, Mathf.Clamp01(strength)) * Mathf.Lerp(0.75f, 1f, amplitude);
+        motionEchoTimers[index] = duration;
+        motionEchoDurations[index] = duration;
+        Color accent = Color.Lerp(bodyColor, owner.CurrentStateColor, 0.58f);
+        accent.a = Mathf.Lerp(0.10f, 0.30f, Mathf.Clamp01(strength));
+        motionEchoColors[index] = accent;
+        target.sprite = bodyRenderer.sprite;
+        target.transform.position = bodyRenderer.transform.position;
+        target.transform.rotation = bodyRenderer.transform.rotation;
+        target.transform.localScale = bodyRenderer.transform.lossyScale;
+        target.color = accent;
+        target.enabled = true;
+    }
+
+    private void ClearMotionEchoes()
+    {
+        for (int i = 0; i < motionEchoRenderers.Length; i++)
+        {
+            motionEchoTimers[i] = 0f;
+            if (motionEchoRenderers[i] != null) motionEchoRenderers[i].enabled = false;
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (motionEchoRoot != null)
+        {
+            Destroy(motionEchoRoot.gameObject);
         }
     }
 }

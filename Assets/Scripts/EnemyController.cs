@@ -1675,7 +1675,12 @@ public class EnemyController : MonoBehaviour
         visualAnimator?.PlayStateTransition(previous, next);
         if (previous != next)
         {
-            GameFeelDirector.StateShift(rb != null ? rb.position : (Vector2)transform.position, GetStateColor(next));
+            EnemyStatePresentationCatalog.Profile presentation = EnemyStatePresentationCatalog.Get(next);
+            GameFeelDirector.StateShift(
+                rb != null ? rb.position : (Vector2)transform.position,
+                GetStateColor(next),
+                presentation.cameraStrength,
+                lastMoveDirection);
         }
 
         if (levelThreeStateController != null && levelThreeStateController.IsActive && previous != next)
@@ -2219,7 +2224,8 @@ public class EnemyController : MonoBehaviour
 
         stateTransitionBurstCooldownTimer = Mathf.Max(0.02f, stateTransitionBurstCooldown);
         Color burstColor = GetStateColor(newState);
-        int rays = Mathf.Max(4, stateTransitionBurstRayCount);
+        float density = GameFeelDirector.CosmeticDensity(0.20f);
+        int rays = Mathf.Max(4, Mathf.RoundToInt(stateTransitionBurstRayCount * density));
         float duration = Mathf.Max(0.08f, stateTransitionBurstDuration);
         float radius = Mathf.Max(0.25f, stateTransitionBurstRadius);
         Vector3 pos = transform.position;

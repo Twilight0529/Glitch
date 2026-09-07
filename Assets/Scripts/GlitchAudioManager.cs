@@ -54,6 +54,8 @@ public class GlitchAudioManager : MonoBehaviour
     private float musicDuck;
     private float breachMuffleTimer;
     private int lastMusicTrack = -1;
+    private int lockedMusicSector = -1;
+    private int arenaMusicTrack;
     private int lastThemeAmbienceIndex = -1;
     private int activeThemeAmbienceSlot;
     private float themeAmbienceBlend;
@@ -329,6 +331,8 @@ public class GlitchAudioManager : MonoBehaviour
         instance.musicIntensityBoost = 0f;
         instance.musicBreachHoldTimer = 0f;
         instance.lastMusicTrack = -1;
+        instance.lockedMusicSector = -1;
+        instance.arenaMusicTrack = 0;
         instance.lastThemeAmbienceIndex = -1;
     }
 
@@ -342,6 +346,8 @@ public class GlitchAudioManager : MonoBehaviour
         instance.secondaryMusicBlend = 0f;
         instance.highPressureMusicBlend = 0f;
         instance.lastMusicTrack = -1;
+        instance.lockedMusicSector = -1;
+        instance.arenaMusicTrack = 0;
         instance.lastThemeAmbienceIndex = -1;
         instance.RefreshReferences();
     }
@@ -541,12 +547,7 @@ public class GlitchAudioManager : MonoBehaviour
         float tensionTarget = active ? tensionVolume * Mathf.SmoothStep(0f, 1f, threat) : 0f;
         float musicSetting = UserSettings.GetMusicVolume();
         int currentMusicSector = arena != null ? arena.SectorLevel : 1;
-        bool highPressureTrack = gameplaySceneLive && highPressureMusicSource != null &&
-                                 (currentMusicSector >= 3 ||
-                                  (gameManager != null && (gameManager.AreBossLevelThreeStatesUnlocked || gameManager.SurvivalTime >= 150f)));
-        bool alternateLevelTrack = !highPressureTrack && gameplaySceneLive && secondaryMusicSource != null &&
-                                   currentMusicSector > 1 && currentMusicSector % 2 == 0;
-        int targetMusicTrack = highPressureTrack ? 2 : alternateLevelTrack ? 1 : 0;
+        int targetMusicTrack = ResolveArenaMusicTrack(gameplaySceneLive, currentMusicSector);
         if (gameplaySceneLive && targetMusicTrack != lastMusicTrack)
         {
             AudioSource incoming = targetMusicTrack == 2
@@ -580,6 +581,49 @@ public class GlitchAudioManager : MonoBehaviour
         UpdateThemeAmbience(active, activeThemeIndex, threat, musicSetting, dt);
 
         UpdateContextFilters(gameplayContext, dt);
+    }
+
+    // La canción se decide una sola vez al entrar a cada sector. El jefe puede
+    // subir de nivel inmediatamente después sin provocar un segundo crossfade:
+    // su presión se expresa con las capas procedurales y los SFX de estado.
+    private int ResolveArenaMusicTrack(bool gameplaySceneLive, int sector)
+    {
+        if (!gameplaySceneLive)
+        {
+            return arenaMusicTrack;
+        }
+
+        int safeSector = Mathf.Max(1, sector);
+        if (lockedMusicSector == safeSector)
+        {
+            return arenaMusicTrack;
+        }
+
+        lockedMusicSector = safeSector;
+        int setlistIndex = (safeSector - 1) % 3;
+        arenaMusicTrack = ResolveAvailableMusicTrack(setlistIndex);
+        return arenaMusicTrack;
+    }
+
+    private int ResolveAvailableMusicTrack(int preferredTrack)
+    {
+        if (preferredTrack == 2 && highPressureMusicSource != null && highPressureMusicSource.clip != null)
+        {
+            return 2;
+        }
+        if (preferredTrack == 1 && secondaryMusicSource != null && secondaryMusicSource.clip != null)
+        {
+            return 1;
+        }
+        if (preferredTrack == 0 && authoredMusicSource != null && authoredMusicSource.clip != null)
+        {
+            return 0;
+        }
+
+        if (authoredMusicSource != null && authoredMusicSource.clip != null) return 0;
+        if (secondaryMusicSource != null && secondaryMusicSource.clip != null) return 1;
+        if (highPressureMusicSource != null && highPressureMusicSource.clip != null) return 2;
+        return 0;
     }
 
     private void UpdateThemeAmbience(bool active, int themeIndex, float threat, float musicSetting, float dt)

@@ -934,6 +934,7 @@ public class PlayerController : MonoBehaviour
         shieldDisplayDuration = 1f;
         visualAnimator?.PlayShieldBreak();
         SpawnShieldBreakFx();
+        GameFeelDirector.ShieldBreak(transform.position, -lastMoveDirection, shieldColor);
         GlitchAudioManager.PlayShieldBreak(transform.position);
         return true;
     }
@@ -2332,7 +2333,7 @@ public class PlayerController : MonoBehaviour
     private void SpawnParrySuccessFx(Vector2 direction)
     {
         Color burst = parrySuccessColor;
-        GameFeelDirector.Major(transform.position, direction, burst, 0.82f);
+        GameFeelDirector.ParryImpact(transform.position, direction, burst);
         GameObject ring = new GameObject("ParrySuccessRingFx");
         ring.transform.position = transform.position;
         SpriteRenderer ringRenderer = ring.AddComponent<SpriteRenderer>();
@@ -2377,7 +2378,7 @@ public class PlayerController : MonoBehaviour
     private void SpawnFirewallBurstFx(float radius)
     {
         Color burst = firewallBurstColor;
-        GameFeelDirector.Critical(transform.position, Vector2.zero, burst, 1.12f);
+        GameFeelDirector.FirewallImpact(transform.position, burst);
         GameObject ring = new GameObject("FirewallBurstRingFx");
         ring.transform.position = transform.position;
         SpriteRenderer ringRenderer = ring.AddComponent<SpriteRenderer>();

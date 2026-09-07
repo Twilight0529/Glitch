@@ -193,6 +193,7 @@ public class AnomalyProjectile : MonoBehaviour
         }
 
         animationFx?.PlayReflection(reflectedColor);
+        GameFeelDirector.ProjectileReflection(transform.position, direction, reflectedColor);
 
         transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg);
         GlitchAudioManager.PlayProjectileReflect(transform.position);
