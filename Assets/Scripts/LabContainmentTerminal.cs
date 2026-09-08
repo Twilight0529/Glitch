@@ -105,10 +105,10 @@ public class LabContainmentTerminal : MonoBehaviour
             }
         }
 
-        bodyRenderer.sprite = SquareSpriteProvider.Get();
-        bodyRenderer.drawMode = SpriteDrawMode.Sliced;
+        bodyRenderer.sprite = ArenaArtAssetProvider.Terminal;
+        bodyRenderer.drawMode = SpriteDrawMode.Simple;
         bodyRenderer.sortingOrder = 16;
-        bodyRenderer.size = Vector2.one * 1.05f;
+        bodyRenderer.transform.localScale = Vector3.one;
 
         if (fillRenderer == null)
         {
@@ -147,18 +147,18 @@ public class LabContainmentTerminal : MonoBehaviour
 
         float progress = Mathf.Clamp01(activationTimer / Mathf.Max(0.001f, activationSeconds));
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * (playerInside ? 10f : 5.2f));
-        Color body = new Color(0.025f, 0.045f, 0.08f, 0.88f);
+        Color body = new Color(0.92f, 0.96f, 1f, 0.96f);
         if (activated)
         {
-            body = Color.Lerp(body, accentColor, 0.35f);
+            body = Color.Lerp(body, accentColor, 0.12f);
         }
 
         bodyRenderer.color = body;
 
         if (fillRenderer != null)
         {
-            fillRenderer.transform.localPosition = new Vector3(0f, Mathf.Lerp(-0.39f, 0f, progress), 0f);
-            fillRenderer.size = new Vector2(0.62f, Mathf.Lerp(0.04f, 0.78f, progress));
+            fillRenderer.transform.localPosition = new Vector3(0f, Mathf.Lerp(-0.25f, 0f, progress), 0f);
+            fillRenderer.size = new Vector2(0.10f, Mathf.Lerp(0.035f, 0.52f, progress));
             Color fill = Color.Lerp(new Color(0.22f, 0.55f, 0.78f, 0.52f), accentColor, progress);
             fill.a = activated ? 0.9f : Mathf.Lerp(0.28f, 0.78f, progress) + pulse * 0.08f;
             fillRenderer.color = fill;
@@ -183,7 +183,7 @@ public class LabContainmentTerminal : MonoBehaviour
 
             float side = i < 2 ? -1f : 1f;
             float vertical = (i & 1) == 0 ? -1f : 1f;
-            tick.transform.localPosition = new Vector3(side * 0.72f, vertical * 0.72f, 0f);
+            tick.transform.localPosition = new Vector3(side * 0.57f, vertical * 0.57f, 0f);
             tick.transform.localRotation = Quaternion.Euler(0f, 0f, i < 2 ? 0f : 90f);
             tick.size = new Vector2(0.32f, 0.055f);
             Color tickColor = Color.Lerp(accentColor, Color.white, pulse * 0.35f);

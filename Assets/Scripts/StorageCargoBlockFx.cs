@@ -70,7 +70,7 @@ public class StorageCargoBlockFx : MonoBehaviour
             }
         }
 
-        bodyRenderer.sprite = SquareSpriteProvider.Get();
+        bodyRenderer.sprite = ArenaArtAssetProvider.StorageCargoPanel;
         bodyRenderer.drawMode = SpriteDrawMode.Sliced;
         bodyRenderer.sortingOrder = 12;
 
@@ -114,10 +114,12 @@ public class StorageCargoBlockFx : MonoBehaviour
         EnsureVisuals();
 
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * (active ? 7.5f : 11.5f));
+        // La carga conserva su material propio. Amarillo y rojo quedan en bordes y escáner
+        // para comunicar el estado sin convertir el objeto entero en un rectángulo de alerta.
         Color baseColor = active
-            ? Color.Lerp(activeColor, new Color(0.08f, 0.12f, 0.18f, 1f), 0.46f)
-            : telegraphColor;
-        baseColor.a = active ? Mathf.Lerp(0.70f, 0.92f, pulse) : Mathf.Lerp(0.14f, 0.34f, pulse);
+            ? Color.Lerp(Color.white, activeColor, 0.10f)
+            : Color.Lerp(Color.white, telegraphColor, 0.16f);
+        baseColor.a = active ? Mathf.Lerp(0.90f, 1f, pulse) : Mathf.Lerp(0.28f, 0.52f, pulse);
         bodyRenderer.size = blockSize;
         bodyRenderer.color = baseColor;
 
