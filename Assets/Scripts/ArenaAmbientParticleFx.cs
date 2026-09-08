@@ -52,9 +52,9 @@ public class ArenaAmbientParticleFx : MonoBehaviour
         particle.transform.localPosition = initialPosition;
 
         SpriteRenderer renderer = particle.AddComponent<SpriteRenderer>();
-        renderer.sprite = (style == ParticleStyle.Storage && index % 5 == 0) || (style == ParticleStyle.Core && index % 4 == 0)
-            ? CircleSpriteProvider.Get()
-            : SquareSpriteProvider.Get();
+        // Trazos rectangulares y pixeles: las particulas redondas se confundian con props
+        // interactivos y repetian la misma silueta en sectores con identidades distintas.
+        renderer.sprite = SquareSpriteProvider.Get();
         renderer.sortingOrder = GetSortingOrder();
 
         Color color = Color.Lerp(primary, secondary, Random.Range(0f, 1f));
@@ -247,15 +247,15 @@ public class ArenaAmbientParticleFx : MonoBehaviour
         switch (style)
         {
             case ParticleStyle.Storage:
-                return Random.Range(0.08f, 0.18f);
+                return Random.Range(0.035f, 0.085f);
             case ParticleStyle.Rupture:
-                return Random.Range(0.07f, 0.18f);
+                return Random.Range(0.030f, 0.075f);
             case ParticleStyle.Core:
-                return Random.Range(0.08f, 0.20f);
+                return Random.Range(0.040f, 0.090f);
             case ParticleStyle.Archive:
-                return Random.Range(0.06f, 0.15f);
+                return Random.Range(0.030f, 0.070f);
             default:
-                return Random.Range(0.07f, 0.17f);
+                return Random.Range(0.035f, 0.080f);
         }
     }
 
@@ -278,6 +278,6 @@ public class ArenaAmbientParticleFx : MonoBehaviour
 
     private int GetSortingOrder()
     {
-        return style == ParticleStyle.Rupture || style == ParticleStyle.Archive ? -3 : -5;
+        return style == ParticleStyle.Rupture || style == ParticleStyle.Archive ? -17 : -19;
     }
 }

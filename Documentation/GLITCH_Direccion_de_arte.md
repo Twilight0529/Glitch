@@ -75,17 +75,25 @@ Bloques monumentales de datos, sellos, índices y grandes zonas negativas. Menos
 - Los assets extensibles reservan el centro para nueve cortes y concentran el detalle en los bordes.
 - Cada textura debe tener fallback geométrico para no romper una build si falta un recurso.
 - No se agregan luces animadas para compensar una silueta débil: primero debe funcionar el dibujo estático.
-- Todas las arenas comparten el suelo modular y el marco perimetral de la instalación. Los obstáculos internos son propios de cada sector y luego se tiñen, cubren o deterioran mediante su paleta y sus motivos; así existe continuidad sin homogeneizar los mapas.
-- Lab usa el material común casi limpio, Storage lo calienta y desgasta, Rupture lo deja apenas visible bajo la corrupción, Core lo integra con circuitos y Archive lo enfría bajo sus anillos de datos.
+- Las arenas comparten escala, perspectiva, iluminación y familia de materiales, pero no reutilizan piso, pared ni props principales. La coherencia proviene de reglas comunes; la identidad, de assets distintos.
+- Cada sector se entrega como un `VisualKit` indivisible con piso, límite, obstáculo rectangular y prop redondeado. El generador solicita un único kit por arena para impedir mezclas accidentales.
 
 ## Kit visual implementado
 
 - `lab_floor_panels.png`: piso modular repetible y de bajo contraste.
 - `lab_obstacle_frame_v2.png`: panel opaco de nueve cortes para paredes y obstáculos.
 - `lab_terminal_v2.png`: terminal cenital integrada a una placa de suelo.
+- `storage_floor_v1.png`: cubierta logística con rieles, módulos de carga y marcas ámbar.
+- `storage_boundary_v1.png`: bulkhead fijo con vías de grúa y estructura pesada.
 - `storage_cargo_frame.png`: carga industrial reforzada, con cierres, rieles y señalización ámbar.
+- `rupture_floor_v1.png`: suelo de instalación fracturado por vacío y corrupción orgánica.
+- `rupture_boundary_v1.png`: muro de emergencia quebrado, reparado y contaminado por la grieta.
 - `rupture_fragment_frame.png`: fragmento blindado partido por vacío y corrupción violeta.
+- `core_floor_v1.png`: piso computacional simétrico con buses e indicadores verdes.
+- `core_boundary_v1.png`: perímetro de servidores con refrigeración y troncales protegidas.
 - `core_data_frame.png`: módulo computacional simétrico con buses, capacitores e indicadores verdes.
+- `archive_floor_v1.png`: losas monumentales con canales e indexación lavanda.
+- `archive_boundary_v1.png`: arquitectura monumental fija con conductos de memoria sellados.
 - `archive_data_slab_frame.png`: bloque monolítico de memoria con índices sellados y luces lavanda.
 
 Todos los assets comparten vista ortográfica, metal naval, iluminación superior izquierda y detalle pixel-art moderno. Los obstáculos rectangulares usan la pieza de su sector. Pilares, cápsulas y núcleos utilizan siluetas temáticas transparentes: tanque octogonal en Lab, tambor reforzado en Storage, fragmento irregular en Rupture, capacitor escalonado en Core y sello poligonal en Archive. Ninguno vuelve al círculo genérico.
@@ -119,3 +127,35 @@ Módulo computacional de borde a borde con canales simétricos, placas de proces
 ### Bloque de Null Archive
 
 Losa monolítica de almacenamiento digital con bordes pesados en capas, índices sellados, muescas dispersas, canales de memoria oscuros y luces lavanda mínimas. Sensación antigua y silenciosa, centro casi vacío para nueve cortes, vista cenital y sin partículas ni símbolos legibles.
+
+### Piso de Storage
+
+Textura opaca y repetible de una cubierta logística cenital: placas rectangulares grandes, rieles de carga empotrados, marcas de alineación de pallets, juntas gastadas, escotillas reforzadas e indicadores ámbar contenidos. Sin cajas, peligros, texto, perspectiva, marco ni punto focal central.
+
+### Piso de Rupture
+
+Textura opaca y repetible de la instalación rota por una anomalía digital orgánica: placas navales desplazadas, grietas estrechas de vacío, juntas interrumpidas y venas magenta-violeta escasas. Contraste bajo, distribución homogénea, sin escombros flotantes, símbolos, marco ni foco central.
+
+### Piso de Data Core
+
+Textura opaca y repetible de infraestructura computacional cenital: baldosas simétricas, buses de circuito embutidos, canales de procesamiento, conectores y pequeños indicadores verdes. Grandes superficies calmas para desplazamiento, sin pantallas, dígitos, marco, perspectiva ni bloom.
+
+### Piso de Null Archive
+
+Textura opaca y repetible de archivo digital monumental: losas de metal-piedra muy grandes, canales de memoria sellados, muescas de índice y uniones concéntricas sutiles con luces lavanda mínimas. Amplio espacio negativo, sin símbolos flotantes, texto, marco, perspectiva ni bloom.
+
+### Pared de Storage
+
+Bulkhead fijo de almacén, opaco y preparado para nueve cortes: rieles longitudinales, vías de grúa empotradas, refuerzos, ventilación e indicadores ámbar. Debe leerse como arquitectura y no como carga móvil; sin cajas, asas, perspectiva, texto ni bloom.
+
+### Pared de Rupture
+
+Muro fijo de contención parcialmente consumido por la grieta: nervios rotos, parches de emergencia, segmentos ausentes, vacío oscuro y corrupción violeta contenida en el borde. Silueta de colisión continua, sin escombros flotantes, texto ni brillo excesivo.
+
+### Pared de Data Core
+
+Perímetro fijo de servidores con troncales simétricas, canales protegidos, rejillas de refrigeración, bancos de conectores e indicadores verdes mínimos. Centro amplio para nueve cortes; sin procesador independiente, pantallas, dígitos, texto ni bloom.
+
+### Pared de Null Archive
+
+Marco monumental de archivo con dinteles pesados en capas, conductos de memoria sellados, muescas de índice, contrafuertes simétricos e indicadores lavanda mínimos. Debe distinguirse de las losas móviles; sin símbolos, texto, partículas ni perspectiva.
