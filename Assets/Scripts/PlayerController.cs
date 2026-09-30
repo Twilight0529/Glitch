@@ -174,6 +174,7 @@ public class PlayerController : MonoBehaviour
     private float firewallChargeGainMultiplier = 1f;
     private bool deathSequenceActive;
     private bool breachConsumptionActive;
+    private bool debugQaInvulnerable;
     private GameObject breachGlitchVisual;
     private SpriteRenderer[] breachGlitchRenderers;
     private Color breachGlitchColor = new Color(1f, 0.42f, 0.78f, 1f);
@@ -881,6 +882,18 @@ public class PlayerController : MonoBehaviour
     public bool HasPhaseDashPowerup => phaseDashPowerupTimer > 0f;
     public bool IsIntangibleDashActive => poweredDashPhasing && ghostDashTimer > 0f;
 
+    public void SetDebugQaInvulnerable(bool active)
+    {
+        if (Application.isEditor || Debug.isDebugBuild)
+        {
+            debugQaInvulnerable = active;
+        }
+        else
+        {
+            debugQaInvulnerable = false;
+        }
+    }
+
     public void ApplyPhaseDashPowerup(float duration)
     {
         if (deathSequenceActive || breachConsumptionActive)
@@ -916,6 +929,11 @@ public class PlayerController : MonoBehaviour
         if (deathSequenceActive)
         {
             return false;
+        }
+
+        if (debugQaInvulnerable && (Application.isEditor || Debug.isDebugBuild))
+        {
+            return true;
         }
 
         if (ghostDashTimer > 0f)

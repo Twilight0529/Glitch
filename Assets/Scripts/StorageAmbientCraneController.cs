@@ -2,8 +2,16 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // Vida pasiva de Storage: las grúas evalúan espacios válidos y mueven carga sin depender de un evento puntual.
-public class StorageAmbientCraneController : MonoBehaviour
+public class StorageAmbientCraneController : MonoBehaviour, IDebugTriggerableEvent
 {
+    public string DebugEventLabel => "Storage: grua ambiental";
+    public bool TriggerForDebug()
+    {
+        if (!isActiveAndEnabled || operationActive) return false;
+        BeginOperation();
+        return operationActive;
+    }
+
     // Maquinaria propia de Storage: gruas laterales que mantienen viva la arena fuera de eventos puntuales.
     private enum CraneOperationKind
     {

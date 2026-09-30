@@ -2,8 +2,16 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // Evento propio de Core: arma una secuencia de compuertas y relés, comunica su objetivo y restaura el mapa al terminar.
-public class CoreGateEventController : MonoBehaviour, IThemedEventStatusProvider
+public class CoreGateEventController : MonoBehaviour, IThemedEventStatusProvider, IDebugTriggerableEvent
 {
+    public string DebugEventLabel => "Core: red";
+    public bool TriggerForDebug()
+    {
+        if (!isActiveAndEnabled || eventActive) return false;
+        StartEvent();
+        return eventActive;
+    }
+
     // Data Core convierte sus compuertas en una red interactiva que el jugador puede reprogramar.
     private class GateSegment
     {
@@ -369,10 +377,11 @@ public class CoreGateEventController : MonoBehaviour, IThemedEventStatusProvider
         root.transform.SetParent(centerTransform, false);
         root.transform.position = new Vector3(position.x, position.y, 0f);
 
-        SpriteRenderer aura = root.AddComponent<SpriteRenderer>();
+        GameObject auraObject = new GameObject("RelaySyncFrame");
+        auraObject.transform.SetParent(root.transform, false);
+        SpriteRenderer aura = auraObject.AddComponent<SpriteRenderer>();
         aura.sprite = CircleSpriteProvider.Get();
-        aura.drawMode = SpriteDrawMode.Sliced;
-        aura.size = Vector2.one * relayRadius * 3.1f;
+        aura.transform.localScale = Vector3.one * relayRadius * 3.1f;
         aura.sortingOrder = 16;
         aura.color = new Color(dormantColor.r, dormantColor.g, dormantColor.b, 0.12f);
 
@@ -380,11 +389,10 @@ public class CoreGateEventController : MonoBehaviour, IThemedEventStatusProvider
         coreObject.transform.SetParent(root.transform, false);
         SpriteRenderer core = coreObject.AddComponent<SpriteRenderer>();
         core.sprite = SquareSpriteProvider.Get();
-        core.drawMode = SpriteDrawMode.Sliced;
-        core.size = Vector2.one * relayRadius * 1.35f;
+        coreObject.transform.localScale = Vector3.one * relayRadius * 1.35f;
         core.sortingOrder = 18;
         core.color = dormantColor;
-        coreObject.transform.rotation = Quaternion.Euler(0f, 0f, 45f);
+        coreObject.transform.rotation = Quaternion.identity;
 
         CircleCollider2D trigger = root.AddComponent<CircleCollider2D>();
         trigger.radius = Mathf.Max(relayRadius, relayTriggerRadius);
@@ -604,11 +612,11 @@ public class CoreGateEventController : MonoBehaviour, IThemedEventStatusProvider
             Color color = relay.activated ? completedColor : target ? targetColor : dormantColor;
             float coreAlpha = relay.activated ? 0.92f : target ? Mathf.Lerp(0.72f, 1f, pulse) : 0.42f;
             relay.core.color = new Color(color.r, color.g, color.b, coreAlpha * intro);
-            relay.core.size = Vector2.one * relayRadius * (target ? Mathf.Lerp(1.35f, 1.65f, pulse) : 1.25f);
+            relay.core.transform.localScale = Vector3.one * relayRadius * (target ? Mathf.Lerp(1.35f, 1.65f, pulse) : 1.25f);
 
             float auraAlpha = relay.activated ? 0.34f : target ? Mathf.Lerp(0.22f, 0.52f, pulse) : 0.08f;
             relay.aura.color = new Color(color.r, color.g, color.b, auraAlpha * intro);
-            relay.aura.size = Vector2.one * relayRadius * (target ? Mathf.Lerp(2.8f, 3.7f, pulse) : 2.5f);
+            relay.aura.transform.localScale = Vector3.one * relayRadius * (target ? Mathf.Lerp(2.8f, 3.7f, pulse) : 2.5f);
             relay.root.transform.rotation = Quaternion.Euler(0f, 0f, Time.time * (target ? 85f : 24f) + i * 22f);
         }
     }

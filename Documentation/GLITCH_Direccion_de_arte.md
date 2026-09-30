@@ -159,3 +159,17 @@ Perímetro fijo de servidores con troncales simétricas, canales protegidos, rej
 ### Pared de Null Archive
 
 Marco monumental de archivo con dinteles pesados en capas, conductos de memoria sellados, muescas de índice, contrafuertes simétricos e indicadores lavanda mínimos. Debe distinguirse de las losas móviles; sin símbolos, texto, partículas ni perspectiva.
+
+## Gramática visual de gameplay
+
+La lectura de amenazas tiene una secuencia común en todas las arenas: amarillo para preparación y advertencia, rojo para ejecución y peligro activo, y retorno breve hacia un tono neutro durante la recuperación. La identidad de cada estado del enemigo no depende de sumar colores nuevos: se conserva mediante su silueta, glifo y patrón de movimiento.
+
+Si la anomalía queda cubierta por un obstáculo, o si el jugador atraviesa uno mediante Phase Dash, el obstáculo reduce temporalmente su opacidad y luego recupera exactamente su aspecto original. El jugador y la anomalía conservan sus siluetas limpias, sin placas ni fondos adicionales debajo de sus cuerpos.
+
+Para revisar esta gramática en una build de desarrollo: `F10` abre el panel de legibilidad, `Page Up/Page Down` recorren los estados de la anomalía y `F8` fuerza un evento compatible de la arena actual. Estas herramientas no se muestran ni responden en una build final.
+
+### Lectura de objetos interactivos
+
+Los objetos de gameplay conservan sus siluetas geométricas originales y se diferencian mediante color, escala, movimiento y contexto. Los powerups mantienen sus iconos específicos de velocidad, escudo, Compact y Phase Dash; los objetivos y eventos usan sus formas propias sin marcos ni glifos superpuestos.
+
+Los peligros comunican primero su alcance y su fase: amarillo durante el aviso y rojo durante la activación. Los proyectiles mantienen una forma simple y su patrón de movimiento es el principal indicador del tipo de ataque.

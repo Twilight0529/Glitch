@@ -2,8 +2,14 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // Vida pasiva de Lab: activa barreras y escaneos de seguridad por ciclos, cuidando no encerrar al jugador sin salida.
-public class LabAmbientSecurityController : MonoBehaviour
+public class LabAmbientSecurityController : MonoBehaviour, IDebugTriggerableEvent
 {
+    public string DebugEventLabel => "Lab: seguridad ambiental";
+    public bool TriggerForDebug()
+    {
+        return isActiveAndEnabled && TrySpawnSecurityLockdown();
+    }
+
     // Sistema ambiental de Lab: seguridad automatica que escanea una linea y cierra compuertas coordinadas.
     private enum GateSide
     {

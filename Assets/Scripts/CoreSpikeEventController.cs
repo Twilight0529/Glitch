@@ -2,8 +2,16 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // Evento exclusivo de Data Core: vuelve peligrosos algunos obstaculos existentes sin cerrar rutas nuevas.
-public class CoreSpikeEventController : MonoBehaviour, IThemedEventStatusProvider
+public class CoreSpikeEventController : MonoBehaviour, IThemedEventStatusProvider, IDebugTriggerableEvent
 {
+    public string DebugEventLabel => "Core: espinas";
+    public bool TriggerForDebug()
+    {
+        if (!isActiveAndEnabled || eventActive) return false;
+        StartEvent();
+        return eventActive;
+    }
+
     [Header("Timing")]
     [SerializeField] private Vector2 initialDelayRange = new Vector2(13f, 19f);
     [SerializeField] private Vector2 intervalRange = new Vector2(20f, 29f);

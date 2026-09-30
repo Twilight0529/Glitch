@@ -67,20 +67,21 @@ public class RuptureEchoPortal : MonoBehaviour
 
         if (ringRenderer == null)
         {
-            ringRenderer = GetComponent<SpriteRenderer>();
-            if (ringRenderer == null)
-            {
-                ringRenderer = gameObject.AddComponent<SpriteRenderer>();
-            }
+            ringRenderer = CreateRenderer(
+                "PortalFrame",
+                CircleSpriteProvider.Get(),
+                23);
         }
 
         ringRenderer.sprite = CircleSpriteProvider.Get();
-        ringRenderer.drawMode = SpriteDrawMode.Sliced;
         ringRenderer.sortingOrder = 23;
 
         if (coreRenderer == null)
         {
-            coreRenderer = CreateRenderer("PortalCore", CircleSpriteProvider.Get(), 24);
+            coreRenderer = CreateRenderer(
+                "PortalCore",
+                CircleSpriteProvider.Get(),
+                24);
         }
 
         for (int i = 0; i < shardRenderers.Length; i++)
@@ -111,7 +112,7 @@ public class RuptureEchoPortal : MonoBehaviour
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 8.8f + portalIndex);
         if (ringRenderer != null)
         {
-            ringRenderer.size = Vector2.one * radius * Mathf.Lerp(1.85f, 2.35f, pulse);
+            ringRenderer.transform.localScale = Vector3.one * radius * Mathf.Lerp(1.85f, 2.35f, pulse);
             Color ring = Color.Lerp(color, Color.white, pulse * 0.34f);
             ring.a = Mathf.Lerp(0.30f, 0.72f, pulse);
             ringRenderer.color = ring;
@@ -119,8 +120,7 @@ public class RuptureEchoPortal : MonoBehaviour
 
         if (coreRenderer != null)
         {
-            coreRenderer.transform.localScale = Vector3.one * Mathf.Lerp(0.72f, 1.08f, pulse);
-            coreRenderer.size = Vector2.one * radius * 1.05f;
+            coreRenderer.transform.localScale = Vector3.one * radius * Mathf.Lerp(0.76f, 1.12f, pulse);
             coreRenderer.color = new Color(0.03f, 0.01f, 0.06f, Mathf.Lerp(0.58f, 0.82f, pulse));
         }
 
@@ -223,9 +223,10 @@ public class RupturePlayerEchoFx : MonoBehaviour
 
         if (bodyRenderer == null)
         {
-            bodyRenderer = gameObject.AddComponent<SpriteRenderer>();
+            GameObject body = new GameObject("EchoTrapHazardFrame");
+            body.transform.SetParent(transform, false);
+            bodyRenderer = body.AddComponent<SpriteRenderer>();
             bodyRenderer.sprite = CircleSpriteProvider.Get();
-            bodyRenderer.drawMode = SpriteDrawMode.Sliced;
             bodyRenderer.sortingOrder = 24;
         }
 
@@ -252,7 +253,7 @@ public class RupturePlayerEchoFx : MonoBehaviour
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * 14f);
         if (bodyRenderer != null)
         {
-            bodyRenderer.size = Vector2.one * radius * Mathf.Lerp(1.85f, 2.55f, t);
+            bodyRenderer.transform.localScale = Vector3.one * radius * Mathf.Lerp(1.85f, 2.55f, t);
             Color c = Color.Lerp(color, Color.white, pulse * 0.3f);
             c.a = Mathf.Lerp(0.5f, 0f, t) * (0.65f + pulse * 0.35f);
             bodyRenderer.color = c;

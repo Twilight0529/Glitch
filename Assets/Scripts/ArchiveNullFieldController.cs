@@ -2,8 +2,16 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // Mecánica central de Archive: crea anomalías móviles que atraen actores, proyectiles y objetos de forma constante.
-public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvider
+public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvider, IDebugTriggerableEvent
 {
+    public string DebugEventLabel => "Archive";
+    public bool TriggerForDebug()
+    {
+        if (!isActiveAndEnabled || eventActive) return false;
+        StartEvent();
+        return eventActive;
+    }
+
     // Evento de Archive: anomalías móviles capturan entidades y curvan su movimiento en órbitas visibles.
     private class Anchor
     {
@@ -251,11 +259,13 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
         root.transform.SetParent(centerTransform, false);
         root.transform.position = new Vector3(position.x, position.y, 0f);
 
-        SpriteRenderer ring = root.AddComponent<SpriteRenderer>();
+        GameObject ringGo = new GameObject("NullAnchorGravityFrame");
+        ringGo.transform.SetParent(root.transform, false);
+        SpriteRenderer ring = ringGo.AddComponent<SpriteRenderer>();
         ring.sprite = CircleSpriteProvider.Get();
         ring.drawMode = SpriteDrawMode.Sliced;
         ring.sortingOrder = 16;
-        ring.size = Vector2.one * visualRadius * 2f;
+        ring.transform.localScale = Vector3.one * visualRadius * 2f;
         ring.color = telegraphColor;
 
         GameObject coreGo = new GameObject("NullAnchorCore");
@@ -264,7 +274,7 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
         core.sprite = CircleSpriteProvider.Get();
         core.drawMode = SpriteDrawMode.Sliced;
         core.sortingOrder = 18;
-        core.size = Vector2.one * anchorRadius * 2f;
+        core.transform.localScale = Vector3.one * anchorRadius * 2f;
         core.color = activeColor;
 
         anchors.Add(new Anchor
@@ -336,7 +346,8 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
                 Color c = active ? activeColor : telegraphColor;
                 c.a = active ? Mathf.Lerp(0.15f, 0.32f, pulse) : Mathf.Lerp(0.08f, 0.18f, pulse) * phase;
                 anchor.ring.color = c;
-                anchor.ring.size = Vector2.one * visualRadius * 2f * Mathf.Lerp(1.00f, 0.86f, pulse);
+                anchor.ring.transform.localScale = Vector3.one * visualRadius * 2f * Mathf.Lerp(1.00f, 0.86f, pulse);
+                anchor.ring.transform.localRotation = Quaternion.Euler(0f, 0f, Time.time * anchor.orbitDirection * (active ? 24f : 10f));
             }
 
             if (anchor.core != null)
@@ -344,7 +355,7 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
                 Color c = Color.Lerp(active ? activeColor : telegraphColor, Color.white, pulse * 0.30f);
                 c.a = active ? Mathf.Lerp(0.46f, 0.78f, pulse) : Mathf.Lerp(0.22f, 0.54f, pulse) * phase;
                 anchor.core.color = c;
-                anchor.core.size = Vector2.one * anchorRadius * 2f * Mathf.Lerp(0.92f, 1.08f, pulse);
+                anchor.core.transform.localScale = Vector3.one * anchorRadius * 2f * Mathf.Lerp(0.92f, 1.08f, pulse);
             }
         }
     }

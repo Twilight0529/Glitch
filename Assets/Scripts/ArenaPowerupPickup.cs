@@ -283,6 +283,7 @@ public class ArenaPowerupPickup : MonoBehaviour
                 return WorldObjectAnimationFx.VisualKind.PowerupSpeed;
         }
     }
+
 }
 
 public class PowerupCollectBurstFx : MonoBehaviour

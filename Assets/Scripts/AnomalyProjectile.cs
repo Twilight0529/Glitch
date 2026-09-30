@@ -20,7 +20,13 @@ public class AnomalyProjectile : MonoBehaviour
 
     public Vector2 CurrentVelocity => direction * speed;
 
-    public void Configure(Vector2 travelDirection, float projectileSpeed, float projectileLifetime, LayerMask obstacles, GameManager manager)
+    public void Configure(
+        Vector2 travelDirection,
+        float projectileSpeed,
+        float projectileLifetime,
+        LayerMask obstacles,
+        GameManager manager,
+        WorldObjectAnimationFx.ProjectileStyle visualStyle = WorldObjectAnimationFx.ProjectileStyle.Direct)
     {
         direction = travelDirection.sqrMagnitude > 0.0001f ? travelDirection.normalized : Vector2.right;
         speed = Mathf.Max(0.1f, projectileSpeed);
@@ -28,6 +34,7 @@ public class AnomalyProjectile : MonoBehaviour
         obstacleMask = obstacles;
         gameManager = manager;
         transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg);
+        animationFx?.SetProjectileStyle(visualStyle);
         animationFx?.SetLifetimeState(lifeTimer, lifetime);
     }
 

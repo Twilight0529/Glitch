@@ -138,7 +138,6 @@ public class ArenaBreachGate : MonoBehaviour
         {
             scanRenderer = CreateChildRenderer("BreachScanLine", 20);
         }
-
         for (int i = 0; i < chevronRenderers.Length; i++)
         {
             if (chevronRenderers[i] == null)

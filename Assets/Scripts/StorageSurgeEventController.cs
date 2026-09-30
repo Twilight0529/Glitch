@@ -3,8 +3,16 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 // Eventos activos de Storage. Convierte sus carriles y carga en obstáculos con ritmo propio.
-public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProvider
+public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProvider, IDebugTriggerableEvent
 {
+    public string DebugEventLabel => "Storage";
+    public bool TriggerForDebug()
+    {
+        if (!isActiveAndEnabled || eventActive) return false;
+        BeginEvent();
+        return eventActive;
+    }
+
     // Evento de Storage: reacomoda carga y activa carriles transportadores que empujan actores.
     private enum StorageEventVariant
     {

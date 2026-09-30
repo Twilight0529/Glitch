@@ -3,8 +3,16 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 // Eventos propios de Lab. Cambian reglas y corredores por unos segundos sin reconstruir toda la arena.
-public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider
+public class LabSweepEventController : MonoBehaviour, IThemedEventStatusProvider, IDebugTriggerableEvent
 {
+    public string DebugEventLabel => "Lab";
+    public bool TriggerForDebug()
+    {
+        if (!isActiveAndEnabled || eventActive) return false;
+        BeginEvent();
+        return eventActive;
+    }
+
     // Evento del laboratorio: mueve obstaculos y crea barridos de esterilizacion con zonas seguras.
     private enum LabEventVariant
     {

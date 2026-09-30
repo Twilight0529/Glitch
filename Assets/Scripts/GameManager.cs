@@ -287,7 +287,7 @@ public class GameManager : MonoBehaviour
     public bool AreBossLevelThreeStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && (devForceBossLevelThree || SurvivalTime >= Mathf.Max(bossLevelTwoUnlockTime, bossLevelThreeUnlockTime));
     public bool IsStateHijackUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive &&
         (devForceBossLevelTwo || devForceBossLevelThree || SurvivalTime >= Mathf.Max(bossLevelTwoUnlockTime, stateHijackUnlockTime));
-    public bool AreMapEventsUnlocked => IsRunActive && SurvivalTime >= Mathf.Max(0f, mapEventsUnlockTime);
+    public bool AreMapEventsUnlocked => IsRunActive && (debugQaModeActive || SurvivalTime >= Mathf.Max(0f, mapEventsUnlockTime));
     public bool IsContainmentPulseUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && SurvivalTime >= Mathf.Max(0f, containmentPulseUnlockTime);
     public bool IsContainmentPulsePressureActive => chaosDirector != null && chaosDirector.IsContainmentPulsePressureActive;
     public float EventPressureRetryDelay => Mathf.Max(0.25f, eventPressureRetryDelay);
@@ -390,6 +390,7 @@ public class GameManager : MonoBehaviour
     private string stateHijackNoticeHint;
     private Color stateHijackNoticeColor = Color.white;
     private bool upgradeSelectionOpen;
+    private bool debugQaModeActive;
     private bool upgradeSelectionClosing;
     private float upgradeSelectionAge;
     private float upgradeTimeRemaining;
@@ -818,6 +819,11 @@ public class GameManager : MonoBehaviour
 
     public void NotifyMapEventStarted(string eventId, string eventLabel, string eventHint)
     {
+        if (debugQaModeActive)
+        {
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(eventId) || string.IsNullOrWhiteSpace(eventLabel))
         {
             return;
@@ -1231,6 +1237,11 @@ public class GameManager : MonoBehaviour
             return false;
         }
 
+        if (debugQaModeActive)
+        {
+            return true;
+        }
+
         string key = string.IsNullOrWhiteSpace(eventKey) ? "event" : eventKey;
         for (int i = 0; i < eventPressureReservations.Count; i++)
         {
@@ -1272,6 +1283,15 @@ public class GameManager : MonoBehaviour
         RegisterDifficultyDirectorReservation(key);
 
         return true;
+    }
+
+    public void SetDebugQaMode(bool active)
+    {
+        debugQaModeActive = (Application.isEditor || Debug.isDebugBuild) && active;
+        if (debugQaModeActive)
+        {
+            pendingMapEventTutorials.Clear();
+        }
     }
 
     public void ReleaseEventPressure(string eventKey, float recoveryCooldown)

@@ -2898,6 +2898,38 @@ public class EnemyController : MonoBehaviour
         SpawnLevelThreeAwakeningBurst();
     }
 
+    public bool ForceStateForDebug(AnomalyState forcedState)
+    {
+        if (breachAbsorbed)
+        {
+            return false;
+        }
+
+        AnomalyState previous = currentState;
+        if (previous == forcedState)
+        {
+            stateTimer = 0f;
+            currentStateDuration = GetRandomDurationForState(currentState);
+            visualAnimator?.PlayStateTransition(previous, currentState);
+            OnStateEntered();
+            TriggerStatePulse();
+            SpawnStateTransitionBurst(currentState, false);
+            return true;
+        }
+
+        currentState = forcedState;
+        currentPattern = ResolvePatternForState(currentState);
+        stateTimer = 0f;
+        currentStateDuration = GetRandomDurationForState(currentState);
+        HandleStateTransition(previous, currentState);
+        TriggerStatePulse();
+        SpawnStateTransitionBurst(currentState, true);
+        OnStateEntered();
+        RegisterStateForPacing(currentState);
+        GlitchAudioManager.PlayEnemyState(currentState, transform.position);
+        return true;
+    }
+
     public void ForceLevelTwoStateForDebug()
     {
         if (breachAbsorbed)
@@ -4367,7 +4399,13 @@ public class EnemyController : MonoBehaviour
         CreateProjectile(position, direction, expansionShootProjectileColor, expansionShootProjectileSize, 1f);
     }
 
-    private void CreateProjectile(Vector2 position, Vector2 direction, Color projectileColor, Vector2 projectileSize, float speedMultiplier)
+    private void CreateProjectile(
+        Vector2 position,
+        Vector2 direction,
+        Color projectileColor,
+        Vector2 projectileSize,
+        float speedMultiplier,
+        WorldObjectAnimationFx.ProjectileStyle visualStyle = WorldObjectAnimationFx.ProjectileStyle.Direct)
     {
         GameObject go = new GameObject($"AnomalyProjectile_{projectileSerial++}");
         go.transform.position = new Vector3(position.x, position.y, 0f);
@@ -4389,7 +4427,8 @@ public class EnemyController : MonoBehaviour
             expansionShootProjectileSpeed * Mathf.Max(0.1f, speedMultiplier),
             expansionShootProjectileLifetime,
             obstacleMask,
-            gameManager);
+            gameManager,
+            visualStyle);
     }
 
     private Vector2 PickPhaseBlinkTarget()
@@ -4866,8 +4905,8 @@ public class EnemyController : MonoBehaviour
             Vector2 rightPerp = new Vector2(-rightDir.y, rightDir.x);
             Vector2 leftPos = pincerLeftSpawn + leftPerp * lane * Mathf.Max(0.2f, pincerVerticalSpread);
             Vector2 rightPos = pincerRightSpawn + rightPerp * lane * Mathf.Max(0.2f, pincerVerticalSpread);
-            CreateProjectile(leftPos, leftDir, pincerProjectileColor, expansionShootProjectileSize * 0.92f, pincerProjectileSpeedMultiplier);
-            CreateProjectile(rightPos, rightDir, pincerProjectileColor, expansionShootProjectileSize * 0.92f, pincerProjectileSpeedMultiplier);
+            CreateProjectile(leftPos, leftDir, pincerProjectileColor, expansionShootProjectileSize * 0.92f, pincerProjectileSpeedMultiplier, WorldObjectAnimationFx.ProjectileStyle.Pincer);
+            CreateProjectile(rightPos, rightDir, pincerProjectileColor, expansionShootProjectileSize * 0.92f, pincerProjectileSpeedMultiplier, WorldObjectAnimationFx.ProjectileStyle.Pincer);
         }
 
         PlayVisualAction(1f);
@@ -5308,7 +5347,7 @@ public class EnemyController : MonoBehaviour
             Vector2 inward = (orbitBarrageCenter - spawn).sqrMagnitude > 0.001f ? (orbitBarrageCenter - spawn).normalized : -radial;
             Vector2 direction = Rotate(inward, 58f * orbitBarrageDirectionSign);
             SpawnOrbitBarrageMuzzleCue(spawn, direction, i);
-            CreateProjectile(spawn, direction, orbitBarrageProjectileColor, expansionShootProjectileSize * 0.86f, orbitBarrageProjectileSpeedMultiplier);
+            CreateProjectile(spawn, direction, orbitBarrageProjectileColor, expansionShootProjectileSize * 0.86f, orbitBarrageProjectileSpeedMultiplier, WorldObjectAnimationFx.ProjectileStyle.Orbit);
         }
 
         SpawnLevelTwoRadialBurst(orbitBarrageCenter, radius * 0.55f, orbitBarrageProjectileColor, "OrbitBarrage");
@@ -6175,7 +6214,7 @@ public class EnemyController : MonoBehaviour
         {
             float angle = (Mathf.PI * 2f * i / count) + Random.Range(-0.08f, 0.08f);
             Vector2 dir = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
-            CreateProjectile(position + dir * 0.35f, dir, signalPossessionColor, expansionShootProjectileSize * 0.86f, 0.86f);
+            CreateProjectile(position + dir * 0.35f, dir, signalPossessionColor, expansionShootProjectileSize * 0.86f, 0.86f, WorldObjectAnimationFx.ProjectileStyle.Possessed);
         }
 
         Vector2 blinkDir = player != null ? ((Vector2)position - player.GetPosition()) : Random.insideUnitCircle;

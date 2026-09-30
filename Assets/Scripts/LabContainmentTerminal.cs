@@ -117,7 +117,10 @@ public class LabContainmentTerminal : MonoBehaviour
 
         if (ringRenderer == null)
         {
-            ringRenderer = CreateChildRenderer("TerminalRing", CircleSpriteProvider.Get(), 17);
+            ringRenderer = CreateChildRenderer(
+                "TerminalInteractionFrame",
+                CircleSpriteProvider.Get(),
+                17);
         }
 
         for (int i = 0; i < tickRenderers.Length; i++)
@@ -166,8 +169,7 @@ public class LabContainmentTerminal : MonoBehaviour
 
         if (ringRenderer != null)
         {
-            ringRenderer.transform.localScale = Vector3.one * Mathf.Lerp(0.92f, 1.18f, pulse);
-            ringRenderer.size = Vector2.one * 1.4f;
+            ringRenderer.transform.localScale = Vector3.one * Mathf.Lerp(1.18f, 1.52f, pulse);
             Color ring = Color.Lerp(accentColor, Color.white, activated ? 0.38f : progress * 0.24f);
             ring.a = activated ? 0.58f : Mathf.Lerp(0.14f, 0.42f, pulse + progress * 0.35f);
             ringRenderer.color = ring;

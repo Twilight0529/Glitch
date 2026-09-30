@@ -127,6 +127,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
     private float ruptureOuterRadius;
     private float ruptureOuterExtentX = 1f;
     private float ruptureOuterExtentY = 1f;
+    private bool debugThemeTransitionActive;
 
     public float ArenaWidth => arenaWidth;
     public float ArenaHeight => arenaHeight;
@@ -136,6 +137,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
     public float SectorPressureMultiplier => 1f + Mathf.Min(0.42f, (SectorLevel - 1) * 0.08f);
     public string ActiveThemeRule => GetThemeRule(activeTheme);
     public Color ActiveThemeAccent => GetThemeAccent(activeTheme);
+    public bool IsDebugThemeTransitionActive => debugThemeTransitionActive;
 
     private void Awake()
     {
@@ -193,6 +195,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
         ConfigureThemeMapEvents(obstaclesRoot, dynamicRoot);
         yield return null;
         ConfigureChaosSystems();
+        ConfigureGameplayReadability(obstaclesRoot, dynamicRoot);
     }
 
     // Este es el orden de montaje de una arena. Si algo visual aparece detrás o un evento no encuentra raíces,
@@ -210,6 +213,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
         // Los controladores de tema se agregan despues de crear la geometria para guardar referencias seguras.
         ConfigureThemeMapEvents(obstaclesRoot, dynamicRoot);
         ConfigureChaosSystems();
+        ConfigureGameplayReadability(obstaclesRoot, dynamicRoot);
     }
 
     private void PrepareThemeGeneration(ArenaTheme theme)
@@ -371,6 +375,123 @@ public class ProceduralArenaGenerator : MonoBehaviour
     {
         playerTransform = player;
         anomalyTransform = anomaly;
+    }
+
+    private void ConfigureGameplayReadability(Transform obstaclesRoot, Transform dynamicRoot)
+    {
+        GameplayReadabilityDirector director = GetComponent<GameplayReadabilityDirector>();
+        if (director == null)
+        {
+            director = gameObject.AddComponent<GameplayReadabilityDirector>();
+        }
+        director.Configure(this, obstaclesRoot, dynamicRoot);
+
+        if (Application.isEditor || Debug.isDebugBuild)
+        {
+            GameplayQaDirector qaDirector = GetComponent<GameplayQaDirector>();
+            if (qaDirector == null)
+            {
+                qaDirector = gameObject.AddComponent<GameplayQaDirector>();
+            }
+            qaDirector.Configure(this);
+        }
+    }
+
+    public bool TriggerPrimaryThemedEventForDebug(out string label)
+    {
+        MonoBehaviour[] components = GetComponents<MonoBehaviour>();
+        for (int i = 0; i < components.Length; i++)
+        {
+            if (components[i] is IDebugTriggerableEvent candidate && candidate.TriggerForDebug())
+            {
+                label = candidate.DebugEventLabel;
+                return true;
+            }
+        }
+
+        label = string.Empty;
+        return false;
+    }
+
+    public int GetDebugEventLabels(List<string> labels)
+    {
+        if (labels == null)
+        {
+            return 0;
+        }
+
+        labels.Clear();
+        MonoBehaviour[] components = GetComponents<MonoBehaviour>();
+        for (int i = 0; i < components.Length; i++)
+        {
+            if (components[i] is IDebugTriggerableEvent candidate && components[i].isActiveAndEnabled)
+            {
+                labels.Add(candidate.DebugEventLabel);
+            }
+        }
+
+        return labels.Count;
+    }
+
+    public bool TriggerDebugEventAt(int index, out string label)
+    {
+        label = string.Empty;
+        int current = 0;
+        MonoBehaviour[] components = GetComponents<MonoBehaviour>();
+        for (int i = 0; i < components.Length; i++)
+        {
+            if (!(components[i] is IDebugTriggerableEvent candidate) || !components[i].isActiveAndEnabled)
+            {
+                continue;
+            }
+
+            if (current++ != index)
+            {
+                continue;
+            }
+
+            label = candidate.DebugEventLabel;
+            return candidate.TriggerForDebug();
+        }
+
+        return false;
+    }
+
+    public bool ForceThemeForDebug(ArenaTheme theme)
+    {
+        if ((!Application.isEditor && !Debug.isDebugBuild) || debugThemeTransitionActive)
+        {
+            return false;
+        }
+
+        StartCoroutine(ForceThemeForDebugRoutine(theme));
+        return true;
+    }
+
+    private IEnumerator ForceThemeForDebugRoutine(ArenaTheme theme)
+    {
+        debugThemeTransitionActive = true;
+        InitializeRandom();
+        PrepareThemeGeneration(theme);
+
+        // Destroy se resuelve al final del frame. Esperar antes de recrear evita raices duplicadas
+        // y hace que la prueba mida el mismo montaje escalonado usado por una Breach real.
+        yield return null;
+
+        CreateGenerationRoots(out Transform boundsRoot, out Transform obstaclesRoot, out Transform dynamicRoot, out Transform detailsRoot);
+        CreateArenaBounds(boundsRoot);
+        yield return null;
+        CreateThemedObstacles(obstaclesRoot);
+        yield return null;
+        CreateThemedDynamicObstacles(dynamicRoot);
+        yield return null;
+        CreateThemedDetails(detailsRoot);
+        yield return null;
+        ConfigureThemeMapEvents(obstaclesRoot, dynamicRoot);
+        yield return null;
+        ConfigureChaosSystems();
+        ConfigureGameplayReadability(obstaclesRoot, dynamicRoot);
+        debugThemeTransitionActive = false;
     }
 
     private static string ToThemeLabel(ArenaTheme theme)

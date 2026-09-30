@@ -546,6 +546,9 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         // El cuerpo conserva el matiz del estado, pero parte de una base oscura
         // para separarse de los indicadores luminosos y reforzar su identidad.
         bodyColor = Color.Lerp(GlitchUiPalette.Surface, bodyColor, 0.48f);
+        // La identidad cromatica del estado permanece en el cuerpo, pero el final
+        // recupera un valor neutral para comunicar que la ventana especial se cierra.
+        bodyColor = Color.Lerp(bodyColor, GlitchUiPalette.Neutral, recovery * 0.14f);
         bodyColor = Color.Lerp(bodyColor, Color.white, transitionEnvelope * 0.42f + impactEnvelope * 0.58f);
         bodyColor.a = authoredBaseColor.a * Mathf.Clamp01(bodyAlpha);
         bodyRenderer.color = bodyColor;
@@ -867,7 +870,10 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         signatureRoot.localRotation = Quaternion.identity;
         signatureRoot.localScale = Vector3.one * tierScale * pop;
 
-        Color warning = Color.Lerp(GlitchUiPalette.Alert, accent, Mathf.SmoothStep(0.32f, 0.92f, elapsed));
+        // Toda entrada de estado comparte la misma gramatica: amarillo mientras prepara,
+        // rojo al entrar en ejecucion. El glifo conserva la identidad de cada ataque.
+        float dangerBlend = Mathf.SmoothStep(0.62f, 0.96f, elapsed);
+        Color warning = Color.Lerp(GlitchUiPalette.Alert, GlitchUiPalette.Danger, dangerBlend);
         signatureRingRenderer.transform.localPosition = Vector3.zero;
         signatureRingRenderer.transform.localRotation = Quaternion.Euler(0f, 0f, animationClock * 52f);
         signatureRingRenderer.transform.localScale = Vector3.one * 0.82f;

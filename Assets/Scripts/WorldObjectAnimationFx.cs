@@ -18,6 +18,14 @@ public sealed class WorldObjectAnimationFx : MonoBehaviour
         Projectile
     }
 
+    public enum ProjectileStyle
+    {
+        Direct,
+        Pincer,
+        Orbit,
+        Possessed
+    }
+
     private SpriteRenderer sourceRenderer;
     private SpriteRenderer bodyRenderer;
     private SpriteRenderer haloRenderer;
@@ -30,6 +38,7 @@ public sealed class WorldObjectAnimationFx : MonoBehaviour
     private Transform ornamentRoot;
 
     private VisualKind visualKind;
+    private ProjectileStyle projectileStyle;
     private Color tint = Color.white;
     private Vector3 requestedContentScale = Vector3.one;
     private float age;
@@ -73,6 +82,11 @@ public sealed class WorldObjectAnimationFx : MonoBehaviour
         visualKind = kind;
         tint = styleTint;
         ApplyOrnamentTint();
+    }
+
+    public void SetProjectileStyle(ProjectileStyle style)
+    {
+        projectileStyle = style;
     }
 
     public void SetLifetimeState(float currentAge, float totalLifetime)
