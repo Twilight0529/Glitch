@@ -30,6 +30,8 @@ public class CoreSpikeEventController : MonoBehaviour, IThemedEventStatusProvide
 
     private const string EventPressureKey = "ThemeCoreSpikes";
     private readonly List<CoreSpikeHazard> hazards = new List<CoreSpikeHazard>();
+    private readonly List<int> hazardGroups = new List<int>();
+    private int groupCount;
     private Transform centerTransform;
     private Transform obstaclesRoot;
     private GameManager gameManager;
@@ -96,14 +98,7 @@ public class CoreSpikeEventController : MonoBehaviour, IThemedEventStatusProvide
         }
 
         eventTimer += Time.deltaTime;
-        if (!hazardsArmed && eventTimer >= Mathf.Max(0.2f, telegraphSeconds))
-        {
-            hazardsArmed = true;
-            for (int i = 0; i < hazards.Count; i++)
-            {
-                hazards[i]?.SetArmed(true);
-            }
-        }
+        UpdateGroups();
 
         if (eventTimer >= Mathf.Max(0.2f, telegraphSeconds) + Mathf.Max(1f, activeSeconds))
         {
@@ -138,13 +133,16 @@ public class CoreSpikeEventController : MonoBehaviour, IThemedEventStatusProvide
         int desired = Random.Range(
             Mathf.Max(1, Mathf.Min(minSpikedObstacles, maxSpikedObstacles)),
             Mathf.Max(1, Mathf.Max(minSpikedObstacles, maxSpikedObstacles)) + 1);
-        int count = Mathf.Min(desired, candidates.Count);
+        // Select two alternating groups rather than making every selected prop lethal together.
+        int count = Mathf.Min(desired * 2, candidates.Count);
+        groupCount = count > 1 ? 2 : 1;
         for (int i = 0; i < count; i++)
         {
             CoreSpikeHazard hazard = CreateHazard(candidates[i]);
             if (hazard != null)
             {
                 hazards.Add(hazard);
+                hazardGroups.Add(i % groupCount);
             }
         }
 
@@ -158,10 +156,11 @@ public class CoreSpikeEventController : MonoBehaviour, IThemedEventStatusProvide
         eventActive = true;
         hazardsArmed = false;
         eventTimer = 0f;
+        UpdateGroups();
         gameManager.NotifyMapEventStarted(
             "core_spike_protocol",
             "PROTOCOLO DE ESPINAS",
-            "Los obstáculos amarillos están por cubrirse de espinas; al cambiar a rojo causarán daño. Rodéalos o atraviésalos mientras Phase Dash esté activo.");
+            "Las espinas se activan por turnos: amarillo avisa, rojo daña. Cuando un grupo se apaga, el siguiente comienza su aviso. Rodéalas o atraviesa los objetos con Phase Dash activo.");
         GlitchAudioManager.PlayCoreSpikes(transform.position);
     }
 
@@ -182,8 +181,9 @@ public class CoreSpikeEventController : MonoBehaviour, IThemedEventStatusProvide
                 continue;
             }
 
-            Vector2 position = candidate.bounds.center;
-            if (Vector2.Distance(position, playerPosition) < safety || Vector2.Distance(position, enemyPosition) < safety)
+            // Measure against the prop's surface, not its center (long props may touch an actor).
+            if (Vector2.Distance(candidate.ClosestPoint(playerPosition), playerPosition) < safety + hazardPadding ||
+                Vector2.Distance(candidate.ClosestPoint(enemyPosition), enemyPosition) < safety + hazardPadding)
             {
                 continue;
             }
@@ -237,10 +237,13 @@ public class CoreSpikeEventController : MonoBehaviour, IThemedEventStatusProvide
         {
             if (hazards[i] != null)
             {
+                hazards[i].SetPhase(CoreSpikePhase.Finished);
                 Destroy(hazards[i].gameObject);
             }
         }
         hazards.Clear();
+        hazardGroups.Clear();
+        groupCount = 0;
 
         if (eventActive && gameManager != null)
         {
@@ -260,6 +263,26 @@ public class CoreSpikeEventController : MonoBehaviour, IThemedEventStatusProvide
         if (gameManager == null) gameManager = FindAnyObjectByType<GameManager>();
         if (enemy == null) enemy = FindAnyObjectByType<EnemyController>();
         if (player == null) player = FindAnyObjectByType<PlayerController>();
+    }
+
+    private void UpdateGroups()
+    {
+        // Disarm old groups before enabling new ones, including frames that skip a boundary.
+        for (int i = 0; i < hazards.Count; i++)
+        {
+            CoreSpikePhase phase = CoreSpikeGroupTiming.GetPhase(eventTimer, hazardGroups[i], groupCount,
+                telegraphSeconds, activeSeconds);
+            if (phase != CoreSpikePhase.Active) hazards[i]?.SetPhase(phase);
+        }
+        hazardsArmed = false;
+        for (int i = 0; i < hazards.Count; i++)
+        {
+            CoreSpikePhase phase = CoreSpikeGroupTiming.GetPhase(eventTimer, hazardGroups[i], groupCount,
+                telegraphSeconds, activeSeconds);
+            if (phase != CoreSpikePhase.Active || hazards[i] == null) continue;
+            hazards[i].SetPhase(phase);
+            hazardsArmed = true;
+        }
     }
 
     private void Schedule(Vector2 range)
@@ -294,6 +317,7 @@ public class CoreSpikeHazard : MonoBehaviour
         warningColor = warning;
         activeColor = active;
         CreateSpikeVisuals(size);
+        SetPhase(CoreSpikePhase.Dormant);
     }
 
     public void SetArmed(bool value)
@@ -302,6 +326,16 @@ public class CoreSpikeHazard : MonoBehaviour
         if (trigger != null)
         {
             trigger.enabled = value;
+        }
+    }
+
+    public void SetPhase(CoreSpikePhase phase)
+    {
+        SetArmed(phase == CoreSpikePhase.Active);
+        bool visible = phase == CoreSpikePhase.Warning || phase == CoreSpikePhase.Active;
+        for (int i = 0; i < spikes.Count; i++)
+        {
+            if (spikes[i] != null) spikes[i].enabled = visible;
         }
     }
 

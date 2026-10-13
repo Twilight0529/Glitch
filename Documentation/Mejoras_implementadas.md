@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 8. Espinas de Core por grupos
+
+El evento reparte los obstáculos seleccionados entre dos grupos que se activan por turnos. Cada grupo tiene su propio aviso amarillo; solo el grupo activo aparece en rojo y causa daño. El anterior se desarma antes de encender el siguiente, incluso si un frame atraviesa el límite entre fases. Los obstáculos del grupo que todavía no avisa conservan su aspecto original.
+
+Se conserva la duración total y la reserva de presión: con los valores actuales son 1,5 segundos de aviso, 2,75 activos, otro aviso de 1,5 y otros 2,75 activos. El aviso adicional consume parte del tiempo activo anterior. Se eligen hasta dos veces los candidatos configurados, pero como máximo una mitad está armada simultáneamente. Con un solo candidato se mantiene el ciclo anterior.
+
+La distancia de seguridad al seleccionar obstáculos se mide desde su superficie, incluido el margen de espinas, para no considerar seguro un bloque largo cuyo centro esté lejos pero cuyo borde esté junto al jugador. Validación: trece pruebas de fases, límites, grupos y duraciones cortas; compilación conjunta aprobada. Pendiente ajustar la sensación de peligro en Play Mode.
+
 ## 6. Duración contextual de las compuertas de Lab
 
 Antes de iniciar un cierre, Lab compara el área alcanzable desde el jugador con el área que quedaría al desplegar ambas compuertas. Incluye también los destinos de compuertas ya anunciadas para no evaluar cada cierre como si fuera el único. Usa copias de la grilla de navegación; probar o rechazar una posición no modifica la geometría real.
