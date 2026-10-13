@@ -199,6 +199,11 @@ public class PlayerController : MonoBehaviour
     public float SpeedBoostTimeRemaining => Mathf.Max(0f, speedBoostTimer);
     public float CompactTimeRemaining => Mathf.Max(0f, compactTimer);
     public float PhaseDashTimeRemaining => Mathf.Max(0f, phaseDashPowerupTimer);
+    // Shared by the HUD and the existing visual rig; gameplay time keeps the
+    // warning frozen while paused, just like the powerup duration itself.
+    public float PhaseDashExpiryWarningStrength => phaseDashPowerupTimer > 0f && phaseDashPowerupTimer <= 3f
+        ? 0.2f + 0.7f * (0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.PI * 4f))
+        : 0f;
     public float ShieldTimeNormalized => Mathf.Clamp01(shieldTimer / Mathf.Max(0.1f, shieldDisplayDuration));
     public float SpeedBoostTimeNormalized => Mathf.Clamp01(speedBoostTimer / Mathf.Max(0.1f, speedBoostDisplayDuration));
     public float CompactTimeNormalized => Mathf.Clamp01(compactTimer / Mathf.Max(0.1f, compactDisplayDuration));

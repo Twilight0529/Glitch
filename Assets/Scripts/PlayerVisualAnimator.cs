@@ -432,7 +432,7 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
         }
         if (owner.HasPhaseDashPowerup)
         {
-            color = Color.Lerp(color, GlitchUiPalette.Special, 0.14f);
+            color = Color.Lerp(color, GlitchUiPalette.Special, 0.14f + owner.PhaseDashExpiryWarningStrength * 0.30f);
         }
         if (owner.IsFirewallBurstReady)
         {
@@ -462,6 +462,7 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
             float shellScale = 1.105f + shellPulse * 0.018f + dash * 0.055f + parry * 0.035f;
             shellRenderer.transform.localScale = Vector3.one * shellScale;
             Color shellColor = Color.Lerp(GlitchUiPalette.Surface, accent, 0.72f);
+            shellColor = Color.Lerp(shellColor, GlitchUiPalette.Alert, owner.PhaseDashExpiryWarningStrength * 0.85f);
             shellColor = Color.Lerp(shellColor, Color.white, parrySuccess * 0.52f + firewallBurst * 0.68f);
             shellColor.a = Mathf.Clamp01(color.a * Mathf.Lerp(0.64f, 0.94f, Mathf.Clamp01(shellPulse + readiness * 0.25f)));
             shellRenderer.color = shellColor;

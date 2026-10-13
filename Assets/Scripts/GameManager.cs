@@ -5845,12 +5845,14 @@ public class GameManager : MonoBehaviour
         if (playerController.HasPhaseDashPowerup)
         {
             DrawPowerupTimerRow(panel, ref y, "PHASE DASH", playerController.PhaseDashTimeRemaining,
-                playerController.PhaseDashTimeNormalized, PhaseDashSpriteProvider.Get(), GlitchUiPalette.Information, s);
+                playerController.PhaseDashTimeNormalized, PhaseDashSpriteProvider.Get(), GlitchUiPalette.Information, s,
+                playerController.PhaseDashExpiryWarningStrength);
         }
     }
 
-    private void DrawPowerupTimerRow(Rect panel, ref float y, string label, float remaining, float normalized, Sprite iconSprite, Color accent, float s)
+    private void DrawPowerupTimerRow(Rect panel, ref float y, string label, float remaining, float normalized, Sprite iconSprite, Color accent, float s, float expiryWarning = 0f)
     {
+        accent = Color.Lerp(accent, GlitchUiPalette.Alert, Mathf.Clamp01(expiryWarning));
         float rowHeight = 27f * s;
         Rect icon = new Rect(panel.x + (9f * s), y + (3f * s), 18f * s, 18f * s);
         Color previous = GUI.color;
@@ -5863,7 +5865,12 @@ public class GameManager : MonoBehaviour
 
         string value = $"{label}  {remaining:0.0}s";
         Rect text = new Rect(icon.xMax + (7f * s), y, panel.xMax - icon.xMax - (13f * s), 18f * s);
-        GUI.Label(text, value, BuildFittedSingleLineStyle(hudChipStyle, value, text.width, text.height, Mathf.RoundToInt(8f * s)));
+        GUIStyle timerStyle = BuildFittedSingleLineStyle(hudChipStyle, value, text.width, text.height, Mathf.RoundToInt(8f * s));
+        if (expiryWarning > 0f)
+        {
+            timerStyle.normal.textColor = accent;
+        }
+        GUI.Label(text, value, timerStyle);
 
         Rect bar = new Rect(text.x, y + (19f * s), text.width, 3f * s);
         DrawSolidRect(bar, new Color(0.06f, 0.08f, 0.13f, 0.94f));

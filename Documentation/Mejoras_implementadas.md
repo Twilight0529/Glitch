@@ -2,6 +2,12 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 17. Aviso de vencimiento de Phase Dash
+
+Durante los últimos tres segundos, el icono, la barra y el tiempo del HUD pulsan hacia amarillo de advertencia. La carcasa existente del jugador comparte esa señal a dos pulsos por segundo; el cuerpo permanece visible. El aviso usa tiempo de gameplay, de modo que se congela al pausar junto con la duración del powerup. No cambia el enfriamiento, las colisiones ni la duración de Phase Dash.
+
+Validación: compilación de gameplay, revisión de los límites del aviso (solo mientras está activo y quedan como máximo tres segundos) y del uso de la misma señal en HUD y personaje. Pendiente observar el contraste y la lectura en Play Mode.
+
 ## 1. Rutas transitables y nodos accesibles
 
 El generador comprueba la conectividad antes de crear cada obstáculo. Una grilla conservadora reserva espacio para el jugador y recorre las celdas libres mediante BFS, sin atravesar esquinas en diagonal. Se rechazan las colocaciones que dividen el espacio libre. Los obstáculos compuestos se comprueban como conjunto; los cuadrados girados usan su huella de colisión rotada.
