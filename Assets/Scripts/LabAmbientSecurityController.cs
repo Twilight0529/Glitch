@@ -117,6 +117,8 @@ public class LabAmbientSecurityController : MonoBehaviour, IDebugTriggerableEven
             return;
         }
 
+        if (gameManager.ShouldDelayAmbientMapEvents) return;
+
         if (activeGates.Count >= Mathf.Max(1, maxActiveGates))
         {
             return;

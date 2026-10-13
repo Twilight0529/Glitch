@@ -111,6 +111,8 @@ public class RuptureAmbientRiftController : MonoBehaviour, IDebugTriggerableEven
             return;
         }
 
+        if (gameManager.ShouldDelayAmbientMapEvents) return;
+
         if (GetLiveBurstCount() >= Mathf.Max(1, maxActiveRiftBursts))
         {
             return;

@@ -126,6 +126,8 @@ public class StorageAmbientCraneController : MonoBehaviour, IDebugTriggerableEve
             return;
         }
 
+        if (gameManager.ShouldDelayAmbientMapEvents) return;
+
         operationTimer -= Time.deltaTime;
         if (operationTimer <= 0f)
         {

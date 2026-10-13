@@ -282,6 +282,8 @@ public class GameManager : MonoBehaviour
     public string CurrentMapEventLabel => GetMapEventLabel();
     public string CurrentMapEventHint => GetThemedEventHint();
     public bool IsBreachSensitiveSuppressionActive => breachSensitiveSuppressionTimer > 0f;
+    public bool ShouldDelayAmbientMapEvents => IsBreachSensitiveSuppressionActive || sectorArrivalWindow.IsActive(SurvivalTime);
+    private readonly SectorArrivalWindow sectorArrivalWindow = new SectorArrivalWindow();
     public bool AreBossSpecialStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && (devForceBossLevelTwo || devForceBossLevelThree || SurvivalTime >= Mathf.Max(0f, bossSpecialStatesUnlockTime));
     public bool AreBossLevelTwoStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && (devForceBossLevelTwo || devForceBossLevelThree || SurvivalTime >= Mathf.Max(bossSpecialStatesUnlockTime, bossLevelTwoUnlockTime));
     public bool AreBossLevelThreeStatesUnlocked => IsRunActive && !IsBreachSensitiveSuppressionActive && (devForceBossLevelThree || SurvivalTime >= Mathf.Max(bossLevelTwoUnlockTime, bossLevelThreeUnlockTime));
@@ -1323,6 +1325,8 @@ public class GameManager : MonoBehaviour
 
     public void NotifySectorArrivalForDifficultyDirector()
     {
+        // Ambient machinery must respect arrival even when the hybrid director is disabled.
+        sectorArrivalWindow.Extend(SurvivalTime, sectorArrivalRecoverySeconds);
         if (!enableHybridDifficultyDirector)
         {
             return;
@@ -1816,6 +1820,7 @@ public class GameManager : MonoBehaviour
 
     private void InitializeDifficultyDirector()
     {
+        sectorArrivalWindow.Clear();
         directorRecoveryUntil = 0f;
         sectorSignatureBeatPending = false;
         sectorSignatureBeatDeadline = 0f;

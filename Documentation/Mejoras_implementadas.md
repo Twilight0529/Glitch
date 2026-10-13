@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 4. Margen al llegar a un sector
+
+Ya existían una llegada de tres segundos antes de reinsertar al enemigo, una gracia de reinserción y seis segundos de recuperación del director. Sin embargo, las compuertas ambientales de Lab, las grúas de Storage y las grietas pasivas de Rupture podían iniciar operaciones sin consultar esas protecciones.
+
+Ahora esos sistemas posponen nuevos eventos durante la supresión sensible de Breach y la ventana de llegada configurada mediante `sectorArrivalRecoverySeconds`. La ventana usa el tiempo de gameplay, se congela al pausar y se limpia al iniciar otra run. También funciona cuando el director híbrido está deshabilitado. Las operaciones ya iniciadas conservan su finalización normal: no se congela una carga a mitad de movimiento.
+
+La mejora no añade otra pausa al control del jugador ni retrasa el primer mapa de una run. Las herramientas de debug pueden seguir forzando eventos para probarlos. Validación: siete pruebas del reloj de protección, límites y reinicio, compilación conjunta y revisión de los tres puntos de programación ambiental. Pendiente observar la llegada a cada sector en Play Mode.
+
 ## 7. Conservar pasos durante SpinMotion de Rupture
 
 La formación orbital comprueba su próximo paso físico completo antes de mover los obstáculos. Una grilla reutilizable valida que las huellas barridas, con sus rotaciones y curvatura, mantengan conectado el espacio transitable. Si el paso cerraría un corredor o alcanzaría una pared, se detiene antes de aplicarlo y desacelera para invertir el giro, con una espera mínima de 0,4 segundos entre correcciones.
