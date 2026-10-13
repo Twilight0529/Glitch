@@ -2,6 +2,16 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 7. Conservar pasos durante SpinMotion de Rupture
+
+La formación orbital comprueba su próximo paso físico completo antes de mover los obstáculos. Una grilla reutilizable valida que las huellas barridas, con sus rotaciones y curvatura, mantengan conectado el espacio transitable. Si el paso cerraría un corredor o alcanzaría una pared, se detiene antes de aplicarlo y desacelera para invertir el giro, con una espera mínima de 0,4 segundos entre correcciones.
+
+La protección directa del jugador se verifica aparte contra su collider real y las formas rotadas de los objetos móviles. El contacto con paredes u objetos estáticos no bloquea la formación por quedar fuera de la holgura conservadora de navegación. Phase Dash intangible conserva su excepción física. No se eliminan props ni se teletransportan: se conserva el radio inicial para evitar el salto causado por recortarlo al empezar el evento.
+
+El movimiento de SpinMotion se aplica en FixedUpdate; las demás variantes de Rupture conservan su funcionamiento. Si la distribución inicial ya quedó desconectada por cambios anteriores, se pospone SpinMotion antes de anunciarlo y se restauran los controladores de objetos. La comprobación es conservadora: puede detener o invertir el giro antes de que un paso se estreche demasiado.
+
+Validación: doce pruebas de conectividad, espacio del jugador, obstáculos diagonales y límites de holgura; compilación conjunta aprobada. Mil comprobaciones de la grilla reutilizada con 21 obstáculos tomaron aproximadamente 80 ms en la ejecución local (no representa el coste completo del evento). Pendiente Play Mode para revisar fluidez, duración de correcciones y frecuencia efectiva de aparición.
+
 ## 9. Dirección del reorden magnético de Storage
 
 La idea original hablaba de campos magnéticos que empujan o atraen al jugador. En la versión actual, el evento activo de Storage es el reorden magnético de carga; el código de campos circulares no se instancia. La mejora se aplica a ese sistema real: pequeñas flechas junto a los objetos indican su desplazamiento durante el aviso amarillo y acompañan el movimiento en rojo. Al regresar, apuntan a su posición inicial.

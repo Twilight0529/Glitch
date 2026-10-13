@@ -27,6 +27,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         public Transform transform;
         public Rigidbody2D rigidbody;
         public DynamicObstacleController dynamicController;
+        public Collider2D collider;
         public float obstacleRadius;
         public float spinMultiplier;
     }
@@ -42,6 +43,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         public float orbitSpeedMultiplier;
         public bool orbitEnabled;
         public bool dynamicWasEnabled;
+        public Vector2[] footprintCorners;
         public SpriteRenderer[] renderers;
         public Color[] baseColors;
     }
@@ -142,6 +144,13 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
     private float echoSuccessTimer;
     private RuptureEventVariant currentVariant = RuptureEventVariant.None;
     private ThemedEventSignatureFx signatureFx;
+    private RuptureOrbitSafety orbitSafety;
+    private readonly List<Rect> sweptFootprints = new List<Rect>();
+    private float nextSafetyTurnTime;
+    private bool sweepWithinBounds;
+    private bool sweepKeepsPlayerClear;
+    private Collider2D spinPlayerCollider;
+    private readonly Vector2[] sampleFootprintCorners = new Vector2[4];
     private const string EventPressureKey = "ThemeRuptureSpin";
 
     public string ActiveThemedEventLabel
@@ -360,6 +369,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
                 transform = target,
                 rigidbody = target.GetComponent<Rigidbody2D>(),
                 dynamicController = target.GetComponent<DynamicObstacleController>(),
+                collider = col,
                 obstacleRadius = Mathf.Max(col.bounds.extents.x, col.bounds.extents.y),
                 spinMultiplier = Random.Range(spinMultiplierRange.x, spinMultiplierRange.y)
             };
@@ -447,16 +457,33 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
                     baseColors = null
                 };
                 ConfigureOrbitSnapshot(ref snapshot);
+                snapshot.footprintCorners = CaptureFootprintCorners(binding);
                 snapshot.baseColors = CaptureBaseColors(snapshot.renderers);
 
                 snapshots.Add(snapshot);
             }
+
+            orbitSafety = new RuptureOrbitSafety(new Rect(interiorLeft, interiorBottom,
+                interiorRight - interiorLeft, interiorTop - interiorBottom), 0.55f);
+            nextSafetyTurnTime = 0f;
+            if (playerController == null) playerController = FindAnyObjectByType<PlayerController>();
+            spinPlayerCollider = playerController != null ? playerController.GetComponent<Collider2D>() : null;
 
             if (snapshots.Count == 0)
             {
                 ReleaseEventPressure();
                 EndEvent(restoreControllers: true);
                 currentVariant = RuptureEventVariant.None;
+                ScheduleNextEvent();
+                return;
+            }
+
+            BuildSweptFootprints(0f, 0f);
+            if (!orbitSafety.IsConnected(sweptFootprints))
+            {
+                // Existing dynamic geometry may have changed since generation.
+                // Do not announce a rotating event that cannot safely start.
+                EndEvent(restoreControllers: true);
                 ScheduleNextEvent();
                 return;
             }
@@ -546,8 +573,6 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
             float response = Mathf.Abs(targetSpeed) > Mathf.Abs(currentAngularSpeedDeg) ? angularAcceleration : angularDeceleration;
             currentAngularSpeedDeg = Mathf.MoveTowards(currentAngularSpeedDeg, targetSpeed, response * dt);
 
-            currentAngleDeg = Mathf.Repeat(currentAngleDeg + currentAngularSpeedDeg * dt, 360f);
-            ApplyAngle(currentAngleDeg);
             ApplyActiveColorPulse(progress);
         }
 
@@ -555,6 +580,124 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         {
             EndEvent(restoreControllers: true);
             ScheduleNextEvent();
+        }
+    }
+
+    private void FixedUpdate()
+    {
+        if (!eventActive || currentVariant != RuptureEventVariant.SpinMotion ||
+            Mathf.Abs(currentAngularSpeedDeg) < 0.001f) return;
+
+        float nextAngle = currentAngleDeg + currentAngularSpeedDeg * Time.fixedDeltaTime;
+        BuildSweptFootprints(currentAngleDeg, nextAngle);
+        if (!sweepWithinBounds || !sweepKeepsPlayerClear ||
+            (orbitSafety != null && !orbitSafety.IsConnected(sweptFootprints)))
+        {
+            // Turn the whole formation before its swept colliders seal a passage.
+            // No obstacle teleports, disappears or pushes through a rejected step.
+            if (Time.time >= nextSafetyTurnTime)
+            {
+                targetAngularSpeedDeg = -Mathf.Sign(currentAngularSpeedDeg) *
+                    Mathf.Abs(targetAngularSpeedDeg);
+                nextSafetyTurnTime = Time.time + 0.4f;
+            }
+            currentAngularSpeedDeg = Mathf.MoveTowards(currentAngularSpeedDeg, 0f,
+                angularDeceleration * Time.fixedDeltaTime);
+            return;
+        }
+        currentAngleDeg = nextAngle;
+        ApplyAngle(currentAngleDeg);
+    }
+
+    private static Vector2[] CaptureFootprintCorners(ObstacleBinding binding)
+    {
+        BoxCollider2D box = binding.collider as BoxCollider2D;
+        Vector2[] corners = new Vector2[4];
+        if (box != null)
+        {
+            Vector2 half = box.size * 0.5f;
+            for (int i = 0; i < 4; i++)
+            {
+                Vector2 local = box.offset + new Vector2((i & 1) == 0 ? -half.x : half.x,
+                    (i & 2) == 0 ? -half.y : half.y);
+                corners[i] = (Vector2)box.transform.TransformPoint(local) -
+                    (Vector2)binding.transform.position;
+            }
+        }
+        else
+        {
+            Bounds bounds = binding.collider.bounds;
+            for (int i = 0; i < 4; i++)
+                corners[i] = new Vector2((i & 1) == 0 ? bounds.min.x : bounds.max.x,
+                    (i & 2) == 0 ? bounds.min.y : bounds.max.y) -
+                    (Vector2)binding.transform.position;
+        }
+        return corners;
+    }
+
+    private void BuildSweptFootprints(float fromAngle, float toAngle)
+    {
+        sweptFootprints.Clear();
+        sweepWithinBounds = true;
+        sweepKeepsPlayerClear = true;
+        // Connectivity uses generous navigation clearance, while direct sweep
+        // collision uses the actual collider. Wall contact cannot stop all orbits.
+        bool checkPlayer = spinPlayerCollider != null && spinPlayerCollider.enabled && !spinPlayerCollider.isTrigger;
+        Bounds playerBounds = checkPlayer ? spinPlayerCollider.bounds : default;
+        Rect playerFootprint = new Rect(playerBounds.min.x, playerBounds.min.y,
+            playerBounds.size.x, playerBounds.size.y);
+        Vector2 center = centerTransform.position;
+        for (int i = 0; i < snapshots.Count; i++)
+        {
+            ObstacleSnapshot snapshot = snapshots[i];
+            if (snapshot.binding.transform == null || snapshot.binding.collider == null ||
+                !snapshot.binding.collider.enabled) continue;
+            if (!snapshot.orbitEnabled)
+            {
+                Bounds bounds = snapshot.binding.collider.bounds;
+                sweptFootprints.Add(new Rect(bounds.min.x, bounds.min.y, bounds.size.x, bounds.size.y));
+                continue;
+            }
+            Vector2 min = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
+            Vector2 max = new Vector2(float.NegativeInfinity, float.NegativeInfinity);
+            float cornerRadius = 0f;
+            foreach (Vector2 corner in snapshot.footprintCorners)
+                cornerRadius = Mathf.Max(cornerRadius, corner.magnitude);
+            float delta = Mathf.Abs(toAngle - fromAngle) * Mathf.Deg2Rad * snapshot.orbitSpeedMultiplier;
+            // Any point on the sweep lies within this distance of the nearest
+            // of the three sampled footprints (quarter of the angular step).
+            float playerSweepPadding = (Mathf.Max(snapshot.orbitRadiusX, snapshot.orbitRadiusY) +
+                cornerRadius * Mathf.Abs(snapshot.binding.spinMultiplier)) * delta * 0.25f + 0.001f;
+            for (int sample = 0; sample < 3; sample++)
+            {
+                float angle = Mathf.Lerp(fromAngle, toAngle, sample * 0.5f);
+                float orbitAngle = snapshot.orbitStartAngleRad +
+                    angle * Mathf.Deg2Rad * snapshot.orbitSpeedMultiplier;
+                Vector2 position = center + new Vector2(Mathf.Cos(orbitAngle) * snapshot.orbitRadiusX,
+                    Mathf.Sin(orbitAngle) * snapshot.orbitRadiusY);
+                float rotation = angle * Mathf.Deg2Rad * snapshot.orbitSpeedMultiplier *
+                    snapshot.binding.spinMultiplier;
+                for (int cornerIndex = 0; cornerIndex < snapshot.footprintCorners.Length; cornerIndex++)
+                {
+                    Vector2 corner = snapshot.footprintCorners[cornerIndex];
+                    Vector2 point = position + new Vector2(corner.x * Mathf.Cos(rotation) - corner.y * Mathf.Sin(rotation),
+                        corner.x * Mathf.Sin(rotation) + corner.y * Mathf.Cos(rotation));
+                    sampleFootprintCorners[cornerIndex] = point;
+                    min = Vector2.Min(min, point);
+                    max = Vector2.Max(max, point);
+                }
+                if (checkPlayer && RuptureOrbitSafety.IntersectsPlayerFootprint(
+                    sampleFootprintCorners, playerFootprint, playerSweepPadding))
+                    sweepKeepsPlayerClear = false;
+            }
+            // Bound arc curvature between samples, including rotation of the object itself.
+            float arcPadding = (Mathf.Max(snapshot.orbitRadiusX, snapshot.orbitRadiusY) +
+                cornerRadius * snapshot.binding.spinMultiplier * snapshot.binding.spinMultiplier) * delta * delta / 8f + 0.001f;
+            sweptFootprints.Add(Rect.MinMaxRect(min.x - arcPadding, min.y - arcPadding,
+                max.x + arcPadding, max.y + arcPadding));
+            if (min.x - arcPadding < interiorLeft + boundsPadding || max.x + arcPadding > interiorRight - boundsPadding ||
+                min.y - arcPadding < interiorBottom + boundsPadding || max.y + arcPadding > interiorTop - boundsPadding)
+                sweepWithinBounds = false;
         }
     }
 
@@ -627,9 +770,8 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
                 Mathf.Cos(orbitAngle) * snapshot.orbitRadiusX,
                 Mathf.Sin(orbitAngle) * snapshot.orbitRadiusY);
             Vector2 targetPosition = center + orbitalOffset;
-            float margin = binding.obstacleRadius + boundsPadding;
-            targetPosition.x = Mathf.Clamp(targetPosition.x, interiorLeft + margin, interiorRight - margin);
-            targetPosition.y = Mathf.Clamp(targetPosition.y, interiorBottom + margin, interiorTop - margin);
+            // The batch sweep already checked the actual rotated collider footprint
+            // against the walls. Clamping centres here would invalidate that check.
 
             if (binding.rigidbody != null && binding.rigidbody.bodyType == RigidbodyType2D.Kinematic)
             {
@@ -672,7 +814,8 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
             return;
         }
 
-        float safeRadius = Mathf.Min(normalizedRadius, 0.98f);
+        // Preserve the initial position; clipping the radius caused a first-frame jump.
+        float safeRadius = normalizedRadius;
         snapshot.orbitRadiusX = availableX * safeRadius;
         snapshot.orbitRadiusY = availableY * safeRadius;
         snapshot.orbitStartAngleRad = Mathf.Atan2(normalizedY, normalizedX);
@@ -792,6 +935,7 @@ public class RuptureSpinEventController : MonoBehaviour, IThemedEventStatusProvi
         }
 
         snapshots.Clear();
+        orbitSafety = null;
         ClearRiftEchoes();
         ClearEchoPortals();
         ClearSignature();
