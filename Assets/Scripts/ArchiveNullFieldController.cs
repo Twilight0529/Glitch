@@ -44,7 +44,6 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
     [Header("Null Field")]
     [SerializeField] private int anchorCount = 3;
     [SerializeField] private float anchorRadius = 0.52f;
-    [SerializeField] private float visualRadius = 2.8f;
     [SerializeField] private float influenceRadius = 3.6f;
     [SerializeField] private float playerPullSpeed = 4.6f;
     [SerializeField] private float enemyPullSpeed = 3.8f;
@@ -93,6 +92,7 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
     private readonly Dictionary<int, Anchor> pickupAnchors = new Dictionary<int, Anchor>();
     private readonly Dictionary<int, Anchor> cloneAnchors = new Dictionary<int, Anchor>();
     private const string EventPressureKey = "ThemeArchiveNullField";
+    private static Sprite fieldRangeSprite;
 
     public string ActiveThemedEventLabel => eventActive ? "POZO GRAVITACIONAL" : string.Empty;
     public string ActiveThemedEventHint => eventActive ? "Las anomalías arrastran la arena con ellas" : string.Empty;
@@ -262,10 +262,9 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
         GameObject ringGo = new GameObject("NullAnchorGravityFrame");
         ringGo.transform.SetParent(root.transform, false);
         SpriteRenderer ring = ringGo.AddComponent<SpriteRenderer>();
-        ring.sprite = CircleSpriteProvider.Get();
-        ring.drawMode = SpriteDrawMode.Sliced;
+        ring.sprite = GetFieldRangeSprite();
         ring.sortingOrder = 16;
-        ring.transform.localScale = Vector3.one * visualRadius * 2f;
+        ring.transform.localScale = Vector3.one * influenceRadius * 2f;
         ring.color = telegraphColor;
 
         GameObject coreGo = new GameObject("NullAnchorCore");
@@ -287,6 +286,49 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
             seed = Random.Range(0f, 12f),
             orbitDirection = Random.value < 0.5f ? -1f : 1f
         });
+    }
+
+    // A single quiet surface communicates both the real entry radius and the
+    // force falloff. Its outside edge stays fixed even while the core pulses.
+    private static Sprite GetFieldRangeSprite()
+    {
+        if (fieldRangeSprite != null)
+        {
+            return fieldRangeSprite;
+        }
+
+        const int size = 256;
+        Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        {
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp,
+            name = "ArchiveFieldRangeTexture"
+        };
+        Color[] pixels = new Color[size * size];
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                Vector2 normalized = new Vector2((x + 0.5f) / size * 2f - 1f, (y + 0.5f) / size * 2f - 1f);
+                float distance = normalized.magnitude;
+                float edgeFeather = Mathf.Clamp01((1f - distance) * size * 0.5f);
+                float border = Mathf.InverseLerp(0.978f, 0.991f, distance) * edgeFeather;
+                float strength = EvaluateFieldFalloff(distance);
+                float alpha = Mathf.Max(strength * 0.22f, border * 0.75f);
+                pixels[y * size + x] = new Color(1f, 1f, 1f, alpha);
+            }
+        }
+
+        texture.SetPixels(pixels);
+        texture.Apply(false, true);
+        fieldRangeSprite = Sprite.Create(texture, new Rect(0f, 0f, size, size), Vector2.one * 0.5f, size, 0, SpriteMeshType.FullRect);
+        fieldRangeSprite.name = "ArchiveFieldRange";
+        return fieldRangeSprite;
+    }
+
+    internal static float EvaluateFieldFalloff(float normalizedDistance)
+    {
+        return Mathf.SmoothStep(0f, 1f, 1f - Mathf.Clamp01(normalizedDistance));
     }
 
     private void UpdateAnchorMotion(bool active)
@@ -344,10 +386,9 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
             if (anchor.ring != null)
             {
                 Color c = active ? activeColor : telegraphColor;
-                c.a = active ? Mathf.Lerp(0.15f, 0.32f, pulse) : Mathf.Lerp(0.08f, 0.18f, pulse) * phase;
+                c.a = active ? 0.70f : Mathf.Lerp(0.38f, 0.68f, phase);
                 anchor.ring.color = c;
-                anchor.ring.transform.localScale = Vector3.one * visualRadius * 2f * Mathf.Lerp(1.00f, 0.86f, pulse);
-                anchor.ring.transform.localRotation = Quaternion.Euler(0f, 0f, Time.time * anchor.orbitDirection * (active ? 24f : 10f));
+                anchor.ring.transform.localScale = Vector3.one * influenceRadius * 2f;
             }
 
             if (anchor.core != null)
@@ -693,7 +734,7 @@ public class ArchiveNullFieldController : MonoBehaviour, IThemedEventStatusProvi
         Vector2 inward = (selectedAnchor.position - position) / selectedDistance;
         Vector2 tangent = new Vector2(-inward.y, inward.x) * selectedAnchor.orbitDirection;
         float normalizedDistance = Mathf.Clamp01(selectedDistance / fieldRadius);
-        float edgeStrength = Mathf.SmoothStep(0f, 1f, 1f - normalizedDistance);
+        float edgeStrength = EvaluateFieldFalloff(normalizedDistance);
         float fieldStrength = persistentCapture ? Mathf.Max(0.62f, edgeStrength) : edgeStrength;
         float targetRadius = targetRadiusOverride > 0f
             ? targetRadiusOverride

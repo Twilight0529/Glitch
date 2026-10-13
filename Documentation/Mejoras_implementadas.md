@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 10. Alcance legible de los campos de Archive
+
+El dibujo anterior usaba un radio independiente de 2,8 unidades que además se encogía al pulsar, mientras la fuerza alcanzaba 3,6 unidades. Ahora el borde permanece fijo en `influenceRadius`, incluyendo sus modificaciones en Caos. Un relleno tenue usa el mismo factor de caída radial que la física: se intensifica hacia el centro. El amarillo identifica el aviso y el rojo el campo activo; solo respira el núcleo.
+
+Un sprite procedural compartido y cacheado reemplaza la superficie anterior. No se añaden capas decorativas ni se cambian las fuerzas, duraciones o radios efectivos. El borde representa el alcance de entrada del jugador: los objetos ya capturados pueden seguir orbitando fuera, y los obstáculos conservan su regla de captura más amplia.
+
+Validación: compilación conjunta y revisión del uso del mismo radio y factor de caída en dibujo y fuerza. Pendiente comprobar los campos superpuestos y el contraste en Play Mode.
+
 ## 4. Margen al llegar a un sector
 
 Ya existían una llegada de tres segundos antes de reinsertar al enemigo, una gracia de reinserción y seis segundos de recuperación del director. Sin embargo, las compuertas ambientales de Lab, las grúas de Storage y las grietas pasivas de Rupture podían iniciar operaciones sin consultar esas protecciones.
