@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 11. Preparación y ejecución reales del jefe
+
+La firma visual del jefe antes pasaba de amarillo a rojo mediante un reloj decorativo de entrada. Ese reloj no coincidía con los ataques que se repiten dentro del mismo estado. Ahora Expansion Shoot, Phase Blink, Pincer Barrage, Signal Jam, Orbit Barrage y Map Recompile exponen si su aviso real está activo. La firma reaparece en amarillo durante cada carga y muestra rojo al ejecutarse; su deformación también sigue esas fases en vez del porcentaje transcurrido del estado.
+
+Se conserva el estilo y los sprites del slime. Los seis ataques revisados no aparentan una recuperación al final del reloj del estado si todavía están activos. Los demás estados mantienen sus señales nativas y su identidad; esta mejora no añade nuevas ventanas de vulnerabilidad ni altera duraciones o ataques.
+
+Validación: compilación conjunta y revisión de cada flag o telegraph que alimenta la presentación. Pendiente comparar señales y repetición de cargas en Play Mode. La idea 13 sigue pendiente de definir: el aturdimiento actual suspende la persecución, pero las habilidades continúan actualizándose, por lo que no debe presentarse como una oportunidad segura general.
+
 ## 10. Alcance legible de los campos de Archive
 
 El dibujo anterior usaba un radio independiente de 2,8 unidades que además se encogía al pulsar, mientras la fuerza alcanzaba 3,6 unidades. Ahora el borde permanece fijo en `influenceRadius`, incluyendo sus modificaciones en Caos. Un relleno tenue usa el mismo factor de caída radial que la física: se intensifica hacia el centro. El amarillo identifica el aviso y el rojo el campo activo; solo respira el núcleo.

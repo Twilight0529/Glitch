@@ -335,6 +335,24 @@ public class EnemyController : MonoBehaviour
         ? Mathf.Clamp01(stateTimer / currentStateDuration)
         : 0f;
     public Color CurrentStateColor => GetStateColor(currentState);
+    // Lectura de los avisos que realmente usa cada habilidad, sin otra cuenta regresiva visual.
+    public bool IsPreparingAttack
+    {
+        get
+        {
+            switch (currentState)
+            {
+                case AnomalyState.ExpansionShoot:
+                    return expansionTelegraphRoot != null && expansionTelegraphRoot.activeSelf;
+                case AnomalyState.PhaseBlink: return phaseBlinkCharging;
+                case AnomalyState.PincerBarrage: return pincerBarrageCharging;
+                case AnomalyState.SignalJam: return signalJamCharging;
+                case AnomalyState.OrbitBarrage: return orbitBarrageCharging;
+                case AnomalyState.MapRecompile: return mapRecompileCharging;
+                default: return false;
+            }
+        }
+    }
     public SpriteRenderer BodyRenderer => visualAnimator != null && visualAnimator.BodyRenderer != null
         ? visualAnimator.BodyRenderer
         : ownRenderer;

@@ -60,6 +60,9 @@ public static class EnemyStatePresentationCatalog
         }
 
         public bool ShowsSignature => glyph != Glyph.None && glyph != Glyph.Pursuit;
+        public bool HasAttackPreparation => glyph == Glyph.Expansion || glyph == Glyph.PhaseBlink
+            || glyph == Glyph.Pincer || glyph == Glyph.SignalJam || glyph == Glyph.Orbit
+            || glyph == Glyph.Recompile;
     }
 
     public static Profile Get(EnemyController.AnomalyState state)

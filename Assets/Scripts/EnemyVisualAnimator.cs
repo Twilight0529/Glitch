@@ -58,6 +58,7 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
     private Vector2 smoothedLookDirection = Vector2.right;
     private bool presentationVisible = true;
     private EnemyController.AnomalyState lastState;
+    private bool wasPreparingAttack;
     private float signatureTimer;
     private float signatureDuration;
     private float motionEchoCooldown;
@@ -311,6 +312,13 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         float anticipation = 1f - Mathf.SmoothStep(0f, 0.22f, stateProgress);
         float execution = Mathf.SmoothStep(0.16f, 0.42f, stateProgress) * (1f - Mathf.SmoothStep(0.72f, 1f, stateProgress));
         float recovery = Mathf.SmoothStep(0.76f, 1f, stateProgress);
+        if (profile.HasAttackPreparation)
+        {
+            // Los ataques se repiten dentro del estado: su aviso real manda sobre el reloj de entrada.
+            anticipation = owner.IsPreparingAttack ? 1f : 0f;
+            execution = 1f - anticipation;
+            recovery = 0f;
+        }
         float idle = Mathf.Sin(animationClock * 2.8f);
         float fast = Mathf.Sin(animationClock * profile.rhythm);
         float transitionEnvelope = Mathf.Sin((1f - Mathf.Clamp01(transitionPulse)) * Mathf.PI) * transitionStrength;
@@ -837,6 +845,7 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
 
     private void ConfigureStateSignature(EnemyController.AnomalyState state)
     {
+        wasPreparingAttack = false;
         EnemyStatePresentationCatalog.Profile profile = EnemyStatePresentationCatalog.Get(state);
         signatureDuration = Mathf.Max(0f, profile.signatureSeconds);
         signatureTimer = profile.ShowsSignature ? signatureDuration : 0f;
@@ -853,7 +862,13 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
             return;
         }
 
-        bool visible = profile.ShowsSignature && signatureTimer > 0f && presentationVisible;
+        bool preparing = profile.HasAttackPreparation && owner.IsPreparingAttack;
+        if (wasPreparingAttack && !preparing)
+        {
+            signatureTimer = Mathf.Max(signatureTimer, 0.22f);
+        }
+        wasPreparingAttack = preparing;
+        bool visible = profile.ShowsSignature && (signatureTimer > 0f || preparing) && presentationVisible;
         signatureRingRenderer.enabled = visible;
         signatureGlyphRenderer.enabled = visible;
         if (!visible)
@@ -864,16 +879,18 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         float remaining = Mathf.Clamp01(signatureTimer / Mathf.Max(0.01f, signatureDuration));
         float elapsed = 1f - remaining;
         float fade = Mathf.SmoothStep(0f, 1f, Mathf.Min(elapsed * 8f, remaining * 3.4f));
+        if (preparing)
+        {
+            fade = 0.88f + Mathf.Sin(animationClock * 8f) * 0.12f;
+        }
         float tierScale = profile.tier >= 3 ? 0.86f : profile.tier == 2 ? 0.93f : 1f;
         float pop = 0.82f + Mathf.Sin(Mathf.Clamp01(elapsed * 1.7f) * Mathf.PI * 0.5f) * 0.18f;
         signatureRoot.localPosition = new Vector3(0f, 1.13f + Mathf.Sin(animationClock * 4.4f) * 0.025f * amplitude, 0f);
         signatureRoot.localRotation = Quaternion.identity;
         signatureRoot.localScale = Vector3.one * tierScale * pop;
 
-        // Toda entrada de estado comparte la misma gramatica: amarillo mientras prepara,
-        // rojo al entrar en ejecucion. El glifo conserva la identidad de cada ataque.
-        float dangerBlend = Mathf.SmoothStep(0.62f, 0.96f, elapsed);
-        Color warning = Color.Lerp(GlitchUiPalette.Alert, GlitchUiPalette.Danger, dangerBlend);
+        // Amarillo solo durante el aviso real; entrar en un estado no implica una carga.
+        Color warning = preparing ? GlitchUiPalette.Alert : GlitchUiPalette.Danger;
         signatureRingRenderer.transform.localPosition = Vector3.zero;
         signatureRingRenderer.transform.localRotation = Quaternion.Euler(0f, 0f, animationClock * 52f);
         signatureRingRenderer.transform.localScale = Vector3.one * 0.82f;
