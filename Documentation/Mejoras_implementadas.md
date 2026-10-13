@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 3. Coordinar combinaciones de amenazas
+
+La admisión de eventos y la supresión de ataques mayores comparten el umbral de presión configurado del director. Antes, un evento como Core Spikes podía empezar encima de un ataque mayor porque su entrada exigía 0,8 de presión, mientras el bloqueo inverso empezaba en 0,6. Ahora se considera también la suma de los eventos ya reservados: varias amenazas pequeñas no pueden superar ese umbral encima de un estado mayor. Breach conserva su excepción de escape.
+
+La reserva de Containment Pulse incluye los peligros adicionales de sectores avanzados. Si se interrumpe la creación de nuevos pulsos, mantiene la presión hasta que terminan los peligros que ya aparecieron. Luego libera la reserva, sin dejarla ocupada hasta un vencimiento artificial.
+
+Validación: doce pruebas independientes de umbrales, combinaciones acumuladas, duraciones, escalado de sectores y valores límite; compilación conjunta de gameplay aprobada. Pendiente observar las combinaciones en Play Mode.
+
 ## 12. Evitar repeticiones inmediatas de estados
 
 La selección normal recuerda cuándo terminó cada especial y lo excluye durante diez segundos desde su salida, incluso si entre ambos usos aparece BasePursuit. Se configura mediante `specialStateRepeatCooldown` en el apartado Anomaly State Machine del enemigo. La memoria se reinicia al comenzar el ritmo de una run. Las prioridades, desbloqueos y pesos de los estados disponibles permanecen vigentes, y WeaveHunter conserva su restricción específica de 45 segundos.

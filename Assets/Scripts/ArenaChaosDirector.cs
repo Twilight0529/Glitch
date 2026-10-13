@@ -625,12 +625,9 @@ public class ArenaChaosDirector : MonoBehaviour
 
     private float EstimatePulseEventDuration()
     {
-        int maxCount = Mathf.Max(1, Mathf.Max(pulseHazardsMin, pulseHazardsMax));
-        return Mathf.Max(0f, pulsePreWarningSeconds)
-            + Mathf.Max(0f, pulseTelegraphSeconds)
-            + Mathf.Max(0f, pulseActiveSeconds)
-            + Mathf.Max(0f, pulseSpawnStagger) * maxCount
-            + 0.35f;
+        return EventThreatScheduling.EstimatePulseDuration(
+            Mathf.Max(pulseHazardsMin, pulseHazardsMax), GetSectorExtraHazardCount(),
+            pulsePreWarningSeconds, pulseTelegraphSeconds, pulseActiveSeconds, pulseSpawnStagger);
     }
 
     private void TrySpawnPowerup()
@@ -1760,9 +1757,8 @@ public class ArenaChaosDirector : MonoBehaviour
             if (gameManager.IsBreachSensitiveSuppressionActive || breachEventActive || breachTransitionActive || IsBossLevelTwoStateActive())
             {
                 SchedulePulseEvent();
-                ReleaseDirectorEventPressure(PulseEventPressureKey, pulseEventPressureCooldown);
-                pulseEventActive = false;
-                yield break;
+                // Already spawned hazards still exist: retain pressure until they finish.
+                break;
             }
 
             float ringAngle = basePhase + ((360f / Mathf.Max(1, count)) * i);
@@ -1817,7 +1813,7 @@ public class ArenaChaosDirector : MonoBehaviour
 
         if (spawnedHazards > 0)
         {
-            float hazardLifetime = Mathf.Max(0f, pulseTelegraphSeconds) + Mathf.Max(0f, pulseActiveSeconds);
+            float hazardLifetime = Mathf.Max(0.1f, pulseTelegraphSeconds) + Mathf.Max(0.1f, pulseActiveSeconds);
             float elapsedSinceLastSpawn = Time.time - lastHazardSpawnTime;
             float remainingLifetime = Mathf.Max(0f, hazardLifetime - elapsedSinceLastSpawn);
             if (remainingLifetime > 0f)
@@ -1826,6 +1822,7 @@ public class ArenaChaosDirector : MonoBehaviour
             }
         }
 
+        ReleaseDirectorEventPressure(PulseEventPressureKey, pulseEventPressureCooldown);
         pulseEventActive = false;
     }
 

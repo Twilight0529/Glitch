@@ -294,7 +294,7 @@ public class GameManager : MonoBehaviour
     public float CurrentEventPressureLoad => GetCurrentEventPressureLoad();
     public float CurrentEventPressureCap => GetCurrentEventPressureCap();
     public bool ShouldSuppressBossMajorStates => enableHybridDifficultyDirector &&
-        (GetCurrentEventPressureLoad() >= Mathf.Max(0.1f, bossMajorSuppressionPressure) || SurvivalTime < directorRecoveryUntil);
+        (EventThreatScheduling.RequiresBossRecovery(GetCurrentEventPressureLoad(), bossMajorSuppressionPressure) || SurvivalTime < directorRecoveryUntil);
 
     public float CurrentBehaviorChangeInterval
     {
@@ -1380,7 +1380,8 @@ public class GameManager : MonoBehaviour
         bool breachEvent = eventKey == "ChaosBreach";
         float duration = Mathf.Max(0f, expectedDuration);
 
-        if (!breachEvent && Mathf.Max(0f, pressureCost) >= 0.8f &&
+        if (!breachEvent && EventThreatScheduling.RequiresBossRecovery(
+                pressureCost, bossMajorSuppressionPressure, GetCurrentEventPressureLoad()) &&
             enemyController != null && enemyController.IsCurrentStateMajor)
         {
             return false;
