@@ -377,7 +377,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private float stuckTargetMinDistance = 1.4f;
     [SerializeField] private float stuckObstacleProbeRadius = 1.45f;
     [SerializeField] private float stuckEscapeDistance = 2.9f;
-    [SerializeField] private float stuckEscapeVelocityBoost = 1.35f;
+    [SerializeField] private float stuckEscapeHoldSeconds = 1.1f;
     [SerializeField, Range(1, 6)] private int failedRecoveriesBeforeDestroyer = 3;
     [SerializeField] private float emergencyDestroyerDuration = 2f;
 
@@ -567,10 +567,14 @@ public class EnemyController : MonoBehaviour
 
     private float stuckTimer;
     private Vector2 stuckCheckPosition;
-    private Vector2 stuckLastStrategicTarget;
-    private float stuckLastTargetDistance;
     private int stuckConsecutiveChecks;
     private int failedStuckRecoveries;
+    private bool stuckEscapeActive;
+    private Vector2 stuckEscapeTarget;
+    private Vector2 stuckEscapeOrigin;
+    private float stuckEscapeTimer;
+    private Vector2 stuckProgressAnchor;
+    private float stuckProgressTimer;
     private Vector2 pendingBlockedRepathGoal;
     private float pendingBlockedRepathTimer;
     private bool hasPendingBlockedRepathGoal;
@@ -748,8 +752,7 @@ public class EnemyController : MonoBehaviour
         InitializePacingDirector();
 
         stuckCheckPosition = rb.position;
-        stuckLastStrategicTarget = player != null ? player.GetPosition() : rb.position;
-        stuckLastTargetDistance = Vector2.Distance(rb.position, stuckLastStrategicTarget);
+        stuckProgressAnchor = rb.position;
         if (localVersusControl)
         {
             SelectNextLocalVersusState();
@@ -762,6 +765,7 @@ public class EnemyController : MonoBehaviour
 
     private void OnDisable()
     {
+        ResetStuckEscape();
         DestroySplitCloneImmediate();
         DestroySplitMergeTelegraphImmediate();
         DestroyLevelTwoTelegraphsImmediate();
@@ -843,6 +847,7 @@ public class EnemyController : MonoBehaviour
 
         if (gameManager == null || player == null || gameManager.IsGameOver || !gameManager.IsRunActive)
         {
+            ResetStuckEscape();
             rb.linearVelocity = Vector2.zero;
             UpdateStatePulseVisual();
             return;
@@ -885,12 +890,7 @@ public class EnemyController : MonoBehaviour
         if (levelThreeStateController != null &&
             levelThreeStateController.TryGetMovementOverride(out Vector2 levelThreeVelocity))
         {
-            Vector2 overrideTarget = levelThreeStateController.GetMovementOverrideTarget(player.GetPosition());
-            UpdateStuckDetection(overrideTarget);
-            if (currentState == AnomalyState.Destroyer)
-            {
-                return;
-            }
+            ResetStuckEscape();
 
             rb.linearVelocity = Vector2.MoveTowards(
                 rb.linearVelocity,
@@ -905,11 +905,17 @@ public class EnemyController : MonoBehaviour
 
         if (splitMergeInProgress && splitClone != null)
         {
+            ResetStuckEscape();
             TickOwnerSplitMergeMovement();
             UpdateSplitMergeTelegraphVisual();
             return;
         }
         HideSplitMergeTelegraphVisual();
+
+        if (TickStuckEscape())
+        {
+            return;
+        }
 
         // Reconstruye la grilla periodicamente porque eventos y el estado destructor pueden mover o quitar bloqueos.
         gridRefreshTimer += Time.deltaTime;
@@ -1066,6 +1072,10 @@ public class EnemyController : MonoBehaviour
         }
 
         UpdateStuckDetection(strategicTarget);
+        if (TickStuckEscape())
+        {
+            return;
+        }
 
         float speed = GetCurrentStateMoveSpeed();
 
@@ -1245,6 +1255,7 @@ public class EnemyController : MonoBehaviour
 
     public void EnableLocalVersusControl(PlayerController controlledTarget)
     {
+        ResetStuckEscape();
         localVersusControl = true;
         if (controlledTarget != null)
         {
@@ -1672,6 +1683,7 @@ public class EnemyController : MonoBehaviour
 
     private void HandleStateTransition(AnomalyState previous, AnomalyState next)
     {
+        ResetStuckEscape();
         visualAnimator?.PlayStateTransition(previous, next);
         if (previous != next)
         {
@@ -2131,6 +2143,7 @@ public class EnemyController : MonoBehaviour
 
     public void AbsorbIntoBreach(Vector2 breachPosition)
     {
+        ResetStuckEscape();
         breachAbsorbed = true;
         breachLureTimer = 0f;
         rb.linearVelocity = Vector2.zero;
@@ -6710,6 +6723,9 @@ public class EnemyController : MonoBehaviour
     {
         repathTimer = 0f;
         lastPathGoal = goalWorld;
+        // Nunca conservar una ruta vieja cuando la geometria movil invalida la nueva.
+        pathWorld.Clear();
+        pathIndex = 0;
 
         Vector2Int start = WorldToCell(rb.position);
         Vector2Int goal = WorldToCell(goalWorld);
@@ -6883,23 +6899,19 @@ public class EnemyController : MonoBehaviour
         stuckCheckPosition = rb.position;
 
         float targetDistance = Vector2.Distance(rb.position, strategicTarget);
-        float targetShift = Vector2.Distance(strategicTarget, stuckLastStrategicTarget);
-        float distanceProgress = stuckLastTargetDistance - targetDistance;
-        Vector2 towardTarget = strategicTarget - rb.position;
-        float forwardSpeed = towardTarget.sqrMagnitude > 0.001f
-            ? Vector2.Dot(rb.linearVelocity, towardTarget.normalized)
-            : 0f;
-        bool stableTarget = targetShift <= Mathf.Max(0.55f, targetRepathThreshold * 1.5f);
+        // Un rodeo puede alejarse del jugador: medir avance fisico, no distancia al objetivo.
+        stuckProgressTimer += Mathf.Max(0.05f, stuckCheckInterval);
+        float netProgress = Vector2.Distance(rb.position, stuckProgressAnchor);
+        if (netProgress >= Mathf.Max(0.65f, agentRadius * 2f))
+        {
+            stuckProgressAnchor = rb.position;
+            stuckProgressTimer = 0f;
+        }
         float progressThreshold = Mathf.Max(0.14f, stuckDistanceThreshold);
-        bool oscillatingWithoutProgress = stableTarget &&
-            moved >= progressThreshold &&
-            distanceProgress < 0.035f &&
-            forwardSpeed < 0.30f;
+        bool oscillatingWithoutProgress = stuckProgressTimer >= 1.5f;
         bool lowProgress = moved < progressThreshold || oscillatingWithoutProgress;
         bool needsChase = targetDistance >= Mathf.Max(0.45f, stuckTargetMinDistance * 0.55f);
         bool nearObstacle = IsNearBlockingObstacle(Mathf.Max(0.3f, stuckObstacleProbeRadius));
-        stuckLastStrategicTarget = strategicTarget;
-        stuckLastTargetDistance = targetDistance;
 
         if (!nearObstacle || !needsChase)
         {
@@ -6919,7 +6931,6 @@ public class EnemyController : MonoBehaviour
 
         if (stuckConsecutiveChecks >= Mathf.Max(1, stuckChecksBeforeRecovery))
         {
-            failedStuckRecoveries++;
             if (currentState != AnomalyState.Destroyer &&
                 failedStuckRecoveries >= Mathf.Max(1, failedRecoveriesBeforeDestroyer))
             {
@@ -6961,20 +6972,89 @@ public class EnemyController : MonoBehaviour
             desired = lastMoveDirection.sqrMagnitude > 0.0001f ? lastMoveDirection : Vector2.right;
         }
 
-        Vector2 escapeDir = ApplyObstacleRepulsion(desired.normalized);
+        // Buscar una salida completa, incluyendo retroceso; el steering habitual favorece
+        // demasiado el frente y puede repetir exactamente la direccion que acaba de fallar.
+        Vector2 escapeDir = Vector2.zero;
+        float bestScore = float.NegativeInfinity;
+        float escapeDistance = 0f;
+        int samples = Mathf.Max(16, steeringSampleCount);
+        for (int i = 0; i < samples; i++)
+        {
+            Vector2 candidate = Rotate(desired.normalized, i * (360f / samples));
+            Vector2 endpoint = ClampToArena(rb.position + candidate * Mathf.Max(0.8f, stuckEscapeDistance));
+            candidate = (endpoint - rb.position).normalized;
+            float distance = Vector2.Distance(rb.position, endpoint);
+            float clearance = GetBlockingClearance(rb.position, candidate, distance);
+            float safeDistance = Mathf.Min(distance, clearance - 0.08f);
+            if (safeDistance < Mathf.Max(0.35f, agentRadius))
+            {
+                continue;
+            }
+            float score = safeDistance + Vector2.Dot(candidate, desired.normalized) * 0.2f;
+            if (score > bestScore)
+            {
+                bestScore = score;
+                escapeDir = candidate;
+                escapeDistance = safeDistance;
+            }
+        }
         if (escapeDir.sqrMagnitude < 0.0001f)
         {
-            escapeDir = desired.normalized;
+            failedStuckRecoveries++;
+            BuildNavigationGrid();
+            RebuildPathTo(strategicTarget);
+            return;
         }
-        escapeDir.Normalize();
 
-        Vector2 escapeTarget = ClampToArena(rb.position + escapeDir * Mathf.Max(0.8f, stuckEscapeDistance));
-        BuildNavigationGrid();
-        RebuildPathTo(escapeTarget);
-
-        float burstSpeed = Mathf.Max(baseMoveSpeed * Mathf.Max(1f, stuckEscapeVelocityBoost), baseMoveSpeed + 0.4f);
-        rb.linearVelocity = escapeDir * burstSpeed;
+        stuckEscapeOrigin = rb.position;
+        stuckEscapeTarget = rb.position + escapeDir * escapeDistance;
+        stuckEscapeTimer = Mathf.Max(0.35f, stuckEscapeHoldSeconds);
+        stuckEscapeActive = true;
+        ResetBlockedRepathHysteresis();
         lastMoveDirection = escapeDir;
+    }
+
+    private bool TickStuckEscape()
+    {
+        if (!stuckEscapeActive)
+        {
+            return false;
+        }
+        Vector2 delta = stuckEscapeTarget - rb.position;
+        stuckEscapeTimer -= Time.deltaTime;
+        bool reached = delta.magnitude <= Mathf.Max(0.12f, waypointReachDistance);
+        bool blocked = !reached && GetBlockingClearance(rb.position, delta.normalized,
+            Mathf.Min(delta.magnitude, 0.45f)) < 0.06f;
+        if (reached || blocked || stuckEscapeTimer <= 0f || currentState == AnomalyState.Destroyer)
+        {
+            bool progressed = Vector2.Distance(rb.position, stuckEscapeOrigin) >= Mathf.Max(0.4f, agentRadius);
+            failedStuckRecoveries = progressed ? 0 : failedStuckRecoveries + 1;
+            stuckEscapeActive = false;
+            stuckCheckPosition = rb.position;
+            stuckProgressAnchor = rb.position;
+            stuckProgressTimer = 0f;
+            stuckTimer = 0f;
+            BuildNavigationGrid();
+            RebuildPathTo(ClampToArena(GetStrategicTarget()));
+            return false;
+        }
+
+        Vector2 direction = delta.normalized;
+        rb.linearVelocity = Vector2.MoveTowards(rb.linearVelocity,
+            direction * GetCurrentStateMoveSpeed(), velocityResponsiveness * sectorResponseMultiplier * Time.deltaTime);
+        lastMoveDirection = direction;
+        return true;
+    }
+
+    private void ResetStuckEscape()
+    {
+        stuckEscapeActive = false;
+        stuckTimer = 0f;
+        stuckConsecutiveChecks = 0;
+        failedStuckRecoveries = 0;
+        stuckCheckPosition = rb != null ? rb.position : Vector2.zero;
+        stuckProgressAnchor = stuckCheckPosition;
+        stuckProgressTimer = 0f;
     }
 
     private void EnterEmergencyDestroyer()
@@ -6991,6 +7071,7 @@ public class EnemyController : MonoBehaviour
         currentStateDuration = Mathf.Max(0.5f, emergencyDestroyerDuration);
         stuckConsecutiveChecks = 0;
         failedStuckRecoveries = 0;
+        stuckEscapeActive = false;
         ResetBlockedRepathHysteresis();
         HandleStateTransition(previous, currentState);
         TriggerStatePulse();

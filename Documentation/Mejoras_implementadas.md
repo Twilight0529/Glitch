@@ -2,6 +2,16 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 2. Recuperación del enemigo atascado
+
+La salida de un atasco conserva un destino temporal, en lugar de dejar que la persecución lo sobrescriba en el siguiente frame. Se prueban direcciones alrededor del enemigo mediante CircleCast, incluido el retroceso, con su radio de colisión y los límites de la arena. Se mantiene la velocidad del estado actual. Al llegar, agotarse el tiempo o bloquearse la salida se reconstruye la ruta hacia el jugador.
+
+La detección distingue el desplazamiento real del acercamiento al jugador: rodear un obstáculo puede alejar al enemigo de su objetivo sin constituir un atasco. Destroyer de emergencia permanece como último recurso después de recuperaciones fallidas. Si A* no encuentra una ruta, se descarta la anterior para evitar seguir waypoints obsoletos.
+
+El escape se cancela al cambiar de estado, entrar en Breach, desactivar al enemigo o pasar a control versus. Los movimientos especiales de nivel tres y la fusión de Split mantienen su propio control. La animación continúa actualizándose mientras el enemigo escapa.
+
+Validación: compilación de gameplay y revisión del orden de actualización, limpieza de estados y comprobación de salida con el radio del enemigo. Pendiente Play Mode para comprobar esquinas, obstáculos móviles y tasas de activación de Destroyer en Rupture.
+
 ## 17. Aviso de vencimiento de Phase Dash
 
 Durante los últimos tres segundos, el icono, la barra y el tiempo del HUD pulsan hacia amarillo de advertencia. La carcasa existente del jugador comparte esa señal a dos pulsos por segundo; el cuerpo permanece visible. El aviso usa tiempo de gameplay, de modo que se congela al pausar junto con la duración del powerup. No cambia el enfriamiento, las colisiones ni la duración de Phase Dash.
