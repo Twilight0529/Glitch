@@ -1710,6 +1710,7 @@ public class ArenaChaosDirector : MonoBehaviour
         indicator.transform.SetParent(runtimeRoot, false);
         activeBreachIndicatorFx = indicator.AddComponent<ArenaBreachDirectionIndicatorFx>();
         activeBreachIndicatorFx.Configure(player.transform, breachPosition, Mathf.Max(0.4f, breachTelegraphSeconds), breachColor);
+        activeBreachIndicatorFx.ConfigureSweepWarning(arena, activeBreachSweepDirection);
     }
 
     private IEnumerator SpawnPulseEventRoutine()

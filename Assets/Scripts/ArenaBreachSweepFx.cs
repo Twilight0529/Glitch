@@ -49,7 +49,8 @@ public class ArenaBreachSweepFx : MonoBehaviour
 
         direction = sweepDirection.sqrMagnitude > 0.001f ? sweepDirection.normalized : Vector2.right;
         perpendicular = new Vector2(-direction.y, direction.x);
-        tint = color;
+        // The exit keeps its own identity; the advancing lethal front is always danger red.
+        tint = GlitchUiPalette.Danger;
         duration = Mathf.Max(0.1f, seconds);
 
         float travel = Mathf.Abs(direction.x) > 0.5f ? arenaSize.x : arenaSize.y;
@@ -365,7 +366,8 @@ public class ArenaBreachSweepFx : MonoBehaviour
 
         if (coreLineRenderer != null)
         {
-            coreLineRenderer.color = new Color(1f, 0.9f, 1f, Mathf.Clamp01(guideAlpha * Mathf.Lerp(0.82f, 1.25f, pulse)));
+            Color hot = Color.Lerp(tint, Color.white, 0.55f);
+            coreLineRenderer.color = new Color(hot.r, hot.g, hot.b, Mathf.Clamp01(guideAlpha * Mathf.Lerp(0.82f, 1.25f, pulse)));
         }
 
         if (hotEdgeRenderer != null)
@@ -423,7 +425,7 @@ public class ArenaBreachSweepFx : MonoBehaviour
             sr.size = horizontal
                 ? new Vector2(0.55f, Mathf.Lerp(0.06f, 0.16f, pulse))
                 : new Vector2(Mathf.Lerp(0.06f, 0.16f, pulse), 0.55f);
-            sr.color = new Color(1f, 0.78f, 0.96f, alpha * Mathf.Lerp(0.3f, 0.9f, pulse));
+            sr.color = GlitchUiPalette.WithAlpha(Color.Lerp(tint, Color.white, 0.4f), alpha * Mathf.Lerp(0.3f, 0.9f, pulse));
         }
     }
 
@@ -453,7 +455,7 @@ public class ArenaBreachSweepFx : MonoBehaviour
                 : new Vector2(Mathf.Lerp(0.04f, 0.16f, flow), Mathf.Lerp(0.08f, 0.36f, pulse));
 
             float alpha = lifeAlpha * Mathf.Lerp(0.12f, 0.55f, Mathf.PerlinNoise(seed + 9.4f, Time.time * 5.5f));
-            sr.color = new Color(1f, Mathf.Lerp(0.45f, 0.82f, pulse), 0.98f, alpha);
+            sr.color = GlitchUiPalette.WithAlpha(Color.Lerp(tint, Color.white, Mathf.Lerp(0.15f, 0.45f, pulse)), alpha);
         }
     }
 

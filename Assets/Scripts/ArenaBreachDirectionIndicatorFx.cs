@@ -18,6 +18,48 @@ public class ArenaBreachDirectionIndicatorFx : MonoBehaviour
     private SpriteRenderer beaconRenderer;
     private SpriteRenderer beaconCoreRenderer;
     private SpriteRenderer beaconBackRenderer;
+    private SpriteRenderer sweepOriginRenderer;
+    private readonly SpriteRenderer[] sweepHeads = new SpriteRenderer[6];
+    private Vector2 sweepOrigin;
+    private Vector2 sweepDirection;
+    private Vector2 sweepPerpendicular;
+    private float sweepSpan;
+
+    // Independent of the player-to-exit arrows: identifies where the lethal front starts.
+    public void ConfigureSweepWarning(ProceduralArenaGenerator arena, Vector2 direction)
+    {
+        if (arena == null || sweepOriginRenderer != null || direction.sqrMagnitude < 0.001f)
+        {
+            return;
+        }
+
+        sweepDirection = direction.normalized;
+        sweepPerpendicular = new Vector2(-sweepDirection.y, sweepDirection.x);
+        bool horizontal = Mathf.Abs(sweepDirection.x) > 0.5f;
+        float travel = horizontal ? arena.ArenaWidth : arena.ArenaHeight;
+        const float warningInset = 0.85f;
+        sweepSpan = Mathf.Max(0.5f, (horizontal ? arena.ArenaHeight : arena.ArenaWidth) - warningInset * 2f);
+        // The lethal sweep starts outside the arena because the exit is inset.
+        // Show its entry edge inside the playable bounds so the warning stays visible.
+        Vector2 arenaCenter = arena.transform.position;
+        sweepOrigin = arenaCenter - sweepDirection * Mathf.Max(0f, travel * 0.5f - warningInset);
+
+        sweepOriginRenderer = CreateArrowPart(transform, "SweepOriginWarning", Vector3.zero,
+            Quaternion.identity, Vector3.one, 23);
+        sweepOriginRenderer.drawMode = SpriteDrawMode.Sliced;
+        sweepOriginRenderer.size = horizontal ? new Vector2(0.12f, sweepSpan) : new Vector2(sweepSpan, 0.12f);
+        sweepOriginRenderer.transform.position = sweepOrigin;
+        sweepOriginRenderer.color = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.65f);
+
+        float angle = Mathf.Atan2(sweepDirection.y, sweepDirection.x) * Mathf.Rad2Deg;
+        for (int i = 0; i < sweepHeads.Length; i++)
+        {
+            sweepHeads[i] = CreateArrowPart(transform, $"SweepAdvanceChevron_{i}", Vector3.zero,
+                Quaternion.Euler(0f, 0f, angle + (i % 2 == 0 ? -40f : 40f)),
+                new Vector3(0.48f, 0.09f, 1f), 24);
+            sweepHeads[i].color = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.8f);
+        }
+    }
 
     public void Configure(Transform player, Vector2 target, float lifeSeconds, Color color)
     {
@@ -45,6 +87,7 @@ public class ArenaBreachDirectionIndicatorFx : MonoBehaviour
 
         float lifeN = Mathf.Clamp01(age / Mathf.Max(0.01f, lifetime));
         float fade = fadingOut ? Mathf.Clamp01((lifetime - age) / 0.35f) : Mathf.Sin(Mathf.Clamp01(lifeN) * Mathf.PI * 0.5f);
+        UpdateSweepWarning();
         Vector2 playerPos = playerTransform.position;
         Vector2 toBreach = breachPosition - playerPos;
         Vector2 dir = toBreach.sqrMagnitude > 0.001f ? toBreach.normalized : Vector2.right;
@@ -101,6 +144,28 @@ public class ArenaBreachDirectionIndicatorFx : MonoBehaviour
         if (age >= lifetime)
         {
             Destroy(gameObject);
+        }
+    }
+
+    private void UpdateSweepWarning()
+    {
+        if (sweepOriginRenderer == null)
+        {
+            return;
+        }
+
+        float fade = fadingOut ? Mathf.Clamp01((lifetime - age) / 0.35f) : Mathf.Clamp01(age / 0.18f);
+        float pulse = 0.5f + 0.5f * Mathf.Sin(age * 6f);
+        sweepOriginRenderer.color = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, Mathf.Lerp(0.45f, 0.75f, pulse) * fade);
+        // A short motion toward the exit teaches the direction without covering the arena.
+        float flow = Mathf.Repeat(age * 0.7f, 1f);
+        for (int i = 0; i < sweepHeads.Length; i++)
+        {
+            Vector2 position = sweepOrigin + sweepPerpendicular * ((i / 2 - 1) * sweepSpan * 0.3f)
+                + sweepDirection * Mathf.Lerp(0.65f, 1.35f, flow);
+            position += sweepPerpendicular * (i % 2 == 0 ? 0.15f : -0.15f);
+            sweepHeads[i].transform.position = position;
+            sweepHeads[i].color = GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, (0.85f - flow * 0.35f) * fade);
         }
     }
 

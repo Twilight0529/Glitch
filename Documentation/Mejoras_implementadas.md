@@ -2,6 +2,12 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 5. Mostrar el origen y la dirección del barrido de Breach
+
+El aviso previo identifica el borde de entrada del barrido con una banda amarilla dentro de los límites visibles y tres flechas animadas que indican su avance. Las flechas existentes hacia el portal siguen mostrando la ruta de escape. Al activarse el barrido, su frente letal y los fragmentos usan el rojo de peligro; el portal conserva su color propio.
+
+La banda respeta un margen interior de 0,85 unidades para separarse de las paredes. No cambia la velocidad, el tiempo disponible ni las colisiones del barrido. Validación: compilación de gameplay y revisión de la dirección y el montaje del aviso. Pendiente comprobar encuadre y contraste en Play Mode para los cuatro bordes.
+
 ## 3. Coordinar combinaciones de amenazas
 
 La admisión de eventos y la supresión de ataques mayores comparten el umbral de presión configurado del director. Antes, un evento como Core Spikes podía empezar encima de un ataque mayor porque su entrada exigía 0,8 de presión, mientras el bloqueo inverso empezaba en 0,6. Ahora se considera también la suma de los eventos ya reservados: varias amenazas pequeñas no pueden superar ese umbral encima de un estado mayor. Breach conserva su excepción de escape.
