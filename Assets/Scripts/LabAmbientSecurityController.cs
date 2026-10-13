@@ -31,6 +31,8 @@ public class LabAmbientSecurityController : MonoBehaviour, IDebugTriggerableEven
     [SerializeField] private float gateTelegraphSeconds = 1.2f;
     [SerializeField] private float gateDeploySeconds = 0.75f;
     [SerializeField] private float gateRetractSeconds = 0.85f;
+    [SerializeField, Range(0.2f, 1f)] private float minimumGateReachableFraction = 0.55f;
+    [SerializeField, Min(0.1f)] private float minimumContextualHoldSeconds = 3f;
 
     [Header("Gate Shape")]
     [SerializeField] private Vector2 gateLengthRange = new Vector2(5.2f, 8.6f);
@@ -136,6 +138,27 @@ public class LabAmbientSecurityController : MonoBehaviour, IDebugTriggerableEven
     private bool TrySpawnSecurityLockdown()
     {
         BuildInteriorBounds();
+        RefreshReferences();
+        ProceduralArenaGenerator arena = centerTransform != null
+            ? centerTransform.GetComponent<ProceduralArenaGenerator>() : null;
+        if (arena == null || playerController == null) return false;
+
+        Vector2 playerPosition = playerController.GetPosition();
+        ArenaReachabilityGrid reachable = arena.CaptureReachableArea(playerPosition);
+        List<Rect> pendingGates = new List<Rect>();
+        for (int i = 0; i < activeGates.Count; i++)
+        {
+            if (activeGates[i] != null && !activeGates[i].IsRetracting)
+                pendingGates.Add(activeGates[i].PlannedFootprint);
+        }
+        if (pendingGates.Count > 0)
+        {
+            reachable = reachable.WithAdditionalObstacles(pendingGates);
+            reachable.FloodFrom(playerPosition);
+        }
+        int availableBefore = reachable.ReachableCellCount;
+        if (availableBefore <= 0) return false;
+
         int attempts = Mathf.Max(4, placementAttempts);
         for (int i = 0; i < attempts; i++)
         {
@@ -155,6 +178,17 @@ public class LabAmbientSecurityController : MonoBehaviour, IDebugTriggerableEven
             float activeHoldSeconds = Random.Range(
                 Mathf.Min(gateActiveHoldRange.x, gateActiveHoldRange.y),
                 Mathf.Max(gateActiveHoldRange.x, gateActiveHoldRange.y));
+            Rect[] proposedGates =
+            {
+                new Rect(firstTarget - firstSize * 0.5f, firstSize),
+                new Rect(secondTarget - secondSize * 0.5f, secondSize)
+            };
+            ArenaReachabilityGrid closedLayout = reachable.WithAdditionalObstacles(proposedGates);
+            closedLayout.FloodFrom(playerPosition);
+            if (!LabGateClosureTiming.TryResolve(activeHoldSeconds, availableBefore,
+                    closedLayout.ReachableCellCount, minimumGateReachableFraction,
+                    minimumContextualHoldSeconds, out activeHoldSeconds)) continue;
+
             float telegraphSeconds = Mathf.Max(0.1f, gateTelegraphSeconds);
             float deploySeconds = Mathf.Max(0.1f, gateDeploySeconds);
             float retractSeconds = Mathf.Max(0.1f, gateRetractSeconds);

@@ -25,6 +25,10 @@ public class LabContainmentGateFx : MonoBehaviour
     private bool lockSfxPlayed;
     private bool releaseSfxPlayed;
 
+    public bool IsRetracting => age >= duration * retractStartFraction;
+    public Rect PlannedFootprint => new Rect(targetPosition.x - gateSize.x * 0.5f,
+        targetPosition.y - gateSize.y * 0.5f, gateSize.x, gateSize.y);
+
     public void Configure(
         Vector2 start,
         Vector2 target,

@@ -2,6 +2,16 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 6. Duración contextual de las compuertas de Lab
+
+Antes de iniciar un cierre, Lab compara el área alcanzable desde el jugador con el área que quedaría al desplegar ambas compuertas. Incluye también los destinos de compuertas ya anunciadas para no evaluar cada cierre como si fuera el único. Usa copias de la grilla de navegación; probar o rechazar una posición no modifica la geometría real.
+
+Si el cierre conserva al menos el 92 % del espacio disponible, respeta la duración sorteada de `gateActiveHoldRange`. Cuando restringe más el recorrido, reduce progresivamente esa duración hasta un 45 % del valor sorteado, con un piso contextual de tres segundos que nunca extiende una duración configurada más corta. Si conservaría menos del 55 % del área disponible, descarta esa posición y prueba otra.
+
+Los límites se ajustan en `minimumGateReachableFraction` y `minimumContextualHoldSeconds`. El aviso, despliegue y retracción mantienen sus tiempos propios; el escáner se sincroniza con la duración final del cierre. La comprobación se realiza al programar el evento, no cada frame. Los desplazamientos posteriores del jugador y los eventos móviles pueden cambiar el área efectiva durante el aviso.
+
+Validación: nueve pruebas de duración, rechazo, límites y copias de navegación, además de las once comprobaciones originales de conectividad. Compilación conjunta de gameplay aprobada. Pendiente Play Mode para evaluar frecuencia de cierres, especialmente en Ambient Overdrive.
+
 ## 5. Mostrar el origen y la dirección del barrido de Breach
 
 El aviso previo identifica el borde de entrada del barrido con una banda amarilla dentro de los límites visibles y tres flechas animadas que indican su avance. Las flechas existentes hacia el portal siguen mostrando la ruta de escape. Al activarse el barrido, su frente letal y los fragmentos usan el rojo de peligro; el portal conserva su color propio.

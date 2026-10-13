@@ -16,6 +16,7 @@ public sealed class ArenaReachabilityGrid
     private readonly bool[] reached;
     private readonly int[] queue;
     private int freeCount;
+    public int ReachableCellCount { get; private set; }
 
     public ArenaReachabilityGrid(Rect arenaBounds, float playerClearance, float cellSize = 0.3f)
     {
@@ -32,10 +33,32 @@ public sealed class ArenaReachabilityGrid
         queue = new int[blocked.Length];
     }
 
+    private ArenaReachabilityGrid(ArenaReachabilityGrid source)
+    {
+        bounds = source.bounds;
+        columns = source.columns;
+        rows = source.rows;
+        cellWidth = source.cellWidth;
+        cellHeight = source.cellHeight;
+        clearance = source.clearance;
+        blocked = (bool[])source.blocked.Clone();
+        reached = new bool[blocked.Length];
+        queue = new int[blocked.Length];
+        freeCount = source.freeCount;
+    }
+
+    public ArenaReachabilityGrid WithAdditionalObstacles(IReadOnlyList<Rect> obstacles)
+    {
+        ArenaReachabilityGrid copy = new ArenaReachabilityGrid(this);
+        for (int i = 0; i < obstacles.Count; i++) copy.Block(obstacles[i]);
+        return copy;
+    }
+
     public void Build(IReadOnlyList<Rect> obstacles)
     {
         Array.Clear(blocked, 0, blocked.Length);
         Array.Clear(reached, 0, reached.Length);
+        ReachableCellCount = 0;
         freeCount = blocked.Length;
         for (int i = 0; i < obstacles.Count; i++) Block(obstacles[i]);
     }
@@ -53,6 +76,7 @@ public sealed class ArenaReachabilityGrid
     public bool FloodFrom(Vector2 origin)
     {
         Array.Clear(reached, 0, reached.Length);
+        ReachableCellCount = 0;
         int start = GetCell(origin);
         return start >= 0 && !blocked[start] && Flood(start) > 0;
     }
@@ -108,6 +132,7 @@ public sealed class ArenaReachabilityGrid
             if (y > 0) Enqueue(cell - columns, ref tail);
             if (y + 1 < rows) Enqueue(cell + columns, ref tail);
         }
+        ReachableCellCount = tail;
         return tail;
     }
 
