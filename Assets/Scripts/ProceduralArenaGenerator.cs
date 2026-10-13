@@ -39,6 +39,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
     [Header("Flow Rules")]
     [SerializeField] private float primaryLaneWidth = 3.4f;
     [SerializeField] private float secondaryLaneWidth = 2.6f;
+    [SerializeField, Min(0.1f)] private float navigationClearance = 0.55f;
 
     [Header("Static Obstacles")]
     [SerializeField] private int minObstacles = 10;
@@ -116,6 +117,8 @@ public class ProceduralArenaGenerator : MonoBehaviour
 
     private readonly List<Rect> blockedAreas = new List<Rect>();
     private readonly List<Rect> placedObstacleRects = new List<Rect>();
+    private readonly List<Rect> navigationFootprints = new List<Rect>();
+    private ArenaReachabilityGrid placementNavigation;
     private readonly List<Rect> reservedLanes = new List<Rect>();
     private readonly List<Vector2> ruptureAnchors = new List<Vector2>();
     private readonly List<List<Vector2>> ruptureAnchorSlots = new List<List<Vector2>>();
@@ -232,6 +235,8 @@ public class ProceduralArenaGenerator : MonoBehaviour
         ClearGeneratedGeometry();
         blockedAreas.Clear();
         placedObstacleRects.Clear();
+        navigationFootprints.Clear();
+        placementNavigation = new ArenaReachabilityGrid(GetNavigationBounds(), navigationClearance);
         reservedLanes.Clear();
         ruptureAnchors.Clear();
         ruptureAnchorSlots.Clear();
@@ -1919,7 +1924,7 @@ public class ProceduralArenaGenerator : MonoBehaviour
     private bool TryPlaceDiamondObstacle(string name, Vector2 center, float diameter, Transform parent)
     {
         Vector2 size = new Vector2(diameter, diameter);
-        Rect footprint = CenterRect(center, size);
+        Rect footprint = GetAabb(center, size, 45f);
         if (!IsValidFootprint(footprint))
         {
             return false;
@@ -1992,7 +1997,8 @@ public class ProceduralArenaGenerator : MonoBehaviour
         Rect hFootprint = CenterRect(hCenter, hSize);
         Rect vFootprint = CenterRect(vCenter, vSize);
 
-        if (!IsValidFootprint(hFootprint) || !IsValidFootprint(vFootprint))
+        if (!IsValidFootprint(hFootprint) || !IsValidFootprint(vFootprint) ||
+            !placementNavigation.WouldRemainConnected(navigationFootprints, hFootprint, vFootprint))
         {
             return false;
         }
@@ -2049,18 +2055,53 @@ public class ProceduralArenaGenerator : MonoBehaviour
             return false;
         }
 
-        return true;
+        return placementNavigation == null || placementNavigation.WouldRemainConnected(navigationFootprints, candidate);
     }
 
     private void RegisterFootprint(Rect rect)
     {
         placedObstacleRects.Add(rect);
+        navigationFootprints.Add(rect);
         blockedAreas.Add(InflateRect(rect, obstacleGap));
     }
 
     private void RegisterDynamicFootprint(Rect rect)
     {
+        navigationFootprints.Add(rect);
         blockedAreas.Add(InflateRect(rect, dynamicObstacleGap));
+    }
+
+    private Rect GetNavigationBounds()
+    {
+        float inset = Mathf.Max(0f, wallThickness * 0.5f);
+        return new Rect(-arenaWidth * 0.5f + inset, -arenaHeight * 0.5f + inset,
+            arenaWidth - inset * 2f, arenaHeight - inset * 2f);
+    }
+
+    // Refresh once per objective event. Moving obstacles and active solid gates are
+    // included at their current positions, rather than using the original layout.
+    public ArenaReachabilityGrid CaptureReachableArea(Vector2 origin)
+    {
+        Physics2D.SyncTransforms();
+        Rect area = GetNavigationBounds();
+        List<Rect> footprints = new List<Rect>();
+        Collider2D[] colliders = GetComponentsInChildren<Collider2D>();
+        for (int i = 0; i < colliders.Length; i++)
+        {
+            Collider2D obstacle = colliders[i];
+            if (!obstacle.enabled || obstacle.isTrigger ||
+                obstacle.GetComponentInParent<PlayerController>() != null ||
+                obstacle.GetComponentInParent<EnemyController>() != null ||
+                obstacle.GetComponentInParent<SplitAnomalyCloneController>() != null) continue;
+            Bounds colliderBounds = obstacle.bounds;
+            footprints.Add(new Rect(colliderBounds.min.x, colliderBounds.min.y,
+                colliderBounds.size.x, colliderBounds.size.y));
+        }
+
+        ArenaReachabilityGrid snapshot = new ArenaReachabilityGrid(area, navigationClearance);
+        snapshot.Build(footprints);
+        snapshot.FloodFrom(origin);
+        return snapshot;
     }
 
     private bool IsOrbitPathClear(Vector2 orbitCenter, float minRadius, float maxRadius, float clearance)

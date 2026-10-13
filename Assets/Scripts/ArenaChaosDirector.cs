@@ -806,9 +806,12 @@ public class ArenaChaosDirector : MonoBehaviour
         objectiveNodesActivated = 0;
         objectiveNodesTotal = 0;
 
+        ArenaReachabilityGrid reachableArea = arena != null && player != null
+            ? arena.CaptureReachableArea(player.GetPosition()) : null;
         for (int i = 0; i < desiredCount; i++)
         {
-            if (!TryFindSpawnPoint(Mathf.Max(0.35f, objectiveNodeProbeRadius), out Vector2 position))
+            if (reachableArea == null || !TryFindSpawnPoint(
+                    Mathf.Max(0.35f, objectiveNodeProbeRadius), out Vector2 position, reachableArea))
             {
                 continue;
             }
@@ -1826,7 +1829,7 @@ public class ArenaChaosDirector : MonoBehaviour
         pulseEventActive = false;
     }
 
-    private bool TryFindSpawnPoint(float probeRadius, out Vector2 result)
+    private bool TryFindSpawnPoint(float probeRadius, out Vector2 result, ArenaReachabilityGrid reachableArea = null)
     {
         result = Vector2.zero;
         if (arena == null)
@@ -1846,7 +1849,7 @@ public class ArenaChaosDirector : MonoBehaviour
         {
             float x = Random.Range(minX, maxX);
             float y = Random.Range(minY, maxY);
-            Vector2 point = new Vector2(x, y) + (Vector2)transform.position;
+            Vector2 point = new Vector2(x, y);
 
             if (!IsFarFromActors(point))
             {
@@ -1854,6 +1857,11 @@ public class ArenaChaosDirector : MonoBehaviour
             }
 
             if (!IsFree(point, probeRadius))
+            {
+                continue;
+            }
+
+            if (reachableArea != null && !reachableArea.CanReach(point))
             {
                 continue;
             }
