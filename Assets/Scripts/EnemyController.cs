@@ -85,6 +85,7 @@ public class EnemyController : MonoBehaviour
     [SerializeField] private Vector2 levelThreeStateDurationRange = new Vector2(17f, 23f);
     [SerializeField] private float speedStateMultiplier = 1.35f;
     [SerializeField] private bool logStateChanges = false;
+    [SerializeField, Min(0f)] private float specialStateRepeatCooldown = 10f;
 
     [Header("Pacing Director")]
     [SerializeField] private int buildUpMinorStatesMin = 2;
@@ -438,6 +439,7 @@ public class EnemyController : MonoBehaviour
     private readonly HashSet<int> destroyerPendingRespawnIds = new HashSet<int>();
     private float weaveHunterTimer;
     private float weaveHunterCooldownUntil;
+    private readonly EnemyStateCooldowns stateCooldowns = new EnemyStateCooldowns();
     private float weaveHunterSideSign = 1f;
     private float phaseBlinkTimer;
     private bool phaseBlinkCharging;
@@ -1226,6 +1228,7 @@ public class EnemyController : MonoBehaviour
         stuckConsecutiveChecks = 0;
         ResetBlockedRepathHysteresis();
         AnomalyState previousState = currentState;
+        RecordSpecialStateExit(previousState);
         AnomalyState nextState = PickWeightedState(forceDifferent);
         currentState = nextState;
         if (currentState == AnomalyState.WeaveHunter)
@@ -1482,6 +1485,7 @@ public class EnemyController : MonoBehaviour
 
     private void InitializePacingDirector()
     {
+        stateCooldowns.Clear();
         pacingPhase = PacingPhase.BuildUp;
         pacingMinorStatesRemaining = RollBuildUpMinorCount();
         pacingMajorStatesRemaining = 0;
@@ -1683,6 +1687,10 @@ public class EnemyController : MonoBehaviour
 
     private void HandleStateTransition(AnomalyState previous, AnomalyState next)
     {
+        if (previous != next)
+        {
+            RecordSpecialStateExit(previous);
+        }
         ResetStuckEscape();
         visualAnimator?.PlayStateTransition(previous, next);
         if (previous != next)
@@ -1791,6 +1799,8 @@ public class EnemyController : MonoBehaviour
         ApplyLevelTwoPriority(fullOptions);
         ApplyLevelThreePriority(fullOptions);
         ApplyGlobalStateIncidenceCaps(fullOptions);
+        fullOptions.RemoveAll(option => option.state != AnomalyState.BasePursuit &&
+            stateCooldowns.IsCoolingDown((int)option.state, Time.time, specialStateRepeatCooldown));
 
         List<StateWeight> filtered = new List<StateWeight>(fullOptions);
         ApplyPacingFilter(filtered);
@@ -1809,7 +1819,7 @@ public class EnemyController : MonoBehaviour
 
         if (options.Count == 0)
         {
-            options.Add(new StateWeight(GetPhaseFallbackState(), 1f));
+            options.Add(new StateWeight(AnomalyState.BasePursuit, 1f));
         }
 
         float totalWeight = 0f;
@@ -1820,7 +1830,7 @@ public class EnemyController : MonoBehaviour
 
         if (totalWeight <= 0.0001f)
         {
-            return GetPhaseFallbackState();
+            return AnomalyState.BasePursuit;
         }
 
         float roll = Random.Range(0f, totalWeight);
@@ -1836,6 +1846,14 @@ public class EnemyController : MonoBehaviour
         }
 
         return options[options.Count - 1].state;
+    }
+
+    private void RecordSpecialStateExit(AnomalyState state)
+    {
+        if (!localVersusControl && state != AnomalyState.BasePursuit)
+        {
+            stateCooldowns.RecordExit((int)state, Time.time);
+        }
     }
 
     private static void ApplyGlobalStateIncidenceCaps(List<StateWeight> options)
@@ -3132,21 +3150,6 @@ public class EnemyController : MonoBehaviour
         {
             externalSpeedTimer = 0f;
             externalSpeedMultiplier = 1f;
-        }
-    }
-
-    private AnomalyState GetPhaseFallbackState()
-    {
-        switch (pacingPhase)
-        {
-            case PacingPhase.SustainPeak:
-                return enableAdvancedStates && CanUseSpecialStates() ? AnomalyState.SpeedSurge : AnomalyState.BasePursuit;
-            case PacingPhase.Relax:
-                return AnomalyState.BasePursuit;
-            case PacingPhase.PeakFade:
-            case PacingPhase.BuildUp:
-            default:
-                return AnomalyState.BasePursuit;
         }
     }
 

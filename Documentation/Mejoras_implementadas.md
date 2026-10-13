@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 12. Evitar repeticiones inmediatas de estados
+
+La selección normal recuerda cuándo terminó cada especial y lo excluye durante diez segundos desde su salida, incluso si entre ambos usos aparece BasePursuit. Se configura mediante `specialStateRepeatCooldown` en el apartado Anomaly State Machine del enemigo. La memoria se reinicia al comenzar el ritmo de una run. Las prioridades, desbloqueos y pesos de los estados disponibles permanecen vigentes, y WeaveHunter conserva su restricción específica de 45 segundos.
+
+Si no queda un especial elegible, el enemigo usa su persecución base en vez de recurrir a un ataque que eluda la espera. Las herramientas de QA, la selección manual de versus y Destroyer de emergencia pueden forzar estados por sus propias reglas.
+
+Validación: nueve comprobaciones independientes de disponibilidad inicial, salida inmediata, límites del enfriamiento, historial independiente, renovación de la espera, configuración deshabilitada, reloj detenido y reinicio. Compilación conjunta de gameplay aprobada. Pendiente observar la distribución de ataques y el ritmo en Play Mode.
+
 ## 2. Recuperación del enemigo atascado
 
 La salida de un atasco conserva un destino temporal, en lugar de dejar que la persecución lo sobrescriba en el siguiente frame. Se prueban direcciones alrededor del enemigo mediante CircleCast, incluido el retroceso, con su radio de colisión y los límites de la arena. Se mantiene la velocidad del estado actual. Al llegar, agotarse el tiempo o bloquearse la salida se reconstruye la ruta hacia el jugador.
