@@ -42,6 +42,7 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
         public float lateralOffset;
         public SpriteRenderer[] renderers;
         public Color[] baseColors;
+        public StorageMagneticRouteFx directionPreview;
     }
 
     [Header("Event Timing")]
@@ -87,6 +88,7 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
     [SerializeField] private float magneticCraneLateralOffsetMax = 1.15f;
     [SerializeField] private Color magneticCraneTelegraphColor = new Color(1f, 0.78f, 0.24f, 0.46f);
     [SerializeField] private Color magneticCraneActiveColor = new Color(1f, 0.28f, 0.40f, 0.72f);
+    [SerializeField, Range(0, 6)] private int maxMagneticDirectionPreviews = 4;
 
     [Header("Storage Distinctive Event - Cargo Transit")]
     [SerializeField] private bool enableCargoTransit = true;
@@ -533,6 +535,7 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
 
         RestoreAllColors();
         RestoreSnapshots(restoreControllers, snapBackToStart);
+        ClearMagneticDirectionPreviews();
         ReleaseEventPressure();
 
         snapshots.Clear();
@@ -617,6 +620,47 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
             snapshot.lateralOffset = Random.Range(-Mathf.Abs(magneticCraneLateralOffsetMax), Mathf.Abs(magneticCraneLateralOffsetMax));
             snapshots[i] = snapshot;
         }
+
+        // Keep the arena readable: annotate only the nearest moving cargo, without
+        // replacing its art or drawing route lines across the floor.
+        List<int> previewOrder = new List<int>();
+        for (int i = 0; i < snapshots.Count; i++) previewOrder.Add(i);
+        Vector2 focus = playerController != null ? playerController.GetPosition() : (Vector2)centerTransform.position;
+        previewOrder.Sort((a, b) => (snapshots[a].startPosition - focus).sqrMagnitude.CompareTo(
+            (snapshots[b].startPosition - focus).sqrMagnitude));
+        int createdPreviews = 0;
+        for (int i = 0; i < previewOrder.Count && createdPreviews < Mathf.Clamp(maxMagneticDirectionPreviews, 0, 6); i++)
+        {
+            int index = previewOrder[i];
+            ObstacleSnapshot snapshot = snapshots[index];
+            if (snapshot.binding.transform == null) continue;
+            Vector2 destination = GetMagneticDestination(snapshot);
+            if ((destination - snapshot.startPosition).sqrMagnitude < 0.09f) continue;
+            GameObject preview = new GameObject("StorageMagneticDirection");
+            preview.transform.SetParent(centerTransform, false);
+            snapshot.directionPreview = preview.AddComponent<StorageMagneticRouteFx>();
+            snapshot.directionPreview.Configure(snapshot.binding.transform, snapshot.startPosition,
+                destination, snapshot.binding.obstacleRadius);
+            snapshots[index] = snapshot;
+            createdPreviews++;
+        }
+    }
+
+    private Vector2 GetMagneticDestination(ObstacleSnapshot snapshot)
+    {
+        Vector2 offset = surgeAxis * (baseDisplacement * snapshot.displacementScale * snapshot.laneSign)
+            + lateralAxis * snapshot.lateralOffset;
+        return ClampToInterior(snapshot.startPosition + offset, snapshot.binding.obstacleRadius);
+    }
+
+    private void ClearMagneticDirectionPreviews()
+    {
+        for (int i = 0; i < snapshots.Count; i++)
+        {
+            if (snapshots[i].directionPreview == null) continue;
+            snapshots[i].directionPreview.gameObject.SetActive(false);
+            Destroy(snapshots[i].directionPreview.gameObject);
+        }
     }
 
     private void TickMagneticCraneReorder(float eventProgress)
@@ -634,6 +678,7 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
             ObstacleSnapshot snapshot = snapshots[i];
             if (snapshot.binding.transform == null)
             {
+                snapshot.directionPreview?.ShowDirection(false, false, eventTimer);
                 continue;
             }
 
@@ -650,6 +695,12 @@ public class StorageSurgeEventController : MonoBehaviour, IThemedEventStatusProv
             rotationTarget += shudder * 18f;
             MoveTransform(snapshot.binding, target);
             RotateTransform(snapshot.binding, rotationTarget);
+            if (snapshot.directionPreview != null)
+            {
+                snapshot.directionPreview.ShowDirection(
+                    eventProgress >= returnStart + snapshot.phaseDelay * 0.25f,
+                    eventProgress < telegraphEnd + snapshot.phaseDelay, eventTimer);
+            }
         }
     }
 

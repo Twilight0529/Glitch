@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 9. Dirección del reorden magnético de Storage
+
+La idea original hablaba de campos magnéticos que empujan o atraen al jugador. En la versión actual, el evento activo de Storage es el reorden magnético de carga; el código de campos circulares no se instancia. La mejora se aplica a ese sistema real: pequeñas flechas junto a los objetos indican su desplazamiento durante el aviso amarillo y acompañan el movimiento en rojo. Al regresar, apuntan a su posición inicial.
+
+Se muestran como máximo cuatro indicadores, priorizando los objetos más cercanos al jugador. Se pueden ajustar o desactivar mediante `maxMagneticDirectionPreviews`. Las señales usan el destino calculado por el evento y respetan su desfase y los límites de la arena. Desaparecen al llegar, destruirse la carga, cancelarse el evento o cambiar de arena. No se crean campos nuevos ni se altera el movimiento de los objetos.
+
+Validación: compilación conjunta y revisión del cálculo de destino, fases y limpieza de referencias. Pendiente evaluar tamaño, contraste y ubicación de las flechas en Play Mode. En el seguimiento del Excel conviene renombrar esta fila a «Mostrar la dirección del reorden magnético de Storage».
+
 ## 8. Espinas de Core por grupos
 
 El evento reparte los obstáculos seleccionados entre dos grupos que se activan por turnos. Cada grupo tiene su propio aviso amarillo; solo el grupo activo aparece en rojo y causa daño. El anterior se desarma antes de encender el siguiente, incluso si un frame atraviesa el límite entre fases. Los obstáculos del grupo que todavía no avisa conservan su aspecto original.
