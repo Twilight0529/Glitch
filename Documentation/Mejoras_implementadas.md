@@ -2,6 +2,12 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 15. Dirección visible del proyectil reflejado
+
+Cada reflexión puede mostrar una flecha verde breve delante del proyectil durante 0,28 segundos. La señal sigue su velocidad real, incluidas correcciones posteriores de trayectoria, y conserva un tamaño de mundo legible aunque el sprite del proyectil sea pequeño. No reemplaza sus iconos ni cambia hacia dónde se refleja.
+
+Se limita a cuatro señales simultáneas para no saturar la arena durante reflejos múltiples. El efecto se desvanece y se elimina al vencer, destruirse o desactivarse el proyectil. Su reloj respeta la pausa. Validación: compilación conjunta y revisión del seguimiento, límite y liberación del efecto. Pendiente comprobar legibilidad y duración en Play Mode.
+
 ## 11. Preparación y ejecución reales del jefe
 
 La firma visual del jefe antes pasaba de amarillo a rojo mediante un reloj decorativo de entrada. Ese reloj no coincidía con los ataques que se repiten dentro del mismo estado. Ahora Expansion Shoot, Phase Blink, Pincer Barrage, Signal Jam, Orbit Barrage y Map Recompile exponen si su aviso real está activo. La firma reaparece en amarillo durante cada carga y muestra rojo al ejecutarse; su deformación también sigue esas fases en vez del porcentaje transcurrido del estado.
