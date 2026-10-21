@@ -327,6 +327,7 @@ public class GameManager : MonoBehaviour
     private ProceduralArenaGenerator arenaGenerator;
     private EnemyController enemyController;
     private PlayerController playerController;
+    private PlayerStateHijack hudStateHijack;
     private ArenaChaosDirector chaosDirector;
     private IThemedEventStatusProvider themedEventStatusProvider;
     private string levelType = "Unknown";
@@ -5693,7 +5694,9 @@ public class GameManager : MonoBehaviour
         Color old = GUI.color;
         GUI.color = new Color(1f, 1f, 1f, alpha);
         GUI.Label(new Rect(panel.x + (12f * s), panel.y + (3f * s), panel.width - (24f * s), 17f * s), stateHijackNoticeVerb, hudLabelStyle);
-        string value = $"{stateHijackNoticeLabel}  |  F";
+        string value = stateHijackNoticeVerb == "ESTADO CAPTURADO"
+            ? $"{stateHijackNoticeLabel}  |  F"
+            : stateHijackNoticeLabel;
         Rect valueRect = new Rect(panel.x + (12f * s), panel.y + (19f * s), panel.width - (24f * s), 25f * s);
         GUI.Label(valueRect, value, BuildFittedSingleLineStyle(hudValueStyle, value, valueRect.width, valueRect.height, Mathf.RoundToInt(9f * s)));
         if (!string.IsNullOrWhiteSpace(stateHijackNoticeHint))
@@ -6014,22 +6017,56 @@ public class GameManager : MonoBehaviour
             layout.hijack.y + (7f * s),
             layout.hijack.width - (16f * s),
             layout.hijack.height - (17f * s));
+        if (hudStateHijack == null || hudStateHijack.gameObject != playerController.gameObject)
+        {
+            hudStateHijack = playerController.GetComponent<PlayerStateHijack>();
+        }
         bool stored = playerController.HasStoredHijack;
-        Color accent = stored ? playerController.StoredHijackColor : new Color(0.30f, 0.44f, 0.62f, 1f);
+        bool orbitActive = hudStateHijack != null && hudStateHijack.IsOrbitGuardActive;
+        Color accent = stored ? playerController.StoredHijackColor : orbitActive
+            ? PlayerStateHijack.GetAbilityColor(PlayerStateHijack.HijackAbility.OrbitGuard)
+            : new Color(0.30f, 0.44f, 0.62f, 1f);
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (stored ? 8.5f : 2.2f));
 
         DrawSolidRect(new Rect(panel.x, panel.y, panel.width, 2f * s), new Color(accent.r, accent.g, accent.b, stored ? 0.58f + pulse * 0.22f : 0.24f));
         Rect icon = new Rect(panel.x + (4f * s), panel.y + (10f * s), 22f * s, 22f * s);
-        DrawHudMetricIcon(icon, "hijack", accent);
+        EnemyStatePresentationCatalog.Glyph glyph = stored && hudStateHijack != null
+            ? hudStateHijack.StoredGlyph
+            : orbitActive ? EnemyStatePresentationCatalog.Glyph.Orbit : EnemyStatePresentationCatalog.Glyph.None;
+        if (glyph != EnemyStatePresentationCatalog.Glyph.None)
+        {
+            Color previous = GUI.color;
+            GUI.color = accent;
+            GUI.DrawTexture(icon, AnomalyStateGlyphSpriteProvider.Get(glyph).texture, ScaleMode.ScaleToFit);
+            GUI.color = previous;
+        }
+        else
+        {
+            DrawHudMetricIcon(icon, "hijack", accent);
+        }
 
         float keyWidth = Mathf.Min(34f * s, panel.width * 0.24f);
         Rect keyRect = new Rect(panel.xMax - keyWidth, panel.y + (8f * s), keyWidth, 26f * s);
         DrawSolidRect(keyRect, new Color(accent.r, accent.g, accent.b, stored ? 0.24f + pulse * 0.10f : 0.08f));
-        GUI.Label(keyRect, "F", BuildFittedSingleLineStyle(hudChipStyle, "F", keyRect.width, keyRect.height, Mathf.RoundToInt(9f * s)));
+        string keyLabel = stored ? "F" : orbitActive ? $"{hudStateHijack.OrbitGuardTimeRemaining:0.0}s" : "F";
+        GUI.Label(keyRect, keyLabel, BuildFittedSingleLineStyle(hudChipStyle, keyLabel, keyRect.width, keyRect.height, Mathf.RoundToInt(8f * s)));
 
-        string label = stored ? playerController.StoredHijackLabel : "PARRY AL JEFE";
-        Rect labelRect = new Rect(icon.xMax + (6f * s), panel.y + (7f * s), keyRect.x - icon.xMax - (11f * s), 29f * s);
+        string label = stored ? playerController.StoredHijackLabel : orbitActive ? "ORBIT GUARD" : "PARRY AL JEFE";
+        bool showSummary = stored && hudStateHijack != null;
+        Rect labelRect = new Rect(icon.xMax + (6f * s), panel.y + (7f * s), keyRect.x - icon.xMax - (11f * s), (showSummary ? 17f : 29f) * s);
         GUI.Label(labelRect, label, BuildFittedSingleLineStyle(hudChipStyle, label, labelRect.width, labelRect.height, Mathf.RoundToInt(7f * s)));
+        if (showSummary)
+        {
+            string summary = hudStateHijack.StoredEffectSummary;
+            Rect summaryRect = new Rect(labelRect.x, panel.y + (25f * s), labelRect.width, 13f * s);
+            GUI.Label(summaryRect, summary, BuildFittedSingleLineStyle(hudLabelStyle, summary, summaryRect.width, summaryRect.height, Mathf.RoundToInt(6f * s)));
+        }
+        if (orbitActive && !stored)
+        {
+            Rect track = new Rect(panel.x, panel.yMax - (3f * s), panel.width, 2f * s);
+            DrawSolidRect(track, GlitchUiPalette.WithAlpha(accent, 0.16f));
+            DrawSolidRect(new Rect(track.x, track.y, track.width * hudStateHijack.OrbitGuardTimeNormalized, track.height), accent);
+        }
     }
 
     private float GetFirewallRailY(float s, float panelH)

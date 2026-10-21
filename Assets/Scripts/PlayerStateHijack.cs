@@ -44,6 +44,29 @@ public class PlayerStateHijack : MonoBehaviour
     public string StoredHint => GetAbilityHint(storedAbility);
     public string CapturedStateLabel => capturedState.ToString();
     public Color StoredColor => GetAbilityColor(storedAbility);
+    public EnemyStatePresentationCatalog.Glyph StoredGlyph => HasStoredAbility
+        ? EnemyStatePresentationCatalog.Get(capturedState).glyph
+        : EnemyStatePresentationCatalog.Glyph.None;
+    public float OrbitGuardTimeRemaining => Mathf.Max(0f, orbitGuardTimer);
+    public float OrbitGuardTimeNormalized => Mathf.Clamp01(orbitGuardTimer / Mathf.Max(0.5f, orbitGuardDuration));
+
+    // This is the effect's duration after activation, never a storage expiry timer.
+    public string StoredEffectSummary
+    {
+        get
+        {
+            switch (storedAbility)
+            {
+                case HijackAbility.Overclock: return $"VELOCIDAD {Mathf.Max(0.2f, overclockDuration):0.#} s";
+                case HijackAbility.PhaseStep: return "SALTO DIRECCIONAL";
+                case HijackAbility.EchoDecoy: return $"SEÑUELO {Mathf.Max(0.5f, echoDecoyDuration):0.#} s";
+                case HijackAbility.OrbitGuard: return $"REFLEJO {Mathf.Max(0.5f, orbitGuardDuration):0.#} s";
+                case HijackAbility.BreachCutter: return "ROMPE OBSTACULOS";
+                case HijackAbility.ContainmentLock: return $"INMOVILIZA {Mathf.Max(0.2f, containmentLockDuration):0.#} s";
+                default: return "";
+            }
+        }
+    }
 
     public void Configure(PlayerController owner)
     {

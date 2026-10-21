@@ -2,6 +2,12 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 16. Identidad y duración de State Hijack
+
+El slot de la habilidad capturada muestra el glifo existente del estado de origen, el efecto y su duración configurada cuando corresponde. Los efectos instantáneos se describen como acciones, sin un temporizador ficticio. La duración informada corresponde al efecto tras activarlo: la captura guardada no caduca.
+
+Orbit Guard muestra su tiempo restante real y una barra mientras está activo y no hay otra captura ocupando el slot. El aviso de ejecución deja de mostrar F como si la habilidad siguiera disponible. No se cambian iconos base, efectos ni duraciones. Validación: compilación conjunta sin errores y revisión del origen de los valores y sus condiciones de visualización. Pendiente comprobar el ajuste del texto en distintas resoluciones en Play Mode.
+
 ## 14. Respuesta clara cuando el Parry no conecta
 
 El jugador recibe un aviso breve y un pulso amarillo cuando intenta hacer Parry durante la recarga, no tiene cargas en Versus o termina su ventana sin contacto. Se muestran hechos comprobables: no se atribuye el fallo a un input temprano, tardío o fuera de alcance sin evidencia. Un Parry exitoso o una nueva activación limpia el aviso anterior.
