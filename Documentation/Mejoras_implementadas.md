@@ -2,6 +2,12 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 14. Respuesta clara cuando el Parry no conecta
+
+El jugador recibe un aviso breve y un pulso amarillo cuando intenta hacer Parry durante la recarga, no tiene cargas en Versus o termina su ventana sin contacto. Se muestran hechos comprobables: no se atribuye el fallo a un input temprano, tardío o fuera de alcance sin evidencia. Un Parry exitoso o una nueva activación limpia el aviso anterior.
+
+El indicador reutiliza un solo componente por jugador, limita repeticiones y no captura eventos de input. Respeta la pausa y se oculta durante la muerte o el consumo de Breach. No modifica ventanas, cargas ni enfriamientos. Validación: compilación conjunta sin errores y revisión de las rutas de entrada, expiración y éxito. Pendiente comprobar ubicación y contraste en Play Mode.
+
 ## 15. Dirección visible del proyectil reflejado
 
 Cada reflexión puede mostrar una flecha verde breve delante del proyectil durante 0,28 segundos. La señal sigue su velocidad real, incluidas correcciones posteriores de trayectoria, y conserva un tamaño de mundo legible aunque el sprite del proyectil sea pequeño. No reemplaza sus iconos ni cambia hacia dónde se refleja.

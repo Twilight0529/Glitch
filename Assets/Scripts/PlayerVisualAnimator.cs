@@ -37,6 +37,7 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
     private float dashPulse;
     private float parryPulse;
     private float parrySuccessPulse;
+    private float parryFailurePulse;
     private float firewallReadyPulse;
     private float firewallBurstPulse;
     private float shieldPulse;
@@ -108,6 +109,7 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
 
     public void PlayParrySuccess(Vector2 direction)
     {
+        parryFailurePulse = 0f;
         if (direction.sqrMagnitude > 0.001f)
         {
             movementDirection = direction.normalized;
@@ -115,6 +117,11 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
 
         parrySuccessPulse = 1f;
         impactPulse = Mathf.Max(impactPulse, 0.72f);
+    }
+
+    public void PlayParryFailure()
+    {
+        parryFailurePulse = 1f;
     }
 
     public void PlayFirewallReady()
@@ -184,6 +191,7 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
         dashPulse = 0f;
         parryPulse = 0f;
         parrySuccessPulse = 0f;
+        parryFailurePulse = 0f;
         firewallReadyPulse = 0f;
         firewallBurstPulse = 0f;
         shieldPulse = 0f;
@@ -327,6 +335,7 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
         dashPulse = Mathf.MoveTowards(dashPulse, 0f, dt * 4.6f);
         parryPulse = Mathf.MoveTowards(parryPulse, 0f, dt * 6.2f);
         parrySuccessPulse = Mathf.MoveTowards(parrySuccessPulse, 0f, dt * 5.2f);
+        parryFailurePulse = Mathf.MoveTowards(parryFailurePulse, 0f, dt * 3.5f);
         firewallReadyPulse = Mathf.MoveTowards(firewallReadyPulse, 0f, dt * 2.8f);
         firewallBurstPulse = Mathf.MoveTowards(firewallBurstPulse, 0f, dt * 2.9f);
         shieldPulse = Mathf.MoveTowards(shieldPulse, 0f, dt * 3.8f);
@@ -452,6 +461,7 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
         float whiteFlash = Mathf.Clamp01(firewallBurst * 0.78f + parrySuccess * 0.48f + impact * 0.42f);
         color = Color.Lerp(color, Color.white, whiteFlash);
         color = Color.Lerp(color, specialPulseColor, special * 0.62f);
+        color = Color.Lerp(color, GlitchUiPalette.Alert, parryFailurePulse * 0.18f);
         bodyRenderer.color = color;
 
         if (shellRenderer != null)
@@ -463,6 +473,7 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
             shellRenderer.transform.localScale = Vector3.one * shellScale;
             Color shellColor = Color.Lerp(GlitchUiPalette.Surface, accent, 0.72f);
             shellColor = Color.Lerp(shellColor, GlitchUiPalette.Alert, owner.PhaseDashExpiryWarningStrength * 0.85f);
+            shellColor = Color.Lerp(shellColor, GlitchUiPalette.Alert, parryFailurePulse * 0.85f);
             shellColor = Color.Lerp(shellColor, Color.white, parrySuccess * 0.52f + firewallBurst * 0.68f);
             shellColor.a = Mathf.Clamp01(color.a * Mathf.Lerp(0.64f, 0.94f, Mathf.Clamp01(shellPulse + readiness * 0.25f)));
             shellRenderer.color = shellColor;

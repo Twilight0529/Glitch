@@ -151,6 +151,7 @@ public class PlayerController : MonoBehaviour
     private GameObject shieldVisual;
     private float parryTimer;
     private float parryCooldownTimer;
+    private PlayerParryFeedback parryFeedback;
     private int localVersusParryCharges;
     private float localVersusParryRechargeTimer;
     private SpriteRenderer parryRenderer;
@@ -576,9 +577,23 @@ public class PlayerController : MonoBehaviour
         UpdateGhostDashVisual();
         UpdateFirewallReadyVisual();
 
-        if (WasParryPressed() && parryCooldownTimer <= 0f)
+        if (WasParryPressed())
         {
-            StartParry();
+            if (!HasLocalVersusParryCharge)
+            {
+                ShowParryFeedback(PlayerParryFeedback.Reason.NoCharges);
+            }
+            else if (parryCooldownTimer > 0f)
+            {
+                if (parryTimer <= 0f)
+                {
+                    ShowParryFeedback(PlayerParryFeedback.Reason.Cooldown);
+                }
+            }
+            else
+            {
+                StartParry();
+            }
         }
 
         ScanParryWindow();
@@ -1218,6 +1233,7 @@ public class PlayerController : MonoBehaviour
         }
 
         parryDirection = -parryDirection;
+        parryFeedback?.Clear();
         parryTimer = 0f;
         parryCooldownTimer = Mathf.Max(parryCooldownTimer, Mathf.Max(0.05f, parryCooldown * 0.55f));
         AddFirewallCharge(firewallChargeFromParry);
@@ -1465,9 +1481,13 @@ public class PlayerController : MonoBehaviour
         if (parryTimer > 0f)
         {
             parryTimer -= Time.deltaTime;
-            if (parryTimer < 0f)
+            if (parryTimer <= 0f)
             {
                 parryTimer = 0f;
+                if (!tutorialInputLocked)
+                {
+                    ShowParryFeedback(PlayerParryFeedback.Reason.NoContact);
+                }
             }
         }
 
@@ -1526,11 +1546,27 @@ public class PlayerController : MonoBehaviour
             }
         }
 
+        parryFeedback?.Clear();
         parryTimer = Mathf.Max(0.04f, parryActiveDuration);
         parryCooldownTimer = Mathf.Max(0.05f, parryCooldown);
         visualAnimator?.PlayParryStart();
         SpawnParryStartFx();
         GlitchAudioManager.PlayParryStart(transform.position);
+    }
+
+    // A missed window does not tell us whether the input was early, late or
+    // out of range. Report only what this controller can actually establish.
+    private void ShowParryFeedback(PlayerParryFeedback.Reason reason)
+    {
+        if (parryFeedback == null)
+        {
+            parryFeedback = GetComponent<PlayerParryFeedback>();
+            if (parryFeedback == null) parryFeedback = gameObject.AddComponent<PlayerParryFeedback>();
+        }
+        if (parryFeedback.Show(this, reason))
+        {
+            visualAnimator?.PlayParryFailure();
+        }
     }
 
     private void ScanParryWindow()
