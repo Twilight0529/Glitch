@@ -34,6 +34,7 @@ public class ArenaPowerupPickup : MonoBehaviour
     private SpriteRenderer auraRenderer;
     private GameObject auraObject;
     private WorldObjectAnimationFx animationFx;
+    private readonly PickupClaimGate claimGate = new PickupClaimGate();
     private Transform expiryRoot;
     private SpriteRenderer expiryFill;
 
@@ -101,6 +102,7 @@ public class ArenaPowerupPickup : MonoBehaviour
         lifeTimer += Time.deltaTime;
         if (lifeTimer >= lifetime)
         {
+            claimGate.Expire();
             Destroy(gameObject);
             return;
         }
@@ -195,11 +197,16 @@ public class ArenaPowerupPickup : MonoBehaviour
             return;
         }
 
-        PlayerController player = other.GetComponent<PlayerController>();
+        PlayerController player = other.GetComponentInParent<PlayerController>();
         if (player == null)
         {
             return;
         }
+
+        GameManager manager = FindAnyObjectByType<GameManager>();
+        if (!claimGate.TryClaim(Time.timeScale > 0f && !player.IsInDeathSequence &&
+            !player.IsInBreachConsumption && (manager == null || manager.IsRunActive))) return;
+        GetComponent<Collider2D>().enabled = false;
 
         if (kind == PickupKind.Shield)
         {
@@ -219,7 +226,7 @@ public class ArenaPowerupPickup : MonoBehaviour
         }
 
         player.AddFirewallChargeFromPowerup();
-        FindAnyObjectByType<GameManager>()?.NotifyPowerupCollected();
+        manager?.NotifyPowerupCollected();
         GlitchAudioManager.PlayPowerupCollected(kind, transform.position);
         SpawnCollectBurstFx();
         owner?.NotifyPickupConsumed(this);

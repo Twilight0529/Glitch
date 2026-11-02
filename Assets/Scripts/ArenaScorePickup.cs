@@ -24,6 +24,7 @@ public class ArenaScorePickup : MonoBehaviour
     private SpriteRenderer auraRenderer;
     private GameObject auraObject;
     private WorldObjectAnimationFx animationFx;
+    private readonly PickupClaimGate claimGate = new PickupClaimGate();
 
     // Estado propio de esta instancia. Se completa desde Configure apenas aparece en la arena.
     private float lifeTimer;
@@ -90,6 +91,7 @@ public class ArenaScorePickup : MonoBehaviour
         lifeTimer += Time.deltaTime;
         if (lifeTimer >= lifetime)
         {
+            claimGate.Expire();
             Destroy(gameObject);
             return;
         }
@@ -127,11 +129,15 @@ public class ArenaScorePickup : MonoBehaviour
             return;
         }
 
-        PlayerController player = other.GetComponent<PlayerController>();
+        PlayerController player = other.GetComponentInParent<PlayerController>();
         if (player == null)
         {
             return;
         }
+
+        if (!claimGate.TryClaim(Time.timeScale > 0f && !player.IsInDeathSequence &&
+            !player.IsInBreachConsumption && (gameManager == null || gameManager.IsRunActive))) return;
+        GetComponent<Collider2D>().enabled = false;
 
         // Repartimos cada recompensa a su dueño: el GameManager recibe score y el jugador carga Firewall.
         if (gameManager != null)

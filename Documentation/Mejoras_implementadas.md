@@ -2,6 +2,12 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## Adicional: recogida única de recompensas
+
+Los pickups de puntos y powerups se cierran antes de entregar su recompensa y desactivan su collider inmediatamente. Esto evita que varios contactos físicos en el mismo frame dupliquen puntos, efectos, carga de Firewall, estadísticas, audio o partículas mientras Unity espera para destruir el objeto. Al vencer también se cierran antes de pedir su destrucción.
+
+Se reconoce al jugador desde sus colliders hijos. Un contacto en pausa, durante su muerte, durante el consumo de Breach o fuera de una run activa no consume el pickup; uno posterior válido puede recogerlo. No cambia el valor ni el efecto de las recompensas. Validación: siete comprobaciones de recogida única, expiración, contactos inválidos e independencia entre pickups, más compilación de gameplay sin errores. Pendiente comprobar callbacks físicos con varios colliders en Play Mode.
+
 ## Adicional: aviso de dash recargado en el jugador
 
 La carcasa del jugador produce un pulso cian breve cuando el dash pasa de no disponible a listo. No se dispara al aparecer, no se repite mientras permanece listo y se cancela si el jugador vuelve a gastarlo. Usa la disponibilidad real del controlador, no una copia del cooldown, por lo que también espera que termine un dash todavía activo.
