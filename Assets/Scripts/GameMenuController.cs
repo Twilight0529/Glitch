@@ -50,6 +50,7 @@ public class GameMenuController : MonoBehaviour
     private float overlayEnteredAtUnscaled;
     private bool applicationHasFocus = true;
     private bool applicationSuspended;
+    private readonly RunExitConfirmationState exitConfirmation = new RunExitConfirmationState();
 
     private void OnApplicationFocus(bool focused)
     {
@@ -137,6 +138,12 @@ public class GameMenuController : MonoBehaviour
 
         if (GetEscapePressedThisFrame())
         {
+            if (state == OverlayState.Paused && exitConfirmation.Pending != RunExitConfirmationState.Action.None)
+            {
+                exitConfirmation.Cancel();
+                GlitchAudioManager.PlayMenuBack();
+                return;
+            }
             if (state == OverlayState.Paused)
             {
                 SetState(OverlayState.Playing);
@@ -167,6 +174,7 @@ public class GameMenuController : MonoBehaviour
 
     private void SetState(OverlayState nextState)
     {
+        if (nextState != OverlayState.Paused) exitConfirmation.Cancel();
         OverlayState previousState = state;
         state = nextState;
         if (state == OverlayState.Defeat)
@@ -207,12 +215,14 @@ public class GameMenuController : MonoBehaviour
 
     private void RestartLevel()
     {
+        gameManager?.RecordRunExit("restart");
         Time.timeScale = 1f;
         SceneTransitionController.ReloadActiveScene();
     }
 
     private void ReturnToMainMenu()
     {
+        gameManager?.RecordRunExit("return_to_menu");
         Time.timeScale = 1f;
         if (!string.IsNullOrWhiteSpace(mainMenuSceneName) && Application.CanStreamedLevelBeLoaded(mainMenuSceneName))
         {
@@ -345,6 +355,11 @@ public class GameMenuController : MonoBehaviour
 
     private void DrawPauseMenu()
     {
+        if (exitConfirmation.Pending != RunExitConfirmationState.Action.None)
+        {
+            DrawRunExitConfirmation();
+            return;
+        }
         float t = Time.unscaledTime;
         float pulse = 0.5f + 0.5f * Mathf.Sin(t * 2.6f);
         DrawScreenFade(0.66f);
@@ -378,16 +393,47 @@ public class GameMenuController : MonoBehaviour
         if (DrawPauseButton(new Rect(panel.x + 18f, panel.y + 148f, panel.width - 36f, 42f), "Reiniciar", false))
         {
             GlitchAudioManager.PlayMenuConfirm();
-            RestartLevel();
+            exitConfirmation.Request(RunExitConfirmationState.Action.Restart);
+            return;
         }
 
         if (DrawPauseButton(new Rect(panel.x + 18f, panel.y + 204f, panel.width - 36f, 42f), "Menu Principal", false))
         {
             GlitchAudioManager.PlayMenuBack();
-            ReturnToMainMenu();
+            exitConfirmation.Request(RunExitConfirmationState.Action.ReturnToMenu);
+            return;
         }
 
         DrawPauseAudioPanel(audioPanel);
+    }
+
+    private void DrawRunExitConfirmation()
+    {
+        DrawScreenFade(0.76f);
+        float width = Mathf.Min(420f, Mathf.Max(160f, Screen.width - 32f));
+        Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - 200f) * 0.5f, width, 200f);
+        DrawPanel(panel, GlitchUiPalette.Surface, GlitchUiPalette.Alert);
+        bool restarting = exitConfirmation.Pending == RunExitConfirmationState.Action.Restart;
+        string question = restarting ? "¿Reiniciar la run?" : "¿Volver al menú?";
+        GUIStyle heading = GetFittedSingleLineStyle(titleStyle, question, width - 32f, 28, 16);
+        heading.normal.textColor = GlitchUiPalette.Alert;
+        GUI.Label(new Rect(panel.x + 16f, panel.y + 20f, width - 32f, 40f), question, heading);
+        GUIStyle explanation = new GUIStyle(bodyStyle) { alignment = TextAnchor.MiddleCenter, wordWrap = true };
+        GUI.Label(new Rect(panel.x + 16f, panel.y + 66f, width - 32f, 40f), "Se pierde la run actual.", explanation);
+        float buttonWidth = (width - 48f) * 0.5f;
+        if (DrawPauseButton(new Rect(panel.x + 16f, panel.y + 132f, buttonWidth, 46f), "Cancelar", false))
+        {
+            exitConfirmation.Cancel();
+            GlitchAudioManager.PlayMenuBack();
+            return;
+        }
+        if (DrawPauseButton(new Rect(panel.x + 32f + buttonWidth, panel.y + 132f, buttonWidth, 46f), restarting ? "Reiniciar" : "Salir", false) &&
+            exitConfirmation.TryConfirm(out RunExitConfirmationState.Action action))
+        {
+            GlitchAudioManager.PlayMenuConfirm();
+            if (action == RunExitConfirmationState.Action.Restart) RestartLevel();
+            else ReturnToMainMenu();
+        }
     }
 
     private void DrawPauseAudioPanel(Rect panel)

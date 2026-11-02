@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## Adicional: confirmar reinicio o abandono desde pausa
+
+Reiniciar o volver al menú desde pausa abre una confirmación breve con dos opciones: cancelar o ejecutar la acción elegida. El menú y sus botones dejan de dibujarse mientras esa confirmación está abierta, evitando entradas hacia controles que estuvieran detrás. No se confirma automáticamente con Enter ni se reutiliza el clic inicial como una segunda aceptación.
+
+Escape cierra la confirmación sin reanudar la partida; cancelar también conserva la pausa. La acción se consume una sola vez y se limpia al abandonar el estado de pausa. Los accesos de la pantalla de derrota mantienen su comportamiento. Al confirmar una salida se registra su motivo explícito en la telemetría local antes de cambiar de escena.
+
+La ventana reutiliza tipografía y botones existentes, con amarillo de advertencia y solo una línea explicativa. Validación: nueve comprobaciones de solicitud, cancelación, elección y consumo único, más compilación conjunta de gameplay. Pendiente probar el clic real, Escape y encuadre en varias resoluciones en Play Mode.
+
 ## Adicional: contexto del final de cada run en telemetría local
 
 Cada registro nuevo incluye `schemaVersion: 2` y un bloque `endContext` con causa, arena, estado actual del jefe, posición del jugador y segundos de gameplay al aceptar el final. La primera captura se conserva aunque lleguen más contactos, termine la cinemática o se destruya la escena. Los campos existentes y los archivos históricos no se reescriben.
