@@ -48,6 +48,31 @@ public class GameMenuController : MonoBehaviour
     private Font secondaryFont;
     private float defeatStartedAtUnscaled;
     private float overlayEnteredAtUnscaled;
+    private bool applicationHasFocus = true;
+    private bool applicationSuspended;
+
+    private void OnApplicationFocus(bool focused)
+    {
+        applicationHasFocus = focused;
+        PauseIfBackgrounded();
+    }
+
+    private void OnApplicationPause(bool suspended)
+    {
+        applicationSuspended = suspended;
+        PauseIfBackgrounded();
+    }
+
+    private void PauseIfBackgrounded()
+    {
+        if (gameManager != null && GameplayFocusPausePolicy.ShouldPause(
+            applicationHasFocus && !applicationSuspended, state == OverlayState.Playing,
+            gameManager.IsRunActive, gameManager.IsGameOver, SceneTransitionController.IsFading,
+            Time.timeScale > 0f))
+        {
+            SetState(OverlayState.Paused);
+        }
+    }
 
     private void Awake()
     {
@@ -82,6 +107,9 @@ public class GameMenuController : MonoBehaviour
 
         RefreshCursorVisibility();
 
+        // Also covers a run that finishes its countdown while already unfocused.
+        PauseIfBackgrounded();
+
         if (gameManager != null && gameManager.IsGameOver && state != OverlayState.Defeat)
         {
             SetState(OverlayState.Defeat);
@@ -104,6 +132,8 @@ public class GameMenuController : MonoBehaviour
         {
             return;
         }
+
+        if (!applicationHasFocus || applicationSuspended) return;
 
         if (GetEscapePressedThisFrame())
         {

@@ -2,6 +2,12 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## Adicional: pausa al perder el foco
+
+Una run activa se pausa al cambiar de ventana o suspender la aplicación. Al volver permanece en pausa hasta que el jugador elige continuar. Se usa el menú de pausa existente, sin otro overlay ni una segunda autoridad sobre el reloj.
+
+No interrumpe cuenta regresiva, derrota, transiciones ni tutoriales que ya congelaron el juego. Si la run empieza a avanzar mientras la ventana sigue en segundo plano, se aplica la pausa en la siguiente actualización. También se ignora Escape mientras la aplicación está en segundo plano. Validación: ocho comprobaciones de la política de pausa y compilación conjunta de gameplay sin errores. Pendiente probar Alt+Tab, minimizar y volver desde una transición en una build.
+
 ## 13. Avance: lectura de la inmovilización real del jefe
 
 El jefe muestra una pequeña marca neutra y una barra mientras su temporizador de inmovilización está activo por Parry, Firewall o Containment Lock. La barra sigue el tiempo real restante y toma como referencia el mayor tiempo observado en esa inmovilización; una extensión del efecto actualiza esa referencia. No es una cuenta regresiva del estado especial ni predice cuándo termina un ataque.
