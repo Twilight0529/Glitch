@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## Adicional: contexto del final de cada run en telemetría local
+
+Cada registro nuevo incluye `schemaVersion: 2` y un bloque `endContext` con causa, arena, estado actual del jefe, posición del jugador y segundos de gameplay al aceptar el final. La primera captura se conserva aunque lleguen más contactos, termine la cinemática o se destruya la escena. Los campos existentes y los archivos históricos no se reescriben.
+
+Las rutas letales actuales distinguen contacto del jefe, clon de Split, proyectil, fantasma de Replay Predator, espinas de Core y barrido de Breach. La API de salida también distingue reinicio, regreso al menú, cierre de aplicación y destrucción genérica de escena. `enemyState` representa el estado observado al aceptar la derrota, no necesariamente el que creó un proyectil anterior. Una causa no informada queda como `unknown`: no se adivina.
+
+Los datos se acumulan en memoria y aprovechan el guardado único al terminar, sin nuevos envíos a Firebase, consultas de red ni escrituras por frame. Cerrar durante la cinemática conserva la derrota ya aceptada en lugar de clasificarla como abandono. Validación: diez pruebas de primera captura, independencia entre runs y normalización de campos, revisión de todos los puntos de derrota y compilación conjunta. Pendiente verificar los JSONL generados en una run real, reinicio y cierre de build.
+
 ## Adicional: recogida única de recompensas
 
 Los pickups de puntos y powerups se cierran antes de entregar su recompensa y desactivan su collider inmediatamente. Esto evita que varios contactos físicos en el mismo frame dupliquen puntos, efectos, carga de Firewall, estadísticas, audio o partículas mientras Unity espera para destruir el objeto. Al vencer también se cierran antes de pedir su destrucción.

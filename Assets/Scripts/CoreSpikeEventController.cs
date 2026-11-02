@@ -371,7 +371,7 @@ public class CoreSpikeHazard : MonoBehaviour
         {
             gameManager = FindAnyObjectByType<GameManager>();
         }
-        gameManager?.RequestPlayerDefeat(player);
+        gameManager?.RequestPlayerDefeat(player, "core_spikes");
     }
 
     private void CreateSpikeVisuals(Vector2 size)

@@ -507,7 +507,7 @@ public class SplitAnomalyCloneController : MonoBehaviour
                 return;
             }
 
-            gameManager?.RequestPlayerDefeat(hitPlayer);
+            gameManager?.RequestPlayerDefeat(hitPlayer, "split_clone_contact");
         }
     }
 
@@ -533,7 +533,7 @@ public class SplitAnomalyCloneController : MonoBehaviour
                 return;
             }
 
-            gameManager?.RequestPlayerDefeat(hitPlayer);
+            gameManager?.RequestPlayerDefeat(hitPlayer, "split_clone_contact");
         }
     }
 }

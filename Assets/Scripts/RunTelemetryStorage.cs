@@ -8,6 +8,8 @@ public static class RunTelemetryStorage
     [Serializable]
     private class RunRecord
     {
+        public int schemaVersion = 2;
+        public RunEndContext endContext = new RunEndContext();
         public string version;
         public string sessionId;
         public string startedAtUtc;
@@ -70,6 +72,12 @@ public static class RunTelemetryStorage
     public static void Breach() { if (current != null) current.breaches++; }
     public static void ContractCompleted() { if (current != null) current.contractsCompleted++; }
     public static void UpgradeChosen() { if (current != null) current.upgradesChosen++; }
+
+    public static void CaptureEndContext(string source, string arena, string enemyState, float x, float y, float seconds)
+    {
+        if (current == null || recorded) return;
+        current.endContext.TryCapture(source, arena, enemyState, x, y, seconds);
+    }
 
     public static void EndRun(int score, float survivalSeconds, string reason)
     {

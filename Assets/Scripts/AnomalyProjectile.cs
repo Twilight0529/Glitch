@@ -161,7 +161,7 @@ public class AnomalyProjectile : MonoBehaviour
 
             if (gameManager != null && gameManager.IsRunActive && !gameManager.IsGameOver)
             {
-                gameManager.RequestPlayerDefeat(player);
+                gameManager.RequestPlayerDefeat(player, "anomaly_projectile");
             }
 
             Destroy(gameObject);

@@ -7688,7 +7688,7 @@ public class EnemyController : MonoBehaviour
                 return;
             }
 
-            gameManager?.RequestPlayerDefeat(hitPlayer);
+            gameManager?.RequestPlayerDefeat(hitPlayer, "anomaly_contact");
         }
     }
 
@@ -7726,7 +7726,7 @@ public class EnemyController : MonoBehaviour
                 return;
             }
 
-            gameManager?.RequestPlayerDefeat(hitPlayer);
+            gameManager?.RequestPlayerDefeat(hitPlayer, "anomaly_contact");
         }
     }
 
@@ -7979,7 +7979,7 @@ public class ReplayPredatorGhostFx : MonoBehaviour
             return;
         }
 
-        gameManager.RequestPlayerDefeat(player);
+        gameManager.RequestPlayerDefeat(player, "replay_predator_ghost");
         Destroy(gameObject);
     }
 

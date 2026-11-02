@@ -477,10 +477,7 @@ public class GameManager : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (!IsGameOver && !IsLocalVersus && SurvivalTime > 0f)
-        {
-            RunTelemetryStorage.EndRun(CurrentScore, SurvivalTime, "abandoned");
-        }
+        RecordRunExit("scene_exit");
 
         if (introTutorialOpen || contextTutorialOpen)
         {
@@ -660,6 +657,7 @@ public class GameManager : MonoBehaviour
             TrackPerformanceAchievements(LastMetaReward.performanceGrade);
         }
 
+        CaptureTelemetryEndContext("unknown");
         RunTelemetryStorage.EndRun(CurrentScore, SurvivalTime, "defeat");
 
         Debug.Log($"GAME OVER | Time Survived: {SurvivalTime:F2}s");
@@ -687,12 +685,14 @@ public class GameManager : MonoBehaviour
         Debug.Log($"LOCAL VERSUS OVER | Winner: {winner}");
     }
 
-    public void RequestPlayerDefeat(PlayerController defeatedPlayer)
+    public void RequestPlayerDefeat(PlayerController defeatedPlayer, string source = "unknown")
     {
         if (IsGameOver || playerDefeatSequenceRunning)
         {
             return;
         }
+
+        CaptureTelemetryEndContext(source, defeatedPlayer);
 
         if (playerDefeatSequenceRoutine != null)
         {
@@ -701,6 +701,29 @@ public class GameManager : MonoBehaviour
         }
 
         playerDefeatSequenceRoutine = StartCoroutine(PlayerDefeatSequenceRoutine(defeatedPlayer));
+    }
+
+    private void CaptureTelemetryEndContext(string source, PlayerController target = null)
+    {
+        if (IsLocalVersus) return;
+        PlayerController runner = target != null ? target : playerController;
+        Vector2 position = runner != null ? runner.GetPosition() : Vector2.zero;
+        string arena = arenaGenerator != null ? arenaGenerator.ActiveThemeLabel : levelType;
+        RunTelemetryStorage.CaptureEndContext(source, arena,
+            enemyController != null ? enemyController.CurrentStateLabel : "unknown",
+            position.x, position.y, SurvivalTime);
+    }
+
+    private void OnApplicationQuit()
+    {
+        RecordRunExit("application_quit");
+    }
+
+    public void RecordRunExit(string source)
+    {
+        if (IsGameOver || IsLocalVersus || SurvivalTime <= 0f) return;
+        CaptureTelemetryEndContext(source);
+        RunTelemetryStorage.EndRun(CurrentScore, SurvivalTime, playerDefeatSequenceRunning ? "defeat" : "abandoned");
     }
 
     public void AddScore(int amount)

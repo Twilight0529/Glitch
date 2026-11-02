@@ -1133,7 +1133,7 @@ public class ArenaChaosDirector : MonoBehaviour
 
         if (gameManager != null && player != null)
         {
-            gameManager.RequestPlayerDefeat(player);
+            gameManager.RequestPlayerDefeat(player, "breach_sweep");
         }
 
         ReleaseDirectorEventPressure(BreachEventPressureKey, breachEventPressureCooldown);
@@ -1270,7 +1270,7 @@ public class ArenaChaosDirector : MonoBehaviour
         RefreshBreachSensitiveSuppression(true);
         if (gameManager != null && player != null)
         {
-            gameManager.RequestPlayerDefeat(player);
+            gameManager.RequestPlayerDefeat(player, "breach_sweep");
         }
 
         ReleaseDirectorEventPressure(BreachEventPressureKey, breachEventPressureCooldown);
