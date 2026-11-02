@@ -34,6 +34,8 @@ public class ArenaPowerupPickup : MonoBehaviour
     private SpriteRenderer auraRenderer;
     private GameObject auraObject;
     private WorldObjectAnimationFx animationFx;
+    private Transform expiryRoot;
+    private SpriteRenderer expiryFill;
 
     public PickupKind Kind => kind;
 
@@ -105,6 +107,46 @@ public class ArenaPowerupPickup : MonoBehaviour
 
         animationFx?.SetLifetimeState(lifeTimer, lifetime);
         UpdateAuraVisual();
+        UpdateExpiryVisual();
+    }
+
+    private void UpdateExpiryVisual()
+    {
+        bool visible = PickupExpiryWindow.TryGetFraction(lifeTimer, lifetime, out float fraction);
+        if (!visible)
+        {
+            if (expiryRoot != null) expiryRoot.gameObject.SetActive(false);
+            return;
+        }
+        if (expiryRoot == null)
+        {
+            GameObject root = new GameObject("PowerupExpiry");
+            root.transform.SetParent(transform, false);
+            expiryRoot = root.transform;
+            CreateExpiryPart("Track", new Vector2(0.56f, 0.055f), GlitchUiPalette.Surface, 13);
+            expiryFill = CreateExpiryPart("Remaining", new Vector2(0.54f, 0.035f), GlitchUiPalette.Alert, 14);
+        }
+        expiryRoot.gameObject.SetActive(true);
+        expiryRoot.position = new Vector3(transform.position.x, spriteRenderer.bounds.min.y - 0.14f, transform.position.z);
+        expiryRoot.rotation = Quaternion.identity;
+        Vector3 scale = transform.lossyScale;
+        expiryRoot.localScale = new Vector3(1f / Mathf.Max(0.001f, Mathf.Abs(scale.x)), 1f / Mathf.Max(0.001f, Mathf.Abs(scale.y)), 1f);
+        expiryFill.size = new Vector2(Mathf.Max(0.001f, 0.54f * fraction), 0.035f);
+        expiryFill.transform.localPosition = new Vector3(-0.27f * (1f - fraction), 0f, 0f);
+    }
+
+    private SpriteRenderer CreateExpiryPart(string label, Vector2 size, Color color, int order)
+    {
+        GameObject part = new GameObject(label);
+        part.transform.SetParent(expiryRoot, false);
+        SpriteRenderer renderer = part.AddComponent<SpriteRenderer>();
+        renderer.sprite = SquareSpriteProvider.Get();
+        renderer.sortingLayerID = spriteRenderer.sortingLayerID;
+        renderer.sortingOrder = order;
+        renderer.drawMode = SpriteDrawMode.Sliced;
+        renderer.size = size;
+        renderer.color = color;
+        return renderer;
     }
 
     private void ApplyVisualTheme()

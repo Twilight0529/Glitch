@@ -2,6 +2,12 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## Adicional: vencimiento legible de powerups en el suelo
+
+Los powerups muestran una barra amarilla durante sus últimos tres segundos disponibles en la arena. Indica el tiempo antes de desaparecer, no la duración del efecto tras recogerlos. Un pickup con vida menor a tres segundos usa su vida total como referencia, sin comenzar con la barra parcialmente vacía.
+
+El aviso no añade texto ni reemplaza los iconos. Usa dos renderers creados una sola vez al entrar en la ventana de advertencia y conserva el tamaño de mundo, separado del flotado del icono. Se destruye junto con el pickup y comparte su reloj de gameplay. No modifica recogida, recompensas ni duración. Validación: once pruebas de límites, vidas cortas y valores inválidos, y compilación conjunta sin errores. Pendiente comprobar contraste y solapamientos en Play Mode.
+
 ## Adicional: pausa al perder el foco
 
 Una run activa se pausa al cambiar de ventana o suspender la aplicación. Al volver permanece en pausa hasta que el jugador elige continuar. Se usa el menú de pausa existente, sin otro overlay ni una segunda autoridad sobre el reloj.
