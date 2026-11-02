@@ -35,6 +35,9 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
     private Transform signatureRoot;
     private SpriteRenderer signatureRingRenderer;
     private SpriteRenderer signatureGlyphRenderer;
+    private Transform movementLockRoot;
+    private SpriteRenderer movementLockFill;
+    private float movementLockObservedDuration;
     private Transform motionEchoRoot;
     private readonly SpriteRenderer[] motionEchoRenderers = new SpriteRenderer[MotionEchoCount];
     private readonly float[] motionEchoTimers = new float[MotionEchoCount];
@@ -148,6 +151,7 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
             ClearMotionEchoes();
         }
         SetOrnamentsEnabled(visible);
+        if (!visible && movementLockRoot != null) movementLockRoot.gameObject.SetActive(false);
     }
 
     public void ResetVisuals()
@@ -162,6 +166,8 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         impactStrength = 1f;
         actionStrength = 1f;
         signatureTimer = 0f;
+        movementLockObservedDuration = 0f;
+        if (movementLockRoot != null) movementLockRoot.gameObject.SetActive(false);
         motionEchoCooldown = 0f;
         ClearMotionEchoes();
         if (visualPivot != null)
@@ -226,9 +232,50 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         signatureRingRenderer.enabled = false;
         signatureGlyphRenderer.enabled = false;
 
+        // A compact neutral pause mark, not a vulnerability or safety indicator.
+        GameObject lockObject = new GameObject("MovementLockIndicator");
+        lockObject.transform.SetParent(transform, false);
+        movementLockRoot = lockObject.transform;
+        CreateMovementLockPart("PauseLeft", new Vector2(-0.045f, 0.07f), new Vector2(0.025f, 0.10f), GlitchUiPalette.Neutral, bodyOrder + 7);
+        CreateMovementLockPart("PauseRight", new Vector2(0.045f, 0.07f), new Vector2(0.025f, 0.10f), GlitchUiPalette.Neutral, bodyOrder + 7);
+        CreateMovementLockPart("TimeTrack", Vector2.zero, new Vector2(0.48f, 0.035f), GlitchUiPalette.Surface, bodyOrder + 7);
+        movementLockFill = CreateMovementLockPart("TimeRemaining", Vector2.zero, new Vector2(0.48f, 0.025f), GlitchUiPalette.Neutral, bodyOrder + 8);
+        lockObject.SetActive(false);
+
         CreateMotionEchoRig(bodyOrder);
 
         sourceRenderer.enabled = false;
+    }
+
+    private SpriteRenderer CreateMovementLockPart(string label, Vector2 position, Vector2 size, Color color, int order)
+    {
+        SpriteRenderer part = CreateRenderer(label, SquareSpriteProvider.Get(), order, movementLockRoot);
+        part.transform.localPosition = position;
+        part.drawMode = SpriteDrawMode.Sliced;
+        part.size = size;
+        part.color = color;
+        return part;
+    }
+
+    private void UpdateMovementLockIndicator(bool visible)
+    {
+        if (movementLockRoot == null) return;
+        float remaining = owner.MovementLockTimeRemaining;
+        bool active = visible && owner.CanDamagePlayer() && remaining > 0f;
+        movementLockRoot.gameObject.SetActive(active);
+        if (!active)
+        {
+            if (remaining <= 0f) movementLockObservedDuration = 0f;
+            return;
+        }
+        movementLockObservedDuration = Mathf.Max(movementLockObservedDuration, remaining);
+        float fraction = Mathf.Clamp01(remaining / Mathf.Max(0.001f, movementLockObservedDuration));
+        movementLockRoot.position = new Vector3(bodyRenderer.bounds.center.x, bodyRenderer.bounds.max.y + 0.17f, transform.position.z);
+        movementLockRoot.rotation = Quaternion.identity;
+        Vector3 parentScale = transform.lossyScale;
+        movementLockRoot.localScale = new Vector3(1f / Mathf.Max(0.001f, Mathf.Abs(parentScale.x)), 1f / Mathf.Max(0.001f, Mathf.Abs(parentScale.y)), 1f);
+        movementLockFill.size = new Vector2(Mathf.Max(0.001f, 0.48f * fraction), 0.025f);
+        movementLockFill.transform.localPosition = new Vector3(-0.24f * (1f - fraction), 0f, 0f);
     }
 
     private static void CopyRenderer(SpriteRenderer source, SpriteRenderer destination)
@@ -274,6 +321,7 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
 
         bool visible = presentationVisible && bodyRenderer.enabled && owner.gameObject.activeInHierarchy;
         SetOrnamentsEnabled(visible);
+        UpdateMovementLockIndicator(visible);
         if (!visible)
         {
             ClearMotionEchoes();

@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 13. Avance: lectura de la inmovilización real del jefe
+
+El jefe muestra una pequeña marca neutra y una barra mientras su temporizador de inmovilización está activo por Parry, Firewall o Containment Lock. La barra sigue el tiempo real restante y toma como referencia el mayor tiempo observado en esa inmovilización; una extensión del efecto actualiza esa referencia. No es una cuenta regresiva del estado especial ni predice cuándo termina un ataque.
+
+La señal conserva su tamaño de mundo aunque el cuerpo se deforme, usa cuatro renderers reutilizados y no crea objetos por frame. Se oculta con el enemigo, durante la llegada protegida, al terminar la run o al reiniciar sus visuales. El reloj sigue siendo el del gameplay y no avanza al pausar. Se mantienen los colores del cuerpo y las señales de ataque: ni el contacto, ni los proyectiles, ni las habilidades se vuelven inofensivos.
+
+Esto mejora la lectura de la inmovilización, pero **no completa la idea 13 como una ventana segura general**: requeriría decidir qué habilidades se interrumpen y revisar el balance de cada estado. Validación: compilación de gameplay sin errores y revisión de tiempo, visibilidad y reutilización. Pendiente Play Mode para comprobar contraste, escala y convivencia con los glifos de estado.
+
 ## 16. Identidad y duración de State Hijack
 
 El slot de la habilidad capturada muestra el glifo existente del estado de origen, el efecto y su duración configurada cuando corresponde. Los efectos instantáneos se describen como acciones, sin un temporizador ficticio. La duración informada corresponde al efecto tras activarlo: la captura guardada no caduca.

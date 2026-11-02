@@ -363,6 +363,8 @@ public class EnemyController : MonoBehaviour
     public bool IsCurrentStateLevelThree => IsLevelThreeState(currentState);
     public bool IsCurrentStateMajor => IsMajorState(currentState);
     public Vector2 CurrentVelocity => rb != null ? rb.linearVelocity : Vector2.zero;
+    // This stops pursuit, not contact damage, existing projectiles or state abilities.
+    public float MovementLockTimeRemaining => Mathf.Max(0f, parryStunTimer);
     public bool IsLocalVersusControlled => localVersusControl;
     public float LocalVersusStateTimeRemaining => localVersusControl ? Mathf.Max(0f, localVersusStateDuration - stateTimer) : 0f;
     public float LocalVersusManualChangeTimeRemaining => localVersusControl ? Mathf.Max(0f, localVersusManualChangeUnlock - stateTimer) : 0f;
