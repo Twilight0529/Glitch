@@ -35,6 +35,8 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
     private float motionIntensity = 1f;
     private float settingsRefreshTimer;
     private float dashPulse;
+    private float dashReadyPulse;
+    private readonly ReadinessTransition dashReadiness = new ReadinessTransition();
     private float parryPulse;
     private float parrySuccessPulse;
     private float parryFailurePulse;
@@ -185,6 +187,8 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
 
     public void ResetVisuals()
     {
+        dashReadiness.Reset();
+        dashReadyPulse = 0f;
         terminalSequence = false;
         previousVelocity = Vector2.zero;
         movementScale = Vector2.one;
@@ -324,6 +328,9 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
         animationClock += dt * clockRate;
 
         TickPulses(dt);
+        bool dashReady = owner.IsGhostDashReady;
+        if (!dashReady) dashReadyPulse = 0f;
+        if (dashReadiness.Observe(dashReady)) dashReadyPulse = 1f;
         UpdateMovement(dt);
         UpdateBody(amplitude);
         UpdateOrnaments(amplitude);
@@ -333,6 +340,7 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
     private void TickPulses(float dt)
     {
         dashPulse = Mathf.MoveTowards(dashPulse, 0f, dt * 4.6f);
+        dashReadyPulse = Mathf.MoveTowards(dashReadyPulse, 0f, dt * 3.4f);
         parryPulse = Mathf.MoveTowards(parryPulse, 0f, dt * 6.2f);
         parrySuccessPulse = Mathf.MoveTowards(parrySuccessPulse, 0f, dt * 5.2f);
         parryFailurePulse = Mathf.MoveTowards(parryFailurePulse, 0f, dt * 3.5f);
@@ -470,12 +478,17 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
             float readiness = owner.IsFirewallBurstReady ? 1f : 0f;
             float shellPulse = 0.5f + 0.5f * Mathf.Sin(animationClock * (readiness > 0f ? 9.5f : 4.8f));
             float shellScale = 1.105f + shellPulse * 0.018f + dash * 0.055f + parry * 0.035f;
+            float dashReadyArrival = PulseEnvelope(dashReadyPulse);
+            shellScale += dashReadyArrival * 0.075f * amplitude;
             shellRenderer.transform.localScale = Vector3.one * shellScale;
             Color shellColor = Color.Lerp(GlitchUiPalette.Surface, accent, 0.72f);
+            // Information cyan; warning, failure and successful combat flashes keep priority.
+            if (!owner.IsFirewallBurstReady)
+                shellColor = Color.Lerp(shellColor, GlitchUiPalette.Information, dashReadyArrival * 0.80f);
             shellColor = Color.Lerp(shellColor, GlitchUiPalette.Alert, owner.PhaseDashExpiryWarningStrength * 0.85f);
             shellColor = Color.Lerp(shellColor, GlitchUiPalette.Alert, parryFailurePulse * 0.85f);
             shellColor = Color.Lerp(shellColor, Color.white, parrySuccess * 0.52f + firewallBurst * 0.68f);
-            shellColor.a = Mathf.Clamp01(color.a * Mathf.Lerp(0.64f, 0.94f, Mathf.Clamp01(shellPulse + readiness * 0.25f)));
+            shellColor.a = Mathf.Clamp01(color.a * Mathf.Lerp(0.64f, 0.94f, Mathf.Clamp01(shellPulse + readiness * 0.25f + dashReadyArrival * 0.65f)));
             shellRenderer.color = shellColor;
         }
     }

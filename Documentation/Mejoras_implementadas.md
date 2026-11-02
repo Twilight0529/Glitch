@@ -2,6 +2,12 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## Adicional: aviso de dash recargado en el jugador
+
+La carcasa del jugador produce un pulso cian breve cuando el dash pasa de no disponible a listo. No se dispara al aparecer, no se repite mientras permanece listo y se cancela si el jugador vuelve a gastarlo. Usa la disponibilidad real del controlador, no una copia del cooldown, por lo que también espera que termine un dash todavía activo.
+
+Se reutiliza la carcasa existente: no agrega texto, iconos, objetos ni sonidos. El movimiento respeta la intensidad visual configurada y se congela al pausar. Los colores de aviso de Phase Dash, fallo de Parry y los flashes de éxito conservan prioridad; Firewall listo conserva su color. Validación: nueve comprobaciones del detector de disponibilidad y su reinicio, más compilación conjunta sin errores. Pendiente comprobar la intensidad del pulso en Play Mode.
+
 ## Adicional: vencimiento legible de powerups en el suelo
 
 Los powerups muestran una barra amarilla durante sus últimos tres segundos disponibles en la arena. Indica el tiempo antes de desaparecer, no la duración del efecto tras recogerlos. Un pickup con vida menor a tres segundos usa su vida total como referencia, sin comenzar con la barra parcialmente vacía.
