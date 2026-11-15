@@ -2,6 +2,12 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## Adicional: bloqueo efectivo de habilidades durante pausa
+
+El jugador deja de leer acciones y de escanear amenazas cuando el reloj está detenido o hay una transición de escena. Las activaciones directas de Firewall, Parry, dash y State Hijack comparten la protección, y Orbit Guard no hace escaneos mientras está pausado. No se consumen cargas ni se inician efectos detrás del menú.
+
+El menú procesa Escape antes que el controlador del jugador. Al reanudar se bloquean las acciones durante ese frame para que el mismo input no active una habilidad. No se elimina la velocidad física ni se reinician cooldowns al pausar. Las acciones tutoriales conservan su ruta explícita una vez que el tutorial devuelve el control. Validación: diez pruebas de la política de input, incluyendo pausa, transición, reanudación y cámara lenta positiva, más compilación conjunta. Pendiente comprobar en Play Mode todas las teclas y el clic de Continuar.
+
 ## Adicional: confirmar reinicio o abandono desde pausa
 
 Reiniciar o volver al menú desde pausa abre una confirmación breve con dos opciones: cancelar o ejecutar la acción elegida. El menú y sus botones dejan de dibujarse mientras esa confirmación está abierta, evitando entradas hacia controles que estuvieran detrás. No se confirma automáticamente con Enter ni se reutiliza el clic inicial como una segunda aceptación.

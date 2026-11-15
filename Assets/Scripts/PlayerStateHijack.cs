@@ -91,6 +91,8 @@ public class PlayerStateHijack : MonoBehaviour
             return;
         }
 
+        if (!PlayerController.CanProcessGameplayActions) return;
+
         orbitGuardTimer -= Time.deltaTime;
         UpdateOrbitGuardVisual();
         orbitScanTimer -= Time.deltaTime;
@@ -132,6 +134,7 @@ public class PlayerStateHijack : MonoBehaviour
 
     public bool TryActivate()
     {
+        if (!PlayerController.CanProcessGameplayActions) return false;
         if (!HasStoredAbility || player == null || player.IsInDeathSequence || LocalVersusModeStorage.IsLocalVersus)
         {
             return false;

@@ -11,6 +11,9 @@ using UnityEngine.InputSystem;
 // Los otros sistemas le piden acciones mediante métodos públicos; este componente conserva la última palabra sobre su estado.
 public class PlayerController : MonoBehaviour
 {
+    private static readonly GameplayInputGate gameplayInputGate = new GameplayInputGate();
+    public static bool CanProcessGameplayActions => gameplayInputGate.Allows(Time.timeScale, SceneTransitionController.IsFading, Time.frameCount);
+    public static void SuppressGameplayInputForCurrentFrame() => gameplayInputGate.BlockFrame(Time.frameCount);
     // Los valores serializados están agrupados por mecánica para que se puedan balancear desde el Inspector sin buscar a ciegas.
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 11f;
@@ -540,6 +543,9 @@ public class PlayerController : MonoBehaviour
     // --- Lectura de input y habilidades -------------------------------------
     private void Update()
     {
+        // Pausing physics does not stop Update or key-down events. Do not spend
+        // abilities or scan threats behind an overlay or on its resume click.
+        if (!CanProcessGameplayActions) return;
         // Los retornos tempranos representan estados donde el jugador no debe responder: muerte, Breach o tutorial congelado.
         if (deathSequenceActive)
         {
@@ -1112,6 +1118,7 @@ public class PlayerController : MonoBehaviour
 
     public bool TryStartParryFromTutorial()
     {
+        if (!CanProcessGameplayActions) return false;
         if (deathSequenceActive || breachConsumptionActive || parryCooldownTimer > 0f)
         {
             return false;
@@ -1169,6 +1176,7 @@ public class PlayerController : MonoBehaviour
 
     public bool TryActivateFirewallBurst()
     {
+        if (!CanProcessGameplayActions) return false;
         if (!IsFirewallBurstReady || deathSequenceActive || breachConsumptionActive)
         {
             return false;
@@ -1223,6 +1231,11 @@ public class PlayerController : MonoBehaviour
 
     public bool TryParryHit(Vector2 threatPosition, out Vector2 parryDirection)
     {
+        if (!CanProcessGameplayActions)
+        {
+            parryDirection = Vector2.zero;
+            return false;
+        }
         parryDirection = ((Vector2)transform.position - threatPosition).sqrMagnitude > 0.0001f
             ? ((Vector2)transform.position - threatPosition).normalized
             : Vector2.right;
@@ -1428,6 +1441,7 @@ public class PlayerController : MonoBehaviour
 
     private bool TryStartGhostDash(Vector2 requestedDirection)
     {
+        if (!CanProcessGameplayActions) return false;
         if (deathSequenceActive || breachConsumptionActive || ghostDashTimer > 0f || ghostDashCooldownTimer > 0f)
         {
             return false;
@@ -1530,6 +1544,7 @@ public class PlayerController : MonoBehaviour
     // El parry abre una ventana corta; Firewall usa una carga separada para que ambas decisiones no compitan por el mismo timer.
     private void StartParry()
     {
+        if (!CanProcessGameplayActions) return;
         if (!HasLocalVersusParryCharge)
         {
             return;

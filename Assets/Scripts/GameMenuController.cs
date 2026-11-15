@@ -4,6 +4,7 @@ using UnityEngine.InputSystem;
 #endif
 
 // Menú que aparece sobre la partida: pausa, derrota, ranking y retorno de escena sin duplicar la lógica de la run.
+[DefaultExecutionOrder(-90)]
 public class GameMenuController : MonoBehaviour
 {
     // Capa de menu en partida: pausa, pantalla de derrota, registro de ranking y navegacion de escena.
@@ -176,6 +177,8 @@ public class GameMenuController : MonoBehaviour
     {
         if (nextState != OverlayState.Paused) exitConfirmation.Cancel();
         OverlayState previousState = state;
+        if (previousState == OverlayState.Paused && nextState == OverlayState.Playing)
+            PlayerController.SuppressGameplayInputForCurrentFrame();
         state = nextState;
         if (state == OverlayState.Defeat)
         {
