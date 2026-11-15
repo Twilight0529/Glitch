@@ -2,6 +2,12 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## Adicional: controles consultables desde pausa
+
+La pausa incluye un botón Controles que abre una referencia breve de teclado y mouse, organizada por acción e input. En modo normal incluye ambas opciones del mouse, movimiento con WASD o flechas, dash, Parry, Firewall y State Hijack. En Versus separa J1 y J2, muestra el cambio de estado de la anomalía y omite mouse e Hijack, que no están habilitados allí.
+
+La referencia reemplaza temporalmente el menú: no agrega texto permanente al HUD. Volver o Escape retorna a la pausa, sin reanudar el juego. Tiene scroll para pantallas bajas y ajusta las etiquetas a sus columnas. No implementa remapeo ni pretende ser una guía de mando; los textos reflejan los bindings actuales y deben actualizarse si cambian. Validación: catorce comprobaciones del catálogo, revisión de las rutas de teclado/mouse y compilación conjunta. Pendiente comprobar clics, scroll y resoluciones en Play Mode.
+
 ## Adicional: bloqueo efectivo de habilidades durante pausa
 
 El jugador deja de leer acciones y de escanear amenazas cuando el reloj está detenido o hay una transición de escena. Las activaciones directas de Firewall, Parry, dash y State Hijack comparten la protección, y Orbit Guard no hace escaneos mientras está pausado. No se consumen cargas ni se inician efectos detrás del menú.

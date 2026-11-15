@@ -52,6 +52,8 @@ public class GameMenuController : MonoBehaviour
     private bool applicationHasFocus = true;
     private bool applicationSuspended;
     private readonly RunExitConfirmationState exitConfirmation = new RunExitConfirmationState();
+    private bool controlsOpen;
+    private Vector2 controlsScroll;
 
     private void OnApplicationFocus(bool focused)
     {
@@ -139,6 +141,12 @@ public class GameMenuController : MonoBehaviour
 
         if (GetEscapePressedThisFrame())
         {
+            if (state == OverlayState.Paused && controlsOpen)
+            {
+                controlsOpen = false;
+                GlitchAudioManager.PlayMenuBack();
+                return;
+            }
             if (state == OverlayState.Paused && exitConfirmation.Pending != RunExitConfirmationState.Action.None)
             {
                 exitConfirmation.Cancel();
@@ -176,6 +184,7 @@ public class GameMenuController : MonoBehaviour
     private void SetState(OverlayState nextState)
     {
         if (nextState != OverlayState.Paused) exitConfirmation.Cancel();
+        if (nextState != OverlayState.Paused) controlsOpen = false;
         OverlayState previousState = state;
         if (previousState == OverlayState.Paused && nextState == OverlayState.Playing)
             PlayerController.SuppressGameplayInputForCurrentFrame();
@@ -363,13 +372,18 @@ public class GameMenuController : MonoBehaviour
             DrawRunExitConfirmation();
             return;
         }
+        if (controlsOpen)
+        {
+            DrawPauseControls();
+            return;
+        }
         float t = Time.unscaledTime;
         float pulse = 0.5f + 0.5f * Mathf.Sin(t * 2.6f);
         DrawScreenFade(0.66f);
         DrawPauseBackdrop(t, pulse);
 
         float mainW = 340f;
-        float mainH = 292f;
+        float mainH = 348f;
         float audioW = 250f;
         float gap = 16f;
         float totalW = mainW + gap + audioW;
@@ -407,7 +421,49 @@ public class GameMenuController : MonoBehaviour
             return;
         }
 
+        if (DrawPauseButton(new Rect(panel.x + 18f, panel.y + 260f, panel.width - 36f, 42f), "Controles", false))
+        {
+            controlsOpen = true;
+            controlsScroll = Vector2.zero;
+            GlitchAudioManager.PlayMenuConfirm();
+            return;
+        }
         DrawPauseAudioPanel(audioPanel);
+    }
+
+    private void DrawPauseControls()
+    {
+        DrawScreenFade(0.76f);
+        float width = Mathf.Min(620f, Mathf.Max(240f, Screen.width - 32f));
+        float height = Mathf.Min(440f, Mathf.Max(240f, Screen.height - 32f));
+        Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
+        DrawPanel(panel, GlitchUiPalette.Surface, GlitchUiPalette.Information);
+        bool versus = gameManager != null && gameManager.IsLocalVersus;
+        string title = versus ? "Teclado · Versus" : "Teclado y mouse";
+        GUIStyle heading = GetFittedSingleLineStyle(titleStyle, title, width - 32f, 28, 16);
+        heading.normal.textColor = GlitchUiPalette.Information;
+        GUI.Label(new Rect(panel.x + 16f, panel.y + 14f, width - 32f, 40f), title, heading);
+        var hints = PauseControlHints.KeyboardAndMouse(versus);
+        Rect viewport = new Rect(panel.x + 16f, panel.y + 64f, width - 32f, height - 132f);
+        float contentWidth = viewport.width - 22f;
+        controlsScroll = GUI.BeginScrollView(viewport, controlsScroll, new Rect(0f, 0f, contentWidth, hints.Count * 42f), false, true);
+        for (int i = 0; i < hints.Count; i++)
+        {
+            Rect row = new Rect(0f, i * 42f, contentWidth, 40f);
+            if (i % 2 == 0) DrawSolidRect(row, GlitchUiPalette.WithAlpha(GlitchUiPalette.Information, 0.06f));
+            float actionWidth = contentWidth * 0.42f;
+            GUIStyle actionStyle = GetFittedSingleLineStyle(bodyStyle, hints[i].action, actionWidth - 12f, 17, 11);
+            GUIStyle inputStyle = GetFittedSingleLineStyle(bodyStyle, hints[i].input, contentWidth - actionWidth - 12f, 17, 11);
+            inputStyle.normal.textColor = GlitchUiPalette.Information;
+            GUI.Label(new Rect(6f, row.y, actionWidth - 12f, row.height), hints[i].action, actionStyle);
+            GUI.Label(new Rect(actionWidth, row.y, contentWidth - actionWidth - 6f, row.height), hints[i].input, inputStyle);
+        }
+        GUI.EndScrollView();
+        if (DrawPauseButton(new Rect(panel.x + 16f, panel.yMax - 56f, width - 32f, 40f), "Volver", false))
+        {
+            controlsOpen = false;
+            GlitchAudioManager.PlayMenuBack();
+        }
     }
 
     private void DrawRunExitConfirmation()
