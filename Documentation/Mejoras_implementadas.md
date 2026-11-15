@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## Adicional: conservar identidad al renovar la sesión de Firebase
+
+Un fallo de red, una renovación rechazada o un 401 al leer el ranking ya no elimina el UID y la credencial de renovación para crear otra cuenta anónima. El 401 invalida únicamente el acceso temporal; el siguiente intento usa la identidad guardada. Un fallo de renovación deja el envío pendiente y comunica el problema, sin recurrir al alta de otra identidad.
+
+Solo una instalación sin UID ni credencial de renovación puede iniciar un alta anónima. Las respuestas deben incluir los campos necesarios y, si había un UID, pertenecer al mismo usuario. Una credencial faltante o revocada queda como un problema explícito: no se recupera automáticamente la cuenta ni se borra la progresión para resolverlo.
+
+Los lectores y el uploader comparten un único intento de autenticación concurrente, incluso si ese intento falla. Se impide que un token viejo siga usándose tras una renovación fallida y el log de ese fallo ya no incluye el cuerpo de la respuesta. Validación: once pruebas de la política de identidad, revisión de las rutas de autenticación y compilación conjunta. No se realizaron llamadas ni escrituras remotas. Pendiente comprobar con Firebase real los casos de sesión vencida, desconexión, 401 y petición simultánea.
+
 ## Adicional: preferencias numéricas resistentes a valores inválidos
 
 Volumen general, música, SFX, escala de menú, escala del HUD e intensidad de movimiento validan que sus valores sean finitos al leer y al guardar. Si aparece NaN o infinito usan el valor por defecto de esa opción; los valores finitos fuera de rango conservan el recorte a los límites existentes.

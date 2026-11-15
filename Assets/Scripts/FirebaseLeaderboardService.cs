@@ -20,6 +20,7 @@ public sealed class FirebaseLeaderboardService : MonoBehaviour
     private long tokenExpiresUtc;
     private bool busy;
     private bool submitInFlight;
+    private bool authInFlight;
     public static string Status { get; private set; } = "Firebase listo";
 
     public static bool IsConfigured => EnsureInstance().HasConfig;
@@ -63,7 +64,23 @@ public sealed class FirebaseLeaderboardService : MonoBehaviour
 
     private IEnumerator EnsureAuth()
     {
-        if (!string.IsNullOrEmpty(idToken) && DateTimeOffset.UtcNow.ToUnixTimeSeconds() < tokenExpiresUtc - 60) yield break;
+        if (!string.IsNullOrEmpty(idToken) && !string.IsNullOrEmpty(uid) && !string.IsNullOrEmpty(refreshToken) &&
+            DateTimeOffset.UtcNow.ToUnixTimeSeconds() < tokenExpiresUtc - 60) yield break;
+        if (authInFlight)
+        {
+            while (authInFlight) yield return null;
+            yield break; // Share that attempt, including its failure; do not create a retry storm.
+        }
+        authInFlight = true;
+        try { yield return AuthenticateIdentity(); }
+        finally { authInFlight = false; }
+    }
+
+    private IEnumerator AuthenticateIdentity()
+    {
+        // Never let callers use the stale access token when renewal fails.
+        idToken = string.Empty;
+        tokenExpiresUtc = 0;
 
         if (!string.IsNullOrEmpty(refreshToken))
         {
@@ -77,11 +94,22 @@ public sealed class FirebaseLeaderboardService : MonoBehaviour
                 if (request.result == UnityWebRequest.Result.Success)
                 {
                     RefreshResponse response = JsonUtility.FromJson<RefreshResponse>(request.downloadHandler.text);
-                    SaveAuth(response.id_token, response.refresh_token, response.user_id, response.expires_in);
+                    if (response != null && FirebaseIdentityPolicy.CanAccept(response.id_token, response.refresh_token, response.user_id, uid))
+                        SaveAuth(response.id_token, response.refresh_token, response.user_id, response.expires_in);
+                    else
+                        Status = "Renovación inválida; cuenta conservada";
                     yield break;
                 }
-                Debug.LogWarning($"Firebase token refresh: {request.responseCode} {request.error} {request.downloadHandler.text}");
+                Status = "No se pudo renovar la sesión; cuenta conservada";
+                Debug.LogWarning($"Firebase token refresh: HTTP {request.responseCode}. Se conserva la identidad local.");
+                yield break;
             }
+        }
+
+        if (!FirebaseIdentityPolicy.CanCreateAnonymous(uid, refreshToken))
+        {
+            Status = "Cuenta conservada: falta credencial de renovación";
+            yield break;
         }
 
         using (UnityWebRequest request = CreateJsonRequest("https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=" + UnityWebRequest.EscapeURL(config.apiKey), "POST", "{\"returnSecureToken\":true}"))
@@ -94,7 +122,10 @@ public sealed class FirebaseLeaderboardService : MonoBehaviour
                 yield break;
             }
             AuthResponse response = JsonUtility.FromJson<AuthResponse>(request.downloadHandler.text);
-            SaveAuth(response.idToken, response.refreshToken, response.localId, response.expiresIn);
+            if (response != null && FirebaseIdentityPolicy.CanAccept(response.idToken, response.refreshToken, response.localId, uid))
+                SaveAuth(response.idToken, response.refreshToken, response.localId, response.expiresIn);
+            else
+                Status = "Respuesta de autenticación incompleta";
         }
     }
 
@@ -104,14 +135,19 @@ public sealed class FirebaseLeaderboardService : MonoBehaviour
         busy = true;
         Status = "Conectando...";
         yield return EnsureAuth();
-        if (string.IsNullOrEmpty(idToken)) { Status = "Sin autenticación"; busy = false; yield break; }
+        if (string.IsNullOrEmpty(idToken))
+        {
+            if (Status == "Conectando...") Status = "Sin autenticación";
+            busy = false;
+            yield break;
+        }
         string query = "?auth=" + UnityWebRequest.EscapeURL(idToken) + "&orderBy=%22score%22&limitToLast=15";
         using (UnityWebRequest request = UnityWebRequest.Get(DatabaseRoot + "/leaderboard.json" + query))
         {
             yield return request.SendWebRequest();
             if (request.responseCode == 401)
             {
-                ClearAuth();
+                InvalidateAccessToken();
                 yield return EnsureAuth();
                 if (!string.IsNullOrEmpty(idToken))
                 {
@@ -241,15 +277,11 @@ public sealed class FirebaseLeaderboardService : MonoBehaviour
         PlayerPrefs.SetString("firebase_lb_uid", uid); PlayerPrefs.SetString("firebase_lb_expiry", tokenExpiresUtc.ToString()); PlayerPrefs.Save();
     }
 
-    private void ClearAuth()
+    private void InvalidateAccessToken()
     {
         idToken = string.Empty;
-        refreshToken = string.Empty;
-        uid = string.Empty;
         tokenExpiresUtc = 0;
         PlayerPrefs.DeleteKey("firebase_lb_id_token");
-        PlayerPrefs.DeleteKey("firebase_lb_refresh_token");
-        PlayerPrefs.DeleteKey("firebase_lb_uid");
         PlayerPrefs.DeleteKey("firebase_lb_expiry");
         PlayerPrefs.Save();
     }
