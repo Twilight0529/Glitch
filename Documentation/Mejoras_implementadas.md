@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## Adicional: pausa consistente de la anomalía y sus ataques
+
+La anomalía no procesa cambios de estado, navegación ni habilidades con el reloj detenido o durante una transición. Esto incluye el input manual de estado en Versus. Split, el controlador de nivel tres, Replay Predator, Checksum Lattice, Signal Possession y los proyectiles también detienen sus actualizaciones de gameplay. El guardado de muestras del jugador no avanza detrás del menú.
+
+Los callbacks físicos del jefe, clones y proyectiles respetan esa protección. No se borra la velocidad al pausar ni se reinician estados o enfriamientos: al continuar retoman sus valores. La presencia del enemigo se distingue de su capacidad de hacer daño para que el indicador de inmovilización pueda seguir visible y congelado en pausa. Se conserva la limpieza al terminar la run o perder al propietario.
+
+Validación: ocho pruebas de la política compartida de reloj, recompilación de las diez comprobaciones de input y compilación conjunta. Pendiente comprobar en Play Mode cada estado, sus objetos secundarios y la pulsación de Enter/Ctrl en Versus durante la pausa. No constituye una auditoría de todos los eventos ambientales del mapa.
+
 ## Adicional: conservar el mejor récord pendiente de Firebase
 
 Una respuesta de subida para 2000 puntos ya no borra un pendiente más nuevo de 2001. Solo se elimina el pendiente si el puntaje confirmado es igual o mayor. Si Firebase ya contiene ese récord o uno superior, se reconoce sin volver a escribirlo y se limpia únicamente lo que esa confirmación cubre.

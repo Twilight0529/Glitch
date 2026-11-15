@@ -6,6 +6,6 @@ public sealed class GameplayInputGate
 
     public bool Allows(float timeScale, bool transitioning, int frame)
     {
-        return timeScale > 0f && !float.IsInfinity(timeScale) && !transitioning && frame != blockedFrame;
+        return GameplayTickPolicy.CanAdvance(timeScale, transitioning) && frame != blockedFrame;
     }
 }

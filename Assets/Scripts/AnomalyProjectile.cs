@@ -113,6 +113,7 @@ public class AnomalyProjectile : MonoBehaviour
             return;
         }
 
+        if (!GameplayTickPolicy.CanAdvance(Time.timeScale, SceneTransitionController.IsFading)) return;
         float dt = Time.deltaTime;
         transform.position += (Vector3)(direction * speed * dt);
 
@@ -134,6 +135,7 @@ public class AnomalyProjectile : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
+        if (!GameplayTickPolicy.CanAdvance(Time.timeScale, SceneTransitionController.IsFading)) return;
         if (other == null)
         {
             return;

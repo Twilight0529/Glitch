@@ -180,6 +180,7 @@ public class EnemyLevelThreeStateController : MonoBehaviour
 
     private void Update()
     {
+        if (!GameplayTickPolicy.CanAdvance(Time.timeScale, SceneTransitionController.IsFading)) return;
         ResolveReferences();
         SamplePlayerBehavior();
 

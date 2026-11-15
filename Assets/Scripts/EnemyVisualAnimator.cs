@@ -261,7 +261,7 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
     {
         if (movementLockRoot == null) return;
         float remaining = owner.MovementLockTimeRemaining;
-        bool active = visible && owner.CanDamagePlayer() && remaining > 0f;
+        bool active = visible && owner.HasCombatPresence && remaining > 0f;
         movementLockRoot.gameObject.SetActive(active);
         if (!active)
         {

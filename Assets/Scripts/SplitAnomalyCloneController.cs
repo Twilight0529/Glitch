@@ -210,6 +210,7 @@ public class SplitAnomalyCloneController : MonoBehaviour
             return;
         }
 
+        if (!GameplayTickPolicy.CanAdvance(Time.timeScale, SceneTransitionController.IsFading)) return;
         if (!owner.CanDamagePlayer())
         {
             rb.linearVelocity = Vector2.zero;

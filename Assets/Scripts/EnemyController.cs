@@ -365,6 +365,8 @@ public class EnemyController : MonoBehaviour
     public Vector2 CurrentVelocity => rb != null ? rb.linearVelocity : Vector2.zero;
     // This stops pursuit, not contact damage, existing projectiles or state abilities.
     public float MovementLockTimeRemaining => Mathf.Max(0f, parryStunTimer);
+    public bool HasCombatPresence => gameManager != null && gameManager.IsRunActive && !gameManager.IsGameOver &&
+        !breachAbsorbed && postBreachReentryGraceTimer <= 0f;
     public bool IsLocalVersusControlled => localVersusControl;
     public float LocalVersusStateTimeRemaining => localVersusControl ? Mathf.Max(0f, localVersusStateDuration - stateTimer) : 0f;
     public float LocalVersusManualChangeTimeRemaining => localVersusControl ? Mathf.Max(0f, localVersusManualChangeUnlock - stateTimer) : 0f;
@@ -877,12 +879,14 @@ public class EnemyController : MonoBehaviour
 
         if (postBreachReentryGraceTimer > 0f)
         {
+            if (!GameplayTickPolicy.CanAdvance(Time.timeScale, SceneTransitionController.IsFading)) return;
             postBreachReentryGraceTimer -= Time.deltaTime;
             rb.linearVelocity = Vector2.zero;
             UpdateStatePulseVisual();
             return;
         }
 
+        if (!GameplayTickPolicy.CanAdvance(Time.timeScale, SceneTransitionController.IsFading)) return;
         RecordReplaySample();
         if (hijackDecoyTimer > 0f)
         {
@@ -3948,8 +3952,7 @@ public class EnemyController : MonoBehaviour
 
     public bool CanDamagePlayer()
     {
-        return gameManager != null && gameManager.IsRunActive && !gameManager.IsGameOver && !breachAbsorbed &&
-            postBreachReentryGraceTimer <= 0f;
+        return GameplayTickPolicy.CanAdvance(Time.timeScale, SceneTransitionController.IsFading) && HasCombatPresence;
     }
 
     public bool IsAvailableForCombatTutorial()
@@ -7666,7 +7669,7 @@ public class EnemyController : MonoBehaviour
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        if (gameManager == null || !gameManager.IsRunActive)
+        if (!CanDamagePlayer())
         {
             return;
         }
@@ -7694,7 +7697,7 @@ public class EnemyController : MonoBehaviour
 
     private void OnCollisionStay2D(Collision2D collision)
     {
-        if (gameManager == null || !gameManager.IsRunActive)
+        if (!CanDamagePlayer())
         {
             return;
         }
@@ -7704,7 +7707,7 @@ public class EnemyController : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        if (gameManager == null || !gameManager.IsRunActive)
+        if (!CanDamagePlayer())
         {
             return;
         }
@@ -7732,7 +7735,7 @@ public class EnemyController : MonoBehaviour
 
     private void OnTriggerStay2D(Collider2D other)
     {
-        if (gameManager == null || !gameManager.IsRunActive)
+        if (!CanDamagePlayer())
         {
             return;
         }
@@ -7852,6 +7855,7 @@ public class ReplayPredatorGhostFx : MonoBehaviour
             return;
         }
 
+        if (!GameplayTickPolicy.CanAdvance(Time.timeScale, SceneTransitionController.IsFading)) return;
         age += Time.deltaTime;
         if (hitCooldown > 0f)
         {
@@ -8182,6 +8186,7 @@ public class ChecksumLatticeFx : MonoBehaviour
             return;
         }
 
+        if (!GameplayTickPolicy.CanAdvance(Time.timeScale, SceneTransitionController.IsFading)) return;
         age += Time.deltaTime;
         grayscaleRefreshTimer -= Time.deltaTime;
         if (grayscaleRefreshTimer <= 0f)
@@ -8517,6 +8522,7 @@ public class SignalPossessionLure : MonoBehaviour
 
     private void Update()
     {
+        if (!GameplayTickPolicy.CanAdvance(Time.timeScale, SceneTransitionController.IsFading)) return;
         age += Time.deltaTime;
         float armed = age >= armSeconds ? 1f : Mathf.Clamp01(age / armSeconds);
         float pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * Mathf.Lerp(6f, 16f, armed));
