@@ -19,6 +19,7 @@ public sealed class FirebaseLeaderboardService : MonoBehaviour
     private string uid;
     private long tokenExpiresUtc;
     private bool busy;
+    private bool submitInFlight;
     public static string Status { get; private set; } = "Firebase listo";
 
     public static bool IsConfigured => EnsureInstance().HasConfig;
@@ -32,7 +33,7 @@ public sealed class FirebaseLeaderboardService : MonoBehaviour
     public static void SubmitPersonalBest(RankingEntry entry)
     {
         FirebaseLeaderboardService service = EnsureInstance();
-        if (service.HasConfig) service.StartCoroutine(service.SubmitRoutine(entry));
+        if (service.HasConfig && !service.submitInFlight) service.StartCoroutine(service.SubmitQueuedRoutine(entry));
     }
 
     private bool HasConfig => config != null && !string.IsNullOrWhiteSpace(config.databaseUrl) && !string.IsNullOrWhiteSpace(config.apiKey) && !config.databaseUrl.Contains("YOUR_");
@@ -123,6 +124,8 @@ public sealed class FirebaseLeaderboardService : MonoBehaviour
                             RankingStorage.ReplaceGlobalCache(ParseEntries(retry.downloadHandler.text));
                             Status = "Ranking actualizado";
                             busy = false;
+                            if (RankingStorage.TryGetPendingBest(out RankingEntry retryPending))
+                                SubmitPersonalBest(retryPending);
                             yield break;
                         }
                         Debug.LogWarning($"Firebase leaderboard retry: {retry.responseCode} {retry.error} {retry.downloadHandler.text}");
@@ -142,10 +145,37 @@ public sealed class FirebaseLeaderboardService : MonoBehaviour
         }
         busy = false;
         if (Status == "Ranking actualizado" && RankingStorage.TryGetPendingBest(out RankingEntry pending))
-            StartCoroutine(SubmitRoutine(pending));
+            SubmitPersonalBest(pending);
     }
 
-    private IEnumerator SubmitRoutine(RankingEntry entry)
+    private IEnumerator SubmitQueuedRoutine(RankingEntry entry)
+    {
+        if (submitInFlight) yield break;
+        submitInFlight = true;
+        bool anyWritten = false;
+        try
+        {
+            // Keep one uploader. A better run can update the persisted pending
+            // entry while a request is in flight; pick it up after that response.
+            if (RankingStorage.TryGetPendingBest(out RankingEntry newest) && newest.score > entry.score)
+                entry = newest;
+            while (true)
+            {
+                bool confirmed = false;
+                yield return SubmitRoutine(entry, written => { confirmed = true; anyWritten |= written; });
+                if (!confirmed) break; // Preserve pending data; no retry loop on errors.
+                if (!RankingStorage.TryGetPendingBest(out entry)) break;
+            }
+        }
+        finally
+        {
+            submitInFlight = false;
+        }
+        // One top-list refresh per successful batch, not per intermediate record.
+        if (anyWritten) RefreshTop(true);
+    }
+
+    private IEnumerator SubmitRoutine(RankingEntry entry, Action<bool> onConfirmed)
     {
         yield return EnsureAuth();
         if (string.IsNullOrEmpty(idToken) || string.IsNullOrEmpty(uid)) yield break;
@@ -166,7 +196,22 @@ public sealed class FirebaseLeaderboardService : MonoBehaviour
             if (get.downloadHandler.text != "null") remoteScore = JsonUtility.FromJson<RankingEntry>(get.downloadHandler.text).score;
         }
         RankingStorage.UpdatePersonalBestFloor(remoteScore);
-        if (entry.score <= remoteScore || string.IsNullOrEmpty(etag)) yield break;
+        // Coalesce a better score that arrived during authentication/the GET,
+        // before spending a write on the older snapshot.
+        if (RankingStorage.TryGetPendingBest(out RankingEntry latest) && latest.score > entry.score)
+            entry = latest;
+        if (entry.score <= remoteScore)
+        {
+            RankingStorage.ClearPendingBestUpTo(remoteScore);
+            Status = "Récord global sincronizado";
+            onConfirmed(false);
+            yield break;
+        }
+        if (string.IsNullOrEmpty(etag))
+        {
+            Status = "Récord pendiente: falta ETag";
+            yield break;
+        }
         entry.playerName = RankingStorage.SanitizePlayerName(entry.playerName);
         using (UnityWebRequest put = CreateJsonRequest(url, "PUT", JsonUtility.ToJson(entry)))
         {
@@ -175,9 +220,9 @@ public sealed class FirebaseLeaderboardService : MonoBehaviour
             if (put.responseCode == 200 || put.responseCode == 204)
             {
                 RankingStorage.UpdatePersonalBestFloor(entry.score);
-                RankingStorage.ClearPendingBest();
+                RankingStorage.ClearPendingBestUpTo(entry.score);
                 Status = "Récord global guardado";
-                RefreshTop(true);
+                onConfirmed(true);
             }
             else
             {

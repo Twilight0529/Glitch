@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## Adicional: conservar el mejor récord pendiente de Firebase
+
+Una respuesta de subida para 2000 puntos ya no borra un pendiente más nuevo de 2001. Solo se elimina el pendiente si el puntaje confirmado es igual o mayor. Si Firebase ya contiene ese récord o uno superior, se reconoce sin volver a escribirlo y se limpia únicamente lo que esa confirmación cubre.
+
+Las subidas pasan por un único proceso que consulta el pendiente más alto al completar cada operación. También toma un récord nuevo que haya llegado durante la autenticación o la lectura, antes de gastar una escritura en el anterior. Mantiene la condición ETag para no sobrescribir una actualización remota concurrente y solicita como máximo una actualización del top al terminar un lote que haya escrito datos. Una confirmación de algo que ya existía no fuerza otra lectura del top.
+
+Ante un error, conflicto o ausencia de ETag, conserva el pendiente para el siguiente intento normal y no entra en un bucle de reintentos. La lectura exitosa tras renovar la autenticación también puede reactivar el envío pendiente. No cambia las reglas de Firebase ni envía récords de prueba. Validación: once comprobaciones de la política de confirmación, revisión de la serialización de coroutines y compilación conjunta. Pendiente probar la secuencia completa con red lenta, error de conexión y dos récords consecutivos contra Firebase.
+
 ## Adicional: controles consultables desde pausa
 
 La pausa incluye un botón Controles que abre una referencia breve de teclado y mouse, organizada por acción e input. En modo normal incluye ambas opciones del mouse, movimiento con WASD o flechas, dash, Parry, Firewall y State Hijack. En Versus separa J1 y J2, muestra el cambio de estado de la anomalía y omite mouse e Hijack, que no están habilitados allí.

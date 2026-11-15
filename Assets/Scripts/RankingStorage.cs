@@ -160,10 +160,13 @@ public static class RankingStorage
         return false;
     }
 
-    public static void ClearPendingBest()
+    public static bool ClearPendingBestUpTo(int acknowledgedScore)
     {
+        if (!TryGetPendingBest(out RankingEntry pending) ||
+            !LeaderboardPendingPolicy.CanClear(pending.score, acknowledgedScore)) return false;
         PlayerPrefs.DeleteKey(PendingBestKey);
         PlayerPrefs.Save();
+        return true;
     }
 
     private static RankingTable LoadTable()
