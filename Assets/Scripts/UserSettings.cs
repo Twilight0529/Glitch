@@ -55,76 +55,79 @@ public static class UserSettings
 
     public static float GetMasterVolume()
     {
-        return Mathf.Clamp01(PlayerPrefs.GetFloat(MasterVolumeKey, DefaultMasterVolume));
+        return FiniteSetting.Clamp(PlayerPrefs.GetFloat(MasterVolumeKey, DefaultMasterVolume), DefaultMasterVolume, 0f, 1f);
     }
 
     public static void SetMasterVolume(float value)
     {
-        PlayerPrefs.SetFloat(MasterVolumeKey, Mathf.Clamp01(value));
+        PlayerPrefs.SetFloat(MasterVolumeKey, FiniteSetting.Clamp(value, DefaultMasterVolume, 0f, 1f));
         PlayerPrefs.Save();
     }
 
     public static float GetMusicVolume()
     {
-        return Mathf.Clamp01(PlayerPrefs.GetFloat(MusicVolumeKey, DefaultMusicVolume));
+        return FiniteSetting.Clamp(PlayerPrefs.GetFloat(MusicVolumeKey, DefaultMusicVolume), DefaultMusicVolume, 0f, 1f);
     }
 
     public static void SetMusicVolume(float value)
     {
-        PlayerPrefs.SetFloat(MusicVolumeKey, Mathf.Clamp01(value));
+        PlayerPrefs.SetFloat(MusicVolumeKey, FiniteSetting.Clamp(value, DefaultMusicVolume, 0f, 1f));
         PlayerPrefs.Save();
     }
 
     public static float GetSfxVolume()
     {
-        return Mathf.Clamp01(PlayerPrefs.GetFloat(SfxVolumeKey, DefaultSfxVolume));
+        return FiniteSetting.Clamp(PlayerPrefs.GetFloat(SfxVolumeKey, DefaultSfxVolume), DefaultSfxVolume, 0f, 1f);
     }
 
     public static void SetSfxVolume(float value)
     {
-        PlayerPrefs.SetFloat(SfxVolumeKey, Mathf.Clamp01(value));
+        PlayerPrefs.SetFloat(SfxVolumeKey, FiniteSetting.Clamp(value, DefaultSfxVolume, 0f, 1f));
         PlayerPrefs.Save();
     }
 
     public static float GetMenuUiScale()
     {
-        return Mathf.Clamp(
+        return FiniteSetting.Clamp(
             PlayerPrefs.GetFloat(MenuUiScaleKey, DefaultMenuUiScale),
+            DefaultMenuUiScale,
             MinMenuUiScale,
             MaxMenuUiScale);
     }
 
     public static void SetMenuUiScale(float value)
     {
-        PlayerPrefs.SetFloat(MenuUiScaleKey, Mathf.Clamp(value, MinMenuUiScale, MaxMenuUiScale));
+        PlayerPrefs.SetFloat(MenuUiScaleKey, FiniteSetting.Clamp(value, DefaultMenuUiScale, MinMenuUiScale, MaxMenuUiScale));
         PlayerPrefs.Save();
     }
 
     public static float GetHudScale()
     {
-        return Mathf.Clamp(
+        return FiniteSetting.Clamp(
             PlayerPrefs.GetFloat(HudScaleKey, DefaultHudScale),
+            DefaultHudScale,
             MinHudScale,
             MaxHudScale);
     }
 
     public static void SetHudScale(float value)
     {
-        PlayerPrefs.SetFloat(HudScaleKey, Mathf.Clamp(value, MinHudScale, MaxHudScale));
+        PlayerPrefs.SetFloat(HudScaleKey, FiniteSetting.Clamp(value, DefaultHudScale, MinHudScale, MaxHudScale));
         PlayerPrefs.Save();
     }
 
     public static float GetMenuMotion()
     {
-        return Mathf.Clamp(
+        return FiniteSetting.Clamp(
             PlayerPrefs.GetFloat(MenuMotionKey, DefaultMenuMotion),
+            DefaultMenuMotion,
             MinMenuMotion,
             MaxMenuMotion);
     }
 
     public static void SetMenuMotion(float value)
     {
-        PlayerPrefs.SetFloat(MenuMotionKey, Mathf.Clamp(value, MinMenuMotion, MaxMenuMotion));
+        PlayerPrefs.SetFloat(MenuMotionKey, FiniteSetting.Clamp(value, DefaultMenuMotion, MinMenuMotion, MaxMenuMotion));
         PlayerPrefs.Save();
     }
 

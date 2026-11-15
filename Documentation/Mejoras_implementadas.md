@@ -2,6 +2,12 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## Adicional: preferencias numéricas resistentes a valores inválidos
+
+Volumen general, música, SFX, escala de menú, escala del HUD e intensidad de movimiento validan que sus valores sean finitos al leer y al guardar. Si aparece NaN o infinito usan el valor por defecto de esa opción; los valores finitos fuera de rango conservan el recorte a los límites existentes.
+
+Se preservan el mute voluntario, los extremos permitidos y cualquier configuración válida. Leer una preferencia corrupta no borra progresión ni escribe en disco para repararla: devuelve un valor seguro hasta que el usuario vuelva a ajustarla. No modifica los rangos configurados. Validación: diez pruebas de límites, defaults, NaN, infinitos y mute, más compilación conjunta. Pendiente comprobar la propagación visual y de audio en Unity con preferencias de prueba.
+
 ## Adicional: pausa consistente de la anomalía y sus ataques
 
 La anomalía no procesa cambios de estado, navegación ni habilidades con el reloj detenido o durante una transición. Esto incluye el input manual de estado en Versus. Split, el controlador de nivel tres, Replay Predator, Checksum Lattice, Signal Possession y los proyectiles también detienen sus actualizaciones de gameplay. El guardado de muestras del jugador no avanza detrás del menú.
