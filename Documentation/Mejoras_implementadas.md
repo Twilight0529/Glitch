@@ -2,6 +2,12 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## Adicional: causa de derrota en el título existente
+
+La pantalla de derrota individual muestra una etiqueta breve de la causa conocida en lugar del título genérico. Distingue contacto con la anomalía, clon de Split, proyectil, eco de Replay Predator, espinas de Core y barrido de Breach. No añade otro párrafo ni otra fila al resultado: conserva el foco en la letra de rendimiento y las estadísticas.
+
+La causa se toma de la primera solicitud de derrota aceptada, antes de la cinemática, y se limpia al comenzar otra run. Una causa desconocida conserva el título configurado; no se infiere un culpable por proximidad. Versus mantiene su resultado propio. Validación: diez comprobaciones del catálogo y los casos sin causa, revisión de la captura y compilación conjunta. Pendiente comprobar las etiquetas y su ajuste de fuente en Play Mode.
+
 ## Adicional: resultados sin superposiciones en ventanas bajas
 
 La pantalla de derrota individual conserva el título y las acciones fuera del cuerpo desplazable. La letra de rendimiento y las tres estadísticas usan una región con scroll únicamente cuando no entran en la altura disponible. Esto evita que la distribución fija de 190 píxeles para la letra y las estadísticas a 270 píxeles invadan los botones al reducir la ventana.

@@ -634,9 +634,11 @@ public class GameMenuController : MonoBehaviour
         DrawPanel(panel, new Color(0.07f, 0.03f, 0.06f, 0.92f), new Color(0.94f, 0.42f, 0.55f, 0.65f));
 
         Rect area = new Rect(panel.x + 28f, panel.y + 18f, panel.width - 56f, panel.height - 36f);
-        GUIStyle fittedTitleStyle = GetFittedSingleLineStyle(titleStyle, defeatTitle, area.width, 32, 22);
+        string resultTitle = gameManager != null && !string.IsNullOrWhiteSpace(gameManager.DefeatCauseLabel)
+            ? gameManager.DefeatCauseLabel : defeatTitle;
+        GUIStyle fittedTitleStyle = GetFittedSingleLineStyle(titleStyle, resultTitle, area.width, 32, 14);
         Rect titleRect = new Rect(area.x, area.y, area.width, 46f);
-        DrawGlitchLabel(titleRect, defeatTitle, fittedTitleStyle, textGlitch * 0.30f);
+        DrawGlitchLabel(titleRect, resultTitle, fittedTitleStyle, textGlitch * 0.30f);
         DrawSolidRect(new Rect(area.x + 24f, area.y + 52f, area.width - 48f, 1f), new Color(1f, 0.52f, 0.62f, 0.26f));
 
         float time = gameManager != null ? gameManager.SurvivalTime : 0f;

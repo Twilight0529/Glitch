@@ -257,6 +257,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float scorePopupLifetime = 0.95f;
 
     public bool IsGameOver { get; private set; }
+    public string DefeatCauseLabel { get; private set; } = string.Empty;
     public bool IsRunActive => runPhase == RunPhase.Active && !IsGameOver && !playerDefeatSequenceRunning;
     public bool IsLocalVersus => LocalVersusModeStorage.IsLocalVersus;
     public string VersusWinnerLabel { get; private set; }
@@ -692,6 +693,7 @@ public class GameManager : MonoBehaviour
             return;
         }
 
+        DefeatCauseLabel = DefeatCausePresentation.Label(source);
         CaptureTelemetryEndContext(source, defeatedPlayer);
 
         if (playerDefeatSequenceRoutine != null)
@@ -1772,6 +1774,7 @@ public class GameManager : MonoBehaviour
         lastContractCompletionLabel = string.Empty;
         contractDataBonusEarned = 0;
         activeOperation = ContainmentOperationStorage.SelectedOperation;
+        DefeatCauseLabel = string.Empty;
         RunTelemetryStorage.BeginRun(levelType, activeOperation.title);
         operationRunRecorded = false;
         operationPlayerModifiersApplied = false;
