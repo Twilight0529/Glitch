@@ -2,6 +2,12 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## Adicional: resultados sin superposiciones en ventanas bajas
+
+La pantalla de derrota individual conserva el título y las acciones fuera del cuerpo desplazable. La letra de rendimiento y las tres estadísticas usan una región con scroll únicamente cuando no entran en la altura disponible. Esto evita que la distribución fija de 190 píxeles para la letra y las estadísticas a 270 píxeles invadan los botones al reducir la ventana.
+
+Se mantiene la distribución vertical habitual en ventanas grandes. Las cifras de las métricas ajustan su fuente al ancho de su tarjeta para no dibujarse encima de la siguiente. La posición del scroll se reinicia al entrar en derrota; no cambia la clasificación ni el bloqueo inicial de interacción. Validación: diecisiete comprobaciones geométricas para cinco alturas y el espacio del scrollbar, más compilación conjunta. Pendiente comprobar scroll, animación y tamaños de ventana en Play Mode. La pantalla de resultado de Versus no forma parte de este cambio.
+
 ## Adicional: conservar identidad al renovar la sesión de Firebase
 
 Un fallo de red, una renovación rechazada o un 401 al leer el ranking ya no elimina el UID y la credencial de renovación para crear otra cuenta anónima. El 401 invalida únicamente el acceso temporal; el siguiente intento usa la identidad guardada. Un fallo de renovación deja el envío pendiente y comunica el problema, sin recurrir al alta de otra identidad.

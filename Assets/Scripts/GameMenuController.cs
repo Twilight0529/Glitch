@@ -54,6 +54,7 @@ public class GameMenuController : MonoBehaviour
     private readonly RunExitConfirmationState exitConfirmation = new RunExitConfirmationState();
     private bool controlsOpen;
     private Vector2 controlsScroll;
+    private Vector2 defeatBodyScroll;
 
     private void OnApplicationFocus(bool focused)
     {
@@ -193,6 +194,7 @@ public class GameMenuController : MonoBehaviour
         {
             PrepareDefeatRegistration();
             defeatStartedAtUnscaled = Time.unscaledTime;
+            defeatBodyScroll = Vector2.zero;
         }
         if (state != OverlayState.Playing && state != previousState)
         {
@@ -643,19 +645,24 @@ public class GameMenuController : MonoBehaviour
             ? gameManager.LastMetaReward
             : MetaProgressionStorage.LastRunReward;
         string grade = string.IsNullOrWhiteSpace(reward.performanceGrade) ? "D" : reward.performanceGrade;
-        DrawPerformanceGrade(new Rect(area.x, area.y + 66f, area.width, 190f), grade, defeatElapsed, pulse);
+        DefeatBodyLayout bodyLayout = new DefeatBodyLayout(area.width, area.height);
+        Rect resultViewport = new Rect(area.x, area.y + DefeatBodyLayout.BodyTop, area.width, bodyLayout.viewportHeight);
+        defeatBodyScroll = GUI.BeginScrollView(resultViewport, defeatBodyScroll,
+            new Rect(0f, 0f, bodyLayout.contentWidth, DefeatBodyLayout.ContentHeight), false, bodyLayout.needsScroll);
+        DrawPerformanceGrade(new Rect(0f, 0f, bodyLayout.contentWidth, 190f), grade, defeatElapsed, pulse);
 
-        float statY = area.y + 270f;
+        float statY = 204f;
         float statGap = 10f;
-        float statWidth = (area.width - statGap * 2f) / 3f;
-        DrawResultMetric(new Rect(area.x, statY, statWidth, 64f), "PUNTOS", score.ToString(), GlitchUiPalette.Information);
-        DrawResultMetric(new Rect(area.x + statWidth + statGap, statY, statWidth, 64f), "TIEMPO", $"{time:F1}s", GlitchUiPalette.Neutral);
-        DrawResultMetric(new Rect(area.x + (statWidth + statGap) * 2f, statY, statWidth, 64f), "DATOS", $"+{reward.dataEarned}", GlitchUiPalette.Success);
+        float statWidth = (bodyLayout.contentWidth - statGap * 2f) / 3f;
+        DrawResultMetric(new Rect(0f, statY, statWidth, 64f), "PUNTOS", score.ToString(), GlitchUiPalette.Information);
+        DrawResultMetric(new Rect(statWidth + statGap, statY, statWidth, 64f), "TIEMPO", $"{time:F1}s", GlitchUiPalette.Neutral);
+        DrawResultMetric(new Rect((statWidth + statGap) * 2f, statY, statWidth, 64f), "DATOS", $"+{reward.dataEarned}", GlitchUiPalette.Success);
+        GUI.EndScrollView();
 
         bool canInteract = defeatElapsed >= Mathf.Max(0f, defeatInputUnlockDelay);
         bool prevEnabled = GUI.enabled;
         GUI.enabled = canInteract;
-        float actionsY = area.yMax - 48f;
+        float actionsY = area.y + bodyLayout.actionsTop;
         float actionWidth = (area.width - 12f) * 0.5f;
         if (GUI.Button(new Rect(area.x, actionsY, actionWidth, 42f), "REINTENTAR", buttonStyle))
         {
@@ -755,7 +762,8 @@ public class GameMenuController : MonoBehaviour
         DrawSolidRect(rect, new Color(0.025f, 0.04f, 0.075f, 0.82f));
         DrawSolidRect(new Rect(rect.x, rect.yMax - 3f, rect.width, 3f), new Color(accent.r, accent.g, accent.b, 0.76f));
         GUIStyle labelStyle = new GUIStyle(rankingStatusStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Normal };
-        GUIStyle valueStyle = new GUIStyle(titleStyle) { alignment = TextAnchor.MiddleCenter, fontSize = 24 };
+        GUIStyle valueStyle = GetFittedSingleLineStyle(titleStyle, value, rect.width - 12f, 24, 10);
+        valueStyle.alignment = TextAnchor.MiddleCenter;
         valueStyle.normal.textColor = accent;
         GUI.Label(new Rect(rect.x + 6f, rect.y + 3f, rect.width - 12f, 18f), label, labelStyle);
         GUI.Label(new Rect(rect.x + 6f, rect.y + 20f, rect.width - 12f, 37f), value, valueStyle);
