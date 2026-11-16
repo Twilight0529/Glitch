@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## Adicional: espera finita en las peticiones de Firebase
+
+Las lecturas del top, la lectura del récord personal, la escritura condicional y las peticiones de autenticación configuran un timeout por petición. Por defecto es de quince segundos. El campo opcional `requestTimeoutSeconds` del JSON de configuración permite ajustarlo entre cinco y sesenta segundos; un valor ausente, cero o negativo usa el valor por defecto, nunca una espera ilimitada.
+
+Un fallo de conexión sigue las rutas de error existentes: conserva el récord pendiente y la identidad, y permite terminar el intento en vez de dejar una petición de red sin límite configurado. El límite corresponde a cada petición, no al lote completo ni a una promesa de tiempo total de toda la autenticación. No introduce reintentos periódicos ni cambia las reglas, la caché o el criterio de récord superior.
+
+Validación: ocho comprobaciones del rango y compatibilidad de configuración, revisión de todos los constructores de peticiones y compilación conjunta. No se realizaron llamadas a Firebase. Pendiente probar con red lenta o interrumpida que Unity informe el timeout y libere el intento de lectura/subida.
+
 ## Adicional: causa de derrota en el título existente
 
 La pantalla de derrota individual muestra una etiqueta breve de la causa conocida en lugar del título genérico. Distingue contacto con la anomalía, clon de Split, proyectil, eco de Replay Predator, espinas de Core y barrido de Breach. No añade otro párrafo ni otra fila al resultado: conserva el foco en la letra de rendimiento y las estadísticas.

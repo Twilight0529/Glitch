@@ -8,7 +8,7 @@ using UnityEngine.Networking;
 
 public sealed class FirebaseLeaderboardService : MonoBehaviour
 {
-    [Serializable] private class Config { public string databaseUrl; public string apiKey; public int cacheSeconds = 120; }
+    [Serializable] private class Config { public string databaseUrl; public string apiKey; public int cacheSeconds = 120; public int requestTimeoutSeconds = 15; }
     [Serializable] private class AuthResponse { public string idToken; public string refreshToken; public string localId; public string expiresIn; }
     [Serializable] private class RefreshResponse { public string id_token; public string refresh_token; public string user_id; public string expires_in; }
 
@@ -89,6 +89,7 @@ public sealed class FirebaseLeaderboardService : MonoBehaviour
             {
                 request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
                 request.downloadHandler = new DownloadHandlerBuffer();
+                request.timeout = RequestTimeoutSeconds;
                 request.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded");
                 yield return request.SendWebRequest();
                 if (request.result == UnityWebRequest.Result.Success)
@@ -142,7 +143,7 @@ public sealed class FirebaseLeaderboardService : MonoBehaviour
             yield break;
         }
         string query = "?auth=" + UnityWebRequest.EscapeURL(idToken) + "&orderBy=%22score%22&limitToLast=15";
-        using (UnityWebRequest request = UnityWebRequest.Get(DatabaseRoot + "/leaderboard.json" + query))
+        using (UnityWebRequest request = CreateGetRequest(DatabaseRoot + "/leaderboard.json" + query))
         {
             yield return request.SendWebRequest();
             if (request.responseCode == 401)
@@ -152,7 +153,7 @@ public sealed class FirebaseLeaderboardService : MonoBehaviour
                 if (!string.IsNullOrEmpty(idToken))
                 {
                     string retryQuery = "?auth=" + UnityWebRequest.EscapeURL(idToken) + "&orderBy=%22score%22&limitToLast=15";
-                    using (UnityWebRequest retry = UnityWebRequest.Get(DatabaseRoot + "/leaderboard.json" + retryQuery))
+                    using (UnityWebRequest retry = CreateGetRequest(DatabaseRoot + "/leaderboard.json" + retryQuery))
                     {
                         yield return retry.SendWebRequest();
                         if (retry.result == UnityWebRequest.Result.Success)
@@ -218,7 +219,7 @@ public sealed class FirebaseLeaderboardService : MonoBehaviour
         string url = DatabaseRoot + "/leaderboard/" + UnityWebRequest.EscapeURL(uid) + ".json?auth=" + UnityWebRequest.EscapeURL(idToken);
         string etag = null;
         int remoteScore = -1;
-        using (UnityWebRequest get = UnityWebRequest.Get(url))
+        using (UnityWebRequest get = CreateGetRequest(url))
         {
             get.SetRequestHeader("X-Firebase-ETag", "true");
             yield return get.SendWebRequest();
@@ -288,12 +289,22 @@ public sealed class FirebaseLeaderboardService : MonoBehaviour
 
     private string DatabaseRoot => config.databaseUrl.TrimEnd('/');
 
-    private static UnityWebRequest CreateJsonRequest(string url, string method, string json)
+    private int RequestTimeoutSeconds => LeaderboardRequestPolicy.TimeoutSeconds(config != null ? config.requestTimeoutSeconds : 0);
+
+    private UnityWebRequest CreateGetRequest(string url)
+    {
+        UnityWebRequest request = UnityWebRequest.Get(url);
+        request.timeout = RequestTimeoutSeconds;
+        return request;
+    }
+
+    private UnityWebRequest CreateJsonRequest(string url, string method, string json)
     {
         UnityWebRequest request = new UnityWebRequest(url, method);
         request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
         request.downloadHandler = new DownloadHandlerBuffer();
         request.SetRequestHeader("Content-Type", "application/json");
+        request.timeout = RequestTimeoutSeconds;
         return request;
     }
 
