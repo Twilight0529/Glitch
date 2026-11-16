@@ -2,6 +2,12 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 24. Volver a consultar controles y mecánicas
+
+Archivo incluye una Guía de mecánicas con ocho fichas: movimiento, Dash, Parry, Firewall, datos/powerups, Phase Dash, Breach y State Hijack. Cada una presenta una explicación breve, sus controles reales y un ejemplo visual animado. Los ejemplos usan las formas del juego, sin crear actores de gameplay ni iniciar una run.
+
+Se pueden consultar incluso con las pausas tutoriales desactivadas, y los flags existentes señalan los tutoriales ya vistos. La guía no marca tutoriales como completados ni reinicia su progreso. Tiene navegación anterior/siguiente, vuelta a Archivo y scroll para ventanas bajas, incluido el propio hub de Archivo. No altera ranking, recompensas o dificultad. Validación: trece comprobaciones del contenido y sus controles, compilación de gameplay y revisión de navegación sin escrituras de progresión. Pendiente comprobar ejemplos, scroll y texto en Play Mode.
+
 ## Adicional: espera finita en las peticiones de Firebase
 
 Las lecturas del top, la lectura del récord personal, la escritura condicional y las peticiones de autenticación configuran un timeout por petición. Por defecto es de quince segundos. El campo opcional `requestTimeoutSeconds` del JSON de configuración permite ajustarlo entre cinco y sesenta segundos; un valor ausente, cero o negativo usa el valor por defecto, nunca una espera ilimitada.

@@ -7,7 +7,7 @@ using UnityEngine.InputSystem;
 
 // Controla todas las pantallas del menú principal y su fondo vivo.
 // Los datos persistentes vienen de los Storage; acá solamente se presentan y se traducen en acciones del jugador.
-public class MainMenuController : MonoBehaviour
+public partial class MainMenuController : MonoBehaviour
 {
     // Menu principal: muestra opciones, ranking, fondo animado y transicion hacia el juego.
     [System.Serializable]
@@ -38,6 +38,7 @@ public class MainMenuController : MonoBehaviour
         Main,
         Play,
         Archive,
+        Guide,
         Operations,
         Options,
         Stats,
@@ -185,6 +186,7 @@ public class MainMenuController : MonoBehaviour
             showCredits = false;
             showPlayHub = false;
             showArchiveHub = false;
+            showMechanicsReference = false;
             GlitchAudioManager.PlayMenuToggle();
         }
 
@@ -212,7 +214,11 @@ public class MainMenuController : MonoBehaviour
         bool previousEnabled = GUI.enabled;
         ApplyMenuPageTransition(previousMatrix, previousColor);
 
-        if (showOptions)
+        if (showMechanicsReference)
+        {
+            DrawMechanicsReference();
+        }
+        else if (showOptions)
         {
             DrawOptionsMenu();
         }
@@ -263,6 +269,7 @@ public class MainMenuController : MonoBehaviour
     private MenuView GetCurrentMenuView()
     {
         if (showPlayerNameSetup) return MenuView.PlayerName;
+        if (showMechanicsReference) return MenuView.Guide;
         if (showOptions) return MenuView.Options;
         if (showStats) return MenuView.Stats;
         if (showOperations) return MenuView.Operations;
@@ -596,9 +603,13 @@ public class MainMenuController : MonoBehaviour
     private void DrawArchiveHub()
     {
         Rect panel = DrawHubShell("ARCHIVO", GlitchUiPalette.Special);
-        Rect content = new Rect(panel.x + 26f, panel.y + 112f, panel.width - 52f, panel.height - 164f);
+        Rect viewport = new Rect(panel.x + 26f, panel.y + 112f, panel.width - 52f, Mathf.Max(40f, panel.height - 164f));
+        float contentWidth = viewport.width - (viewport.height < 256f ? 22f : 0f);
+        archiveHubScroll = GUI.BeginScrollView(viewport, archiveHubScroll, new Rect(0f, 0f, contentWidth, 256f));
+        Rect content = new Rect(0f, 0f, contentWidth, 256f);
         Rect unlocksRect = new Rect(content.x, content.y, content.width, 82f);
         Rect statsRect = new Rect(content.x, unlocksRect.yMax + 14f, content.width, 82f);
+        Rect guideRect = new Rect(content.x, statsRect.yMax + 14f, content.width, 64f);
 
         if (DrawMainCommandButton(unlocksRect, "unlocks", "DESBLOQUEOS", new Color(0.48f, 0.94f, 1f, 1f)))
         {
@@ -608,15 +619,21 @@ public class MainMenuController : MonoBehaviour
         {
             showStats = true;
         }
+        if (DrawMainCommandButton(guideRect, "stats", "GUIA DE MECANICAS", GlitchUiPalette.Information))
+        {
+            showMechanicsReference = true;
+            mechanicsReferenceScroll = Vector2.zero;
+        }
+        GUI.EndScrollView();
 
         DrawHubBackButton(panel, () => showArchiveHub = false);
     }
 
-    private Rect DrawHubShell(string title, Color accent)
+    private Rect DrawHubShell(string title, Color accent, float preferredHeight = 460f)
     {
         DrawScreenFade(0.48f);
         float bob = Mathf.Sin(Time.unscaledTime * 1.15f) * 3f;
-        Rect panel = CenterRect(Mathf.Min(620f, Screen.width - 34f), Mathf.Min(460f, Screen.height - 34f));
+        Rect panel = CenterRect(Mathf.Min(620f, Screen.width - 34f), Mathf.Min(preferredHeight, Screen.height - 34f));
         panel.y += bob;
         DrawPanel(panel, new Color(0.025f, 0.045f, 0.08f, 0.94f), new Color(accent.r, accent.g, accent.b, 0.58f));
         DrawPanelFx(panel, accent, 0.12f);
