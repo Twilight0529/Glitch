@@ -650,15 +650,18 @@ public class GameMenuController : MonoBehaviour
         DefeatBodyLayout bodyLayout = new DefeatBodyLayout(area.width, area.height);
         Rect resultViewport = new Rect(area.x, area.y + DefeatBodyLayout.BodyTop, area.width, bodyLayout.viewportHeight);
         defeatBodyScroll = GUI.BeginScrollView(resultViewport, defeatBodyScroll,
-            new Rect(0f, 0f, bodyLayout.contentWidth, DefeatBodyLayout.ContentHeight), false, bodyLayout.needsScroll);
-        DrawPerformanceGrade(new Rect(0f, 0f, bodyLayout.contentWidth, 190f), grade, defeatElapsed, pulse);
+            new Rect(0f, 0f, bodyLayout.contentWidth, bodyLayout.contentHeight), false, bodyLayout.needsScroll);
+        DrawPerformanceGrade(new Rect(0f, 0f, bodyLayout.contentWidth, 154f), grade, defeatElapsed, pulse);
+        RunPerformanceSummary summary = RunTelemetryStorage.PerformanceSummary;
+        GUIStyle highlightStyle = GetFittedSingleLineStyle(bodyStyle, summary.Highlight, bodyLayout.contentWidth, 17, 12);
+        highlightStyle.alignment = TextAnchor.MiddleCenter;
+        highlightStyle.normal.textColor = GlitchUiPalette.Success;
+        GUI.Label(new Rect(0f, 166f, bodyLayout.contentWidth, 26f), summary.Highlight, highlightStyle);
 
-        float statY = 204f;
-        float statGap = 10f;
-        float statWidth = (bodyLayout.contentWidth - statGap * 2f) / 3f;
-        DrawResultMetric(new Rect(0f, statY, statWidth, 64f), "PUNTOS", score.ToString(), GlitchUiPalette.Information);
-        DrawResultMetric(new Rect(statWidth + statGap, statY, statWidth, 64f), "TIEMPO", $"{time:F1}s", GlitchUiPalette.Neutral);
-        DrawResultMetric(new Rect((statWidth + statGap) * 2f, statY, statWidth, 64f), "DATOS", $"+{reward.dataEarned}", GlitchUiPalette.Success);
+        DrawResultGridMetric(bodyLayout, 0, "PUNTOS", score.ToString(), GlitchUiPalette.Information);
+        DrawResultGridMetric(bodyLayout, 1, "TIEMPO", $"{time:F1}s", GlitchUiPalette.Neutral);
+        DrawResultGridMetric(bodyLayout, 2, "DATOS", $"+{reward.dataEarned}", GlitchUiPalette.Success);
+        DrawResultGridMetric(bodyLayout, 3, "PARRYS", summary.parries.ToString(), GlitchUiPalette.Special);
         GUI.EndScrollView();
 
         bool canInteract = defeatElapsed >= Mathf.Max(0f, defeatInputUnlockDelay);
@@ -694,7 +697,7 @@ public class GameMenuController : MonoBehaviour
         Rect gradeRect = ScaleRectFromCenter(rect, size);
         GUIStyle gradeStyle = new GUIStyle(titleStyle)
         {
-            fontSize = Mathf.RoundToInt(Mathf.Lerp(52f, 132f, reveal)),
+            fontSize = Mathf.RoundToInt(Mathf.Lerp(52f, Mathf.Min(132f, rect.height * 0.7f), reveal)),
             alignment = TextAnchor.MiddleCenter,
             clipping = TextClipping.Overflow
         };
@@ -757,6 +760,13 @@ public class GameMenuController : MonoBehaviour
             DrawSolidRect(new Rect(x - spark * 0.5f, y - spark * 0.5f, spark, spark),
                 new Color(color.r, color.g, color.b, (0.24f + pulse * 0.30f) * reveal));
         }
+    }
+
+    private void DrawResultGridMetric(DefeatBodyLayout layout, int index, string label, string value, Color accent)
+    {
+        float width = (layout.contentWidth - 10f * (layout.metricColumns - 1)) / layout.metricColumns;
+        Rect rect = new Rect((index % layout.metricColumns) * (width + 10f), 204f + (index / layout.metricColumns) * 74f, width, 64f);
+        DrawResultMetric(rect, label, value, accent);
     }
 
     private void DrawResultMetric(Rect rect, string label, string value, Color accent)

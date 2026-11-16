@@ -20,6 +20,10 @@ public static class DefeatBodyLayoutValidation
         Check(!normal.needsScroll && normal.contentWidth == 584f, "normal presentation preserved", ref checks);
         var shortWindow = new DefeatBodyLayout(256f, 276f);
         Check(shortWindow.needsScroll && shortWindow.contentWidth == 236f, "short window reserves scrollbar", ref checks);
+        Check(normal.metricColumns == 4 && normal.contentHeight == 268f, "wide four-metric row", ref checks);
+        Check(shortWindow.metricColumns == 2 && shortWindow.contentHeight == 342f, "narrow two-row metrics", ref checks);
+        Check(204f + 64f <= normal.contentHeight, "wide metrics within scroll content", ref checks);
+        Check(204f + 74f + 64f <= shortWindow.contentHeight, "last narrow row within scroll content", ref checks);
         return checks;
     }
     private static void Check(bool value, string label, ref int count)

@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 27. Resumen breve y útil de la derrota
+
+El resultado individual reúne la causa de muerte ya capturada, la clasificación por letras, un hito destacado de la run y cuatro métricas: puntos, tiempo, datos ganados y Parrys exitosos. El hito usa únicamente contadores reales de la run; prioriza brechas superadas, contratos completados, mejoras elegidas, Parrys y datos recogidos. Si no hubo ninguno, usa «Supervivencia», sin inventar un desbloqueo o una cadena de acciones.
+
+Se leen los contadores en memoria que ya usa la telemetría, sin otro guardado ni lectura de red. Los contadores dejan de aceptar eventos al cerrar el registro. La letra conserva la jerarquía visual; el hito ocupa una sola línea. Las métricas usan una fila de cuatro tarjetas en ventanas amplias y dos filas de dos en las angostas, con scroll donde hace falta y acciones fuera del cuerpo desplazable. Versus conserva su resultado independiente.
+
+Validación: diez comprobaciones del resumen y sus prioridades, veintiuna de geometría del resultado (cuatro nuevas respecto de la validación previa), y compilación conjunta. Pendiente comparar los contadores con una run real y comprobar la jerarquía, scroll y contraste en Play Mode. No cambia los umbrales de clasificación ni los premios.
+
 ## 26. Opciones de accesibilidad visual
 
 Opciones incluye una página de Accesibilidad con controles persistentes para impactos de cámara y destellos, ambos desde 0 hasta 100 %, y acceso al ajuste existente de movimiento decorativo. Los defaults conservan el aspecto previo y Reset opciones restaura también los nuevos valores. Se validan los números como el resto de las preferencias.

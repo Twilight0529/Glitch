@@ -65,13 +65,17 @@ public static class RunTelemetryStorage
         };
     }
 
-    public static void ScorePickup() { if (current != null) current.scorePickups++; }
-    public static void Powerup() { if (current != null) current.powerups++; }
-    public static void Parry() { if (current != null) current.parries++; }
-    public static void FirewallBurst() { if (current != null) current.firewallBursts++; }
-    public static void Breach() { if (current != null) current.breaches++; }
-    public static void ContractCompleted() { if (current != null) current.contractsCompleted++; }
-    public static void UpgradeChosen() { if (current != null) current.upgradesChosen++; }
+    private static bool IsRecording => current != null && !recorded;
+    public static void ScorePickup() { if (IsRecording) current.scorePickups++; }
+    public static void Powerup() { if (IsRecording) current.powerups++; }
+    public static void Parry() { if (IsRecording) current.parries++; }
+    public static void FirewallBurst() { if (IsRecording) current.firewallBursts++; }
+    public static void Breach() { if (IsRecording) current.breaches++; }
+    public static void ContractCompleted() { if (IsRecording) current.contractsCompleted++; }
+    public static void UpgradeChosen() { if (IsRecording) current.upgradesChosen++; }
+
+    public static RunPerformanceSummary PerformanceSummary => current == null ? default :
+        new RunPerformanceSummary(current.parries, current.breaches, current.contractsCompleted, current.upgradesChosen, current.scorePickups);
 
     public static void CaptureEndContext(string source, string arena, string enemyState, float x, float y, float seconds)
     {

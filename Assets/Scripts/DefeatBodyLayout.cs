@@ -3,7 +3,8 @@ using System;
 public struct DefeatBodyLayout
 {
     public const float BodyTop = 66f;
-    public const float ContentHeight = 268f;
+    public readonly float contentHeight;
+    public readonly int metricColumns;
     public readonly float actionsTop;
     public readonly float viewportHeight;
     public readonly float contentWidth;
@@ -13,7 +14,9 @@ public struct DefeatBodyLayout
     {
         actionsTop = areaHeight - 48f;
         viewportHeight = Math.Max(1f, actionsTop - BodyTop - 16f);
-        needsScroll = viewportHeight < ContentHeight;
+        metricColumns = areaWidth < 420f ? 2 : 4;
+        contentHeight = metricColumns == 2 ? 342f : 268f;
+        needsScroll = viewportHeight < contentHeight;
         contentWidth = Math.Max(1f, areaWidth - (needsScroll ? 20f : 0f));
     }
 }
