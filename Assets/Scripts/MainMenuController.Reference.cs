@@ -46,7 +46,7 @@ public partial class MainMenuController
         DrawSolidRect(rect, GlitchUiPalette.Surface);
         GUI.BeginGroup(rect);
         float w = rect.width;
-        float t = Mathf.Repeat(Time.unscaledTime * 0.55f, 1f);
+        float t = Mathf.Repeat(Time.unscaledTime * 0.55f * UserSettings.GetMenuMotion(), 1f);
         float x = Mathf.Lerp(w * 0.18f, w * 0.78f, t);
         Color info = GlitchUiPalette.Information;
         if (example == MechanicsReferenceCatalog.Example.Parry)

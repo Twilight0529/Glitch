@@ -10,6 +10,8 @@ public static class UserSettings
     public const string MenuUiScaleKey = "glitch_menu_ui_scale";
     public const string HudScaleKey = "glitch_hud_scale";
     public const string MenuMotionKey = "glitch_menu_motion";
+    public const string CameraImpactKey = "glitch_camera_impact";
+    public const string FlashIntensityKey = "glitch_flash_intensity";
     public const string FullscreenKey = "glitch_fullscreen";
     public const string VSyncKey = "glitch_vsync";
     public const string IntroTutorialKey = "glitch_intro_tutorial";
@@ -128,6 +130,19 @@ public static class UserSettings
     public static void SetMenuMotion(float value)
     {
         PlayerPrefs.SetFloat(MenuMotionKey, FiniteSetting.Clamp(value, DefaultMenuMotion, MinMenuMotion, MaxMenuMotion));
+        PlayerPrefs.Save();
+    }
+
+    public static float GetCameraImpact() => FiniteSetting.Clamp(PlayerPrefs.GetFloat(CameraImpactKey, 1f), 1f, 0f, 1f);
+    public static float GetFlashIntensity() => FiniteSetting.Clamp(PlayerPrefs.GetFloat(FlashIntensityKey, 1f), 1f, 0f, 1f);
+    public static void SetCameraImpact(float value)
+    {
+        PlayerPrefs.SetFloat(CameraImpactKey, FiniteSetting.Clamp(value, 1f, 0f, 1f));
+        PlayerPrefs.Save();
+    }
+    public static void SetFlashIntensity(float value)
+    {
+        PlayerPrefs.SetFloat(FlashIntensityKey, FiniteSetting.Clamp(value, 1f, 0f, 1f));
         PlayerPrefs.Save();
     }
 
@@ -272,6 +287,8 @@ public static class UserSettings
         SetMenuUiScale(DefaultMenuUiScale);
         SetHudScale(DefaultHudScale);
         SetMenuMotion(DefaultMenuMotion);
+        SetCameraImpact(1f);
+        SetFlashIntensity(1f);
         SetFullscreen(DefaultFullscreen);
         SetVSync(DefaultVSync);
         SetShowIntroTutorial(DefaultShowIntroTutorial);

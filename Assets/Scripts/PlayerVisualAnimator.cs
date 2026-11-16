@@ -467,7 +467,7 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
         }
 
         float whiteFlash = Mathf.Clamp01(firewallBurst * 0.78f + parrySuccess * 0.48f + impact * 0.42f);
-        color = Color.Lerp(color, Color.white, whiteFlash);
+        color = Color.Lerp(color, Color.white, VisualAccessibility.ScaleIntensity(whiteFlash, UserSettings.GetFlashIntensity()));
         color = Color.Lerp(color, specialPulseColor, special * 0.62f);
         color = Color.Lerp(color, GlitchUiPalette.Alert, parryFailurePulse * 0.18f);
         bodyRenderer.color = color;
@@ -487,7 +487,7 @@ public sealed class PlayerVisualAnimator : MonoBehaviour
                 shellColor = Color.Lerp(shellColor, GlitchUiPalette.Information, dashReadyArrival * 0.80f);
             shellColor = Color.Lerp(shellColor, GlitchUiPalette.Alert, owner.PhaseDashExpiryWarningStrength * 0.85f);
             shellColor = Color.Lerp(shellColor, GlitchUiPalette.Alert, parryFailurePulse * 0.85f);
-            shellColor = Color.Lerp(shellColor, Color.white, parrySuccess * 0.52f + firewallBurst * 0.68f);
+            shellColor = Color.Lerp(shellColor, Color.white, VisualAccessibility.ScaleIntensity(parrySuccess * 0.52f + firewallBurst * 0.68f, UserSettings.GetFlashIntensity()));
             shellColor.a = Mathf.Clamp01(color.a * Mathf.Lerp(0.64f, 0.94f, Mathf.Clamp01(shellPulse + readiness * 0.25f + dashReadyArrival * 0.65f)));
             shellRenderer.color = shellColor;
         }

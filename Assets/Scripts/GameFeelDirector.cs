@@ -264,7 +264,7 @@ public sealed class GameFeelDirector : MonoBehaviour
             Vector2 directional = shakeDirection.sqrMagnitude > 0.001f
                 ? shakeDirection * Mathf.Sin(clock * 0.83f) * 0.55f
                 : Vector2.zero;
-            appliedCameraOffset = (noise * 0.55f + directional) * shakeStrength * envelope;
+            appliedCameraOffset = (noise * 0.55f + directional) * VisualAccessibility.ScaleIntensity(shakeStrength * envelope, UserSettings.GetCameraImpact());
             gameplayCamera.transform.localPosition += appliedCameraOffset;
         }
 
@@ -272,7 +272,7 @@ public sealed class GameFeelDirector : MonoBehaviour
         {
             zoomRemaining = Mathf.Max(0f, zoomRemaining - dt);
             float normalized = zoomDuration > 0f ? zoomRemaining / zoomDuration : 0f;
-            appliedZoomOffset = -Mathf.Sin(normalized * Mathf.PI) * zoomStrength;
+            appliedZoomOffset = -Mathf.Sin(normalized * Mathf.PI) * VisualAccessibility.ScaleIntensity(zoomStrength, UserSettings.GetCameraImpact());
             gameplayCamera.orthographicSize = Mathf.Max(0.1f, gameplayCamera.orthographicSize + appliedZoomOffset);
         }
     }

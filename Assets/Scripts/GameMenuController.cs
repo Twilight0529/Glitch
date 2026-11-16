@@ -1009,7 +1009,8 @@ public class GameMenuController : MonoBehaviour
             float alpha = f * f;
             DrawSolidRect(
                 new Rect(0f, 0f, Screen.width, Screen.height),
-                new Color(defeatFlashColor.r, defeatFlashColor.g, defeatFlashColor.b, alpha * 0.75f));
+                new Color(defeatFlashColor.r, defeatFlashColor.g, defeatFlashColor.b,
+                    VisualAccessibility.ScaleIntensity(alpha * 0.75f, UserSettings.GetFlashIntensity())));
         }
 
         float shockDuration = Mathf.Max(0.01f, defeatShockwaveDuration);
@@ -1068,6 +1069,7 @@ public class GameMenuController : MonoBehaviour
 
     private void DrawGlitchLabel(Rect rect, string text, GUIStyle style, float glitch)
     {
+        glitch = VisualAccessibility.ScaleIntensity(glitch, UserSettings.GetFlashIntensity());
         float cappedSplit = Mathf.Min(glitchSplitStrength, 1.15f);
         float split = cappedSplit * glitch;
         Color old = GUI.color;
@@ -1112,6 +1114,7 @@ public class GameMenuController : MonoBehaviour
 
     private static void DrawHudGlitchOverlay(float glitch, float time)
     {
+        glitch = VisualAccessibility.ScaleIntensity(glitch, UserSettings.GetFlashIntensity());
         if (glitch <= 0.001f)
         {
             return;

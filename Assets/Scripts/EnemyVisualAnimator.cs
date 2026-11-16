@@ -605,7 +605,7 @@ public sealed class EnemyVisualAnimator : MonoBehaviour
         // La identidad cromatica del estado permanece en el cuerpo, pero el final
         // recupera un valor neutral para comunicar que la ventana especial se cierra.
         bodyColor = Color.Lerp(bodyColor, GlitchUiPalette.Neutral, recovery * 0.14f);
-        bodyColor = Color.Lerp(bodyColor, Color.white, transitionEnvelope * 0.42f + impactEnvelope * 0.58f);
+        bodyColor = Color.Lerp(bodyColor, Color.white, VisualAccessibility.ScaleIntensity(transitionEnvelope * 0.42f + impactEnvelope * 0.58f, UserSettings.GetFlashIntensity()));
         bodyColor.a = authoredBaseColor.a * Mathf.Clamp01(bodyAlpha);
         bodyRenderer.color = bodyColor;
 
@@ -1212,7 +1212,7 @@ public sealed class SplitCloneVisualAnimator : MonoBehaviour
         coreRenderer.color = new Color(1f, 0.72f, 0.86f, 0.28f + action * 0.30f);
         Color animatedColor = Color.Lerp(baseColor, GlitchUiPalette.Special, 0.22f);
         animatedColor = Color.Lerp(GlitchUiPalette.Surface, animatedColor, 0.48f);
-        animatedColor = Color.Lerp(animatedColor, Color.white, Mathf.Clamp01(impact * 0.55f + action * 0.20f));
+        animatedColor = Color.Lerp(animatedColor, Color.white, VisualAccessibility.ScaleIntensity(Mathf.Clamp01(impact * 0.55f + action * 0.20f), UserSettings.GetFlashIntensity()));
         animatedColor.a = baseColor.a;
         bodyRenderer.color = animatedColor;
 

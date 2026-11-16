@@ -39,6 +39,7 @@ public partial class MainMenuController : MonoBehaviour
         Play,
         Archive,
         Guide,
+        Accessibility,
         Operations,
         Options,
         Stats,
@@ -187,6 +188,7 @@ public partial class MainMenuController : MonoBehaviour
             showPlayHub = false;
             showArchiveHub = false;
             showMechanicsReference = false;
+            showAccessibility = false;
             GlitchAudioManager.PlayMenuToggle();
         }
 
@@ -217,6 +219,10 @@ public partial class MainMenuController : MonoBehaviour
         if (showMechanicsReference)
         {
             DrawMechanicsReference();
+        }
+        else if (showAccessibility)
+        {
+            DrawAccessibilityMenu();
         }
         else if (showOptions)
         {
@@ -270,6 +276,7 @@ public partial class MainMenuController : MonoBehaviour
     {
         if (showPlayerNameSetup) return MenuView.PlayerName;
         if (showMechanicsReference) return MenuView.Guide;
+        if (showAccessibility) return MenuView.Accessibility;
         if (showOptions) return MenuView.Options;
         if (showStats) return MenuView.Stats;
         if (showOperations) return MenuView.Operations;
@@ -522,7 +529,7 @@ public partial class MainMenuController : MonoBehaviour
     private void DrawMainMenu()
     {
         DrawScreenFade(0.38f);
-        float bob = Mathf.Sin(Time.unscaledTime * 1.15f) * 3f;
+        float bob = Mathf.Sin(Time.unscaledTime * 1.15f) * 3f * UserSettings.GetMenuMotion();
         GetMainMenuLayout(out Rect panel, out Rect rankingRect, out bool sideBySide);
         panel.y += bob;
         rankingRect.y -= bob * 0.35f;
@@ -925,6 +932,11 @@ public partial class MainMenuController : MonoBehaviour
 
         Rect area = new Rect(panel.x + 18f, panel.y + 16f, panel.width - 36f, panel.height - 28f);
         GUI.Label(new Rect(area.x, area.y, area.width, 42f), "Opciones", panelTitleStyle);
+        if (DrawAnimatedMenuButton(new Rect(area.xMax - 176f, area.y + 4f, 176f, 34f), "Accesibilidad"))
+        {
+            showAccessibility = true;
+            return;
+        }
         DrawSolidRect(new Rect(area.x, area.y + 50f, area.width, 1f), new Color(0.70f, 0.90f, 1f, 0.24f));
 
         Rect audio = new Rect(area.x, area.y + 66f, area.width * 0.48f, 184f);
@@ -2935,6 +2947,7 @@ public partial class MainMenuController : MonoBehaviour
 
     private static void DrawGlitchTitle(Rect rect, string text, GUIStyle style, float intensity)
     {
+        intensity = VisualAccessibility.ScaleIntensity(intensity, UserSettings.GetFlashIntensity());
         float t = Time.unscaledTime;
         float split = (0.7f + 0.6f * Mathf.Sin(t * 5.4f + rect.y * 0.012f)) * Mathf.Clamp01(intensity);
         Color old = GUI.color;

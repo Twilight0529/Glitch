@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## 26. Opciones de accesibilidad visual
+
+Opciones incluye una página de Accesibilidad con controles persistentes para impactos de cámara y destellos, ambos desde 0 hasta 100 %, y acceso al ajuste existente de movimiento decorativo. Los defaults conservan el aspecto previo y Reset opciones restaura también los nuevos valores. Se validan los números como el resto de las preferencias.
+
+El control de cámara escala sacudida y zoom de impacto de GameFeelDirector al aplicarlos, sin alterar el encuadre base. El de destellos actúa sobre el flash de derrota, el de la cuenta regresiva, interferencias y separación RGB de texto de menús, y los blanqueos de impacto del jugador y la anomalía. No escala la opacidad de los telegraphs, los fondos de lectura ni los controles. Los iconos, glifos, flechas y ejemplos por forma conservan las señales que complementan el color. Los ejemplos de la guía y el flotado de los hubs respetan el ajuste de movimiento.
+
+Validación: diez comprobaciones de escala, apagado, defaults y valores inválidos, revisión de cada punto de integración y compilación conjunta. Pendiente comprobar cámara, flashes, persistencia y contraste en Play Mode. No es una certificación de ausencia de fotosensibilidad ni un filtro universal sobre cada partícula del juego.
+
 ## 24. Volver a consultar controles y mecánicas
 
 Archivo incluye una Guía de mecánicas con ocho fichas: movimiento, Dash, Parry, Firewall, datos/powerups, Phase Dash, Breach y State Hijack. Cada una presenta una explicación breve, sus controles reales y un ejemplo visual animado. Los ejemplos usan las formas del juego, sin crear actores de gameplay ni iniciar una run.

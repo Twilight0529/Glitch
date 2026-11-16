@@ -4133,7 +4133,7 @@ public class GameManager : MonoBehaviour
         }
 
         float beat = runPhase == RunPhase.Countdown ? Mathf.SmoothStep(1f, 0f, GetCountdownPhaseNormalized()) : 1f;
-        float flashAlpha = Mathf.Clamp01(countdownImpactFlashOpacity) * beat;
+        float flashAlpha = VisualAccessibility.ScaleIntensity(Mathf.Clamp01(countdownImpactFlashOpacity) * beat, UserSettings.GetFlashIntensity());
         DrawSolidRect(new Rect(0f, 0f, Screen.width, Screen.height), new Color(countdownAccent.r, countdownAccent.g, countdownAccent.b, flashAlpha * 0.15f));
     }
 
