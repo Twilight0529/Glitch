@@ -529,13 +529,11 @@ public partial class MainMenuController : MonoBehaviour
     private void DrawMainMenu()
     {
         DrawScreenFade(0.38f);
-        float bob = Mathf.Sin(Time.unscaledTime * 1.15f) * 3f * UserSettings.GetMenuMotion();
+        float bob = 0f;
         GetMainMenuLayout(out Rect panel, out Rect rankingRect, out bool sideBySide);
         panel.y += bob;
         rankingRect.y -= bob * 0.35f;
-        DrawSignalBeams(Time.unscaledTime);
         DrawMenuAtmosphere(panel, rankingRect, sideBySide);
-        DrawPanelOrbiters(panel, rankingRect);
 
         DrawPanel(panel, new Color(0.025f, 0.045f, 0.08f, 0.91f), new Color(0.47f, 0.72f, 0.92f, 0.52f));
         DrawPanelFx(panel, new Color(0.62f, 0.76f, 1f, 1f), 0.14f);
@@ -544,7 +542,7 @@ public partial class MainMenuController : MonoBehaviour
         DrawGlitchTitle(titleRect, gameTitle, titleStyle, 1f);
         DrawSolidRect(new Rect(panel.x + 24f, panel.y + 78f, panel.width - 48f, 1f),
             new Color(0.80f, 0.90f, 1f, 0.18f));
-        float markerX = panel.x + 28f + Mathf.Repeat(Time.unscaledTime * 105f, Mathf.Max(1f, panel.width - 82f));
+        float markerX = panel.x + 28f;
         DrawSolidRect(new Rect(markerX, panel.y + 77f, 30f, 3f),
             new Color(0.50f, 0.94f, 1f, 0.42f));
 
@@ -639,7 +637,7 @@ public partial class MainMenuController : MonoBehaviour
     private Rect DrawHubShell(string title, Color accent, float preferredHeight = 460f)
     {
         DrawScreenFade(0.48f);
-        float bob = Mathf.Sin(Time.unscaledTime * 1.15f) * 3f;
+        float bob = 0f;
         Rect panel = CenterRect(Mathf.Min(620f, Screen.width - 34f), Mathf.Min(preferredHeight, Screen.height - 34f));
         panel.y += bob;
         DrawPanel(panel, new Color(0.025f, 0.045f, 0.08f, 0.94f), new Color(accent.r, accent.g, accent.b, 0.58f));
@@ -663,7 +661,7 @@ public partial class MainMenuController : MonoBehaviour
     private void DrawOperationsMenu()
     {
         DrawScreenFade(0.48f);
-        float bob = Mathf.Sin(Time.unscaledTime * 1.18f + 0.7f) * 4f;
+        float bob = 0f;
         Rect panel = CenterRect(Mathf.Min(900f, Screen.width - 34f), Mathf.Min(560f, Screen.height - 34f));
         panel.y += bob;
         DrawPanel(panel, new Color(0.025f, 0.04f, 0.08f, 0.94f), new Color(0.48f, 0.90f, 1f, 0.58f));
@@ -915,7 +913,7 @@ public partial class MainMenuController : MonoBehaviour
     private void DrawOptionsMenu()
     {
         DrawScreenFade(0.46f);
-        float bob = Mathf.Sin(Time.unscaledTime * 1.2f + 1.2f) * 5f;
+        float bob = 0f;
         Rect panel = CenterRect(Mathf.Min(640f, Screen.width - 42f), Mathf.Min(540f, Screen.height - 42f));
         panel.y += bob;
         DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.90f), new Color(0.47f, 0.56f, 0.72f, 0.55f));
@@ -1076,7 +1074,7 @@ public partial class MainMenuController : MonoBehaviour
     private void DrawStatsMenu()
     {
         DrawScreenFade(0.46f);
-        float bob = Mathf.Sin(Time.unscaledTime * 1.2f + 0.35f) * 5f;
+        float bob = 0f;
         Rect panel = CenterRect(Mathf.Min(720f, Screen.width - 42f), Mathf.Min(520f, Screen.height - 42f));
         panel.y += bob;
         DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.92f), new Color(0.54f, 0.76f, 1f, 0.55f));
@@ -1152,7 +1150,7 @@ public partial class MainMenuController : MonoBehaviour
     private void DrawCreditsMenu()
     {
         DrawScreenFade(0.48f);
-        float bob = Mathf.Sin(Time.unscaledTime * 1.05f + 0.95f) * 5f;
+        float bob = 0f;
         Rect panel = CenterRect(Mathf.Min(760f, Screen.width - 42f), Mathf.Min(540f, Screen.height - 42f));
         panel.y += bob;
         DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.92f), new Color(0.72f, 0.62f, 1f, 0.58f));
@@ -1325,7 +1323,7 @@ public partial class MainMenuController : MonoBehaviour
     private void DrawUnlocksMenu()
     {
         DrawScreenFade(0.46f);
-        float bob = Mathf.Sin(Time.unscaledTime * 1.2f + 0.7f) * 5f;
+        float bob = 0f;
         Rect panel = CenterRect(Mathf.Min(700f, Screen.width - 42f), Mathf.Min(520f, Screen.height - 42f));
         panel.y += bob;
         DrawPanel(panel, new Color(0.03f, 0.05f, 0.09f, 0.92f), new Color(0.52f, 0.78f, 1f, 0.55f));
@@ -2623,58 +2621,13 @@ public partial class MainMenuController : MonoBehaviour
         bool hovered = rect.Contains(Event.current.mousePosition);
         TrackButtonHover(label, canInteract && hovered);
         float hoverLerp = GetButtonHoverState(label, hovered);
-        float t = Time.unscaledTime;
-        float pulse = 0.6f + 0.4f * Mathf.Sin(t * (primary ? 3.6f : 2.8f));
-        float wobble = hovered ? Mathf.Sin(t * 7.2f) * 0.7f : 0f;
-        rect.y += wobble;
-
-        Color baseFill = danger
-            ? new Color(0.22f, 0.055f, 0.075f, 0.92f)
-            : primary
-                ? new Color(0.10f, 0.18f, 0.28f, 0.94f)
-                : new Color(0.08f, 0.11f, 0.18f, 0.90f);
-        Color hoverFill = danger
-            ? new Color(0.40f, 0.08f, 0.10f, 0.97f)
-            : new Color(0.18f, 0.30f, 0.48f, 0.96f);
-        Color fill = Color.Lerp(baseFill, hoverFill, hoverLerp * 0.65f);
-        Color border = danger
-            ? Color.Lerp(GlitchUiPalette.WithAlpha(GlitchUiPalette.Alert, 0.54f), GlitchUiPalette.Danger, hoverLerp)
-            : Color.Lerp(
-                new Color(0.62f, 0.76f, 1f, 0.36f),
-                new Color(0.88f, 0.96f, 1f, 0.78f),
-                hoverLerp);
-
-        DrawSolidRect(rect, fill);
-        DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 1.5f), border);
-        DrawSolidRect(new Rect(rect.x, rect.yMax - 1.5f, rect.width, 1.5f), new Color(border.r, border.g, border.b, border.a * 0.65f));
-        DrawSolidRect(new Rect(rect.x, rect.y, 1.5f, rect.height), new Color(border.r, border.g, border.b, border.a * 0.8f));
-        DrawSolidRect(new Rect(rect.xMax - 1.5f, rect.y, 1.5f, rect.height), new Color(border.r, border.g, border.b, border.a * 0.8f));
-        Color indicator = danger ? GlitchUiPalette.Danger : new Color(0.84f, 0.95f, 1f, 1f);
-        DrawSolidRect(new Rect(rect.x + 6f, rect.y + 6f, 3f, rect.height - 12f), new Color(indicator.r, indicator.g, indicator.b, 0.24f + hoverLerp * 0.28f));
-
-        float shineW = Mathf.Lerp(rect.width * 0.16f, rect.width * 0.28f, hoverLerp);
-        float shineX = Mathf.Repeat(t * 120f + rect.width * (primary ? 0.12f : 0.38f), rect.width + shineW) - shineW;
-        Rect shineRect = new Rect(rect.x + shineX, rect.y + 1f, shineW, rect.height - 2f);
-        Rect innerBounds = new Rect(rect.x + 1f, rect.y + 1f, rect.width - 2f, rect.height - 2f);
-        Rect clippedShine = IntersectRect(shineRect, innerBounds);
-        if (clippedShine.width > 0f && clippedShine.height > 0f)
-        {
-            DrawSolidRect(
-                clippedShine,
-                new Color(0.84f, 0.94f, 1f, (0.05f + 0.06f * pulse) * (0.45f + hoverLerp * 0.8f)));
-        }
-
-        if (hovered)
-        {
-            DrawSolidRect(new Rect(rect.x - 2f, rect.y - 2f, rect.width + 4f, 2f), new Color(border.r, border.g, border.b, 0.32f));
-            DrawSolidRect(new Rect(rect.x - 2f, rect.yMax, rect.width + 4f, 2f), new Color(border.r, border.g, border.b, 0.24f));
-            float waveX = rect.x + 14f + Mathf.Repeat(t * 46f, Mathf.Max(1f, rect.width - 40f));
-            DrawSolidRect(new Rect(waveX, rect.y + rect.height * 0.5f - 1f, 18f, 2f), new Color(1f, 1f, 1f, 0.26f));
-        }
+        GlitchUiSkin.Button(rect, danger ? GlitchUiPalette.Danger : GlitchUiPalette.Information,
+            hoverLerp, primary, canInteract && GUI.enabled);
 
         Color old = GUI.color;
         GUI.color = canInteract ? Color.white : new Color(1f, 1f, 1f, 0.45f);
-        GUI.Label(rect, label, menuButtonLabelStyle);
+        GUI.Label(new Rect(rect.x + 12f, rect.y + 4f, rect.width - 24f, rect.height - 8f), label,
+            BuildFittedSingleLineStyle(menuButtonLabelStyle, label, rect.width - 24f, rect.height - 8f, 12));
         GUI.color = old;
 
         if (!canInteract)
@@ -2736,16 +2689,7 @@ public partial class MainMenuController : MonoBehaviour
         bool hovered = canInteract && rect.Contains(Event.current.mousePosition);
         TrackButtonHover(hoverKey, hovered);
         float hover = GetButtonHoverState(hoverKey, hovered);
-        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (emphasis ? 3.4f : 2.3f));
-
-        Color fill = emphasis
-            ? new Color(accent.r, accent.g, accent.b, 0.10f + hover * 0.10f)
-            : new Color(0.025f, 0.05f, 0.09f, 0.38f + hover * 0.30f);
-        DrawSolidRect(rect, fill);
-        DrawSolidRect(new Rect(rect.x, rect.y, 4f + hover * 3f, rect.height),
-            new Color(accent.r, accent.g, accent.b, 0.54f + hover * 0.38f));
-        DrawSolidRect(new Rect(rect.x + 12f, rect.yMax - 1f, rect.width - 12f, 1f),
-            new Color(accent.r, accent.g, accent.b, 0.18f + hover * 0.28f));
+        GlitchUiSkin.Button(rect, accent, hover, emphasis, canInteract && GUI.enabled);
 
         float codeWidth = emphasis ? 66f : 60f;
         float iconSize = emphasis ? 42f : 36f;
@@ -2767,7 +2711,7 @@ public partial class MainMenuController : MonoBehaviour
         commandStyle.normal.textColor = Color.Lerp(new Color(0.84f, 0.90f, 1f, 0.92f), Color.white, hover);
         float availableTextWidth = rect.xMax - textX - arrowSpace;
         float titleWidth = Mathf.Min(availableTextWidth, commandStyle.CalcSize(new GUIContent(title)).x + (8f * uiScale));
-        GUI.Label(new Rect(textX, rect.y + 2f, titleWidth, rect.height), title, commandStyle);
+        GUI.Label(new Rect(textX, rect.y, titleWidth, rect.height), title, commandStyle);
 
         if (!string.IsNullOrWhiteSpace(metric))
         {
@@ -2797,15 +2741,6 @@ public partial class MainMenuController : MonoBehaviour
         DrawSolidRect(new Rect(arrowX + 8f, rect.center.y + 1f, 2f, 4f),
             new Color(accent.r, accent.g, accent.b, 0.46f + hover * 0.44f));
 
-        if (hovered)
-        {
-            float sweepX = rect.x + Mathf.Repeat(Time.unscaledTime * 145f, rect.width + 44f) - 44f;
-            Rect sweep = IntersectRect(new Rect(sweepX, rect.y, 44f, rect.height), rect);
-            if (sweep.width > 0f)
-            {
-                DrawSolidRect(sweep, new Color(accent.r, accent.g, accent.b, 0.025f + pulse * 0.025f));
-            }
-        }
 
         if (!canInteract)
         {
@@ -2923,32 +2858,20 @@ public partial class MainMenuController : MonoBehaviour
 
     private static void DrawPanelFx(Rect rect, Color accent, float baseAlpha)
     {
-        float t = Time.unscaledTime;
-        float pulse = 0.5f + 0.5f * Mathf.Sin(t * 2.4f);
-        float alpha = Mathf.Clamp01(baseAlpha + pulse * 0.08f);
-        Color glow = new Color(accent.r, accent.g, accent.b, alpha);
-
-        DrawSolidRect(new Rect(rect.x - 1f, rect.y - 1f, rect.width + 2f, 1f), glow);
-        DrawSolidRect(new Rect(rect.x - 1f, rect.yMax, rect.width + 2f, 1f), new Color(glow.r, glow.g, glow.b, glow.a * 0.85f));
-
-        float corner = 20f;
-        DrawSolidRect(new Rect(rect.x + 6f, rect.y + 6f, corner, 2f), new Color(glow.r, glow.g, glow.b, glow.a * 0.8f));
-        DrawSolidRect(new Rect(rect.x + 6f, rect.y + 6f, 2f, corner), new Color(glow.r, glow.g, glow.b, glow.a * 0.8f));
-        DrawSolidRect(new Rect(rect.xMax - 6f - corner, rect.y + 6f, corner, 2f), new Color(glow.r, glow.g, glow.b, glow.a * 0.8f));
-        DrawSolidRect(new Rect(rect.xMax - 8f, rect.y + 6f, 2f, corner), new Color(glow.r, glow.g, glow.b, glow.a * 0.8f));
-        DrawSolidRect(new Rect(rect.x + 6f, rect.yMax - 8f, corner, 2f), new Color(glow.r, glow.g, glow.b, glow.a * 0.7f));
-        DrawSolidRect(new Rect(rect.x + 6f, rect.yMax - 6f - corner, 2f, corner), new Color(glow.r, glow.g, glow.b, glow.a * 0.7f));
-        DrawSolidRect(new Rect(rect.xMax - 6f - corner, rect.yMax - 8f, corner, 2f), new Color(glow.r, glow.g, glow.b, glow.a * 0.7f));
-        DrawSolidRect(new Rect(rect.xMax - 8f, rect.yMax - 6f - corner, 2f, corner), new Color(glow.r, glow.g, glow.b, glow.a * 0.7f));
-
-        float sweepY = rect.y + Mathf.Repeat(t * 42f, Mathf.Max(1f, rect.height));
-        DrawSolidRect(new Rect(rect.x + 2f, sweepY, rect.width - 4f, 1f), new Color(accent.r, accent.g, accent.b, 0.10f));
+        GlitchUiSkin.Accent(rect, accent);
     }
 
     private static void DrawGlitchTitle(Rect rect, string text, GUIStyle style, float intensity)
     {
         intensity = VisualAccessibility.ScaleIntensity(intensity, UserSettings.GetFlashIntensity());
         float t = Time.unscaledTime;
+        // Keep the brand's signature as an occasional short accent, never as
+        // permanent chromatic movement on every section heading.
+        if (intensity < 0.9f || Mathf.Repeat(t, 8f) > 0.12f)
+        {
+            GUI.Label(rect, text, style);
+            return;
+        }
         float split = (0.7f + 0.6f * Mathf.Sin(t * 5.4f + rect.y * 0.012f)) * Mathf.Clamp01(intensity);
         Color old = GUI.color;
 
@@ -3036,11 +2959,7 @@ public partial class MainMenuController : MonoBehaviour
 
     private void DrawPanel(Rect rect, Color fill, Color border)
     {
-        DrawSolidRect(rect, fill);
-        DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 2f), border);
-        DrawSolidRect(new Rect(rect.x, rect.yMax - 2f, rect.width, 2f), border);
-        DrawSolidRect(new Rect(rect.x, rect.y, 2f, rect.height), border);
-        DrawSolidRect(new Rect(rect.xMax - 2f, rect.y, 2f, rect.height), border);
+        GlitchUiSkin.Panel(rect, fill, border);
     }
 
     private void EnsureStyles()
@@ -3070,7 +2989,7 @@ public partial class MainMenuController : MonoBehaviour
 
         panelTitleStyle = new GUIStyle(GUI.skin.label)
         {
-            font = titleFont,
+            font = uiFont,
             fontSize = Mathf.RoundToInt(30f * uiScale),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter
@@ -3080,14 +2999,14 @@ public partial class MainMenuController : MonoBehaviour
         paragraphStyle = new GUIStyle(GUI.skin.label)
         {
             font = uiFont,
-            fontSize = Mathf.RoundToInt(15f * uiScale),
+            fontSize = Mathf.RoundToInt(GlitchUiSkin.BodySize * uiScale),
             alignment = TextAnchor.MiddleLeft
         };
-        paragraphStyle.normal.textColor = new Color(0.86f, 0.90f, 0.96f, 0.95f);
+        paragraphStyle.normal.textColor = GlitchUiSkin.Text;
 
         rankingTitleStyle = new GUIStyle(GUI.skin.label)
         {
-            font = titleFont,
+            font = uiFont,
             fontSize = Mathf.RoundToInt(24f * uiScale),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter
@@ -3104,7 +3023,7 @@ public partial class MainMenuController : MonoBehaviour
 
         rankingScoreStyle = new GUIStyle(GUI.skin.label)
         {
-            font = titleFont,
+            font = uiFont,
             fontSize = Mathf.RoundToInt(17f * uiScale),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleRight
@@ -3134,8 +3053,8 @@ public partial class MainMenuController : MonoBehaviour
 
         menuButtonLabelStyle = new GUIStyle(GUI.skin.label)
         {
-            font = titleFont,
-            fontSize = Mathf.RoundToInt(16f * uiScale),
+            font = uiFont,
+            fontSize = Mathf.RoundToInt(GlitchUiSkin.ControlSize * uiScale),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter
         };
