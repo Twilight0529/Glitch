@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## Corrección: continuidad de tutoriales después de morir
+
+Al iniciar otra run se reiniciaban los indicadores temporales, pero el disparador de movimiento salía de la revisión incluso cuando su cuadro ya estaba completado y no se abría. Al no registrar ese descarte en la caché de la nueva run, se repetía cada frame y bloqueaba los tutoriales posteriores. Algunos disparadores de combate podían interrumpir la revisión de forma similar.
+
+Ahora todo tutorial ya gestionado se recuerda en la run actual, aunque su finalización provenga del guardado. Los disparadores solo interrumpen la revisión cuando efectivamente abren un cuadro. Abrir o descartar un cuadro no guarda su finalización: esa escritura sigue reservada a su confirmación completa. Tampoco se abre un tutorial cuando la run ya no está activa, incluida la secuencia de derrota. No se borran los tutoriales vistos, preferencias ni progreso del jugador.
+
+Validación: doce comprobaciones de continuidad tras una muerte temprana, cuadros interrumpidos, eventos independientes, desactivación voluntaria y conservación del progreso. Compilación conjunta de gameplay sin errores. Pendiente reproducir en Play Mode la primera derrota y el reintento con tutoriales pendientes.
+
 ## 27. Resumen breve y útil de la derrota
 
 El resultado individual reúne la causa de muerte ya capturada, la clasificación por letras, un hito destacado de la run y cuatro métricas: puntos, tiempo, datos ganados y Parrys exitosos. El hito usa únicamente contadores reales de la run; prioriza brechas superadas, contratos completados, mejoras elegidas, Parrys y datos recogidos. Si no hubo ninguno, usa «Supervivencia», sin inventar un desbloqueo o una cadena de acciones.

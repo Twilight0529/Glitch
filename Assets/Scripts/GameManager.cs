@@ -2111,9 +2111,8 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        if (!contextMovementShown && SurvivalTime >= 0.35f)
+        if (!contextMovementShown && SurvivalTime >= 0.35f && TryOpenContextTutorial(ContextTutorialKind.Movement))
         {
-            TryOpenContextTutorial(ContextTutorialKind.Movement);
             return;
         }
 
@@ -2130,9 +2129,8 @@ public class GameManager : MonoBehaviour
         {
             float distance = Vector2.Distance(playerController.GetPosition(), enemyController.GetCurrentPosition());
             float parryTeachDistance = Mathf.Max(0.65f, playerController.ParryRadius + 0.10f);
-            if (distance <= parryTeachDistance)
+            if (distance <= parryTeachDistance && TryOpenContextTutorial(ContextTutorialKind.Parry))
             {
-                TryOpenContextTutorial(ContextTutorialKind.Parry);
                 return;
             }
         }
@@ -2141,22 +2139,20 @@ public class GameManager : MonoBehaviour
             enemyController.IsAvailableForCombatTutorial() && SurvivalTime >= 3.2f && playerController.IsGhostDashReady)
         {
             float distance = Vector2.Distance(playerController.GetPosition(), enemyController.GetCurrentPosition());
-            if (distance <= 3.2f)
+            if (distance <= 3.2f && TryOpenContextTutorial(ContextTutorialKind.GhostDash))
             {
-                TryOpenContextTutorial(ContextTutorialKind.GhostDash);
                 return;
             }
         }
 
-        if (!contextFirewallShown && playerController.IsFirewallBurstReady)
+        if (!contextFirewallShown && playerController.IsFirewallBurstReady && TryOpenContextTutorial(ContextTutorialKind.Firewall))
         {
-            TryOpenContextTutorial(ContextTutorialKind.Firewall);
             return;
         }
 
-        if (IsStateHijackUnlocked && !contextStateHijackUnlockShown && bossLevelTwoIntroTimer <= 0f)
+        if (IsStateHijackUnlocked && !contextStateHijackUnlockShown && bossLevelTwoIntroTimer <= 0f &&
+            TryOpenContextTutorial(ContextTutorialKind.StateHijackUnlock))
         {
-            TryOpenContextTutorial(ContextTutorialKind.StateHijackUnlock);
             return;
         }
 
@@ -2267,23 +2263,19 @@ public class GameManager : MonoBehaviour
 
     private bool TryOpenContextTutorial(ContextTutorialKind kind, string eventKey = null, string eventLabel = null, string eventHint = null)
     {
-        if (kind == ContextTutorialKind.None || contextTutorialOpen || introTutorialOpen || upgradeSelectionOpen || IsGameOver)
+        if (kind == ContextTutorialKind.None || contextTutorialOpen || introTutorialOpen || upgradeSelectionOpen || !IsRunActive)
         {
             return false;
         }
 
-        if (!UserSettings.GetShowContextTutorial())
-        {
-            MarkContextTutorialOpenedThisRun(kind, eventKey);
-            return false;
-        }
-
-        if (HasContextTutorialBeenShown(kind, eventKey))
+        bool enabled = UserSettings.GetShowContextTutorial();
+        bool alreadyHandled = enabled && HasContextTutorialBeenShown(kind, eventKey);
+        if (!ContextTutorialRunGate.TryOffer(enabled, alreadyHandled,
+            () => MarkContextTutorialOpenedThisRun(kind, eventKey)))
         {
             return false;
         }
 
-        MarkContextTutorialOpenedThisRun(kind, eventKey);
         contextTutorialOpen = true;
         contextTutorialKind = kind;
         contextTutorialProgress = 0f;
