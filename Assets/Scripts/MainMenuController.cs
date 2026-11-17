@@ -1258,8 +1258,7 @@ public partial class MainMenuController : MonoBehaviour
 
     private void DrawStatsSection(Rect rect, string title, Color accent)
     {
-        DrawSolidRect(rect, new Color(0.025f, 0.045f, 0.085f, 0.72f));
-        DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 2f), new Color(accent.r, accent.g, accent.b, 0.55f));
+        GlitchUiSkin.Panel(rect, GlitchUiSkin.Raised, accent, false);
         GUI.Label(new Rect(rect.x + 12f, rect.y + 6f, rect.width - 24f, 24f), title, rankingRowStyle);
     }
 

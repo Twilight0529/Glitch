@@ -3861,16 +3861,7 @@ public class GameManager : MonoBehaviour
 
     private void DrawTutorialPanel(Rect rect, Color fill, Color border)
     {
-        DrawSolidRect(rect, fill);
-        DrawTutorialFrame(rect, border, 2f);
-        DrawSolidRect(new Rect(rect.x + 8f, rect.y + 8f, 42f, 2f), new Color(border.r, border.g, border.b, 0.75f));
-        DrawSolidRect(new Rect(rect.x + 8f, rect.y + 8f, 2f, 42f), new Color(border.r, border.g, border.b, 0.75f));
-        DrawSolidRect(new Rect(rect.xMax - 50f, rect.y + 8f, 42f, 2f), new Color(border.r, border.g, border.b, 0.60f));
-        DrawSolidRect(new Rect(rect.xMax - 10f, rect.y + 8f, 2f, 42f), new Color(border.r, border.g, border.b, 0.60f));
-        DrawSolidRect(new Rect(rect.x + 8f, rect.yMax - 10f, 42f, 2f), new Color(border.r, border.g, border.b, 0.50f));
-        DrawSolidRect(new Rect(rect.x + 8f, rect.yMax - 50f, 2f, 42f), new Color(border.r, border.g, border.b, 0.50f));
-        DrawSolidRect(new Rect(rect.xMax - 50f, rect.yMax - 10f, 42f, 2f), new Color(border.r, border.g, border.b, 0.50f));
-        DrawSolidRect(new Rect(rect.xMax - 10f, rect.yMax - 50f, 2f, 42f), new Color(border.r, border.g, border.b, 0.50f));
+        GlitchUiSkin.Panel(rect, fill, border, false);
     }
 
     private void DrawTutorialFrame(Rect rect, Color color, float thickness)
@@ -4303,9 +4294,8 @@ public class GameManager : MonoBehaviour
         float x = (Screen.width - panelW) * 0.5f;
         y = Mathf.Clamp(y, 8f * s, Screen.height - panelH - (8f * s));
 
-        DrawSolidRect(new Rect(x, y, panelW, panelH), fill);
-        DrawSolidRect(new Rect(x, y, panelW, 2f * s), topLine);
-        DrawSolidRect(new Rect(x, y + panelH - (2f * s), panelW, 2f * s), bottomLine);
+        GlitchUiSkin.Panel(new Rect(x, y, panelW, panelH), fill, topLine, false);
+        DrawSolidRect(new Rect(x, y, 3f * s, panelH), textColor);
 
         Rect textRect = new Rect(
             x + textPaddingX,
@@ -5608,31 +5598,22 @@ public class GameManager : MonoBehaviour
         HudTopLayout layout = GetHudTopLayout(s);
         Rect topBand = layout.bar;
         float threat = enableReactiveHudFx ? Mathf.Clamp01(smoothedThreat) : 0f;
-        Color themeBase;
-        Color themeAccent;
-        GetHudThemeColors(out themeBase, out themeAccent);
+        GetHudThemeColors(out _, out Color themeAccent);
         Color accent = Color.Lerp(themeAccent, new Color(1f, 0.30f, 0.40f, 1f), threat);
-        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * Mathf.Lerp(2.2f, 6f, threat));
 
-        DrawSolidRect(topBand, new Color(0.008f, 0.016f, 0.034f, 0.88f));
-        DrawSolidRect(new Rect(topBand.x, topBand.y, topBand.width, 2f * s), new Color(themeAccent.r, themeAccent.g, themeAccent.b, 0.58f));
-        DrawSolidRect(new Rect(topBand.x, topBand.yMax - (3f * s), topBand.width, 3f * s), new Color(accent.r, accent.g, accent.b, 0.42f + pulse * 0.18f));
-        DrawSolidRect(new Rect(topBand.x, topBand.y, 3f * s, topBand.height), new Color(accent.r, accent.g, accent.b, 0.48f));
-        DrawSolidRect(new Rect(topBand.xMax - (3f * s), topBand.y, 3f * s, topBand.height), new Color(accent.r, accent.g, accent.b, 0.34f));
+        DrawSolidRect(topBand, GlitchUiSkin.Surface);
+        GlitchUiSkin.Frame(topBand, GlitchUiSkin.Border);
+        DrawSolidRect(new Rect(topBand.x, topBand.y, topBand.width, 2f * s), new Color(themeAccent.r, themeAccent.g, themeAccent.b, 0.32f));
 
         Rect[] zones = { layout.metrics, layout.sector, layout.focus, layout.dash, layout.firewall, layout.hijack };
         for (int i = 0; i < zones.Length; i++)
         {
-            float zoneAlpha = i % 2 == 0 ? 0.10f : 0.055f;
-            DrawSolidRect(zones[i], new Color(themeBase.r, themeBase.g, themeBase.b, zoneAlpha));
+            DrawSolidRect(zones[i], GlitchUiPalette.WithAlpha(GlitchUiSkin.Raised, 0.56f));
             if (i > 0)
             {
-                DrawSolidRect(new Rect(zones[i].x, topBand.y + (8f * s), 1f * s, topBand.height - (18f * s)), new Color(themeAccent.r, themeAccent.g, themeAccent.b, 0.20f));
+                DrawSolidRect(new Rect(zones[i].x, topBand.y + (8f * s), 1f * s, topBand.height - (18f * s)), GlitchUiSkin.Border);
             }
         }
-
-        float topScanX = topBand.x + Mathf.Repeat(Time.unscaledTime * 64f * s, Mathf.Max(1f, topBand.width - (30f * s)));
-        DrawSolidRect(new Rect(topScanX, topBand.y, 30f * s, 2f * s), new Color(accent.r, accent.g, accent.b, 0.34f));
 
         Rect threatRail = new Rect(topBand.x + (10f * s), topBand.yMax - (8f * s), topBand.width - (20f * s), 4f * s);
         DrawSolidRect(threatRail, new Color(0.03f, 0.045f, 0.075f, 0.95f));
@@ -6439,7 +6420,7 @@ public class GameManager : MonoBehaviour
 
         tutorialHeaderStyle = new GUIStyle(GUI.skin.label)
         {
-            font = importantFont,
+            font = secondaryFont,
             fontSize = Mathf.RoundToInt(17f * hudScale),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleLeft,
@@ -6451,17 +6432,17 @@ public class GameManager : MonoBehaviour
         tutorialBodyStyle = new GUIStyle(GUI.skin.label)
         {
             font = secondaryFont,
-            fontSize = Mathf.RoundToInt(14f * hudScale),
-            fontStyle = FontStyle.Bold,
+            fontSize = Mathf.RoundToInt(GlitchUiSkin.BodySize * hudScale),
+            fontStyle = FontStyle.Normal,
             alignment = TextAnchor.UpperLeft,
             clipping = TextClipping.Clip,
             wordWrap = true
         };
-        tutorialBodyStyle.normal.textColor = new Color(0.82f, 0.90f, 1f, 0.92f);
+        tutorialBodyStyle.normal.textColor = GlitchUiSkin.Text;
 
         tutorialTinyStyle = new GUIStyle(GUI.skin.label)
         {
-            font = importantFont,
+            font = secondaryFont,
             fontSize = Mathf.RoundToInt(14f * hudScale),
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,

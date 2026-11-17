@@ -318,20 +318,20 @@ public class GameMenuController : MonoBehaviour
 
         titleStyle = new GUIStyle(GUI.skin.label)
         {
-            font = importantFont,
+            font = secondaryFont,
             fontSize = 34,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter,
             wordWrap = false,
             clipping = TextClipping.Clip
         };
-        titleStyle.normal.textColor = new Color(1f, 0.58f, 0.64f, 1f);
+        titleStyle.normal.textColor = GlitchUiSkin.Text;
 
         subtitleStyle = new GUIStyle(GUI.skin.label)
         {
             font = secondaryFont,
             fontSize = 16,
-            fontStyle = FontStyle.Italic,
+            fontStyle = FontStyle.Normal,
             alignment = TextAnchor.MiddleCenter
         };
         subtitleStyle.normal.textColor = new Color(0.95f, 0.90f, 0.92f, 0.95f);
@@ -339,24 +339,24 @@ public class GameMenuController : MonoBehaviour
         bodyStyle = new GUIStyle(GUI.skin.label)
         {
             font = secondaryFont,
-            fontSize = 15,
+            fontSize = GlitchUiSkin.BodySize,
             alignment = TextAnchor.MiddleLeft
         };
-        bodyStyle.normal.textColor = new Color(0.90f, 0.93f, 1f, 0.95f);
+        bodyStyle.normal.textColor = GlitchUiSkin.Text;
 
         rankingStatusStyle = new GUIStyle(GUI.skin.label)
         {
             font = secondaryFont,
             fontSize = 13,
-            fontStyle = FontStyle.Italic,
+            fontStyle = FontStyle.Normal,
             alignment = TextAnchor.MiddleLeft
         };
-        rankingStatusStyle.normal.textColor = new Color(0.94f, 0.86f, 0.98f, 0.95f);
+        rankingStatusStyle.normal.textColor = GlitchUiSkin.SecondaryText;
 
         buttonStyle = new GUIStyle(GUI.skin.button)
         {
-            font = importantFont,
-            fontSize = 17,
+            font = secondaryFont,
+            fontSize = GlitchUiSkin.ControlSize,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.MiddleCenter
         };
@@ -540,35 +540,14 @@ public class GameMenuController : MonoBehaviour
         return GUI.HorizontalSlider(sliderRect, value, 0f, 1f);
     }
 
-    private bool DrawPauseButton(Rect rect, string label, bool primary)
+    private bool DrawPauseButton(Rect rect, string label, bool primary, bool playConfirmSound = true)
     {
-        bool hovered = rect.Contains(Event.current.mousePosition);
-        float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (primary ? 4.0f : 3.0f));
-        Color fill = primary
-            ? new Color(0.10f, 0.18f, 0.28f, 0.94f)
-            : new Color(0.07f, 0.10f, 0.16f, 0.92f);
-        if (hovered)
-        {
-            fill = Color.Lerp(fill, new Color(0.18f, 0.28f, 0.42f, 0.96f), 0.72f);
-        }
-
-        Color border = hovered
-            ? new Color(0.90f, 0.96f, 1f, 0.78f)
-            : new Color(0.54f, 0.70f, 0.96f, 0.42f + pulse * 0.16f);
-        DrawSolidRect(rect, fill);
-        DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 2f), border);
-        DrawSolidRect(new Rect(rect.x, rect.yMax - 2f, rect.width, 2f), new Color(border.r, border.g, border.b, border.a * 0.58f));
-        DrawSolidRect(new Rect(rect.x + 7f, rect.y + 7f, 3f, rect.height - 14f), new Color(0.86f, 0.96f, 1f, hovered ? 0.46f : 0.22f));
-
-        if (hovered)
-        {
-            float scanX = rect.x + 16f + Mathf.Repeat(Time.unscaledTime * 82f, Mathf.Max(1f, rect.width - 48f));
-            DrawSolidRect(new Rect(scanX, rect.y + rect.height * 0.5f - 1f, 24f, 2f), new Color(1f, 1f, 1f, 0.24f));
-        }
-
-        GUI.Label(rect, label, buttonStyle);
+        bool hovered = GUI.enabled && rect.Contains(Event.current.mousePosition);
+        GlitchUiSkin.Button(rect, GlitchUiPalette.Information, hovered ? 1f : 0f, primary, GUI.enabled);
+        GUI.Label(new Rect(rect.x + 12f, rect.y + 4f, rect.width - 24f, rect.height - 8f), label,
+            GetFittedSingleLineStyle(buttonStyle, label, rect.width - 24f, GlitchUiSkin.ControlSize, 12));
         bool clicked = GUI.Button(rect, GUIContent.none, GUIStyle.none);
-        if (clicked && primary)
+        if (clicked && primary && playConfirmSound)
         {
             GlitchAudioManager.PlayMenuConfirm();
         }
@@ -578,22 +557,12 @@ public class GameMenuController : MonoBehaviour
 
     private void DrawPauseBackdrop(float time, float pulse)
     {
-        DrawHudGlitchOverlay(0.20f + pulse * 0.10f, time);
-        float stripeAlpha = 0.06f + pulse * 0.035f;
-        for (float y = 0f; y < Screen.height + 80f; y += 80f)
-        {
-            float drift = Mathf.Sin(time * 1.4f + y * 0.02f) * 34f;
-            DrawSolidRect(new Rect(drift - 40f, y, Screen.width + 80f, 2f), new Color(0.62f, 0.82f, 1f, stripeAlpha));
-        }
+        DrawHudGlitchOverlay(0.035f, time);
     }
 
     private void DrawPausePanelFx(Rect rect, Color accent, float pulse)
     {
-        DrawSolidRect(new Rect(rect.x + 8f, rect.y + 8f, 24f, 2f), new Color(accent.r, accent.g, accent.b, 0.42f));
-        DrawSolidRect(new Rect(rect.x + 8f, rect.y + 8f, 2f, 24f), new Color(accent.r, accent.g, accent.b, 0.42f));
-        DrawSolidRect(new Rect(rect.xMax - 32f, rect.y + 8f, 24f, 2f), new Color(accent.r, accent.g, accent.b, 0.42f));
-        DrawSolidRect(new Rect(rect.xMax - 10f, rect.y + 8f, 2f, 24f), new Color(accent.r, accent.g, accent.b, 0.42f));
-        DrawSolidRect(new Rect(rect.x + 2f, rect.y + Mathf.Repeat(Time.unscaledTime * 36f, Mathf.Max(1f, rect.height)), rect.width - 4f, 1f), new Color(accent.r, accent.g, accent.b, 0.06f + pulse * 0.06f));
+        GlitchUiSkin.Accent(rect, accent);
     }
 
     private void DrawDefeatMenu()
@@ -637,6 +606,7 @@ public class GameMenuController : MonoBehaviour
         string resultTitle = gameManager != null && !string.IsNullOrWhiteSpace(gameManager.DefeatCauseLabel)
             ? gameManager.DefeatCauseLabel : defeatTitle;
         GUIStyle fittedTitleStyle = GetFittedSingleLineStyle(titleStyle, resultTitle, area.width, 32, 14);
+        fittedTitleStyle.normal.textColor = GlitchUiPalette.Danger;
         Rect titleRect = new Rect(area.x, area.y, area.width, 46f);
         DrawGlitchLabel(titleRect, resultTitle, fittedTitleStyle, textGlitch * 0.30f);
         DrawSolidRect(new Rect(area.x + 24f, area.y + 52f, area.width - 48f, 1f), new Color(1f, 0.52f, 0.62f, 0.26f));
@@ -669,12 +639,12 @@ public class GameMenuController : MonoBehaviour
         GUI.enabled = canInteract;
         float actionsY = area.y + bodyLayout.actionsTop;
         float actionWidth = (area.width - 12f) * 0.5f;
-        if (GUI.Button(new Rect(area.x, actionsY, actionWidth, 42f), "REINTENTAR", buttonStyle))
+        if (DrawPauseButton(new Rect(area.x, actionsY, actionWidth, 42f), "REINTENTAR", true, false))
         {
             GlitchAudioManager.PlayMenuConfirm();
             RestartLevel();
         }
-        if (GUI.Button(new Rect(area.x + actionWidth + 12f, actionsY, actionWidth, 42f), "MENÚ", buttonStyle))
+        if (DrawPauseButton(new Rect(area.x + actionWidth + 12f, actionsY, actionWidth, 42f), "MENÚ", false, false))
         {
             GlitchAudioManager.PlayMenuBack();
             ReturnToMainMenu();
@@ -697,6 +667,7 @@ public class GameMenuController : MonoBehaviour
         Rect gradeRect = ScaleRectFromCenter(rect, size);
         GUIStyle gradeStyle = new GUIStyle(titleStyle)
         {
+            font = importantFont,
             fontSize = Mathf.RoundToInt(Mathf.Lerp(52f, Mathf.Min(132f, rect.height * 0.7f), reveal)),
             alignment = TextAnchor.MiddleCenter,
             clipping = TextClipping.Overflow
@@ -771,8 +742,7 @@ public class GameMenuController : MonoBehaviour
 
     private void DrawResultMetric(Rect rect, string label, string value, Color accent)
     {
-        DrawSolidRect(rect, new Color(0.025f, 0.04f, 0.075f, 0.82f));
-        DrawSolidRect(new Rect(rect.x, rect.yMax - 3f, rect.width, 3f), new Color(accent.r, accent.g, accent.b, 0.76f));
+        GlitchUiSkin.Panel(rect, GlitchUiSkin.Raised, accent, false);
         GUIStyle labelStyle = new GUIStyle(rankingStatusStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Normal };
         GUIStyle valueStyle = GetFittedSingleLineStyle(titleStyle, value, rect.width - 12f, 24, 10);
         valueStyle.alignment = TextAnchor.MiddleCenter;
@@ -862,12 +832,12 @@ public class GameMenuController : MonoBehaviour
         GUI.enabled = canInteract;
         Rect rematchRect = new Rect(content.x + 18f, content.yMax - 104f, content.width - 36f, 42f);
         Rect menuRect = new Rect(content.x + 18f, content.yMax - 52f, content.width - 36f, 42f);
-        if (GUI.Button(rematchRect, "Revancha", buttonStyle))
+        if (DrawPauseButton(rematchRect, "Revancha", true, false))
         {
             GlitchAudioManager.PlayMenuConfirm();
             RestartLevel();
         }
-        if (GUI.Button(menuRect, "Menu Principal", buttonStyle))
+        if (DrawPauseButton(menuRect, "Menu Principal", false, false))
         {
             GlitchAudioManager.PlayMenuBack();
             ReturnToMainMenu();
@@ -982,12 +952,12 @@ public class GameMenuController : MonoBehaviour
 
     private void DrawDefeatBackdrop(float pulse, float glitch, float time)
     {
-        Color ring = new Color(0.98f, 0.45f, 0.60f, 0.18f + pulse * 0.10f);
+        Color ring = new Color(0.98f, 0.45f, 0.60f, 0.055f + pulse * 0.015f);
         Vector2 center = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
         DrawEllipseRing(center, Screen.width * 0.18f, Screen.height * 0.20f, ring);
         DrawEllipseRing(center, Screen.width * 0.30f, Screen.height * 0.33f, ring);
 
-        Color stripe = new Color(1f, 0.28f, 0.42f, 0.11f + pulse * 0.06f);
+        Color stripe = new Color(1f, 0.28f, 0.42f, 0.015f);
         float spacing = 90f;
         for (float y = 0f; y < Screen.height + spacing; y += spacing)
         {
@@ -1001,11 +971,11 @@ public class GameMenuController : MonoBehaviour
             float width = Screen.width * Mathf.Lerp(0.2f, 0.82f, flow);
             float offset = (Mathf.PerlinNoise(y * 0.03f, time * 5.2f) - 0.5f) * 60f * glitch;
             float x = (Screen.width - width) * 0.5f + offset;
-            Color bar = new Color(1f, 0.34f, 0.48f, glitchBarOpacity * glitch);
+            Color bar = new Color(1f, 0.34f, 0.48f, glitchBarOpacity * glitch * 0.18f);
             DrawSolidRect(new Rect(x, y, width, 2f), bar);
         }
 
-        DrawHudGlitchOverlay(glitch, time);
+        DrawHudGlitchOverlay(glitch * 0.15f, time);
     }
 
     private void DrawDefeatCinematicIntro(float defeatElapsed, float introT)
@@ -1079,18 +1049,7 @@ public class GameMenuController : MonoBehaviour
 
     private void DrawGlitchLabel(Rect rect, string text, GUIStyle style, float glitch)
     {
-        glitch = VisualAccessibility.ScaleIntensity(glitch, UserSettings.GetFlashIntensity());
-        float cappedSplit = Mathf.Min(glitchSplitStrength, 1.15f);
-        float split = cappedSplit * glitch;
-        Color old = GUI.color;
-
-        GUI.color = new Color(1f, 0.28f, 0.38f, 0.55f * glitch);
-        GUI.Label(new Rect(rect.x - split, rect.y, rect.width, rect.height), text, style);
-
-        GUI.color = new Color(0.24f, 0.98f, 1f, 0.50f * glitch);
-        GUI.Label(new Rect(rect.x + split, rect.y, rect.width, rect.height), text, style);
-
-        GUI.color = old;
+        // Keep result and pause typography steady; the surrounding reveal carries the impact.
         GUI.Label(rect, text, style);
     }
 
@@ -1179,11 +1138,7 @@ public class GameMenuController : MonoBehaviour
 
     private static void DrawPanel(Rect rect, Color fill, Color border)
     {
-        DrawSolidRect(rect, fill);
-        DrawSolidRect(new Rect(rect.x, rect.y, rect.width, 2f), border);
-        DrawSolidRect(new Rect(rect.x, rect.yMax - 2f, rect.width, 2f), border);
-        DrawSolidRect(new Rect(rect.x, rect.y, 2f, rect.height), border);
-        DrawSolidRect(new Rect(rect.xMax - 2f, rect.y, 2f, rect.height), border);
+        GlitchUiSkin.Panel(rect, fill, border);
     }
 
     private static void DrawSolidRect(Rect rect, Color color)
