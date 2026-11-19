@@ -184,15 +184,15 @@ Ahora esos sistemas posponen nuevos eventos durante la supresión sensible de Br
 
 La mejora no añade otra pausa al control del jugador ni retrasa el primer mapa de una run. Las herramientas de debug pueden seguir forzando eventos para probarlos. Validación: siete pruebas del reloj de protección, límites y reinicio, compilación conjunta y revisión de los tres puntos de programación ambiental. Pendiente observar la llegada a cada sector en Play Mode.
 
-## 7. Conservar pasos durante SpinMotion de Rupture
+## 7. Conservar pasos durante SpinMotion de Rupture — revertida, pendiente
 
-La formación orbital comprueba su próximo paso físico completo antes de mover los obstáculos. Una grilla reutilizable valida que las huellas barridas, con sus rotaciones y curvatura, mantengan conectado el espacio transitable. Si el paso cerraría un corredor o alcanzaría una pared, se detiene antes de aplicarlo y desacelera para invertir el giro, con una espera mínima de 0,4 segundos entre correcciones.
+Se retiró la implementación del commit `257e19b` a pedido del usuario: la comprobación conservadora de conectividad podía cancelar el inicio del evento o detener la formación durante el giro, perjudicando su funcionamiento. La idea 7 vuelve a quedar pendiente; no debe contarse como una mejora vigente.
 
-La protección directa del jugador se verifica aparte contra su collider real y las formas rotadas de los objetos móviles. El contacto con paredes u objetos estáticos no bloquea la formación por quedar fuera de la holgura conservadora de navegación. Phase Dash intangible conserva su excepción física. No se eliminan props ni se teletransportan: se conserva el radio inicial para evitar el salto causado por recortarlo al empezar el evento.
+Se restauró íntegramente `RuptureSpinEventController.cs` a la versión anterior a ese cambio: movimiento orbital en Update, aceleración y desaceleración originales, elección de dirección y radios elípticos ajustados a los límites. Se eliminaron la grilla de seguridad, la comprobación de huellas barridas en FixedUpdate y sus pruebas específicas. Las otras variantes de Rupture no cambian.
 
-El movimiento de SpinMotion se aplica en FixedUpdate; las demás variantes de Rupture conservan su funcionamiento. Si la distribución inicial ya quedó desconectada por cambios anteriores, se pospone SpinMotion antes de anunciarlo y se restauran los controladores de objetos. La comprobación es conservadora: puede detener o invertir el giro antes de que un paso se estreche demasiado.
+La captura y el apartado 7 del video previo documentan la versión retirada, no la actual. La restauración no implica garantizar que las órbitas anteriores mantengan siempre conectados todos los pasillos.
 
-Validación: doce pruebas de conectividad, espacio del jugador, obstáculos diagonales y límites de holgura; compilación conjunta aprobada. Mil comprobaciones de la grilla reutilizada con 21 obstáculos tomaron aproximadamente 80 ms en la ejecución local (no representa el coste completo del evento). Pendiente Play Mode para revisar fluidez, duración de correcciones y frecuencia efectiva de aparición.
+Validación de la reversión: el controlador coincide exactamente con la revisión anterior a `257e19b`; no quedan referencias a `RuptureOrbitSafety` en el código del juego ni en sus pruebas. Compilación conjunta de gameplay sin errores (con advertencias existentes del compilador y de APIs obsoletas). Pendiente comprobar la fluidez restaurada en Play Mode.
 
 ## 9. Dirección del reorden magnético de Storage
 
