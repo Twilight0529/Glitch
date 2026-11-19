@@ -2,6 +2,14 @@
 
 Cada mejora se implementa y registra en un commit separado. Los archivos del Excel se conservan para el seguimiento manual.
 
+## Adicional: telemetría opcional en Google Sheets
+
+Se agregó una salida remota de los resúmenes locales de runs mediante un receptor de Apps Script y una hoja privada del desarrollador. Incluye una cola persistente acotada, reintentos con espera creciente, lotes de hasta cinco registros y deduplicación por run. El consentimiento viene desactivado y se controla en Opciones → Datos de juego; no se sube el historial anterior ni se envían nombres del ranking o credenciales de Firebase. La baja invalida los pendientes y reinicia el seudónimo local, sin prometer borrar filas ya recibidas por Google.
+
+El receptor valida datos y tamaños, protege textos contra fórmulas y permite actualizar a pedido un resumen de supervivencia, abandonos, muertes tempranas, uso de Parry y distribuciones por arena, causa, estado, clase y versión. Los indicadores de retorno son aproximados por instalación, no retención D1/D7 ni una medición de satisfacción. Las runs del banco de QA se excluyen del envío. No altera el ranking ni el registro local existente.
+
+Validación: 16 pruebas deterministas de cola y 22 del receptor con servicios simulados, más compilación conjunta de gameplay sin errores. La conexión viene deshabilitada hasta crear/desplegar la hoja y completar el JSON de configuración. Pendientes la prueba contra la cuenta real de Google y la revisión visual en Play Mode. Instrucciones completas en `Documentation/Telemetria_Google_Sheets.md`.
+
 ## Corrección: continuidad de tutoriales después de morir
 
 Al iniciar otra run se reiniciaban los indicadores temporales, pero el disparador de movimiento salía de la revisión incluso cuando su cuadro ya estaba completado y no se abría. Al no registrar ese descarte en la caché de la nueva run, se repetía cada frame y bloqueaba los tutoriales posteriores. Algunos disparadores de combate podían interrumpir la revisión de forma similar.

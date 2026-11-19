@@ -1318,6 +1318,7 @@ public class GameManager : MonoBehaviour
         debugQaModeActive = (Application.isEditor || Debug.isDebugBuild) && active;
         if (debugQaModeActive)
         {
+            RunTelemetryStorage.MarkCurrentRunAsDebug();
             pendingMapEventTutorials.Clear();
         }
     }

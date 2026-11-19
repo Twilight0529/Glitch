@@ -16,6 +16,32 @@ public static class UserSettings
     public const string VSyncKey = "glitch_vsync";
     public const string IntroTutorialKey = "glitch_intro_tutorial";
     public const string ContextTutorialKey = "glitch_context_tutorial";
+    private const string ShareTelemetryKey = "glitch_share_gameplay_telemetry_v1";
+    private const string TelemetryInstallationKey = "glitch_telemetry_installation_v1";
+    private const string TelemetryEpochKey = "glitch_telemetry_consent_epoch_v1";
+
+    public static bool GetShareGameplayTelemetry() => PlayerPrefs.GetInt(ShareTelemetryKey, 0) == 1;
+    public static void SetShareGameplayTelemetry(bool allowed)
+    {
+        PlayerPrefs.SetInt(ShareTelemetryKey, allowed ? 1 : 0);
+        PlayerPrefs.Save();
+        GoogleSheetsTelemetryService.ConsentChanged(allowed);
+    }
+    public static string GetTelemetryInstallationId() => TelemetryGuid(TelemetryInstallationKey);
+    public static string GetTelemetryConsentEpoch() => TelemetryGuid(TelemetryEpochKey);
+    public static void RotateTelemetryConsentEpoch()
+    {
+        PlayerPrefs.SetString(TelemetryEpochKey, System.Guid.NewGuid().ToString("N"));
+        PlayerPrefs.DeleteKey(TelemetryInstallationKey);
+        PlayerPrefs.Save();
+    }
+    private static string TelemetryGuid(string key)
+    {
+        string value = PlayerPrefs.GetString(key, string.Empty);
+        if (SheetsTelemetryOutbox.ValidId(value)) return value;
+        value = System.Guid.NewGuid().ToString("N");
+        PlayerPrefs.SetString(key, value); PlayerPrefs.Save(); return value;
+    }
     private const string ContextTutorialSeenPrefix = "glitch_context_tutorial_seen_";
     private const string ContextTutorialProgressVersionKey = "glitch_context_tutorial_progress_version";
     private const string ContextTutorialDynamicRegistryKey = "glitch_context_tutorial_dynamic_keys";
@@ -281,6 +307,7 @@ public static class UserSettings
 
     public static void ResetOptions()
     {
+        SetShareGameplayTelemetry(false);
         SetMasterVolume(DefaultMasterVolume);
         SetMusicVolume(DefaultMusicVolume);
         SetSfxVolume(DefaultSfxVolume);

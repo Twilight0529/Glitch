@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using UnityEngine;
 
-// Telemetría exclusivamente local. Acumula en memoria y escribe una vez al terminar cada run.
+// Registro local independiente, con envío opcional de resúmenes a Sheets si hay consentimiento.
 public static class RunTelemetryStorage
 {
     [Serializable]
@@ -48,6 +48,8 @@ public static class RunTelemetryStorage
 
     private static RunRecord current;
     private static bool recorded;
+    private static bool suppressRemoteForCurrentRun;
+    public static void MarkCurrentRunAsDebug() { suppressRemoteForCurrentRun = true; }
     public static string DirectoryPath => Path.Combine(Application.persistentDataPath, "telemetry");
     public static string RunsPath => Path.Combine(DirectoryPath, "runs.jsonl");
     public static string SummaryPath => Path.Combine(DirectoryPath, "summary.json");
@@ -55,6 +57,7 @@ public static class RunTelemetryStorage
     public static void BeginRun(string level, string playerClass)
     {
         recorded = false;
+        suppressRemoteForCurrentRun = false;
         current = new RunRecord
         {
             version = Application.version,
@@ -116,10 +119,14 @@ public static class RunTelemetryStorage
         {
             Debug.LogWarning($"Telemetry local no pudo guardarse: {exception.Message}");
         }
+        // Independent of local I/O: a failed local summary must not prevent queueing, or vice versa.
+        if (!suppressRemoteForCurrentRun)
+            GoogleSheetsTelemetryService.QueueFinishedRun(JsonUtility.ToJson(current));
     }
 
     public static void ResetLocalData()
     {
+        GoogleSheetsTelemetryService.ClearPending();
         current = null;
         recorded = false;
 

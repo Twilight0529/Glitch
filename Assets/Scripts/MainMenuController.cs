@@ -40,6 +40,7 @@ public partial class MainMenuController : MonoBehaviour
         Archive,
         Guide,
         Accessibility,
+        Telemetry,
         Operations,
         Options,
         Stats,
@@ -189,6 +190,7 @@ public partial class MainMenuController : MonoBehaviour
             showArchiveHub = false;
             showMechanicsReference = false;
             showAccessibility = false;
+            showTelemetry = false;
             GlitchAudioManager.PlayMenuToggle();
         }
 
@@ -219,6 +221,10 @@ public partial class MainMenuController : MonoBehaviour
         if (showMechanicsReference)
         {
             DrawMechanicsReference();
+        }
+        else if (showTelemetry)
+        {
+            DrawTelemetryMenu();
         }
         else if (showAccessibility)
         {
@@ -276,6 +282,7 @@ public partial class MainMenuController : MonoBehaviour
     {
         if (showPlayerNameSetup) return MenuView.PlayerName;
         if (showMechanicsReference) return MenuView.Guide;
+        if (showTelemetry) return MenuView.Telemetry;
         if (showAccessibility) return MenuView.Accessibility;
         if (showOptions) return MenuView.Options;
         if (showStats) return MenuView.Stats;
@@ -1059,6 +1066,11 @@ public partial class MainMenuController : MonoBehaviour
             GlitchAudioManager.PlayMenuConfirm();
         }
 
+        if (string.IsNullOrEmpty(optionsActionMessage) &&
+            DrawAnimatedMenuButton(new Rect(area.x, area.yMax - 42f, 164f, 34f), "Datos de juego"))
+        {
+            showTelemetry = true;
+        }
         if (!string.IsNullOrEmpty(optionsActionMessage))
         {
             GUI.Label(new Rect(area.x, area.yMax - 38f, area.width * 0.62f, 28f), optionsActionMessage, paragraphStyle);
